@@ -170,4 +170,9 @@ flowchart TB
     RT -. logs .-> SEC
 ```
 
-GCPサービスの配置を含む構成図は [diagrams/architecture.drawio](./diagrams/architecture.drawio) を参照。
+GCPサービスの配置を含む構成図は次のとおり。
+
+![全体構成図](./diagrams/architecture.png)
+
+各アプリをどのGCPサービスとして動かすかは [08. GCP実行基盤](./08-gcp-infrastructure.md) を参照。
+編集用の元データは [diagrams/architecture.drawio](./diagrams/architecture.drawio) にある。

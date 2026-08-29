@@ -28,9 +28,19 @@ Resourceへのアクセスは、Agent OPが発行するID-JAGをResource Authori
 | 09 | [セキュリティ監視](./docs/09-security-monitoring.md) | ログ収集、正規化と保存、検知の段階、Risk Score、Security AI、Response |
 | 10 | [設計ルール](./docs/10-design-rules.md) | 各文書で決めた原則の一覧 |
 
-## 図
+## 全体構成図
 
-- [docs/diagrams/architecture.drawio](./docs/diagrams/architecture.drawio)：GCPサービスの配置を含む全体構成図（draw.io）
+![全体構成図](./docs/diagrams/architecture.png)
+
+| ファイル | 用途 |
+|---|---|
+| [architecture.png](./docs/diagrams/architecture.png) | Markdown表示用の画像 |
+| [architecture.svg](./docs/diagrams/architecture.svg) | 拡大しても劣化しないベクター版 |
+| [architecture.drawio](./docs/diagrams/architecture.drawio) | draw.ioで編集する場合の元データ |
+| [generate.py](./docs/diagrams/generate.py) | 上記3ファイルの生成スクリプト |
+
+図を変更するときは `generate.py` のレイアウト定義を編集し、`python3 docs/diagrams/generate.py` で3ファイルをまとめて再生成する。
+draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に注意する。
 
 ## 変更履歴
 

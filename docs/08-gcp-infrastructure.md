@@ -1,7 +1,10 @@
 # 08. GCP実行基盤
 
 本書は、[01. §3.1](./01-overview.md#31-アプリと機能の区別) で分けた各アプリをGCP上のどのサービスとして配置し、どのGCP Service Accountで動かし、どのGCPリソースを使わせるかを定める。
-GCPサービスのアイコン付き構成図は [diagrams/architecture.drawio](./diagrams/architecture.drawio) にある。
+![GCP実行基盤の全体構成図](./diagrams/architecture.png)
+
+図中の破線の枠はGCP ProjectとProject内の論理的なまとまりを、実線の箱はデプロイ単位のアプリを表す。
+編集用の元データは [diagrams/architecture.drawio](./diagrams/architecture.drawio) にある。
 
 ## 1. GCP Projectの構成
 
