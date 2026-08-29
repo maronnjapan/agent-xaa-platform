@@ -1,0 +1,237 @@
+{
+  "targetFile": "SPEC.md",
+  "updatedAt": "2026-08-29T16:47:20.516Z",
+  "contextNotes": [
+    {
+      "id": "note-1788011161482-hwkpwr",
+      "kind": "background",
+      "body": "### Service AccountとAgentとの関係についての概要\n\n- **Agent**は、自動化の内容を判断・実行する主体。\n- **OP Service Account**は、Agentとは別の、外部サービスへアクセスするための専用アカウント。\n- Service Accountは通常、特定の人間に紐づかない非人間アカウント。\n- AgentはService Accountを使って外部サービスに接続する。\n- 外部サービスは、Service Accountを見て「誰として操作しているか」を識別する。\n- Service Accountに付与された権限によって、Agentが実行できる操作範囲が決まる。\n- Service Accountは、Agentが正しいか・安全かを判断するものではない。\n- つまり、Service AccountはAgentが外部サービス上で操作するときに**名乗る身元（Identity）**である。",
+      "source": "chat",
+      "createdAt": "2026-08-29T13:46:01.482Z"
+    }
+  ],
+  "comments": [
+    {
+      "id": "comment-1788005594359-jod112",
+      "type": "section",
+      "selectedText": "3. 自動化定義の基本方針",
+      "targetText": "3. 自動化定義の基本方針",
+      "heading": "3. 自動化定義の基本方針",
+      "headingPath": [
+        "3. 自動化定義の基本方針"
+      ],
+      "comment": "ちょっとイメージが違って、ユーザー起因で自動化を作るのだけど、このシステム自体に日報はかけて、その日報の内容も合わせて自動化できそうなものを自動化するイメージでいた。",
+      "status": "resolved",
+      "createdAt": "2026-08-29T12:13:14.359Z"
+    },
+    {
+      "id": "comment-1788005782496-yngu15",
+      "type": "section",
+      "selectedText": "4. Work Definition",
+      "targetText": "4. Work Definition",
+      "heading": "4. Work Definition",
+      "headingPath": [
+        "4. Work Definition"
+      ],
+      "comment": "これは権限基盤がわで行うイメージだった。これをAutomation側で行うと権限について情報を持っていることになりそれは避けたい。\nAutomation側どこにアクセスできるかなどの情報を可能な限り持ちたくない。",
+      "status": "resolved",
+      "createdAt": "2026-08-29T12:16:22.496Z"
+    },
+    {
+      "id": "comment-1788006051849-ecdj9x",
+      "type": "section",
+      "selectedText": "16. Projectを細分化しない理由",
+      "targetText": "16. Projectを細分化しない理由",
+      "heading": "16. Projectを細分化しない理由",
+      "headingPath": [
+        "16. Projectを細分化しない理由"
+      ],
+      "comment": "この部分はいらない。",
+      "status": "resolved",
+      "createdAt": "2026-08-29T12:20:51.849Z"
+    },
+    {
+      "id": "comment-1788006065417-afbvyb",
+      "type": "section",
+      "selectedText": "17. Security Projectのみ分離可能とする",
+      "targetText": "17. Security Projectのみ分離可能とする",
+      "heading": "17. Security Projectのみ分離可能とする",
+      "headingPath": [
+        "17. Security Projectのみ分離可能とする"
+      ],
+      "comment": "ここもいらない。",
+      "status": "resolved",
+      "createdAt": "2026-08-29T12:21:05.417Z"
+    },
+    {
+      "id": "comment-1788006237541-j49fwf",
+      "type": "text-selection",
+      "selectedText": "Delegatable Permission\n        ∩\nOrganization Policy\n        ∩\nRisk Policy\n        =\nEffective Agent Permission",
+      "contextBefore": "t Permission\n    ⊆\nHuman User Permission\nさらに、\nAuthorization AI Proposed Capability\n        ∩\nHuman Permission\n        ∩",
+      "contextAfter": "とする。\n\n 14. 全体アーキテクチャ\n本システムはGCP上で構築する。\n基本方針として、すべてのコンポーネントを細かくGCP Project分割するのではなく、\nagent-platform-prod\nを主要実行Projectとし、",
+      "headingPath": [
+        "13. 基本的な権限関係"
+      ],
+      "comment": "ここらへんの権限がなにものか分からなくなったので、他で説明しておいてほしい。",
+      "status": "open",
+      "createdAt": "2026-08-29T12:23:57.541Z"
+    },
+    {
+      "id": "comment-1788006266793-kcb6h8",
+      "type": "text-selection",
+      "selectedText": "8. Tool / Connector Catalog",
+      "contextBefore": "/ Agent Creation App\n\n4. Automation Design AI\n\n5. Authorization Platform\n\n6. Authorization AI Agent\n\n7. Policy Engine",
+      "contextAfter": "9. Agent IdP Provisioning Application\n\n10. Shared Agent OpenID Provider\n\n11. Dedicated Agent OpenID Provider\n\n12. Auto",
+      "headingPath": [
+        "18. コンポーネント一覧"
+      ],
+      "comment": "こいつなんだっけ？この単語を出す前に概要を説明しておいてほしい。",
+      "status": "open",
+      "createdAt": "2026-08-29T12:24:26.793Z"
+    },
+    {
+      "id": "comment-1788006445887-sad45l",
+      "type": "section",
+      "selectedText": "20. Agent Runtime",
+      "targetText": "20. Agent Runtime",
+      "heading": "20. Agent Runtime",
+      "headingPath": [
+        "20. Agent Runtime"
+      ],
+      "comment": "こいつだけど自動化を設定するアプリで実行状況の把握はできるようにしてほしい。\nそして止めることも可能としてほしいし、途中で指示も追加できるようにしたい。\nだけど、権限を超える作業はできない。つまり一度作ったエージェントを再度権限を昇格することはせず、そうしたい場合は再度エージェントを一から作成するようにしたいので、その形で記述を修正して。",
+      "status": "resolved",
+      "createdAt": "2026-08-29T12:27:25.887Z"
+    },
+    {
+      "id": "comment-1788010805890-75jnj5",
+      "type": "text-selection",
+      "selectedText": "Service Account",
+      "contextBefore": "untime compromise\n↓\n複数Agentへの影響可能性\nがある。\nDedicated OPの場合、\nDedicated OP compromise\n↓\nAgent Aのみ\nに限定できる。\n\n 62. Dedicated OP",
+      "contextAfter": "例：\nsa-dedicated-op-agent-a\nに付与する権限：\nALLOW\n\nagent-a-signing-keyで署名\n\nagent-a-config読み取り\n\n\nDENY\n\nagent-b-signing-key\n\nshar",
+      "headingPath": [
+        "62. Dedicated OP Service Account"
+      ],
+      "comment": "そもそもService Accountは何でいるのかの説明はほしい。",
+      "status": "open",
+      "createdAt": "2026-08-29T13:40:05.890Z"
+    },
+    {
+      "id": "comment-1788011563573-y2rfez",
+      "type": "text-selection",
+      "selectedText": "Tool Execution",
+      "contextBefore": "Agent OPの仕事は、\nAgent Authentication\n\npreconfigured XAAの実行\n\nID-JAG発行\n\nToken署名\n\nAgent Expiration確認\nのみ。\n\n 69. Agent Runtimeの",
+      "contextAfter": "AI Agentが自律実行する際、\nLLM自身にAPI URLやOAuth手順を考えさせない。\nAIが決めるのは、\nWHAT\n=\nどのToolを利用するか\nまで。\n実際の、\nHOW\n=\nどのOPへ行くか\n\nどのID-JAGを取るか\n\nどの",
+      "headingPath": [
+        "69. Agent RuntimeのTool Execution"
+      ],
+      "comment": "こいつはどこに存在しているかが分からんくなった。なので、それぞれ存在するアプリと各役割がどこのアプリに属するかを図にしてほしい。\nどこまでがアプリでどこから機能の話なのかが分からん。",
+      "status": "open",
+      "createdAt": "2026-08-29T13:52:43.573Z"
+    },
+    {
+      "id": "comment-1788020333847-jfanpk",
+      "type": "section",
+      "selectedText": "57. STANDARD",
+      "targetText": "57. STANDARD",
+      "heading": "57. STANDARD",
+      "headingPath": [
+        "57. STANDARD"
+      ],
+      "comment": "こいつが実はよくわからなくて、ここもOPには認証のためアカウントの作成自体はAgentごとに必要では？とおもっている。だけど、その記載がないのはなんでだろう？",
+      "status": "open",
+      "createdAt": "2026-08-29T16:18:53.847Z"
+    },
+    {
+      "id": "comment-1788020437844-eq2l67",
+      "type": "section",
+      "selectedText": "58. DEDICATED_IDENTITY",
+      "targetText": "58. DEDICATED_IDENTITY",
+      "heading": "58. DEDICATED_IDENTITY",
+      "headingPath": [
+        "58. DEDICATED_IDENTITY"
+      ],
+      "comment": "あまりこれの存在意義が分かっていないんだ。必要かどうか再度検討して。もし必要だと思うのなら、その理由を書いてほしい",
+      "status": "open",
+      "createdAt": "2026-08-29T16:20:37.844Z"
+    },
+    {
+      "id": "comment-1788020656211-jpji9n",
+      "type": "section",
+      "selectedText": "84. GCP Service Account設計",
+      "targetText": "84. GCP Service Account設計",
+      "heading": "84. GCP Service Account設計",
+      "headingPath": [
+        "84. GCP Service Account設計"
+      ],
+      "comment": "これは要は動かすAI Agent用のアカウントをどうするかということ？",
+      "status": "open",
+      "createdAt": "2026-08-29T16:24:16.211Z"
+    },
+    {
+      "id": "comment-1788020797062-dtlg0a",
+      "type": "section",
+      "selectedText": "86. Agent Runtime Service Account",
+      "targetText": "86. Agent Runtime Service Account",
+      "heading": "86. Agent Runtime Service Account",
+      "headingPath": [
+        "86. Agent Runtime Service Account"
+      ],
+      "comment": "このアカウントの存在意義がわからん。どこで動くんだ？もしかして、共有のやつは全部このAI Agent一つで動かす想定？それはちょっと思想がちがう。\nOPとかは共有していいけど、各AI Agentは独立してそんざいしてほしい。",
+      "status": "open",
+      "createdAt": "2026-08-29T16:26:37.062Z"
+    },
+    {
+      "id": "comment-1788020869662-bw5fip",
+      "type": "section",
+      "selectedText": "87. Google Bridge Service Account",
+      "targetText": "87. Google Bridge Service Account",
+      "heading": "87. Google Bridge Service Account",
+      "headingPath": [
+        "87. Google Bridge Service Account"
+      ],
+      "comment": "これもサービスアカウントを作る理由がわからん。ここは完全にアプリしかないからAI Agent関係ないはずだと思っているので、なぜサービスアカウントを作るのかわかっていない。\n多分だけど、そもそもGCPにおけるサービスアカウントの定義が私の理解とずれているのかもしれない。",
+      "status": "open",
+      "createdAt": "2026-08-29T16:27:49.662Z"
+    },
+    {
+      "id": "comment-1788021134586-t3z3u2",
+      "type": "section",
+      "selectedText": "97. Agent Provisioning Flow",
+      "targetText": "97. Agent Provisioning Flow",
+      "heading": "97. Agent Provisioning Flow",
+      "headingPath": [
+        "97. Agent Provisioning Flow"
+      ],
+      "comment": "これ分かりにくさが分かった。どこまでがアプリとしてデプロイしていて、どこからがそのアプリの中で動くAI Agentなのかがわからないから、どれがどう動くのかがアプリの構成図としてイメージしにくいから、アプリ単位でのフローがイメージできるものも頂戴",
+      "status": "open",
+      "createdAt": "2026-08-29T16:32:14.586Z"
+    },
+    {
+      "id": "comment-1788021569585-i312df",
+      "type": "section",
+      "selectedText": "130. Human User権限変更",
+      "targetText": "130. Human User権限変更",
+      "heading": "130. Human User権限変更",
+      "headingPath": [
+        "130. Human User権限変更"
+      ],
+      "comment": "これはそうだね。権限が変更したタイミングでRe-Provisionningはしたいな。",
+      "status": "open",
+      "createdAt": "2026-08-29T16:39:29.585Z"
+    },
+    {
+      "id": "comment-1788021972335-svmons",
+      "type": "document",
+      "comment": "全体の構成図をDraw.ioのMCPを使って書いてほしい。なお、基本的にシンプルにしてほしく色は白黒で、テキストは最低限しか書かないようにしてほしい。\nただし、GCPのアイコンについては例外で積極的に使用してほしい。",
+      "status": "open",
+      "createdAt": "2026-08-29T16:46:12.335Z"
+    },
+    {
+      "id": "comment-1788022039318-l03d4x",
+      "type": "document",
+      "comment": "全体的に重複している内容や分かりにくい表現が多いから、それをスキルを使い修正しつつこのファイルをベースに内容ごとに適切にファイル分割をしてほしい。",
+      "status": "open",
+      "createdAt": "2026-08-29T16:47:19.318Z"
+    }
+  ]
+}

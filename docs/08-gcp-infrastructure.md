@@ -1,0 +1,291 @@
+# 08. GCP実行基盤
+
+本書は、[01. §3.1](./01-overview.md#31-アプリと機能の区別) で分けた各アプリをGCP上のどのサービスとして配置し、どのGCP Service Accountで動かし、どのGCPリソースを使わせるかを定める。
+GCPサービスのアイコン付き構成図は [diagrams/architecture.drawio](./diagrams/architecture.drawio) にある。
+
+## 1. GCP Projectの構成
+
+| Project | 置くもの |
+|---|---|
+| `agent-platform-prod` | 実行系のすべて。Cloud Run Service / Job、Cloud SQL、Firestore、Cloud KMS、Secret Manager、Pub/Sub、Cloud Logging、Vertex AI |
+| `agent-security-prod` | 監査ログとSecurity Findingsの長期保存。BigQuery |
+
+実行系はProjectを分けず、責務の分離はService Account、IAM、KMS Key、Secret、DB Userの単位で行う。
+Security Projectだけを分けるのは、Agent RuntimeやControl Planeが侵害されても監査ログを消せないようにするためである。
+Platform ProjectからSecurity Projectへはログの一方向送信（Log SinkとPub/Sub）だけを許し、Platform側のService AccountにはSecurity Project上の削除権限を与えない。
+
+## 2. デプロイ単位と内部機能
+
+アプリ（デプロイ単位）と、その中で動く機能の対応を図にする。
+Automation Design AI、Authorization AI Agent、Policy Engine、Tool Executorは独立したアプリではなく、それぞれのアプリ内部のモジュールである。
+LLM推論はすべてVertex AIへのAPI呼び出しであり、各アプリは推論結果を受け取るだけでモデルを持たない。
+
+```mermaid
+flowchart TB
+    subgraph AUTO["Automation App（Cloud Run Service）"]
+        A1[Web UI / 日報管理]
+        A2[Automation Design AI]
+        A3[Agent操作]
+    end
+    subgraph AUTHZ["Authorization Platform（Cloud Run Service）"]
+        Z1[Work Definition構造化]
+        Z2[Authorization AI Agent]
+        Z3[Policy Engine]
+        Z4[Capability Taxonomy]
+    end
+    subgraph PROV["Agent Provisioner（Cloud Run Service）"]
+        P1[Provisioning Transaction]
+        P2[Tool / Connector Catalog解決]
+        P3[Agent登録 / Dedicated OP作成 / Job起動]
+    end
+    subgraph LIFE["Lifecycle Manager（Cloud Run Service + Cloud Scheduler）"]
+        L1[期限監視 / Revoke / Destroy / Re-Provisioning]
+    end
+    subgraph OP["Shared Agent OP / Dedicated Agent OP（Cloud Run Service）"]
+        O1[Agent認証 / ID-JAG発行 / KMS署名 / 期限確認]
+    end
+    subgraph GB["Google Bridge（Cloud Run Service）"]
+        G1[ID-JAG検証 / Consent / Refresh Token管理 / Access Token払い出し]
+    end
+    subgraph RUN["Agent Runtime（Cloud Run Job Execution。1 Agent = 1 Execution）"]
+        R1[Agent Reasoning]
+        R2[Tool Executor]
+        R3[Checkpoint / Telemetry]
+    end
+    subgraph SEC["Security Detection（Cloud Run Service）"]
+        S1[Protocol Validation / Rule / Correlation / Risk Score]
+        S2[Security AI]
+        S3[Response]
+    end
+    VAI[(Vertex AI)]
+    A2 -.-> VAI
+    Z2 -.-> VAI
+    R1 -.-> VAI
+    S2 -.-> VAI
+```
+
+各アプリのGCP上の実体、公開範囲、動作に使うService Accountは次のとおり。
+内部機能の一覧は [01. §3.1](./01-overview.md#31-アプリと機能の区別) を正とし、ここでは繰り返さない。
+
+| アプリ | GCPの実体 | 公開範囲 | Service Account |
+|---|---|---|---|
+| Automation App | Cloud Run Service | 公開（Human IdPでログイン） | `sa-automation-app` |
+| Authorization Platform | Cloud Run Service | 内部 | `sa-authorization` |
+| Agent Provisioner | Cloud Run Service | 内部 | `sa-provisioner` |
+| Lifecycle Manager | Cloud Run Service。Cloud Schedulerから定期起動 | 内部 | `sa-lifecycle` |
+| Shared Agent OP | Cloud Run Service（1つ） | 内部 | `sa-shared-agent-op` |
+| Dedicated Agent OP | Cloud Run Service（FULL_ISOLATION Agentごとに1つ） | 内部 | `sa-op-<agent>` |
+| Google Bridge | Cloud Run Service | 内部API。OAuth Callbackだけ公開 | `sa-google-bridge` |
+| Native Resource AS / API | Cloud Run Service（社内Resourceの場合） | 内部 | `sa-native-resource-as` / `sa-native-resource-api` |
+| Agent Runtime | Cloud Run Job。STANDARDは共通のJob定義、FULL_ISOLATIONはAgent専用のJob定義。1 Agent = 1 Execution | 非公開（HTTP Ingressなし） | `sa-agent-runtime` / `sa-agent-<agent>` |
+| Security Detection | Cloud Run Service | 内部 | `sa-security` |
+
+## 3. アプリ間の呼び出し関係
+
+アプリ単位で「誰が誰を呼ぶか」と、その呼び出しを何で認証するかを示す。
+Agent作成の時系列は [07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow) にあり、ここでは呼び出しの向きだけを扱う。
+
+```mermaid
+flowchart LR
+    USER[Human User]
+    HIDP[Human IdP]
+    AUTO[Automation App]
+    AUTHZ[Authorization Platform]
+    PROV[Agent Provisioner]
+    LIFE[Lifecycle Manager]
+    OP[Shared / Dedicated Agent OP]
+    GB[Google Bridge]
+    RUN[Agent Runtime]
+    NAS[Native Resource AS / API]
+    GOOGLE[Google OAuth AS / API]
+    SEC[Security Detection]
+
+    USER --> HIDP
+    USER --> AUTO
+    AUTO -->|Human Token| AUTHZ
+    AUTO -->|Human Token| PROV
+    AUTO -->|停止依頼| LIFE
+    AUTHZ -->|Re-Provisioning| LIFE
+    PROV -->|登録 / 作成| OP
+    PROV -->|Binding作成| GB
+    PROV -->|Execution起動| RUN
+    LIFE -->|Revoke| RUN
+    LIFE -->|Revoke| OP
+    LIFE -->|Revoke| GB
+    LIFE -->|Re-Provision| PROV
+    RUN -->|ID-JAG要求| OP
+    RUN -->|ID-JAG| GB
+    RUN -->|ID-JAG / Access Token| NAS
+    GB -->|Refresh Token| GOOGLE
+    RUN -->|Access Token| GOOGLE
+    SEC -->|Quarantine / Revoke| LIFE
+```
+
+| 呼び出し | 認証と認可 |
+|---|---|
+| Human User → Automation App | Human IdPのOIDCログイン |
+| Automation App → Authorization Platform / Agent Provisioner / Lifecycle Manager | Human Access Token（DPoP-bound、`aud` は各アプリ）に加えて、Cloud Run IAMで `sa-automation-app` にだけ `run.invoker` を付与 |
+| Automation App ↔ Firestore | `sa-automation-app` でAgentのstate読み取りとinstructions書き込み（[02. §5](./02-automation-design.md#5-実行中agentの操作)） |
+| 権限管理システム → Authorization Platform | Human Permission変更イベントをPub/Sub Push Subscriptionで配信。Pub/SubのOIDC Tokenで認証 |
+| Authorization Platform → Lifecycle Manager | Cloud Run IAM |
+| Agent Provisioner → Shared Agent OP / Google Bridge | Cloud Run IAM |
+| Agent Provisioner → GCP API | `sa-provisioner` でCloud Run Job Executionの起動と、FULL_ISOLATION用のCloud Run Service、Service Account、KMS Key、IAM Bindingの作成 |
+| Lifecycle Manager → Agent Runtime / OP / Bridge / Native AS / KMS | Cloud Run IAMとGCP API。Cloud SchedulerからのOIDC Tokenで定期起動 |
+| Agent Runtime → Agent OP | Layer 1：Cloud Run IAM（`sa-agent-runtime` または `sa-agent-<agent>`）。Layer 2：Agent Client Credential（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)） |
+| Agent Runtime → Google Bridge | Cloud Run IAMに加えてID-JAG |
+| Agent Runtime → Native Resource AS / Resource API | ID-JAG、そしてAccess Token。Cloud Run IAMは社内Resourceの場合に追加してよいが、XAAの代替にはしない |
+| Agent Runtime → Google API | Google Bridgeが返したGoogle Access Token |
+| Google Bridge → Google OAuth AS | OAuth Client Secret（Secret Manager）とRefresh Token（Credential DB） |
+| 各アプリ → Cloud Logging → Pub/Sub → Security Detection | Cloud Loggingの標準経路。Security Detectionは `sa-security` でSubscribe |
+| Cloud Logging → BigQuery（`agent-security-prod`） | Log Sink。Sink用のService Accountにだけ書き込み権限を付与 |
+| Security Detection → Lifecycle Manager | Cloud Run IAM |
+
+## 4. GCP Service Accountとは
+
+GCP Service Accountは、GCP上で動くアプリ（Cloud Run ServiceやJob）が**GCPのIAMに対して名乗る身元**である。
+「AI Agentが外部サービスへアクセスするときに名乗る身元」ではない。
+本システムでその役割を担うのは、Agent OPが発行するID-JAG（Agent Identity）である。
+
+| | GCP Service Account | Agent Identity（ID-JAG） |
+|---|---|---|
+| 誰の身元か | Cloud Run Service / Jobというアプリ | 1つのAI Agent |
+| 誰に対して名乗るか | GCP IAM（KMS、Secret Manager、Cloud SQL、Firestore、他のCloud Run） | Resource Authorization Server、OAuth Bridge |
+| 何が決まるか | そのアプリがどのGCPリソースを使えるか | そのAgentがどのResourceへどのscopeでアクセスできるか |
+| 誰が発行するか | GCP | Agent OP |
+| いつ作るか | アプリのデプロイ時。Dedicated OPと専用Runtimeの分だけProvisioning時 | Agent Provisioning時 |
+| 寿命 | アプリと同じ。Dedicated分はAgentと同じ | 最大24時間 |
+
+したがって、AI Agentを含まないアプリにもService Accountは必要になる。
+Google Bridgeを例にすると、Bridgeは動作のために次のGCPリソースへアクセスする。
+
+- Secret ManagerからGoogle OAuth Client Secretを読む
+- Cloud KMSでRefresh Tokenを復号する
+- Cloud SQL（Credential DB）へ接続する
+
+これらの可否はGCP IAMが `sa-google-bridge` に対して判定する。
+Service Accountを指定しないCloud RunはProject共通のデフォルトService Accountで動作し、その権限はProject全体に及ぶため、アプリごとに専用のService Accountを作って必要な権限だけを付与する。
+
+### 4.1 Agent Runtimeが共有Service Accountで動く意味
+
+`sa-agent-runtime` はCloud Run Job定義に紐づくService Accountであり、そのJobから起動されるすべてのExecutionがこのService Accountとして動く。
+STANDARD Agentは1つのJob定義を共有するため、Service Accountも共有する。
+しかし、共有されるのはService AccountとJob定義だけである。
+実行は 1 Agent = 1 Execution であり、コンテナ、プロセス、メモリ、Tool Manifest、Agent Client CredentialはAgentごとに独立している（[07. §4.1](./07-lifecycle.md#41-実行形態)）。
+複数のAgentを1つのAI Agentプロセスで動かす構成ではない。
+
+Service Accountが共有されていても、Agent OPが「どのAgentとしてID-JAGを発行するか」はService Accountでは決まらない。
+それを決めるのは、Provisioning時にそのExecutionにだけ渡すAgent Client Credentialである（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)）。
+Agent AのExecutionはAgent BのClient Credentialを持たないため、Agent Bとして名乗れない。
+
+STANDARD AgentごとにService Accountを分けない理由は3つある。
+
+1. Service AccountはAgentの身元ではないため、分けてもAgent間の分離（Layer 2）は変わらない。
+2. 24時間で使い捨てるAgentごとにService Accountを作ると、ProjectあたりのService Account数の上限（既定100）と、IAM変更の反映遅延（最大数分）が運用上の制約になる。
+3. Agent専用のService Accountが意味を持つのは、Dedicated OPへの呼び出し権限をそのAgentのRuntimeだけに絞るときである。それが必要なFULL_ISOLATIONでは `sa-agent-<agent>` を作る。
+
+### 4.2 Dedicated OPにService Accountを分ける理由
+
+Dedicated OPに専用のService Account `sa-op-<agent>` を作るのは、GCP IAMでKMS鍵への署名権限を「このOPだけ」に絞るためである。
+Shared OPのService Accountを流用すると、そのService Accountが持つ全Agentの鍵に署名できてしまい、OPを分けた意味がなくなる。
+Blast Radiusの比較は [05. §5](./05-identity.md#5-isolation-model) を参照。
+
+## 5. Service Account一覧
+
+各Service Accountに付与する権限と、明示的に付与しない権限を示す。
+「付与しない」欄は、侵害時にそのService Accountで到達できてはならない範囲である。
+
+| Service Account | 付与する | 付与しない |
+|---|---|---|
+| `sa-automation-app` | Authorization Platform / Provisioner / Lifecycle Managerの `run.invoker`。Vertex AI推論。Cloud SQL（日報、`agent_definition`）。Firestore（`agents/*/state` 読み取り、`agents/*/instructions` 書き込み） | Signing Key。Secret。Credential DB。Authorization DBの書き込み。Tool Catalog |
+| `sa-authorization` | Vertex AI推論。Cloud SQL（`authorization`、`capability_taxonomy`）。Lifecycle Managerの `run.invoker`。Pub/Sub Subscribe（Human Permission変更） | Signing Key。Refresh Token。Client Secret。Resource APIの直接実行。Agent Runtimeの操作 |
+| `sa-provisioner` | Shared OP / Google Bridgeの `run.invoker`。Cloud SQL（`provisioning`、`tool_catalog`、`agent_definition`）。Firestore（`agents/*` 書き込み）。Cloud Run Job Executionの起動。FULL_ISOLATION用のCloud Run Service、Service Account、KMS Key、IAM Bindingの作成 | Refresh Token。Client Secret。既存Agent Keyでの署名。Authorization DBの書き込み。Security Project |
+| `sa-lifecycle` | Job Executionの取り消し。OP / Bridge / Native AS / Provisionerの `run.invoker`。KMS Keyの無効化。Dedicated Cloud Run ServiceとService Accountの削除。Firestore（`agents/*` 削除） | Refresh Token。Client Secret。署名 |
+| `sa-shared-agent-op` | STANDARD AgentのKMS Keyでの署名（`cloudkms.signerVerifier`）。Firestore（`agents/*` 読み取り） | Dedicated OP用Key。Refresh Token。Client Secret。Authorization DB。Provisionerの権限 |
+| `sa-op-<agent>` | そのAgentのKMS Keyでの署名。そのAgentのRegistration読み取り | 他AgentのKey。Refresh Token。Authorization DBの書き込み。Provisionerの権限 |
+| `sa-agent-runtime` | Shared OP / Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Secret Manager。Credential DB。Signing Keyの管理。Authorization DBの書き込み。Provisionerの権限 |
+| `sa-agent-<agent>` | `dedicated-op-<agent>` の `run.invoker`。Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Shared OPの `run.invoker`。上記 `sa-agent-runtime` と同じ |
+| `sa-google-bridge` | Google OAuth Client Secretの読み取り。Credential DBの読み書き。Connector Encryption Keyでの暗号化と復号 | Agent OP Signing Key。Authorization DBの書き込み。Agent Runtimeの操作 |
+| `sa-native-resource-as` | Resource AS Signing Keyでの署名。Resource側の認可DB | Agent OP Signing Key。Platform側DB |
+| `sa-security` | Pub/Sub Subscribe。BigQuery（`agent-security-prod`）の読み書き。Vertex AI推論。Lifecycle Managerの `run.invoker` | Platform側DBの書き込み。Signing Key。Secret |
+
+`sa-provisioner` と `sa-lifecycle` はCloud Run ServiceやService Account、KMS Keyを作成および削除できるため、Project内で最も強い権限を持つ。
+両アプリは内部公開に限定し、ProvisionerはHuman Access Token（DPoP-bound）を伴う要求だけを受け付ける。
+
+## 6. 鍵と秘密情報
+
+### 6.1 Cloud KMS
+
+鍵は用途ごとにKey Ringを分ける。
+
+| Key Ring | 鍵 | 使う者 |
+|---|---|---|
+| `agent-op-signing` | Agentごとの署名鍵（`agent-001-key`、`finance-001-key` など） | STANDARDは `sa-shared-agent-op`、FULL_ISOLATIONは `sa-op-<agent>` のみ |
+| `resource-as-signing` | Native Resource ASのAccess Token署名鍵 | `sa-native-resource-as` |
+| `connector-encryption` | Refresh Tokenの暗号化鍵 | `sa-google-bridge` |
+
+Agentの署名鍵はAgent単位で作り、Dedicated OPではOP、Service Account、鍵を1対1で対応させる。
+Agent破棄時は鍵を即時Disableし、Destroyは予約する。
+秘密鍵はKMSの外へ出さず、署名はすべてKMS APIで行う。
+
+### 6.2 Secret Manager
+
+Google OAuth Client Secretなど、外部SaaSの静的なClient SecretはSecret Managerへ保存する。
+各Secretは対応するBridgeのService Accountにだけ `secretAccessor` を付与する。
+Refresh TokenはSecret Managerではなく、KMSで暗号化してCredential DBへ保存する（[06. §3](./06-oauth-bridge.md#3-credential保持方針)）。
+
+## 7. データストア
+
+### 7.1 Cloud SQL（PostgreSQL）
+
+1インスタンスの中で、論理DBとDB Userを責務ごとに分ける。
+DB UserはService Accountに対応させ、Cloud SQL IAM認証で接続する。
+
+| 論理DB | 内容 | 読み書きするService Account |
+|---|---|---|
+| `authorization` | Human Permission、Delegatable Permission、Organization Policy、Risk Policy、Policy Decisionの記録 | `sa-authorization` |
+| `capability_taxonomy` | 定義済みCapabilityの一覧 | `sa-authorization`（読み取り）。管理者（更新） |
+| `tool_catalog` | Tool / Connector Definition | `sa-provisioner`（読み取り）。管理者（更新） |
+| `agent_definition` | Agent Definition、Work Definition | `sa-automation-app`、`sa-provisioner` |
+| `provisioning` | Provisioning Transaction | `sa-provisioner`、`sa-lifecycle` |
+| `connector`（Credential DB） | Google Connection、暗号化Refresh Token、Agent Binding | `sa-google-bridge` |
+
+### 7.2 Firestore
+
+Agent単位で高速に読み書きするものはFirestoreに置く。
+
+| パス | 内容 | 書く者 | 読む者 |
+|---|---|---|---|
+| `agents/{agent_id}` | Agent Registration（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)） | Provisioner、Lifecycle Manager | Agent OP |
+| `agents/{agent_id}/state` | Runtime Checkpoint、Agent Status | Agent Runtime | Automation App、Lifecycle Manager |
+| `agents/{agent_id}/instructions` | ユーザーからの追加指示 | Automation App | Agent Runtime |
+
+いずれのストアにもRaw Token、Refresh Token（暗号化前）、Private Key、Client Secretは保存しない。
+
+## 8. ネットワークと公開範囲
+
+Internetへ公開するのは、Automation AppとGoogle BridgeのOAuth Callbackだけである。
+Google Consent後のリダイレクト先はAutomation Appとし、Automation AppがProvisionerのTransaction再開をServer-to-Serverで呼ぶ（[06. §5](./06-oauth-bridge.md#5-google-consent)）。
+それ以外のCloud Run ServiceはIngressを内部に限定し、Cloud Run IAMで呼び出し元のService Accountを絞る。
+Agent RuntimeはCloud Run Jobであり、受信するHTTPエンドポイントを持たない。
+
+Cloud SQLへPrivate IPで接続するなど、VPC内へ出る必要がある場合はDirect VPC Egressを使う。
+Serverless VPC Access Connectorは常時費用と運用負荷を伴うため使わない。
+
+Cloud Run IAMはXAAの代替ではない。
+Cloud Run IAMは「どのアプリが呼べるか」を決め、ID-JAGは「どのAgentとして何にアクセスできるか」を決める（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)）。
+
+## 9. 使用するGCPサービス一覧
+
+| GCPサービス | 用途 |
+|---|---|
+| Cloud Run Service | Automation App、Authorization Platform、Agent Provisioner、Lifecycle Manager、Shared / Dedicated Agent OP、Google Bridge、Native Resource AS / API、Security Detection |
+| Cloud Run Job | Agent Runtime（timeout 24h） |
+| Cloud Scheduler | Lifecycle Managerの定期起動 |
+| Vertex AI | Automation Design AI、Authorization AI Agent、Agent Reasoning、Security AIの推論 |
+| Cloud SQL（PostgreSQL） | §7.1の論理DB |
+| Firestore | Agent Registration、Runtime Checkpoint、追加指示 |
+| Cloud KMS | Agent署名鍵、Resource AS署名鍵、Connector暗号化鍵 |
+| Secret Manager | OAuth Client Secret |
+| Pub/Sub | Human Permission変更イベント、Security Detectionへのログ配信 |
+| Cloud Logging | 全アプリのログ収集とLog Sink |
+| BigQuery（`agent-security-prod`） | Security Data Lake、長期監査ログ、Security Findings |
