@@ -31,6 +31,12 @@ Human IdPにAgentの文脈を持ち込まないよう、issuerを1つに保っ�
 | 10 | [設計ルール](./10-design-rules.md) | 各文書で決めた原則の一覧 |
 | 11 | [アクティビティタイムライン](./11-activity-timeline.md) | 人間向けの可視化画面。Activity Event、配信経路、画面表示、侵害を見せるデモの作り方 |
 
+## 実装タスク
+
+本ディレクトリの設計を実装するためのタスクは [tasks/](../tasks/README.md) にある。
+docs 01 から 11 までの記述から要件を421件抽出し、13領域374件のタスクへ分解した。
+制約（単一 GCP プロジェクト、IaC 優先、maronn-openid-connect の利用、低コスト）のもとで docs のルールから外れた判断は [tasks/00-decisions.md](../tasks/00-decisions.md) にまとめてある。
+
 ## 全体構成図
 
 ![全体構成図](./diagrams/architecture.png)
@@ -54,3 +60,4 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 - 2026-08-30：人間向けの可視化画面として[11. アクティビティタイムライン](./11-activity-timeline.md)を追加した。Security Detection（09）とは別に、ログイン・権限決定・Agent実行・遮断を時系列で見せるActivity Eventを新設し、Automation App内の機能として位置づけた（RULE-54〜RULE-58）。
 - 2026-08-30：11のイベント配信を、実行中に逐次配信する方式から、Task（`provisioning` / `task-{n}` / `lifecycle`）が完了してからまとめて再生する方式へ改めた（RULE-59）。再生は文字の一覧だけでなく、呼び出しの経路をアニメーションで示し、遮断はその経路が途中で止まる動きで表す。
 - 2026-08-30：11の画面仕様（5章）は、Task選択後の再生の中身や表示のルールを含め元の記述のまま残した。Activity Eventの記録は通常利用かデモかを区別せず常時行うことを追記した（RULE-60）。
+- 2026-08-30：docs の内容を実装するためのタスクファイルを `tasks/` へ追加した。要件421件を374タスクへ分解し、制約と docs が食い違う箇所の判断を `tasks/00-decisions.md` に、識別子と成果物の所有者を `tasks/00b-conventions.md` に確定させた。
