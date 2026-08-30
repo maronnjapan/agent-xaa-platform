@@ -32,11 +32,11 @@
 | Isolation Slot の status | `free` / `allocated` の2値（小文字） | `FREE` / `ASSIGNED` | T-PROV-24 / T-PROV-26 / T-LIFE-09 |
 | Isolation の水準 | `standard` / `full_isolation` | `shared`、`ISOLATION_MODE` 由来の値 | T-RUN-01 / T-PROV-05 / T-IAC-12 / T-IAC-13 |
 | Human IdP の kid | `idp-<公開 JWK の RFC 7638 thumbprint を base32 小文字で符号化した先頭8文字>` | 乱数8文字 | T-IDP-03 |
-| 共有 Agent OP の kid | `op-shared-<KMS CryptoKeyVersion の末尾番号>` | `agent-op-*`、`dedicated-op-slot-2-1` | T-PKG-13 / T-OP-05 / T-OP-06 |
-| スロット Agent OP の kid | `op-slot-<nn>-<KMS CryptoKeyVersion の末尾番号>`、`nn` は2桁ゼロ埋め | `op-slot-0`、`op-slot-1`、`dedicated-op-slot-<n>-<v>` | T-PKG-13 / T-OP-05 / T-IAC-13 / T-IAC-20 |
+| 共有 Agent OP の kid | `op-shared-<KMS CryptoKeyVersion の末尾番号>` | `agent-op-*`、`idjag-aaaaaaaaaaaa-1` | T-PKG-13 / T-OP-05 / T-OP-06 |
+| Dedicated Agent OP の kid | `idjag-<short>-<KMS CryptoKeyVersion の末尾番号>` | `op-slot-<nn>-<v>`、`dedicated-op-<short>-<v>` | T-PKG-13 / T-OP-05 / T-OP-06 |
 | Docs Resource AS の kid | `docs-as-<thumbprint 先頭8文字>` | `res-docs-*` | T-RES-04 |
 | Finance Resource AS の kid | `fin-as-<thumbprint 先頭8文字>` | `res-finance-*` | T-RES-04 |
-| JWKS の kid 接頭辞の全集合 | `idp-` / `op-shared-` / `op-slot-<nn>-` / `docs-as-` / `fin-as-` の5種 | 上記以外 | T-IAC-21 / T-OP-06 |
+| JWKS の kid 接頭辞の全集合 | `idp-` / `op-shared-` / `idjag-<nn>-` / `docs-as-` / `fin-as-` の5種 | 上記以外 | T-IAC-21 / T-OP-06 |
 | JWKS の個別オブジェクト | `keys/<kid>.json` | `keys/<prefix>-<kid>.json` の二重接頭辞 | T-IAC-13 / T-IAC-20 / T-IAC-21 |
 | JWKS の集約オブジェクト | `jwks.json`（バケット直下、公開） | なし | T-IAC-21 の jwks-publish Job |
 | Resource AS の署名鍵種別 | RSA-2048 の RS256 | ES256（P-256） | T-RES-04 |
@@ -58,13 +58,13 @@
 | SERVICE_IDS | `human-idp` / `shared-agent-op` / `agent-op-callback` / `automation-app` / `provisioner` / `authorization` / `lifecycle` / `resource-docs-as` / `resource-docs-api` / `resource-finance-as` / `resource-finance-api` / `stub-saas-op` / `google-bridge` の13件 | `agent-op`、`tool-catalog` | T-PKG-21 |
 | Cloud Run Service 名（常設12件） | `human-idp` / `automation-app` / `authorization` / `provisioner` / `lifecycle` / `shared-agent-op` / `agent-op-callback` / `security-detection` / `resource-finance-as` / `resource-finance-api` / `resource-docs-as` / `resource-docs-api` | `automation-design-ai`、`authorization-ai-agent`、`policy-engine`、`tool-executor`、`tool-catalog`、`lifecycle-manager` | T-IAC-08 の `locals.service_names` |
 | Cloud Run Service 名（条件付き4件） | `google-bridge` / `google-bridge-callback` / `stub-saas-op` / `stub-saas-api` | 条件付き3件 | T-IAC-08 / T-IAC-11 / T-BRIDGE-19 |
-| Cloud Run Service 名（スロット） | `dedicated-op-slot-<nn>`、Job は `agent-runtime-slot-<nn>`、`nn` は2桁ゼロ埋め | 1桁採番 | T-IAC-13 |
+| Cloud Run Service 名（実行時作成） | `dedicated-op-<short>`、Job は `agent-runtime-<short>`。`<short>` は `agent_id` の乱数部の末尾12文字 | `dedicated-op-slot-<nn>` | T-PROV-24 |
 | Service Account 台帳（19件） | `sa-human-idp` / `sa-automation-app` / `sa-authorization` / `sa-provisioner` / `sa-lifecycle` / `sa-shared-agent-op` / `sa-google-bridge` / `sa-security` / `sa-resource-finance-as` / `sa-resource-finance-api` / `sa-resource-docs-as` / `sa-resource-docs-api` / `sa-agent-runtime` / `sa-scheduler` / `sa-pubsub-push` / `sa-seed` / `sa-jwks-publish` / `sa-stub-saas-op` / `sa-stub-saas-api` | `sa-security-detection`、18件の台帳 | T-IAC-05、T-SEC-07 は `sa-security` を使う |
-| Service Account 台帳（スロット） | `sa-op-slot-<nn>` と `sa-agent-slot-<nn>`、台帳ではなく isolation-slot モジュールが作る | なし | T-IAC-13 |
+| Service Account（実行時作成） | `sa-op-<short>` と `sa-agent-<short>`。Terraform の SA 台帳には書かず Provisioner が作る | `sa-op-slot-<nn>`、`sa-agent-slot-<nn>` | T-PROV-24 |
 | `stub-saas-api` の ingress | `INGRESS_TRAFFIC_INTERNAL_ONLY`（DEC-IAC-14 の公開集合に含めない） | `INGRESS_TRAFFIC_ALL` | T-IAC-11 / T-IAC-16 |
 | Pub/Sub トピック | `agent-activity-stream` / `security-logs` / `human-permission-changed` / `human-identity-disabled` の4件 | `security-events`、`security_events` | T-SEC-08 が Terraform を持つ、T-IAC-30 は削除 |
 | BigQuery の dataset | `security_audit`、テーブル保持は7日 | 30日 | T-IAC-31 が dataset、T-SEC-07 がテーブル |
-| BigQuery テーブル slot_leases の列 | `slot_index` / `agent_id` / `leased_at` / `released_at` の4列 | `slot_id`、`assigned_at` | T-SEC-07 が作成、T-SEC-23 が書き出し、T-SEC-09 が参照 |
+| 横方向アクセスの判定 | Dedicated OP のログ項目 `op_agent_id` と、同じ行の `agent_id` の一致で判定する | リース履歴テーブル `slot_leases` | T-OP-30 が出力、T-SEC-09 と T-SEC-23 が参照 |
 | 共有パッケージ（8件） | `packages/xaa-crypto`（@xaa/crypto）/ `packages/xaa-contracts`（@xaa/contracts）/ `packages/gcp`（@xaa/gcp）/ `packages/xaa-logging`（@xaa/logging）/ `packages/xaa-resource-guard`（@xaa/resource-guard）/ `packages/xaa-control-plane-auth`（@xaa/control-plane-auth）/ `packages/xaa-vertex`（@xaa/vertex）/ `packages/xaa-docs-check`（@xaa/docs-check） | `packages/control-plane-auth`、`packages/xaa-gcp`、7件固定 | T-PKG-01 が一覧を持ち、完了条件は `ls -d packages/*/ | wc -l` が 8 |
 | アプリのディレクトリ名 | `apps/lifecycle-manager`（Cloud Run Service 名は `lifecycle`） | `apps/lifecycle` | T-LIFE 全体、T-PKG-29 の検査対象 |
 | テストの拡張子 | `.spec.ts` | `.test.ts` | 全領域 |
@@ -76,7 +76,7 @@
 | DPoP の htu の組み立て | 環境変数 `PUBLIC_BASE_URL` とリクエストパスの連結 | `Host` と `X-Forwarded-Proto` からの組み立て | T-PKG-12 が定義、T-OP-10 / T-AUTHZ-06 / T-BRIDGE-06 が従う |
 | jti ストアの実装 | `packages/xaa-crypto` の `FirestoreJtiStore`（ドキュメント ID は `${namespace}__${jti}`） | インメモリ Map、アプリ別実装 | T-PKG-11 が定義、T-IDP-18 / T-AUTHZ-06 / T-BRIDGE-06 / T-OP-16 が使う |
 | jti の名前空間 | `dpop` / `actor-token` / `client-assertion` の3種 | なし | T-PKG-11 |
-| platform_endpoints のキー | `issuer` / `jwks_url` / `xaa_token_url` / `xaa_callback_url` / `subject_token_url` / `authorization_url` / `provisioner_url` / `lifecycle_url` / `resource_docs_as_issuer` / `resource_docs_api_url` / `resource_finance_as_issuer` / `resource_finance_api_url` / `bridge_internal_url` / `stub_saas_op_issuer` / `slots` / `agent_max_lifetime_seconds` / `vertex_model` / `vertex_location` / `enable_google_bridge` の19件 | `jwks_uri`、`resource_docs_api_resource`、`resource_finance_api_resource` | T-IAC-07 が書き、T-PKG-20 が検証、T-IAC-26 / T-RES-15 / T-LIFE-07 が読む |
+| platform_endpoints のキー | `issuer` / `jwks_url` / `xaa_token_url` / `xaa_callback_url` / `subject_token_url` / `authorization_url` / `provisioner_url` / `lifecycle_url` / `resource_docs_as_issuer` / `resource_docs_api_url` / `resource_finance_as_issuer` / `resource_finance_api_url` / `bridge_internal_url` / `stub_saas_op_issuer` / `agent_max_lifetime_seconds` / `vertex_model` / `vertex_location` / `enable_google_bridge` の18件 | `jwks_uri`、`slots`、`resource_docs_api_resource`、`resource_finance_api_resource` | T-IAC-07 が書き、T-PKG-20 が検証、T-IAC-26 / T-RES-15 / T-LIFE-07 が読む |
 | platform_endpoints のオブジェクト | `gs://<project_id>-platform-config/platform-endpoints.json` | `endpoints.json` | T-IAC-07 |
 | ID-JAG の audience | Resource AS の issuer（https URL） | `urn:xaa:...` | T-OP-21 / T-RES-06 |
 | Firestore データベース ID | `xaa`（名前付きデータベース） | `(default)` | T-IAC-22、全アプリ |
@@ -102,19 +102,19 @@
 | `FIRESTORE_DATABASE` | T-IAC-09 | T-OP-01 / T-IDP-02 | `xaa` |
 | `JWKS_BUCKET` | T-IAC-09 / T-IAC-10 | T-OP-01 / T-IDP-02 / T-RES | JWKS 公開バケット名 |
 | `JWKS_OBJECT` | T-IAC-09 | T-OP-01 | `jwks.json` |
-| `KMS_IDJAG_KEY` | T-IAC-09 / T-IAC-13 | T-OP-01 | `shared-agent-op-idjag` または `dedicated-op-slot-<nn>-idjag` の完全修飾名 |
+| `KMS_IDJAG_KEY` | T-IAC-09 / T-IAC-13 | T-OP-01 | `shared-agent-op-idjag` または `dedicated-op-<short>-idjag` の完全修飾名 |
 | `KMS_IDP_CONNECTION_KEY` | T-IAC-09 / T-IAC-13 | T-OP-01 | `idp-connection` 系 KMS 鍵の完全修飾名 |
 | `HUMAN_IDP_AUTHORIZE_URL` | T-IAC-09 | T-OP-01 | `${local.run_url["human-idp"]}/authorize` |
 | `HUMAN_IDP_TOKEN_URL` | T-IAC-09 | T-OP-01 | `${local.run_url["human-idp"]}/token` |
 | `HUMAN_IDP_REVOKE_URL` | T-IAC-09 | T-OP-01 | `${local.run_url["human-idp"]}/revoke` |
 | `ID_JAG_LIFETIME_SECONDS` | T-IAC-09 | T-OP-01 | 既定 300 |
-| `SLOT_INDEX` | T-IAC-09 / T-IAC-13 | T-OP-01 / T-RUN-01 | 共有は `-1`、スロットは `01` から始まる2桁。検証は `/^(-1|[0-9]{2})$/` |
+| `AGENT_ID` | Shared OP には注入しない（T-IAC-09）。Dedicated OP には T-PROV-24 が注入 | T-OP-01 / T-OP-06 / T-RUN-01 | 未設定なら Shared OP として動く。設定時は `assertAgentId` を満たすこと |
 | `AGENT_OP_ROLE` | 廃止 | なし | `MODE` に統一 |
 | `IDJAG_KMS_KEY` | 廃止 | なし | `KMS_IDJAG_KEY` に統一 |
 | `IDP_CONNECTION_KMS_KEY` | 廃止 | なし | `KMS_IDP_CONNECTION_KEY` に統一 |
 | `ALLOWED_AUDIENCES` | 廃止 | なし | Agent Registration の `allowed_audiences` から実行時に引く |
 | `ALLOWED_RESOURCES` | 廃止 | なし | Agent Registration の `resources` から実行時に引く |
-| `JWKS_KEY_PREFIX`（Agent OP） | 廃止 | なし | kid は `SLOT_INDEX` から導出する |
+| `JWKS_KEY_PREFIX`（Agent OP） | 廃止 | なし | kid は `AGENT_ID` から導出する |
 | `ISOLATION_MODE` | 廃止 | なし | `ISOLATION_LEVEL` に統一、Agent OP には注入しない |
 | `PORT` | T-IAC-09 | T-IDP-02 | Cloud Run の既定 |
 | `ISSUER_PROFILE` | T-IAC-09 | T-IDP-02 | `direct` または `loadbalancer` |
@@ -134,7 +134,7 @@
 | `TASK_ID` | T-PROV-29 | T-RUN-01 | Task 識別子 |
 | `AGENT_CREATED_AT` | T-PROV-29 | T-RUN-01 | RFC 3339 |
 | `AGENT_EXPIRES_AT` | T-PROV-29 | T-RUN-01 | RFC 3339 |
-| `AGENT_OP_BASE_URL` | T-PROV-29 | T-RUN-01 | 共有 Agent OP またはスロットの URL |
+| `AGENT_OP_BASE_URL` | T-PROV-29 | T-RUN-01 | 共有 Agent OP または当該 Agent の Dedicated OP の URL |
 | `TOOL_MANIFEST` | T-PROV-29 | T-RUN-01 | Manifest の JSON 文字列 |
 | `TOOL_MANIFEST_SHA256` | T-PROV-29 | T-RUN-01 | `TOOL_MANIFEST` の SHA-256 |
 | `AGENT_CLIENT_PRIVATE_JWK` | T-PROV-29 | T-RUN-01 | Agent の秘密鍵 JWK |
@@ -167,7 +167,7 @@
 | `AGENT_MAX_LIFETIME_SECONDS` | T-IAC-11 / T-IAC-12 | T-BRIDGE-01 / T-RUN-01 | 変数 `agent_max_lifetime_seconds`、既定 86400 |
 | `SAAS_CONNECTOR_MODE` | T-IAC-11 | T-BRIDGE-01 | `stub` または `google` |
 | `CALLER_SA_RUNTIME` | T-IAC-11 | T-BRIDGE-01 / T-BRIDGE-02 | `sa-agent-runtime` の email |
-| `CALLER_SA_SLOTS` | T-IAC-11 | T-BRIDGE-01 / T-BRIDGE-02 | `sa-agent-slot-<nn>` の email の CSV |
+| `CALLER_SA_SLOTS` | T-IAC-11 | T-BRIDGE-01 / T-BRIDGE-02 | `sa-agent-<short>` の email の CSV |
 | `CALLER_SA_PROVISIONER` | T-IAC-11 | T-BRIDGE-01 | `sa-provisioner` の email |
 | `CALLER_SA_LIFECYCLE` | T-IAC-11 | T-BRIDGE-01 | `sa-lifecycle` の email |
 | `LIFECYCLE_MANAGER_URL` | T-IAC-08 | T-APP-01 / T-AUTHZ-01 | `local.run_url["lifecycle"]` |
@@ -185,7 +185,7 @@
 | パス | 構造 | 書く側 | 読む側 |
 |---|---|---|---|
 | `agents/{agent_id}` | サブドキュメントの親のみ。フィールドを持たせない | なし | なし |
-| `agents/{agent_id}/meta` | Agent Registration の17キー。`agent_id` `human_subject` `client_auth` `idp_connection_id` `allowed_audiences` `resources` `scopes` `created_at` `expires_at` `status` `dedicated_op_slot_index` `isolation_level` `registration_id` `kms_key_name` `job_execution_name` `bridge_binding_ids` `cleanup_step_results`。`additionalProperties: false`。`issuer` `subject` `api_base_url` `api_method` `api_path` `tool_id` を持たせない | T-PROV-19 の `registration-writer.ts`（`createRegistration` と `deleteRegistration` の2関数）と T-LIFE-02 の `status-writer.ts`（`status` と `cleanup_step_results` のみ） | T-OP-02 / T-OP-19 / T-RUN-04 / T-APP-12 / T-APP-13 / T-LIFE-03 |
+| `agents/{agent_id}/meta` | Agent Registration の17キー。`agent_id` `human_subject` `client_auth` `idp_connection_id` `allowed_audiences` `resources` `scopes` `created_at` `expires_at` `status` `dedicated_op` `isolation_level` `registration_id` `kms_key_name` `job_execution_name` `bridge_binding_ids` `cleanup_step_results`。`additionalProperties: false`。`issuer` `subject` `api_base_url` `api_method` `api_path` `tool_id` を持たせない | T-PROV-19 の `registration-writer.ts`（`createRegistration` と `deleteRegistration` の2関数）と T-LIFE-02 の `status-writer.ts`（`status` と `cleanup_step_results` のみ） | T-OP-02 / T-OP-19 / T-RUN-04 / T-APP-12 / T-APP-13 / T-LIFE-03 |
 | `agents/{agent_id}/state` | Agent の作業状態 | T-RUN | T-APP-12（read のみ） |
 | `agents/{agent_id}/instructions` | 追加指示 | T-APP-12 | T-RUN |
 | `agents/{agent_id}/manifest` | Tool Manifest の写し | T-PROV-06 | T-RUN-06 |
@@ -194,7 +194,7 @@
 | `dpop_jti/{namespace}__{jti}` | `{ namespace, jti, expire_at }`。namespace は `dpop` 固定。TTL は `expire_at` | T-PKG-11 の `FirestoreJtiStore` | 同左 |
 | `assertion_jti/{namespace}__{jti}` | `{ namespace, jti, expire_at }`。namespace は `actor-token` と `client-assertion`。TTL は `expire_at` | T-PKG-11 の `FirestoreJtiStore` | 同左 |
 | `idjag_issuance/{issuance_id}` | ID-JAG 発行台帳 | T-OP-30 | T-SEC |
-| `isolation_slots/{slot_index}` | `slot_index` `status`（`free` と `allocated`）`agent_id` `leased_at` `released_at` `service_url` `service_account_email` `kms_key_name` `job_name` | T-PROV-24 と T-PROV-26 のみ。行の初期化は T-IAC-26 の seed | T-SEC-23 の `export-slot-leases.ts`、T-PROV-28 |
+| `dedicated_resources/{agent_id}` | `agent_id` `status`（`CREATING` `READY` `FAILED` `RELEASED`）`created`（`{kind, name, created_at, deleted_at}` の配列）`created_at` `expires_at` `last_error` | 作成は T-PROV-26、削除の記録は T-LIFE-09 | T-PROV-28、T-LIFE-09、T-LIFE-10 の掃除 |
 | `provisioning_transactions/{transaction_id}` | 8値の `status` と許可遷移表 | T-PROV-13 | T-PROV-16 / T-OP-25 |
 | `catalog_connectors/{connector_id}` | `resource_type` `authorization_audience` `authorization_resource` `bridge_audience` `status` `risk_level` `tools` | T-IAC-26 の seed のみ | T-PROV-03 / T-BRIDGE-03 |
 | `catalog_tools/{tool_id}` | `tool_id` `connector_id` `description` `required_capability` `authorization`（map、キーは `type` `audience` `resource` `scope`）`token_provider` `api`（map、キーは `base_url` `method` `path`）`parameters` `constraints` `response_schema` `risk_level` の11キーの入れ子形 | T-IAC-26 の seed のみ | T-PROV-03 / T-PROV-05 / T-AUTHZ-17 |
@@ -217,13 +217,13 @@
 | `payments/{payment_id}` | Finance Resource の本体 | T-RES-12 | T-RES-12 |
 | `users/{sub}/activity/{event_id}` | Activity Event。`expire_at` の TTL は7日 | T-APP-23 | T-APP-22 |
 | `xaa_configs` | 作らない | なし | `agents/{agent_id}/meta` の3フィールドを `toXaaConfig(registration)` で射影する |
-| `issuer_profiles` | 作らない | なし | issuer は環境変数 `ISSUER`、kid は `SLOT_INDEX` から導出する |
+| `issuer_profiles` | 作らない | なし | issuer は環境変数 `ISSUER`、kid は `AGENT_ID` から導出する |
 | `agent_registrations` | 作らない | なし | `agents/{agent_id}/meta` に統一 |
 | `connector_bindings` | 作らない | なし | `agent_bindings` に統一 |
 | `connector_definitions` | 作らない | なし | `catalog_connectors` に統一 |
 | `jti_locks` | 作らない | なし | `dpop_jti` と `assertion_jti` に統一（DEC-IAC-22） |
 | `bridge_dpop_jti` | 作らない | なし | `dpop_jti` の名前空間 `dpop` に統一 |
-| `slots` | 作らない | なし | `isolation_slots` に統一 |
+| `isolation_slots` | 作らない | なし | `dedicated_resources` に統一 |
 
 ## 4. HTTP エンドポイント
 
@@ -243,7 +243,7 @@
 | `/authorize` `/token` `/userinfo` `/logout` `/revoke` `/.well-known/openid-configuration` | T-IDP-01 | T-APP / T-OP-19 / ブラウザ | OIDC 標準 |
 | `POST /provisioning` | T-PROV-16 | T-APP-14 | Control Plane の `at+jwt` と DPoP、scope `agent:provision` |
 | `POST /provisioning/{transaction_id}/resume` | T-PROV-14 | T-OP-25 | 同上 |
-| `POST /internal/slots/release` | T-PROV-26 | T-LIFE-09 の step8 | Google 発行 OIDC ID Token、呼び出し元は `sa-lifecycle` に限る |
+| （スロット返却 API は作らない） | なし | なし | 削除は T-LIFE-09 が GCP API を直接呼ぶ |
 | `POST /internal/provisioning/reprovision` | T-PROV-16 | T-LIFE-13 の (3) | 同上、呼び出し元は `sa-lifecycle` |
 | `POST /agents/{agent_id}/revoke` | T-LIFE-01 / T-LIFE-11 | T-APP-14（`{LIFECYCLE_MANAGER_URL}/agents/{agent_id}/revoke`） | Control Plane の `at+jwt` と DPoP |
 | `POST /internal/tick` | T-LIFE-01 | Cloud Scheduler（T-IAC-27） | Google 発行 OIDC ID Token、`sa-scheduler` |
@@ -280,7 +280,7 @@
 | `Dockerfile` と `.dockerignore` | T-PKG-26 | T-IAC-34 は成果物から外し、Artifact Registry と shared の outputs のみを作る |
 | `Makefile` | T-PKG-26 | T-IAC-46 は `# --- infra targets (T-IAC) ---` の下に `bootstrap` `shared-apply` `demo-apply` `seed` `verify` `demo-destroy` `all` の7ターゲットを追記する。`images` は T-PKG-26 の定義を使う |
 | `scripts/build-images.sh` | T-PKG-26 | T-IAC-34 の `scripts/build-push.sh` は作らない。T-IAC-34 の完了条件は `make image-human-idp IMAGE_TAG=v1` に、T-IAC-46 の grep 対象は `Makefile scripts/build-images.sh` にする |
-| `infra/tests/no-kms-key-version.sh` と `infra/tests/no-runtime-gcp-mutation.sh` と `infra/tests/no-firestore-sdk-in-frontend.sh` と `infra/tests/run-static-checks.sh` | T-PKG-29 | T-IAC-43 / T-IAC-44 / T-PROV-24 / T-LIFE-09 は成果物から外し、検査対象ディレクトリと禁止シンボルに自領域分を追記する |
+| `infra/tests/no-kms-key-version.sh` と `infra/tests/runtime-mutation-scope.sh` と `infra/tests/no-firestore-sdk-in-frontend.sh` と `infra/tests/run-static-checks.sh` | T-PKG-29 | T-IAC-43 / T-IAC-44 / T-PROV-24 / T-LIFE-09 は成果物から外し、検査対象ディレクトリと禁止シンボルに自領域分を追記する |
 | `docs/deviations.md` | T-DOCS-02 | T-PKG-30 は削除する |
 | `scripts/check-deviations.ts` | T-DOCS-03 | `scripts/check-deviations.mjs` は作らない。T-PKG-27 の CI ジョブ一覧から `docs:deviations` を外し、T-DOCS-16 の `.github/workflows/docs.yml` に一本化する |
 | `packages/xaa-contracts/src/audience.ts` | T-PKG-17 | T-IDP-11 と T-AUTHZ-05 は成果物から外し、`audienceIncludes(aud, self)` を import する。T-IDP-11 の前提タスクに T-PKG-17 を足す |
@@ -289,7 +289,7 @@
 | `packages/xaa-contracts/src/protocol-violation.ts` | T-SEC-11 | T-AUTHZ-07 と T-RUN-25 は成果物から外し、`emitProtocolValidation(logger, ctx, ev)` を import する。T-OP-11 と T-BRIDGE-02 の呼び出しも3引数形にする |
 | `packages/xaa-contracts/src/identifiers.ts` の `assertValidCapabilityId` | T-PKG-16 | T-AUTHZ-03 は `apps/authorization/src/seed/validate-naming.ts` を作らず import する。T-IAC-27 と T-RES-15 も import する |
 | `packages/xaa-contracts/src/token-catalog.ts` | T-PKG-16 | T-DOCS-15 は完了条件の参照先をこのファイルにする |
-| `packages/xaa-contracts/src/service-ids.ts` と httpClient | T-PKG-21 | 各アプリは `SERVICE_IDS` を import する。スロット宛は `requestSlot(slotIndex, path, init?)` を使う |
+| `packages/xaa-contracts/src/service-ids.ts` と httpClient | T-PKG-21 | 各アプリは `SERVICE_IDS` を import する。Dedicated OP 宛は `dedicated_resources` の台帳が持つ URL へ `requestUrl(url, path, init?)` で送る |
 | `packages/xaa-contracts/src/runtime-env.ts` | T-RUN-01 | T-PROV-29 は `RUNTIME_ENV_KEYS` を import し、override の11件だけを渡す |
 | `packages/xaa-contracts/src/collections.ts` | T-IAC-24 | 他タスクはコレクション名の文字列を直書きしない |
 | `packages/gcp/src/access-matrix.json` と `packages/gcp/src/firestore-guard.ts` | T-IAC-25 | T-APP-12 / T-OP-02 / T-RES-02 / T-RUN-04 / T-LIFE-01 / T-BRIDGE-04 / T-AUTHZ-23 は成果物から外し、自アプリの許可パスを実装方針に列挙するだけにする |
@@ -298,7 +298,7 @@
 | `packages/xaa-crypto/README.md` | T-PKG-10 | REQ-05-017 の4機能と担当タスク T-PKG-04 / T-PKG-09 / T-PKG-10 / T-PKG-05 の対応表を4行で書く |
 | `apps/seed/src/index.ts` と `apps/seed/src/resolve.ts` と `infra/seed/**` | T-IAC-26 | T-PROV-02 を削除し、YAML の中身と命名規約検査を T-IAC-26 と T-IAC-27 へ吸収する。T-PROV-03 の前提を T-IAC-26 に付け替え、Catalog Repository は読み取り専用のまま残す。T-PROV-01 は定数表と2つの JSON Schema だけを持つ |
 | `infra/seed/connectors/stub-saas-calendar.yaml` | T-IAC-26 | `infra/seed/connectors/google-workspace.yaml` は作らない |
-| スロット返却の実装（`apps/provisioner/src/slots/*` と `POST /internal/slots/release`） | T-PROV-26 | T-LIFE-09 は `apps/lifecycle-manager/src/slot.ts` を作らず、`apps/lifecycle-manager/src/clients/provisioner.ts` から呼ぶだけにする。T-LIFE-01 の許可接頭辞から `isolation_slots` を外す |
+| `assertRuntimeName` と実行時作成の名前規約（`dedicated-names.ts`） | T-PROV-24 | T-LIFE-09 は同じ関数を `packages/xaa-contracts` 経由で import して使い、自前で名前を組み立てない |
 | `infra/envs/shared/audit.tf` | T-IAC-31 | T-SEC-07 は `infra/envs/shared/audit-tables.tf` と `schemas/*.json` と `infra/tests/audit-iam.test.ts` に縮め、保持は7日、SA は `sa-security`、テーブル単位の binding のみにする |
 | `infra/envs/demo/security-events.tf` | T-SEC-08 | T-IAC-30 を削除し、トピック定義と Log Sink と IAM を T-SEC-08 へ吸収する。トピック名は `security-logs` のまま、`human-identity-disabled` トピックと pull subscription `identity-disabled-to-lifecycle` を追加し、T-LIFE-15 の前提に T-SEC-08 を足す |
 | `scripts/check-readme-vars.sh` | T-IAC-47 | 成果物に追加し、`infra/envs/*/variables*.tf` と `infra/README.md` の変数集合の差を検査する |

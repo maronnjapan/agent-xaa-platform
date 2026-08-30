@@ -18,7 +18,7 @@ docs 01 から 11 までの記述から実装可能な要件を421件抽出し�
 
 | 制約 | 主な影響 | 判断 |
 |---|---|---|
-| GCP の設定を IaC で管理する（要件達成より優先） | FULL_ISOLATION の Dedicated OP を実行時に作らず、Terraform で固定数のスロットを事前作成して Provisioner がリースする | DEC-IAC-07 |
+| GCP の設定を IaC で管理する（要件達成より優先） | 常設のリソースはすべて Terraform 管理。ただし FULL_ISOLATION の Dedicated OP 一式だけは例外とし、Provisioner が実行時に作り Lifecycle が消す。24時間で必ず消えるため IaC が保証する再現性の価値が無い | DEC-IAC-07 |
 | GCP プロジェクトは1つ | 監査ログの分離を BigQuery dataset と Service Account と IAM で行う。同一プロジェクトの Owner には届くため保護は2プロジェクト構成より弱い | DEC-IAC-11 |
 | 認証基盤は maronn-openid-connect を使う | Human IdP と Resource AS 2種は CLI 生成物、Agent OP だけは experimental のステップ関数を組み替えた自前ルート | DEC-ID-01 |
 | リソースサーバーは金融とドキュメントの2種 | Document は STANDARD、Finance は FULL_ISOLATION 対象。どちらも Native XAA | 05-resource-servers.md |
@@ -63,8 +63,8 @@ Allowed Tools 外の `tool_id` を Reasoning が返したとき、外部通信�
 Agent を確実に消せる状態と、金融系リソースサーバー向けの隔離経路を作る。
 検証環境の再現性はここで決まる。
 
-完了の目安はスロットに割り当てた Agent が Finance RS へ XAA を1本通し、`isolation_level` が `full_isolation` でない ID-JAG が 403 `insufficient_isolation` になること。
-Cleanup を2回実行しても同じ結果になり、スロットが `free` に戻ること。
+完了の目安は Dedicated OP 一式を与えた Agent が Finance RS へ XAA を1本通し、`isolation_level` が `full_isolation` でない ID-JAG が 403 `insufficient_isolation` になること。
+Cleanup を2回実行しても同じ結果になり、実行時に作った GCP リソースが1つも残らないこと。
 `make demo-apply` と `make demo-destroy` を2周して2周目の plan が no-op になること。
 
 主なタスク：T-LIFE、T-RES-16 から T-RES-23、T-IAC-13 から T-IAC-14。

@@ -36,7 +36,7 @@ Cloud Run の ingress 設定はサービス単位であり、`/xaa/token` を内
 - `apps/agent-op/src/app.ts` は `createApp(): Hono` を default export する。
   DEC-APP-07 の integration テストが `app.fetch(request)` を直接呼ぶため、`listen` は `src/index.ts` にだけ置く。
 - `config.ts` で環境変数を読み、起動時に検証する。
-  読む変数は `MODE`、`ISSUER`、`XAA_CLIENT_ID`（既定 `agent-platform`）、`GOOGLE_CLOUD_PROJECT`、`FIRESTORE_DATABASE`、`JWKS_BUCKET`、`JWKS_OBJECT`（既定 `jwks.json`）、`KMS_IDJAG_KEY`、`KMS_IDP_CONNECTION_KEY`、`HUMAN_IDP_AUTHORIZE_URL`、`HUMAN_IDP_TOKEN_URL`、`HUMAN_IDP_REVOKE_URL`、`ID_JAG_LIFETIME_SECONDS`（既定 300）、`SLOT_INDEX`（既定 `-1`）、`SIGNER_MODE`（`local|kms`）、`STORE_MODE`（`emulator|gcp`）の16個に限定する。
+  読む変数は `MODE`、`ISSUER`、`XAA_CLIENT_ID`（既定 `agent-platform`）、`GOOGLE_CLOUD_PROJECT`、`FIRESTORE_DATABASE`、`JWKS_BUCKET`、`JWKS_OBJECT`（既定 `jwks.json`）、`KMS_IDJAG_KEY`、`KMS_IDP_CONNECTION_KEY`、`HUMAN_IDP_AUTHORIZE_URL`、`HUMAN_IDP_TOKEN_URL`、`HUMAN_IDP_REVOKE_URL`、`ID_JAG_LIFETIME_SECONDS`（既定 300）、`AGENT_ID`（既定 `-1`）、`SIGNER_MODE`（`local|kms`）、`STORE_MODE`（`emulator|gcp`）の16個に限定する。
   `MODE` が `token` と `callback` のどちらでもなければ起動時に例外で落とす。
 - `MODE=token` のとき `POST /xaa/token`、`POST /xaa/subject-token`、`GET /healthz` の3ルートのみをマウントする。
   `MODE=callback` のとき `GET /xaa/callback`、`GET /healthz` の2ルートのみをマウントする。
@@ -78,7 +78,7 @@ Agent Registration と XAA Static Configuration は docs 05 §3.4 のとおり�
 - Firestore のコレクション名は `agents`、`xaa_configs`、`idp_connections`、`issuer_profiles` の4つに固定する。
   この4語以外のコレクション名文字列を `apps/agent-op/src` に置かない。
 - `types.ts` に4型を定義する。
-  `AgentRegistration` は `agent_id`、`human_subject`、`client_auth: { method: 'client_assertion_jwt'; jwk_thumbprint: string; public_jwk: JsonWebKey }`、`idp_connection_id`、`isolation_level: 'standard' | 'full_isolation'`、`dedicated_op_slot_index: number | null`、`status: 'ACTIVE' | 'EXPIRING' | 'QUARANTINED' | 'REVOKED' | 'EXPIRED'`、`created_at`、`expires_at` を持つ。
+  `AgentRegistration` は `agent_id`、`human_subject`、`client_auth: { method: 'client_assertion_jwt'; jwk_thumbprint: string; public_jwk: JsonWebKey }`、`idp_connection_id`、`isolation_level: 'standard' | 'full_isolation'`、`dedicated_op: number | null`、`status: 'ACTIVE' | 'EXPIRING' | 'QUARANTINED' | 'REVOKED' | 'EXPIRED'`、`created_at`、`expires_at` を持つ。
   `XaaStaticConfiguration` は `agent_id`、`allowed_audiences: string[]`、`resources: string[]`、`scopes: string[]`、`trusted_resource_as: string[]`、`expires_at` を持つ。
   `IdpConnection` は T-OP-24 で定義する。
   `IssuerProfile` は `issuer`、`kms_key_name`、`kid` を持つ。
@@ -181,7 +181,7 @@ DEC-IAC-13 のとおり各アプリは自分専用のオブジェクト `keys/<p
   `MODE=callback` からは呼ばない。
 - KMS の `getPublicKey` で PEM を取得し、`packages/xaa-crypto` の `pemToJwk` で `{ kty:'EC', crv:'P-256', x, y, alg:'ES256', use:'sig', kid }` へ変換する。
   秘密鍵素材を扱う経路をこの関数に持たせない。
-- kid は `SLOT_INDEX < 0` のとき `op-shared-<cryptoKeyVersion の末尾番号>`、`SLOT_INDEX >= 0` のとき `op-slot-<SLOT_INDEX>-<末尾番号>` とする。
+- kid は `AGENT_ID < 0` のとき `op-shared-<cryptoKeyVersion の末尾番号>`、`AGENT_ID >= 0` のとき `idjag-<AGENT_ID>-<末尾番号>` とする。
   Human IdP の `idp-` と衝突しない接頭辞にする。
 - 書き込み先は `keys/<kid>.json` に固定する。
   `jwks.json` を Agent OP から書かない。
@@ -198,35 +198,41 @@ DEC-IAC-13 のとおり各アプリは自分専用のオブジェクト `keys/<p
 
 ---
 
-### T-OP-06 スロット専用署名鍵の kid 規約と JWKS 掲載を実装する
+### T-OP-06 Dedicated OP の署名鍵の解決と JWKS 掲載を実装する
 
 **概要**
-FULL_ISOLATION のスロットごとに Terraform が事前作成した ID-JAG 署名鍵の公開鍵も、Shared OP の鍵と同じ共有 JWKS へ載せる（REQ-05-061）。
+FULL_ISOLATION の Agent ごとに Provisioner が実行時に作った ID-JAG 署名鍵の公開鍵も、Shared OP の鍵と同じ共有 JWKS へ載せる（REQ-05-061）。
 Resource AS は kid で Shared と Dedicated を区別せず、共有 issuer の発行物として同じに扱う。
-FULL_ISOLATION が縮めるのは到達できる Registration と Refresh Token の数であり、偽造能力の広さではないことをコードとテストで固定する（DEV-07）。
+FULL_ISOLATION が縮めるのは到達できる Registration と Refresh Token の数であり、偽造能力の広さではないことをコードとテストで固定する（docs 05 §5）。
 
 **対象要件** REQ-05-061
 **前提タスク** T-OP-05, T-IAC-18
 **成果物**
-- `apps/agent-op/src/keys/slot-key.ts`
-- `apps/agent-op/test/slot-key.spec.ts`
+- `apps/agent-op/src/keys/dedicated-key.ts`
+- `apps/agent-op/test/dedicated-key.spec.ts`
 - `e2e/test/shared-jwks-kids.spec.ts`
 
 **実装方針**
-- `resolveSigningKeyName(slotIndex: number): string` を実装する。
-  `slotIndex < 0` なら `KMS_IDJAG_KEY`（Shared）、`slotIndex >= 0` なら `KMS_IDJAG_KEY` と同じ Key Ring 内の `idjag-slot-<slotIndex>` を返す。
-  鍵名を実行時に組み立てるだけとし、KMS の鍵作成 API を呼ぶコードを書かない（DEC-IAC-07）。
-- スロット Service には Terraform が静的 env `SLOT_INDEX` を注入する。
-  Agent OP は Agent Registration の `dedicated_op_slot_index` が `SLOT_INDEX` と一致しない要求を `invalid_grant` で拒否する。
-- `slot-key.ts` の先頭に、共有 JWKS へ載る以上 Dedicated 鍵で偽造できる ID-JAG の範囲は Shared 鍵と変わらない旨のコメントを置き、DEV-07 を参照する。
-- スロット数は `dedicated_slot_count`（既定2）で決まる。
-  アプリ側でスロット数を仮定した配列長やループ上限を書かない。
+- 鍵名を組み立てず、環境変数 `KMS_IDJAG_KEY` の値をそのまま使う。
+  Shared OP には Terraform が共有鍵の完全修飾名を注入し、Dedicated OP には Provisioner が作成時に `idjag-<short>` の完全修飾名を注入する（DEC-IAC-07）。
+  Agent OP のコードは Shared と Dedicated で分岐しない。
+- Agent OP は KMS の鍵作成 API と削除 API を呼ばない。
+  作成は Provisioner（T-PROV-24）、破棄予約は Lifecycle（T-LIFE-09）が行う。
+- Dedicated OP には Provisioner が env `AGENT_ID` を注入する。
+  Agent OP は `AGENT_ID` が設定されているとき、その値と一致しない `agent_id` への ID-JAG 発行要求を `invalid_grant` で拒否する。
+  `AGENT_ID` が未設定のときは Shared OP として動き、この判定を行わない。
+- 起動時に自分の鍵の公開鍵を `getPublicKey` で取り、JWKS バケットへ `keys/<kid>.json` を書く（T-OP-05 と同じ経路）。
+  kid の規約は 00b-conventions.md のとおり、Shared は `op-shared-<version>`、Dedicated は `idjag-<short>-<version>` とする。
+- `dedicated-key.ts` の先頭に、共有 JWKS へ載る以上 Dedicated 鍵で偽造できる ID-JAG の範囲は Shared 鍵と変わらない旨のコメントを置き、docs 05 §5 の Blast Radius を参照する。
+- アプリ側で FULL_ISOLATION の Agent 数を仮定した配列長やループ上限を書かない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/slot-key.spec.ts` の `returns shared key name when SLOT_INDEX is -1` が緑になる。
-- [ ] 同ファイルの `rejects registration whose dedicated_op_slot_index differs from SLOT_INDEX` が緑になり `invalid_grant` が返る。
-- [ ] `e2e/test/shared-jwks-kids.spec.ts` の `jwks.json lists idp / op-shared / op-slot-0 / op-slot-1 kids` が緑になる。
-- [ ] 同ファイルの `ID-JAG signed by a slot key verifies at resource-docs-as` が緑になる。
+- [ ] `apps/agent-op/test/dedicated-key.spec.ts` の `uses KMS_IDJAG_KEY verbatim without building a name` が緑になる。
+- [ ] 同ファイルの `rejects a request for another agent when AGENT_ID is set` が緑になり `invalid_grant` が返る。
+- [ ] 同ファイルの `does not apply the agent binding check when AGENT_ID is unset` が緑になる。
+- [ ] 同ファイルの `calls no KMS create or delete API` が、モック KMS クライアントの作成系と削除系の呼び出し回数 0 を assert する。
+- [ ] `e2e/test/shared-jwks-kids.spec.ts` の `jwks.json lists idp / op-shared / idjag kids` が緑になる。
+- [ ] 同ファイルの `ID-JAG signed by a dedicated key verifies at resource-docs-as` が緑になる。
 
 ---
 
@@ -873,8 +879,8 @@ Refresh Token は KMS の `idp-connection-encryption` 鍵で暗号化して保�
   平文の `refresh_token` フィールドを型に持たせない。
 - 暗号化は `packages/gcp` の KMS クライアントの `encrypt` を使い、`additionalAuthenticatedData` に `agent_id` を渡す。
   復号時に `agent_id` が一致しなければ KMS が失敗するため、他 Agent の暗号文を流用できない。
-- FULL_ISOLATION のスロットでは `KMS_IDP_CONNECTION_KEY` がスロット専用鍵を指す（DEC-IAC-07）。
-  鍵名の解決は T-OP-06 の `resolveSigningKeyName` と同じ規約で `idpconn-slot-<SLOT_INDEX>` とする。
+- FULL_ISOLATION では `KMS_IDP_CONNECTION_KEY` が Agent 専用鍵 `idpconn-<short>` を指す（DEC-IAC-07）。
+  鍵名は Provisioner が完全修飾名で注入するため、アプリ側で組み立てない。
 - `expires_at` の書き込み値は Agent Registration から読んだ値をそのまま使う。
   Agent OP 側で足し算しない。
 - `toJSON` と `toString` をオーバーライドし、`encrypted_refresh_token` を `[redacted]` に置き換える。
@@ -1153,7 +1159,7 @@ Raw JWT を書かない。
 
 **実装方針**
 - レコードのフィールドを13個に固定する。
-  `jti`、`kid`、`typ`（常に `oauth-id-jag+jwt`）、`iss`、`sub`、`act_sub`、`aud`、`resource`、`scope`、`exp`、`iat`、`agent_id`、`slot_id`（`SLOT_INDEX < 0` のとき `null`）。
+  `jti`、`kid`、`typ`（常に `oauth-id-jag+jwt`）、`iss`、`sub`、`act_sub`、`aud`、`resource`、`scope`、`exp`、`iat`、`agent_id`、`dedicated_short_id`（`AGENT_ID < 0` のとき `null`）。
 - `logName` は `idjag_issuance` に固定する。
   T-OP-30 の Token Exchange ログと同じレコードにまとめない。
   Security Detection の SQL が2つを別テーブルとして扱うためである。
