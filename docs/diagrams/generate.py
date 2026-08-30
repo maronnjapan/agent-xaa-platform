@@ -32,7 +32,7 @@ NODES = [
     # 枠
     ("g_platform",  "group", "agent-platform-prod",   180,  30, 1000, 820, ()),
     ("g_control",   "group", "Control Plane",         200,  70,  960, 120, ()),
-    ("g_op",        "group", "Agent OP",              200, 250,  380, 110, ()),
+    ("g_op",        "group", "Agent OP / same issuer as Human IdP", 200, 250,  380, 110, ()),
     ("g_data",      "group", "Data / Keys",           220, 570,  500, 110, ()),
     ("g_tel",       "group", "Telemetry",             240, 705,  560, 110, ()),
     ("g_security",  "group", "agent-security-prod",   180, 890, 1000, 110, ()),
@@ -83,6 +83,7 @@ EDGES = [
     ("e_prov_gb",   "prov", "gb",   "binding",           False, (0.75, 0.0), (0.944, 0.0), [(830, 85), (1130, 85)]),
     ("e_life_run",  "life", "run",  "revoke",            True,  (0.5, 1.0), (0.769, 0.0), [(1010, 245), (850, 245)]),
     ("e_run_op",    "run",  "g_op", "ID-JAG",            False, (0.0, 0.5), (1.0, 0.59), []),
+    ("e_op_hidp",   "g_op", "hidp", "subject_token",     False, (0.0, 0.9), (1.0, 0.9), [(165, 349), (165, 325)]),
     ("e_run_gb",    "run",  "gb",   "ID-JAG",            False, (1.0, 0.5), (0.0, 0.5), []),
     ("e_gb_gas",    "gb",   "gas",  "Refresh Token",     False, (1.0, 0.28), (0.0, 0.5), []),
     ("e_run_gapi",  "run",  "gapi", "Access Token",      False, (0.9, 1.0), (0.0, 0.5), [(884, 400), (1200, 400), (1200, 347)]),

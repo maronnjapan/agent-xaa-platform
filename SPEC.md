@@ -9,7 +9,9 @@ GCP実行基盤を含む統合アーキテクチャ設計ドキュメントの�
 Authorization Platform内のAuthorization AI AgentがWork DefinitionをVendor非依存の抽象Capabilityへ変換し、Policy EngineがHuman Permission、Delegatable Permission、Organization Policy、Risk Policyと照合してEffective CapabilityとIsolation Levelを確定する。
 Tool / Connector CatalogでCapabilityを具体的なToolとXAA設定へ翻訳し、Agent専用のIdentity（Agent Registration、署名鍵、XAA静的設定）をProvisioningする。
 AgentはCloud Run Jobとして最大24時間だけ存在し、Provisioning済みのToolだけを選んで、認証とAPI実行はDeterministic Tool Executorが行う。
-Resourceへのアクセスは、Agent OPが発行するID-JAGをResource Authorization Serverへ提示するCross App Accessで行い、Googleなど非対応SaaSにはOAuth Bridgeを介する。
+Resourceへのアクセスは、Human IdPと共有するissuerが発行するID-JAGをResource Authorization Serverへ提示するCross App Accessで行い、Googleなど非対応SaaSにはOAuth Bridgeを介する。
+ID-JAGは委譲元の人間を `sub` に、代理として動くAgentを `act` に載せる。
+Human IdPにAgentの文脈を持ち込まないよう、issuerを1つに保ったままAgent OPを別デプロイとして分ける。
 通常AgentはShared OPプロセスを共有してコストを抑え、高セキュリティAgentはDedicated OP、専用Service Account、専用鍵、専用Runtimeまで分離する。
 期限到達、ユーザーによる停止、異常検知のいずれでもAgent Identity Domain全体を破棄し、Security Detectionが全レイヤーのログから異常を検知する。
 
@@ -21,7 +23,7 @@ Resourceへのアクセスは、Agent OPが発行するID-JAGをResource Authori
 | 02 | [自動化定義（Automation App）](./docs/02-automation-design.md) | ユーザー起因の自動化定義、Automation Design AIの責務、Business Work Request、Agent Definition、実行中Agentの操作 |
 | 03 | [権限決定（Authorization Platform）](./docs/03-authorization.md) | 権限の種類、Work Definition構造化、Authorization AI Agent、抽象Capability、Policy Engine、Security Profile |
 | 04 | [Tool / Connector CatalogとTool Executor](./docs/04-tool-catalog.md) | Catalogの内容、Resourceの2種類、Tool / Connector Definition、Provisioning時のTool解決、Tool Executor |
-| 05 | [Identity](./docs/05-identity.md) | Human IdPとDPoP、Agent OP、Agent Registration、Isolation Model、Cross App Access、Tokenの種類 |
+| 05 | [Identity](./docs/05-identity.md) | Human IdPとDPoP、Agent OP、Agent Registration、Human IdP Connection、Isolation Model、Cross App Access、ID-JAGとactor_token、Tokenの種類 |
 | 06 | [OAuth Bridge（Google Bridge）](./docs/06-oauth-bridge.md) | Bridgeの役割、Credential保持方針、Runtime Flow、Google Consent |
 | 07 | [AgentのProvisioningとLifecycle](./docs/07-lifecycle.md) | Lifetime、Provisioning、Agent Runtime、Expiration / 緊急停止、権限変更時の扱い |
 | 08 | [GCP実行基盤](./docs/08-gcp-infrastructure.md) | Project構成、デプロイ単位と内部機能、アプリ間の呼び出し関係、GCP Service Account、鍵と秘密情報、データストア、ネットワーク |
@@ -46,3 +48,4 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 
 - 2026-08-30：単一ファイルだった設計メモを内容ごとに `docs/01`〜`10` へ分割し、レビュー指摘（`.review/SPEC.md.review.json`）を反映した。
 - 2026-08-30：Control Plane API（Authorization Platform、Agent Provisioner、Lifecycle Manager）のHuman Access Token検証を明文化した。`human_subject` は Access Token の `sub` を正とし（RULE-43）、DPoP検証では `cnf.jkt` と Proof の鍵の一致を確認する（RULE-44）。
+- 2026-08-30：Cross App Accessを `draft-ietf-oauth-identity-assertion-authz-grant` へ準拠させた（RULE-45〜RULE-53）。ID-JAGの発行者をHuman IdPと共有するissuerへ移し、`sub` を委譲元の人間、`act` を代理のAgentとした。Agent Runtimeが `subject_token` として人間のID Tokenを持ち、その供給源であるRefresh Tokenは Human IdP Connection としてAgent OPが保持する。Agentごとのクライアント登録は作らず、Agent個体は `cnf.jkt` と `act` で識別する。

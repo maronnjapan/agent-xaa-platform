@@ -134,10 +134,12 @@ Tool Executorの処理：
 1. Tool Manifest読み込み
 2. Toolが Allowed Tools に含まれるか確認（含まれなければ拒否）
 3. Agent Expiration確認
-4. Agent OPへID-JAG要求（audience / resource / scope はManifestの値）
+4. Agent OPへToken Exchange（audience / resource / scope はManifestの値。subject_token / actor_token / DPoP Proofを添える）
 5. Resource AS または Bridge へID-JAGを提示し、Access Token取得
 6. API Request生成と実行
 7. Responseを構造化してAgent Reasoningへ返却
+
+4と5の中身は [05. §6](./05-identity.md#6-cross-app-access) にある。
 ```
 
 ```mermaid

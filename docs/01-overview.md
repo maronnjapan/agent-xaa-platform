@@ -18,6 +18,7 @@ Agent作成から破棄までの流れは次のとおり。
 | 3 | 権限を実行手段へ対応付け | Tool / Connector Catalog | [04](./04-tool-catalog.md) |
 | 4 | Agent Identityの生成 | Agent Provisioner + Agent OP | [05](./05-identity.md)、[07](./07-lifecycle.md) |
 | 5 | Resourceへのアクセス | Cross App Access（XAA）。必要に応じてOAuth Bridge | [05](./05-identity.md)、[06](./06-oauth-bridge.md) |
+
 | 6 | 最大24時間の自律実行 | Agent Runtime | [07](./07-lifecycle.md) |
 | 7 | 監視 | Security Detection | [09](./09-security-monitoring.md) |
 | 8 | 期限到達または異常検知で破棄 | Lifecycle Manager | [07](./07-lifecycle.md) |
@@ -70,8 +71,12 @@ GCP上の配置は [08](./08-gcp-infrastructure.md)、各文書で決めた原�
 | 種類 | 誰が | 誰に対して名乗るか | 発行者 | 用途 |
 |---|---|---|---|---|
 | **Human Identity** | 人間ユーザー | Automation App、Authorization Platform | Human IdP | ログイン、Control Plane API呼び出し |
-| **Agent Identity**（ID-JAG） | AI Agent | Resource Authorization Server、OAuth Bridge | Agent OP（Shared / Dedicated） | Cross App AccessでResourceのAccess Tokenを得る |
+| **Agent Identity**（ID-JAG） | 人間ユーザーと、その代理として動くAI Agent | Resource Authorization Server、OAuth Bridge | Human IdPと共有するissuer（Agent OPが署名） | Cross App AccessでResourceのAccess Tokenを得る |
 | **GCP Service Account** | GCP上で動くアプリ（Cloud Run Service / Job） | GCP IAM | GCP | KMS署名、Secret読み取り、DB接続、他Cloud Run呼び出しの可否 |
+
+ID-JAGはAgentだけの身元ではない。
+`sub` が委譲元の人間を、`act` が代理として動くAgentを表す（[05. §6.4](./05-identity.md#64-id-jag)）。
+Resource側から「誰の代理として、どのAgentが操作したか」を1枚のTokenで判別できるようにするためである。
 
 GCP Service Accountは「AI Agent用のアカウント」ではなく「GCP上のアプリが名乗る身元」である。
 Google Bridgeのような、AI Agentを含まないアプリにも必要になるのはそのためである。
@@ -100,10 +105,13 @@ Google Bridgeのような、AI Agentを含まないアプリにも必要にな�
 | Tool | `google.calendar.events.list` のような、具体的な操作単位。1つのCapabilityから複数のToolが使える |
 | Connector | 接続先Resourceごとの認証と接続の定義（Google Workspace、社内顧客APIなど） |
 | Tool / Connector Catalog | CapabilityとToolの対応、および各Toolの認証方式、接続先、APIの呼び出し方法を保持する定義データ。「権限」を「実行手段」に翻訳する辞書 |
-| Cross App Access（XAA） | Agent OPが発行したIdentity Assertion（ID-JAG）をResource側のAuthorization Serverへ提示してAccess Tokenを得る方式 |
-| ID-JAG | Identity Assertion JWT Authorization Grant。Agent OPがAgentに対して発行する、XAA用のAssertion |
-| Agent OP | AgentのOpenID Provider。Agent Identityを表し、ID-JAGを発行する |
-| Agent Registration | Agent OP上に作るAgentごとの登録情報。issuer、subject、signing key、client credential、XAA config、expires_atを持つ |
+| Cross App Access（XAA） | IdPが発行したIdentity Assertion（ID-JAG）をResource側のAuthorization Serverへ提示してAccess Tokenを得る方式。`draft-ietf-oauth-identity-assertion-authz-grant` が定める |
+| ID-JAG | Identity Assertion JWT Authorization Grant。人間（`sub`）とAgent（`act`）を運ぶXAA用のAssertion |
+| Agent OP | Human IdPと同じissuerのうち、Agentの文脈だけを扱うデプロイ。ID-JAGを発行する（[05. §3](./05-identity.md#3-agent-op)） |
+| subject_token | Token Exchangeへ渡す人間のID Token。Cross App Accessの委譲の材料になる |
+| actor_token | Token Exchangeへ渡すAgent自身のAssertion。本システム独自のプロファイル |
+| Human IdP Connection | Agentごとに持つHuman IdPのRefresh Token。`subject_token` の供給源で、Agent OPだけが保持する |
+| Agent Registration | Agent OP上に作るAgentごとの登録情報。client credential、XAA config、IdP Connection、expires_atを持つ |
 | OAuth Bridge | ID-JAGを理解しない外部OAuth SaaS（Googleなど）をXAAモデルへ接続する互換レイヤー |
 | Native XAA Resource | Resource Authorization Server自身がID-JAGを理解するResource。Bridge不要 |
 | Security Profile | Agentのリスク評価結果。Isolation Levelを含む |
@@ -156,7 +164,8 @@ flowchart TB
     LIFE -.->|Expire / Revoke| AGENT
     LIFE -.-> OP
 
-    AGENT -->|ID-JAG Request| OP
+    AGENT -->|Token Exchange| OP
+    OP -->|subject_token / Revoke| HIDP
     AGENT -->|ID-JAG| NAS
     NAS -->|Access Token| AGENT
     AGENT --> NAPI
