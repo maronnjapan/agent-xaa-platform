@@ -1,7 +1,7 @@
 # 自律型AIエージェント × Cross App Access 認証認可基盤
 
-GCP実行基盤を含む統合アーキテクチャ設計ドキュメントの目次である。
-内容は `docs/` 配下の各文書にあり、本ファイルには要約と構成だけを置く。
+本ディレクトリ配下の統合アーキテクチャ設計ドキュメント（GCP実行基盤を含む）の目次である。
+内容は各文書（[01](./01-overview.md)〜[10](./10-design-rules.md)）にあり、本ファイルには要約と構成だけを置く。
 
 ## 要約
 
@@ -19,33 +19,34 @@ Human IdPにAgentの文脈を持ち込まないよう、issuerを1つに保っ�
 
 | No | 文書 | 内容 |
 |---|---|---|
-| 01 | [概要と用語](./docs/01-overview.md) | 目的、基本思想、アプリと機能の区別、3種類のIdentity、用語、全体像 |
-| 02 | [自動化定義（Automation App）](./docs/02-automation-design.md) | ユーザー起因の自動化定義、Automation Design AIの責務、Business Work Request、Agent Definition、実行中Agentの操作 |
-| 03 | [権限決定（Authorization Platform）](./docs/03-authorization.md) | 権限の種類、Work Definition構造化、Authorization AI Agent、抽象Capability、Policy Engine、Security Profile |
-| 04 | [Tool / Connector CatalogとTool Executor](./docs/04-tool-catalog.md) | Catalogの内容、Resourceの2種類、Tool / Connector Definition、Provisioning時のTool解決、Tool Executor |
-| 05 | [Identity](./docs/05-identity.md) | Human IdPとDPoP、Agent OP、Agent Registration、Human IdP Connection、Isolation Model、Cross App Access、ID-JAGとactor_token、Tokenの種類 |
-| 06 | [OAuth Bridge（Google Bridge）](./docs/06-oauth-bridge.md) | Bridgeの役割、Credential保持方針、Runtime Flow、Google Consent |
-| 07 | [AgentのProvisioningとLifecycle](./docs/07-lifecycle.md) | Lifetime、Provisioning、Agent Runtime、Expiration / 緊急停止、権限変更時の扱い |
-| 08 | [GCP実行基盤](./docs/08-gcp-infrastructure.md) | Project構成、デプロイ単位と内部機能、アプリ間の呼び出し関係、GCP Service Account、鍵と秘密情報、データストア、ネットワーク |
-| 09 | [セキュリティ監視](./docs/09-security-monitoring.md) | ログ収集、正規化と保存、検知の段階、Risk Score、Security AI、Response |
-| 10 | [設計ルール](./docs/10-design-rules.md) | 各文書で決めた原則の一覧 |
+| 01 | [概要と用語](./01-overview.md) | 目的、基本思想、アプリと機能の区別、3種類のIdentity、用語、全体像 |
+| 02 | [自動化定義（Automation App）](./02-automation-design.md) | ユーザー起因の自動化定義、Automation Design AIの責務、Business Work Request、Agent Definition、実行中Agentの操作 |
+| 03 | [権限決定（Authorization Platform）](./03-authorization.md) | 権限の種類、Work Definition構造化、Authorization AI Agent、抽象Capability、Policy Engine、Security Profile |
+| 04 | [Tool / Connector CatalogとTool Executor](./04-tool-catalog.md) | Catalogの内容、Resourceの2種類、Tool / Connector Definition、Provisioning時のTool解決、Tool Executor |
+| 05 | [Identity](./05-identity.md) | Human IdPとDPoP、Agent OP、Agent Registration、Human IdP Connection、Isolation Model、Cross App Access、ID-JAGとactor_token、Tokenの種類 |
+| 06 | [OAuth Bridge（Google Bridge）](./06-oauth-bridge.md) | Bridgeの役割、Credential保持方針、Runtime Flow、Google Consent |
+| 07 | [AgentのProvisioningとLifecycle](./07-lifecycle.md) | Lifetime、Provisioning、Agent Runtime、Expiration / 緊急停止、権限変更時の扱い |
+| 08 | [GCP実行基盤](./08-gcp-infrastructure.md) | Project構成、デプロイ単位と内部機能、アプリ間の呼び出し関係、GCP Service Account、鍵と秘密情報、データストア、ネットワーク |
+| 09 | [セキュリティ監視](./09-security-monitoring.md) | ログ収集、正規化と保存、検知の段階、Risk Score、Security AI、Response |
+| 10 | [設計ルール](./10-design-rules.md) | 各文書で決めた原則の一覧 |
 
 ## 全体構成図
 
-![全体構成図](./docs/diagrams/architecture.png)
+![全体構成図](./diagrams/architecture.png)
 
 | ファイル | 用途 |
 |---|---|
-| [architecture.png](./docs/diagrams/architecture.png) | Markdown表示用の画像 |
-| [architecture.svg](./docs/diagrams/architecture.svg) | 拡大しても劣化しないベクター版 |
-| [architecture.drawio](./docs/diagrams/architecture.drawio) | draw.ioで編集する場合の元データ |
-| [generate.py](./docs/diagrams/generate.py) | 上記3ファイルの生成スクリプト |
+| [architecture.png](./diagrams/architecture.png) | Markdown表示用の画像 |
+| [architecture.svg](./diagrams/architecture.svg) | 拡大しても劣化しないベクター版 |
+| [architecture.drawio](./diagrams/architecture.drawio) | draw.ioで編集する場合の元データ |
+| [generate.py](./diagrams/generate.py) | 上記3ファイルの生成スクリプト |
 
 図を変更するときは `generate.py` のレイアウト定義を編集し、`python3 docs/diagrams/generate.py` で3ファイルをまとめて再生成する。
 draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に注意する。
 
 ## 変更履歴
 
-- 2026-08-30：単一ファイルだった設計メモを内容ごとに `docs/01`〜`10` へ分割し、レビュー指摘（`.review/SPEC.md.review.json`）を反映した。
+- 2026-08-30：単一ファイルだった設計メモを内容ごとに `01`〜`10` へ分割し、レビュー指摘（`.review/SPEC.md.review.json`）を反映した。
 - 2026-08-30：Control Plane API（Authorization Platform、Agent Provisioner、Lifecycle Manager）のHuman Access Token検証を明文化した。`human_subject` は Access Token の `sub` を正とし（RULE-43）、DPoP検証では `cnf.jkt` と Proof の鍵の一致を確認する（RULE-44）。
 - 2026-08-30：Cross App Accessを `draft-ietf-oauth-identity-assertion-authz-grant` へ準拠させた（RULE-45〜RULE-53）。ID-JAGの発行者をHuman IdPと共有するissuerへ移し、`sub` を委譲元の人間、`act` を代理のAgentとした。Agent Runtimeが `subject_token` として人間のID Tokenを持ち、その供給源であるRefresh Tokenは Human IdP Connection としてAgent OPが保持する。Agentごとのクライアント登録は作らず、Agent個体は `cnf.jkt` と `act` で識別する。
+- 2026-08-30：ルートにあった目次ファイル `SPEC.md` の内容を本ファイル（`docs/README.md`）に統合し、`SPEC.md` を削除した。
