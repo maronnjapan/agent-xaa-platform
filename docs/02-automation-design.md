@@ -41,6 +41,7 @@ Automation App側は、アクセス可能なResourceやCapabilityの一覧を保
 ## 3. Business Work Request
 
 対話結果は、権限情報を含まない業務要求としてAuthorization Platformへ送る。
+送信にはユーザーがHuman IdPで認証して得たHuman Access Token（DPoP-bound、`aud=authorization-platform`）を伴う（[05. §1](./05-identity.md#1-human-identity-provider)）。
 
 ```yaml
 business_work_request:
@@ -54,12 +55,16 @@ business_work_request:
   requested_lifetime_hours: 24
 ```
 
+`human_subject` はAccess Tokenの `sub` と一致する値だけを受け付ける。
+Authorization Platformはボディの値をそのまま信頼せず、`sub` を正として検証する（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)）。
+
 Authorization Platformはこれを Agent Work Definition として構造化し、`operations` や `target_resources` を導出する（[03. §3](./03-authorization.md#3-agent-work-definition)）。
 
 ## 4. Agent Definition
 
 Authorization Platformの結果（Effective Capability + Security Profile）を受け取った後、Automation Appはユーザーに内容を提示する。
 ユーザーの承認を得てから、Agent ProvisionerへProvisioningを依頼する。
+依頼にはHuman Access Token（DPoP-bound、`aud=agent-provisioner`）を伴い、`human_subject` は§3と同じく `sub` を正とする。
 
 ```yaml
 agent_definition:

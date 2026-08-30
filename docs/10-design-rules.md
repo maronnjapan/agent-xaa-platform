@@ -13,6 +13,8 @@
 | RULE-04 | 1 Agent = 1 Cloud Run Job Execution とする。複数のAgentを1つのプロセスで動かさない | [07. §4.1](./07-lifecycle.md#41-実行形態) |
 | RULE-05 | GCP Service AccountはアプリがGCP IAMに対して名乗る身元であり、Agentの身元ではない。Agentの身元はID-JAGである | [08. §4](./08-gcp-infrastructure.md#4-gcp-service-accountとは) |
 | RULE-06 | Human Control PlaneのAccess TokenはDPoP-boundとする。Agentから外部ResourceへのDPoPは必須にせず、接続先の仕様に従う | [05. §2](./05-identity.md#2-dpop) |
+| RULE-43 | Control Plane APIの `human_subject` はAccess Tokenの `sub` を正とする。リクエストボディの値をそのまま信頼しない | [05. §1.1](./05-identity.md#11-human_subjectの出どころ) |
+| RULE-44 | DPoP検証では、Access Tokenの `cnf.jkt` とDPoP Proofの鍵の一致を必ず確認する。Proofが添付されていることの確認だけで済ませない | [05. §2.1](./05-identity.md#21-受け取り側の検証手順) |
 
 ## 権限決定
 

@@ -14,14 +14,36 @@ GCP上のアプリの身元であるGCP Service Accountは [08. §4](./08-gcp-in
 OIDC / OAuthを利用する。
 
 Human IdPは、Control Planeの各アプリ向けにAccess Tokenを発行する。
+Automation Appはこれを自分で発行せず、ユーザーの認証結果としてHuman IdPから受け取ったものをそのまま転送する。
 
-| 発行するToken | 用途 | aud |
-|---|---|---|
-| ID Token | Automation Appへのログイン | automation-app |
-| Access Token | Authorization Platform API呼び出し | authorization-platform |
-| Access Token | Agent Provisioner API呼び出し | agent-provisioner |
+| 発行するToken | 用途 | aud | scopeの例 |
+|---|---|---|---|
+| ID Token | Automation Appへのログイン | `automation-app` | （なし） |
+| Access Token | Authorization Platform API呼び出し | `authorization-platform` | `workdef:submit` |
+| Access Token | Agent Provisioner API呼び出し | `agent-provisioner` | `agent:provision` |
+| Access Token | Lifecycle Manager API呼び出し（Agent停止依頼） | `lifecycle-manager` | `agent:revoke` |
 
 APIアクセスにはID TokenではなくAccess Tokenを使う。
+`aud` をアプリごとに分けるのは、Authorization Platform向けに発行されたTokenでAgent Provisionerを呼べないようにするためである。
+`aud` だけではそのアプリのAPI全体に届いてしまうため、操作の種類は `scope` で分ける。
+
+Control Planeの各アプリを呼ぶ経路には、このAccess Tokenに加えてCloud Run IAMによる呼び出し元の制限をかける（[08. §3](./08-gcp-infrastructure.md#3-アプリ間の呼び出し関係)）。
+Access Tokenは「どの人間の代理としての要求か」を、Cloud Run IAMは「どのアプリから来た要求か」を決める。
+
+#### 1.1 human_subjectの出どころ
+
+Control Plane APIにおける `human_subject` は、リクエストボディの値ではなくAccess Tokenの `sub` を正とする。
+受け取ったアプリは、ボディに `human_subject` が含まれる場合、`sub` と一致する値だけを受け付ける。
+
+この規定を置かないと、Automation Appが任意の `human_subject` を送って他人の権限でAgentを作れる。
+Policy Engineが照合するHuman Permissionは `sub` で引いたユーザーのものであり、Effective Capabilityはその権限を超えない（[03. §2](./03-authorization.md#2-権限の種類)）。
+つまり `sub` の正しさが、そのままEffective Capabilityの正しさになる。
+
+適用先は次の3つである。
+
+- Business Work Request（[02. §3](./02-automation-design.md#3-business-work-request)）
+- Agent Provisioning Request（[02. §4](./02-automation-design.md#4-agent-definition)）
+- 実行中Agentへの操作（[02. §5](./02-automation-design.md#5-実行中agentの操作)）
 
 ### 2. DPoP
 
@@ -37,7 +59,7 @@ Stolen Access Token + DPoP Private Keyなし = 利用不可
 
 | 経路 | DPoP |
 |---|---|
-| Human IdP → Automation App → Authorization Platform / Agent Provisioner | 必須 |
+| Human IdP → Automation App → Authorization Platform / Agent Provisioner / Lifecycle Manager | 必須 |
 | Agent → Resource Authorization Server / Bridge / Resource API | 必須にしない。接続先の仕様に従い Bearer / DPoP / mTLS などを許容する（外部SaaSがDPoPに対応している保証がないため） |
 
 ```mermaid
@@ -51,12 +73,33 @@ sequenceDiagram
     U->>HIDP: OIDC Login + DPoP Key
     HIDP-->>APP: ID Token
     HIDP-->>APP: DPoP-bound Access Token (aud=authorization-platform)
-    APP->>AUTHZ: Access Token + DPoP Proof
-    AUTHZ->>AUTHZ: Validate Token + Proof
+    APP->>AUTHZ: Business Work Request + Access Token + DPoP Proof
+    AUTHZ->>AUTHZ: Validate Token + Proof + human_subject == sub
     HIDP-->>APP: DPoP-bound Access Token (aud=agent-provisioner)
-    APP->>PROV: Access Token + DPoP Proof
-    PROV->>PROV: Validate Token + Proof
+    APP->>PROV: Agent Provisioning Request + Access Token + DPoP Proof
+    PROV->>PROV: Validate Token + Proof + human_subject == sub
 ```
+
+#### 2.1 受け取り側の検証手順
+
+Access TokenとDPoP Proofを受け取ったアプリ（Authorization Platform、Agent Provisioner、Lifecycle Manager）は、次の順で検証する。
+
+| # | 検証内容 | 失敗時 |
+|---|---|---|
+| 1 | Access Tokenの署名、`iss`、`exp` | 401 |
+| 2 | `aud` が自分自身であること | 401 |
+| 3 | `scope` が要求された操作を含むこと | 403 |
+| 4 | DPoP Proofの署名が、Proofヘッダの `jwk` で検証できること | 401 |
+| 5 | Access Tokenの `cnf.jkt` が、Proofヘッダの `jwk` のthumbprintと一致すること | 401 |
+| 6 | Proofの `htm` と `htu` が、実際のHTTP MethodとURIに一致すること | 401 |
+| 7 | Proofの `iat` が許容範囲内で、`jti` が未使用であること | 401 |
+| 8 | ボディの `human_subject` がAccess Tokenの `sub` に一致すること（[§1.1](#11-human_subjectの出どころ)） | 403 |
+
+5がDPoPの本体である。
+これを省くと、Proofが添付されているかどうかだけを見てAccess Tokenとの結び付きを確認しない実装になり、盗んだTokenに攻撃者自身の鍵で作ったProofを添えるだけで通ってしまう。
+7の `jti` はProofの再利用を防ぐためのもので、`iat` の許容範囲と同じ長さのキャッシュに保持して重複を弾く。
+
+各検証の結果はSecurity DetectionのProtocol Validationへ送る（[09. §5.1](./09-security-monitoring.md#51-protocol-validation)）。
 
 ---
 

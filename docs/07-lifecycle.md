@@ -63,10 +63,13 @@ Google Consentなどの外部認可で処理が一時中断されても復元で
 ### 3.3 End-to-End Provisioning Flow
 
 参加者はアプリ（デプロイ単位）であり、アプリ内部の機能は自己呼び出しとして示す。
+Automation AppからAuthorization PlatformとAgent Provisionerへの呼び出しには、ユーザーがHuman IdPで認証して得たHuman Access Token（DPoP-bound）を伴う。
+`AT` はそのAccess Tokenと対応するDPoP Proofを指す。
 
 ```mermaid
 sequenceDiagram
     actor U as Human User
+    participant HIDP as Human IdP
     participant AUTO as Automation App
     participant AUTHZ as Authorization Platform
     participant PROV as Agent Provisioner
@@ -74,16 +77,20 @@ sequenceDiagram
     participant OP as Agent OP
     participant RUN as Agent Runtime (Cloud Run Job)
 
+    U->>HIDP: OIDC Login + DPoP Key
+    HIDP-->>AUTO: ID Token + DPoP-bound Access Token
     U->>AUTO: 日報作成 / 自動化相談
     AUTO->>AUTO: Automation Design AI: Work Definition Proposal
     U->>AUTO: 修正 / 承認
-    AUTO->>AUTHZ: Business Work Request
+    AUTO->>AUTHZ: Business Work Request + AT (aud=authorization-platform)
+    AUTHZ->>AUTHZ: Token / Proof検証、human_subject == sub
     AUTHZ->>AUTHZ: Work Definition構造化
     AUTHZ->>AUTHZ: Authorization AI Agent: Proposed Capability
     AUTHZ->>AUTHZ: Policy Engine: Human / Delegatable / Org / Risk Policy
     AUTHZ-->>AUTO: Effective Capability + Security Profile
     U->>AUTO: Agent作成承認
-    AUTO->>PROV: Agent Provisioning Request
+    AUTO->>PROV: Agent Provisioning Request + AT (aud=agent-provisioner)
+    PROV->>PROV: Token / Proof検証、human_subject == sub
     PROV->>PROV: Create Provisioning Transaction
     PROV->>PROV: Tool / Connector Catalog: Resolve Allowed Tools + XAA Config
     alt Google Consent Required
@@ -92,7 +99,7 @@ sequenceDiagram
         U->>GB: Google OAuth Consent
         GB-->>U: Redirect to Automation App
         U->>AUTO: Consent完了
-        AUTO->>PROV: Resume Transaction
+        AUTO->>PROV: Resume Transaction + AT (aud=agent-provisioner)
         PROV->>GB: Verify Connection
         GB-->>PROV: READY
     end
@@ -110,6 +117,9 @@ sequenceDiagram
     RUN-->>PROV: ACTIVE
     PROV-->>AUTO: Agent Ready
 ```
+
+Token検証の具体的な手順は [05. §2.1](./05-identity.md#21-受け取り側の検証手順) にある。
+Provisionerは、この検証を通らない要求をProvisioning Transactionの作成前に拒否する。
 
 通常Agentでは「Agent Creation ≠ Infrastructure Creation」であり、Shared OP上にAgent固有のRegistration / Key / Configのみを生成する。
 FULL_ISOLATIONでは「Agent Creation = Dedicated Infrastructure Provisioning」である（[05. §5](./05-identity.md#5-isolation-model)）。

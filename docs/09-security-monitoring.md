@@ -80,7 +80,8 @@ Platform側のService AccountにはSecurity Project上のログを削除する�
 Invalid Signature / Expired Token / Expired Agent
 audience mismatch / resource mismatch / invalid scope
 unknown issuer / invalid client / invalid ID-JAG
-invalid DPoP Proof / replayed DPoP Proof
+invalid DPoP Proof / replayed DPoP Proof / DPoP key binding mismatch (cnf.jkt)
+human_subject mismatch (body vs token sub)
 unauthorized Tool
 expired Bridge Connection / expired XAA Connection
 ```

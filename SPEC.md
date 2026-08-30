@@ -45,3 +45,4 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 ## 変更履歴
 
 - 2026-08-30：単一ファイルだった設計メモを内容ごとに `docs/01`〜`10` へ分割し、レビュー指摘（`.review/SPEC.md.review.json`）を反映した。
+- 2026-08-30：Control Plane API（Authorization Platform、Agent Provisioner、Lifecycle Manager）のHuman Access Token検証を明文化した。`human_subject` は Access Token の `sub` を正とし（RULE-43）、DPoP検証では `cnf.jkt` と Proof の鍵の一致を確認する（RULE-44）。
