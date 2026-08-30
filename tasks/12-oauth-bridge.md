@@ -63,7 +63,7 @@ Authorization ヘッダの Google 発行 ID トークンを検証し、`email` �
 - `callerAuthz(allowed: CallerRole[])` を Hono ミドルウェアとして実装する。`CallerRole` は `runtime` | `provisioner` | `lifecycle` の3値。
 - 許可リストは `config` から作る。`runtime` は `CALLER_SA_RUNTIME` と `CALLER_SA_SLOTS`（カンマ区切りの `sa-agent-slot-01@...` 形式）の和集合、`provisioner` は `CALLER_SA_PROVISIONER`、`lifecycle` は `CALLER_SA_LIFECYCLE`。突き合わせは文字列の完全一致で行い、接尾辞一致や正規表現を使わない。
 - ルートへの適用は `POST /token` が `["runtime"]`、`POST /connections/check` と `POST /connections/verify` と `POST /bindings` が `["provisioner"]`、`POST /bindings/:agent_id/disable` と `DELETE /bindings/:agent_id` が `["lifecycle"]`。
-- 許可外は HTTP 403 と `{"error":"forbidden_caller"}` を返し、拒否理由に SA の email を含めない。同時に `emitProtocolValidation("forbidden_bridge_caller", {route, caller_email})` を呼ぶ（T-SEC-02 が配線する共通ヘルパを使う）。
+- 許可外は HTTP 403 と `{"error":"forbidden_caller"}` を返し、拒否理由に SA の email を含めない。同時に `emitProtocolValidation("forbidden_bridge_caller", {route, caller_email})` を呼ぶ（T-SEC-11 が配線する共通ヘルパを使う）。
 - ID トークンが無い、壊れている、`aud` が違う場合も同じ 403 `forbidden_caller` に寄せ、401 と 403 を使い分けない。
 - callback 面にはこのミドルウェアを適用しない。
 
@@ -570,7 +570,7 @@ stub-saas-op は maronn の CLI 生成物を使い、stub-saas-api は Bearer �
 docs 01 §4 の Bridge 経路（Agent → ID-JAG → Bridge → Refresh Token Grant → Access Token → SaaS API）を stub 相手に通す E2E を作る。
 同時に、既定の `enable_google_bridge=false` では Bridge の Cloud Run Service が plan に現れず、この E2E がスキップされることを機械的に確かめる。
 
-**対象要件** REQ-01-024, REQ-06-018
+**対象要件** REQ-01-024, REQ-06-018, REQ-06-022
 **前提タスク** T-BRIDGE-10, T-BRIDGE-15, T-BRIDGE-17, T-BRIDGE-18, T-BRIDGE-19
 **成果物** `e2e/test/bridge-flow.spec.ts`, `e2e/test/second-agent-no-consent.spec.ts`, `infra/tests/bridge-disabled-plan.sh`, `e2e/support/bridge-enabled.ts`
 

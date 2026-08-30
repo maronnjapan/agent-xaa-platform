@@ -534,12 +534,35 @@ docs 05 §9 の8行を単一の定数表と1対1で対応させ、表に無い�
 
 ---
 
+### T-DOCS-17 Resource AS の失敗応答の記述を訂正する
+
+**概要**
+docs 08 は Resource AS の `/token` が 401 と `WWW-Authenticate` を返すと読める書き方をしているが、Token Endpoint の失敗応答は RFC 6749 §5.2 の 400 とエラーコードである。
+401 と `WWW-Authenticate` を返すのは Resource API 側であり、両者を混ぜると実装者が Resource AS に誤った応答を書く。
+
+**対象要件** REQ-08-044
+**前提タスク** T-RES-06
+**成果物**
+- `docs/08-gcp-infrastructure.md`（当該記述の書き換え）
+
+**実装方針**
+- 当該記述を「Resource AS の `/token` は RFC 6749 §5.2 に従い 400 と `invalid_request` または `invalid_grant` を返す。401 と `WWW-Authenticate` を返すのは Resource API 側である」へ書き換える。
+- T-RES-06 の本文にある「docs 領域へ起票する」の記述を「T-DOCS-17 が訂正する」へ差し替える。
+- Resource AS 側の記述に 401 を残さない。
+
+**完了条件**
+- [ ] `grep -n '401' docs/08-gcp-infrastructure.md` のヒットが Resource API を扱う節の中だけになる。
+- [ ] `grep -n 'WWW-Authenticate' docs/08-gcp-infrastructure.md` のヒットが Resource API を扱う節の中だけになる。
+- [ ] `grep -n 'docs 領域へ起票' tasks/05-resource-servers.md` が0件になる。
+
+---
+
 ## このファイルで扱わない要件
 
 | 要件ID | 内容 | 扱う領域 | 扱うタスクと成果物 |
 |---|---|---|---|
-| REQ-02-014 | Human IdP の `/token` で DPoP Proof の `jwk` から RFC 7638 Thumbprint を計算し、Access Token へ `cnf.jkt` を載せる。Control Plane 向け audience では DPoP ヘッダを必須にし、無ければ `invalid_dpop_proof` を返す | Human IdP 実装領域（`target: lib:maronn` だがライブラリ改造は行わず、生成物のデプロイ側で実装する） | `apps/human-idp/src/routes/token.ts` の DPoP 対応タスク。タスク番号は当該領域のファイルで採番する。逸脱表の DEV-01 が対応する |
-| REQ-05-017 | DPoP ユーティリティ（ES256 鍵生成、Proof 生成、Proof 検証、RFC 7638 Thumbprint、jti 重複排除）の自前実装 | 共有パッケージ領域（`packages/xaa-crypto`） | `packages/xaa-crypto/src/dpop.ts` と `packages/xaa-crypto/test/dpop.spec.ts` を作るタスク。タスク番号は当該領域のファイルで採番する。逸脱表の DEV-01 が対応する |
+| REQ-02-014 | Human IdP の `/token` で DPoP Proof の `jwk` から RFC 7638 Thumbprint を計算し、Access Token へ `cnf.jkt` を載せる | Human IdP | T-IDP-18。逸脱表の DEV-01 が対応する |
+| REQ-05-017 | DPoP ユーティリティ（ES256 鍵生成、Proof 生成、Proof 検証、RFC 7638 Thumbprint、jti 重複排除）の自前実装 | 共有パッケージ | T-PKG-10。逸脱表の DEV-01 が対応する |
 
 上の2件は本ファイルの検査対象には入る。
 DEV-01 の行が指す `packages/xaa-crypto/src/dpop.ts` と `packages/xaa-crypto/test/dpop.spec.ts` の実在は T-DOCS-03 の strict モードが確認し、RULE-06 と RULE-44 の対応は T-DOCS-14 の表が持つ。

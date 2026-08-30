@@ -529,7 +529,7 @@ Automation App から Control Plane 3アプリへ渡る Access Token を、鍵�
 `/token` で DPoP Proof を検証し、Access Token の payload と introspection 応答に `cnf.jkt` を載せ、`token_type` を `DPoP` にする。
 RULE-06 と DEC-ID-13 の経路(3)の発行側にあたる。maronn は DPoP 非対応のため実装は `packages/xaa-crypto` を使う（DEV-01）。
 
-**対象要件** REQ-05-018
+**対象要件** REQ-05-018, REQ-02-014
 **前提タスク** T-IDP-11
 **成果物**
 - `apps/human-idp/src/auth/dpop-token-binding.ts`

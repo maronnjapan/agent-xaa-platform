@@ -8,7 +8,7 @@ Agent OP は判断をしない。
 
 | 前提 | 内容 |
 |---|---|
-| 依存する領域 | 共通基盤（T-BASE、xaa-crypto と xaa-contracts）、インフラ（T-INFRA、KMS と Firestore と Cloud Run と JWKS バケット）、Human IdP（T-IDP）、Provisioner（T-PROV）、Security Detection（T-SEC） |
+| 依存する領域 | 共通基盤（T-PKG、xaa-crypto と xaa-contracts）、インフラ（T-IAC、KMS と Firestore と Cloud Run と JWKS バケット）、Human IdP（T-IDP）、Provisioner（T-PROV）、Security Detection（T-SEC） |
 | このファイルのタスク数 | 33件 |
 | 主に満たす設計ルール | RULE-06, RULE-19, RULE-20, RULE-22, RULE-25, RULE-26, RULE-44, RULE-45, RULE-46, RULE-47, RULE-48, RULE-49, RULE-51, RULE-53 |
 
@@ -138,7 +138,7 @@ subject_token の署名検証に使う JWKS は Agent OP 自身の鍵ではな�
 DEC-ID-20 のとおり subject_token の検証に使うのは `idp-` 接頭辞の kid に限る。
 
 **対象要件** REQ-05-025
-**前提タスク** T-OP-01, T-INFRA-07
+**前提タスク** T-OP-01, T-IAC-20
 **成果物**
 - `apps/agent-op/src/keys/shared-jwks.ts`
 - `apps/agent-op/test/shared-jwks.spec.ts`
@@ -171,7 +171,7 @@ DEC-IAC-13 のとおり各アプリは自分専用のオブジェクト `keys/<p
 これにより他アプリの kid を消す事故が構造的に起きなくなる。
 
 **対象要件** REQ-08-017
-**前提タスク** T-OP-04, T-INFRA-07
+**前提タスク** T-OP-04, T-IAC-20
 **成果物**
 - `apps/agent-op/src/keys/publish-public-key.ts`
 - `apps/agent-op/test/publish-public-key.spec.ts`
@@ -206,7 +206,7 @@ Resource AS は kid で Shared と Dedicated を区別せず、共有 issuer の
 FULL_ISOLATION が縮めるのは到達できる Registration と Refresh Token の数であり、偽造能力の広さではないことをコードとテストで固定する（DEV-07）。
 
 **対象要件** REQ-05-061
-**前提タスク** T-OP-05, T-INFRA-09
+**前提タスク** T-OP-05, T-IAC-18
 **成果物**
 - `apps/agent-op/src/keys/slot-key.ts`
 - `apps/agent-op/test/slot-key.spec.ts`
@@ -238,7 +238,7 @@ KMS の `asymmetricSign` を呼ぶ箇所を Agent OP 全体で1件に限り、�
 Agent OP から ID Token と Access Token と Request Object の発行コードを削除する（REQ-05-033）。
 
 **対象要件** REQ-05-033, REQ-08-031, REQ-08-032, REQ-10-007
-**前提タスク** T-OP-06, T-BASE-04
+**前提タスク** T-OP-06, T-PKG-14
 **成果物**
 - `apps/agent-op/src/idjag/sign-id-jag.ts`
 - `appsers/agent-op/test/signing-typ.spec.ts` は作らず `apps/agent-op/test/signing-typ.spec.ts`
@@ -351,7 +351,7 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
 検証順序は DEC-ID-12 のとおり固定する。
 
 **対象要件** REQ-05-074
-**前提タスク** T-OP-09, T-BASE-03
+**前提タスク** T-OP-09, T-PKG-12
 **成果物**
 - `apps/agent-op/src/middleware/dpop.ts`
 - `apps/agent-op/test/dpop-middleware.spec.ts`
@@ -390,7 +390,7 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
 特に、形式は正しいが別鍵で作った Proof が `dpop_key_binding_mismatch` になることを固定する。
 
 **対象要件** REQ-09-026
-**前提タスク** T-OP-10, T-SEC-02
+**前提タスク** T-OP-10, T-SEC-11
 **成果物**
 - `apps/agent-op/src/validation/dpop-violations.ts`
 - `apps/agent-op/test/dpop-violations.spec.ts`
@@ -606,7 +606,7 @@ actor_token の `sub` で引いた Agent Registration の `human_subject` が su
 同時に `delegation_mismatch` の Protocol Validation イベントを発行する（REQ-09-021）。
 
 **対象要件** REQ-05-071, REQ-09-021
-**前提タスク** T-OP-15, T-OP-16, T-SEC-02
+**前提タスク** T-OP-15, T-OP-16, T-SEC-11
 **成果物**
 - `apps/agent-op/src/idjag/verify-delegation.ts`
 - `apps/agent-op/test/delegation.spec.ts`
@@ -716,7 +716,7 @@ Token Exchange と subject_token 再取得のたびに Agent Registration の `e
 範囲外は `invalid_scope` を返し、`xaa_config_out_of_range` の Protocol Validation イベントを発行する（REQ-09-024）。
 
 **対象要件** REQ-05-073, REQ-09-024
-**前提タスク** T-OP-19, T-SEC-02
+**前提タスク** T-OP-19, T-SEC-11
 **成果物**
 - `apps/agent-op/src/idjag/verify-xaa-config.ts`
 - `apps/agent-op/test/xaa-config.spec.ts`
@@ -861,7 +861,7 @@ Refresh Token は KMS の `idp-connection-encryption` 鍵で暗号化して保�
 `expires_at` は Agent Registration の `expires_at` と同値にする（DEC-IAC-16）。
 
 **対象要件** REQ-05-045
-**前提タスク** T-OP-02, T-INFRA-05
+**前提タスク** T-OP-02, T-IAC-18
 **成果物**
 - `apps/agent-op/src/idp-connection/types.ts`
 - `apps/agent-op/src/idp-connection/repository.ts`
@@ -1046,7 +1046,7 @@ Refresh Token の保持者は Agent OP だけであるため、再利用は漏�
 検知時は当該 `idp_connection_id` を即座に無効化し、Human IdP へ Revoke を送る。
 
 **対象要件** REQ-09-025
-**前提タスク** T-OP-28, T-SEC-02
+**前提タスク** T-OP-28, T-SEC-11
 **成果物**
 - `apps/agent-op/src/idp-connection/reuse-detection.ts`
 - `apps/agent-op/test/refresh-reuse.spec.ts`

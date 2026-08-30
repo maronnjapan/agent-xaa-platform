@@ -576,10 +576,10 @@ Re-Provisioning の中止時の通知と監査ログもここでまとめて扱�
 **概要**
 デモ D-3 は、寿命3分の Agent を作り、期限後の追加指示が Identity 層と Authorization 層と Connection 層のすべてで拒否されることを見せる。
 このタスクではそのうち Lifecycle Manager が担う部分、つまり短寿命 Agent が sweep で EXPIRED へ進み Cleanup が完走して `AGENT_EXPIRED` が1件だけ出るところを integration テストで固定する。
-ブラウザ操作を含む Playwright シナリオは領域 test の T-TEST-07 が書き、このタスクはその前提となるサーバ側の経路を保証する。
+ブラウザ操作を含む Playwright シナリオは T-APP-31 が書き、このタスクはその前提となるサーバ側の経路を保証する。
 
 **対象要件** REQ-11-032
-**前提タスク** T-LIFE-10, T-LIFE-16, T-TEST-01
+**前提タスク** T-LIFE-10, T-LIFE-16
 **成果物**
 - `e2e/test/lifecycle-expired-demo.spec.ts`
 - `apps/lifecycle-manager/test/expiring-window.spec.ts`

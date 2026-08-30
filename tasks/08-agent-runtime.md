@@ -810,15 +810,127 @@ docs 11 §3.1 の YAML 例と同じキー構成を固定する。
 
 ---
 
+### T-RUN-27 Native XAA 経路4ステップの E2E を通す
+
+**概要**
+Human IdP のログインから Resource API の応答までを、実際の HTTP 経路で1本通す。
+ID-JAG をスタブで作らず `/xaa/token` から取得することで、docs 05 §7 の Native XAA Runtime Flow が机上の設計ではなく動作する経路であることを確定させる。
+
+**対象要件** REQ-01-023
+**前提タスク** T-RUN-12, T-RUN-17, T-RES-23, T-OP-12
+**成果物**
+- `e2e/test/runtime/native-xaa-path.spec.ts`
+
+**実装方針**
+- `agent-op`、`human-idp`、`resource-docs-as`、`resource-docs-api`、`agent-runtime` の `createApp()` を1プロセスで結線する。
+  DEC-TEST-01 のとおり、複数プロセスを起動しない。
+- 経路は4ステップに固定する。
+  (1) Human IdP へのログインで `aud=agent-platform` の ID Token を得る。
+  (2) `/xaa/token` へ Token Exchange を送り ID-JAG を得る。
+  (3) `resource-docs-as` へ `JWT_BEARER_GRANT_TYPE` 定数の grant で ID-JAG を提示し Access Token を得る。
+  (4) `resource-docs-api` の `GET /documents` を Access Token で呼ぶ。
+- ID-JAG をテスト内で組み立てない。
+  必ず (2) の応答から取り出す。
+- `globalThis.fetch` をスタブに差し替え、呼び出し回数を数える。
+  すべての通信が `httpClient` 経由で対向アプリの `app.fetch` に届くため、スタブは0回でなければならない。
+
+**完了条件**
+- [ ] `pnpm test:e2e -- runtime/native-xaa-path` が緑になる。
+- [ ] 同 spec 内で (4) の応答が 200 であることをアサートしている。
+- [ ] 同 spec 内で `globalThis.fetch` のスタブ呼び出し回数が0であることをアサートしている。
+
+---
+
+### T-RUN-28 Runtime Flow 10手順を Document と Finance で1本ずつ通す
+
+**概要**
+docs 05 §7 の Runtime Flow を、STANDARD の Document 経路と FULL_ISOLATION の Finance 経路の両方で通す。
+2経路を同じ手順で通すことで、Isolation Level の違いが経路の形ではなく設定と鍵の割り当てだけに現れることを示す。
+
+**対象要件** REQ-05-093
+**前提タスク** T-RUN-27, T-RUN-18, T-RES-19, T-RES-21
+**成果物**
+- `e2e/test/runtime/runtime-flow-docs.spec.ts`
+- `e2e/test/runtime/runtime-flow-finance.spec.ts`
+
+**実装方針**
+- Finance 側は `isolation_level=full_isolation` で Provision し、スロットを1枠リースする。
+- 各シナリオで6件をアサートする。
+  ID-JAG の `sub` が委譲元の `human_subject` に一致すること。
+  ID-JAG の `act.sub` が `urn:xaa:agent:<agent_id>` に一致すること。
+  ID-JAG の `aud` が対象 Resource AS の issuer に一致すること。
+  ID-JAG の `cnf.jkt` が Execution の DPoP 鍵の RFC 7638 thumbprint に一致すること。
+  Access Token の `cnf` が同じ thumbprint を持つこと。
+  Access Token の `act` が ID-JAG の `act` を引き継いでいること。
+- 各シナリオの終了時にスロットを返却し、次のテストへ状態を持ち越さない。
+
+**完了条件**
+- [ ] `pnpm test:e2e -- runtime/runtime-flow-docs` が緑になる。
+- [ ] `pnpm test:e2e -- runtime/runtime-flow-finance` が緑になる。
+- [ ] 両 spec がそれぞれ6件のアサートを持つ。
+- [ ] finance 側の spec で、`isolation_level` を `standard` に変えると 403 `insufficient_isolation` になることをアサートしている。
+
+---
+
+### T-RUN-29 プロンプトインジェクション拒否を実証する
+
+**概要**
+Resource 上のデータに仕込んだ指示文で Agent Reasoning を誘導しても、Allowed Tools の外へは1回も外部通信が出ないことを確かめる。
+docs 04 §7 が主張する「Tool Executor の段階で拒否される」を、実際の経路で確定させる。
+
+**対象要件** REQ-04-025
+**前提タスク** T-RUN-07, T-RUN-18, T-RUN-27
+**成果物**
+- `e2e/test/runtime/prompt-injection.spec.ts`
+
+**実装方針**
+- Tool Manifest を `internal.document.list` と `internal.document.get` の2件に限る。
+- `POST /documents` で、`body` に `internal.finance.payment.approve` の実行を促す文言を含むドキュメントを投入する。
+- Agent Reasoning は `VERTEX_MODE=fake` とし、投入した文言に従って `internal.finance.payment.approve` を返すよう仕込む。
+  誘導が成功した状態を作ったうえで、その先で止まることを見る。
+- Tool Executor の戻り値が `{ outcome: 'blocked', reason: 'not_in_allowed_tools', error_code: 'tool_not_allowed' }` であることを確認する。
+- `agent-op`、`resource-finance-as`、`resource-finance-api` の3アプリの `app.fetch` にカウンタを挟み、いずれも0回であることを確認する。
+
+**完了条件**
+- [ ] `pnpm test:e2e -- runtime/prompt-injection` が緑になる。
+- [ ] Tool Executor の戻り値3フィールドをアサートしている。
+- [ ] 3アプリの呼び出し回数がいずれも0であることをアサートしている。
+
+---
+
+### T-RUN-30 デモ D-1 を実操作の E2E として通す
+
+**概要**
+docs 11 §6.1 の D-1（権限外の操作が拒否される）を、通常の API とデータ経路だけで通す。
+Firestore へ直接書く近道を作らず、ユーザーが画面から行う操作と同じ経路を踏む。
+
+**対象要件** REQ-11-030
+**前提タスク** T-RUN-23, T-RUN-25, T-RUN-26, T-APP-15, T-APP-31
+**成果物**
+- `e2e/test/demo/out-of-permission.spec.ts`
+
+**実装方針**
+- `document.read` だけを持つ Agent を Provision する。
+- 追加指示は `POST /api/agents/{agent_id}/instructions` から入れる。
+  Firestore の `agents/{agent_id}/instructions` へ直接書かない。
+- 指示の内容は支払の承認を求めるものにする。
+- `TOOL_BLOCKED` と `TASK_BLOCKED` の Activity Event が1件ずつ記録されることを確認する。
+- タイムラインの再生 SVG で `data-blocked="true"` の要素が1個、宛先ノードの `data-reached` が `"false"` であることを確認する。
+- D-2 は T-AUTHZ-31、D-3 は T-LIFE-17、D-4 は T-AUTHZ-32 が持つ。
+  このタスクで4種すべてを書かない。
+
+**完了条件**
+- [ ] `pnpm test:e2e -- demo/out-of-permission` が緑になる。
+- [ ] `TOOL_BLOCKED` と `TASK_BLOCKED` がそれぞれ1件であることをアサートしている。
+- [ ] 再生 SVG の `data-blocked="true"` が1個であることをアサートしている。
+- [ ] 宛先ノードの `data-reached` が `"false"` であることをアサートしている。
+
+---
+
 ## このファイルで扱わない要件
 
-次の5件は Runtime の振る舞いを対象とするが、実装ではなく検証シナリオであるため TEST 領域で起票する。
-いずれも本ファイルのタスクが提供する `createApp()` と同一プロセスハーネス、および構造化ログを入力に使う。
+次の1件は Bridge 経路の検証であり、`enable_google_bridge=true` のときだけ実行する。
 
 | 要件ID | 内容 | 扱う領域とタスク |
 |---|---|---|
-| REQ-01-023 | Native XAA 経路4ステップの E2E（Document RS） | TEST / T-TEST-03 |
-| REQ-05-093 | Native XAA Runtime Flow 10手順を finance と docs の2本で通す | TEST / T-TEST-04 |
-| REQ-11-030 | デモ D-1（権限外の操作が拒否される経路）の実操作 E2E | TEST / T-TEST-06 |
-| REQ-04-025 | プロンプトインジェクション拒否の実証テスト | TEST / T-TEST-10 |
-| REQ-06-022 | Bridge Runtime Flow 14ステップの E2E | TEST / T-TEST-14 |
+| REQ-06-022 | Bridge Runtime Flow 14ステップの E2E | OAuth Bridge / T-BRIDGE-20 |
