@@ -127,7 +127,7 @@ flowchart LR
 | 呼び出し | 認証と認可 |
 |---|---|
 | Human User → Automation App | Human IdPのOIDCログイン |
-| Automation App → Authorization Platform / Agent Provisioner / Lifecycle Manager | Human Access Token（DPoP-bound、`aud` は各アプリ）に加えて、Cloud Run IAMで `sa-automation-app` にだけ `run.invoker` を付与 |
+| Automation App → Authorization Platform / Agent Provisioner / Lifecycle Manager | Human Access Token（DPoP-bound、`aud` と `scope` は各アプリ）に加えて、Cloud Run IAMで `sa-automation-app` にだけ `run.invoker` を付与。`human_subject` はTokenの `sub` を正とする（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)） |
 | Automation App ↔ Firestore | `sa-automation-app` でAgentのstate読み取りとinstructions書き込み（[02. §5](./02-automation-design.md#5-実行中agentの操作)） |
 | 権限管理システム → Authorization Platform | Human Permission変更イベントをPub/Sub Push Subscriptionで配信。Pub/SubのOIDC Tokenで認証 |
 | Authorization Platform → Lifecycle Manager | Cloud Run IAM |
@@ -213,6 +213,7 @@ Blast Radiusの比較は [05. §5](./05-identity.md#5-isolation-model) を参照
 
 `sa-provisioner` と `sa-lifecycle` はCloud Run ServiceやService Account、KMS Keyを作成および削除できるため、Project内で最も強い権限を持つ。
 両アプリは内部公開に限定し、ProvisionerはHuman Access Token（DPoP-bound）を伴う要求だけを受け付ける。
+Tokenの検証手順は [05. §2.1](./05-identity.md#21-受け取り側の検証手順) にある。
 
 ## 6. 鍵と秘密情報
 
