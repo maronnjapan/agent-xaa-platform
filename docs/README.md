@@ -52,3 +52,4 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 - 2026-08-30：Cross App Accessを `draft-ietf-oauth-identity-assertion-authz-grant` へ準拠させた（RULE-45〜RULE-53）。ID-JAGの発行者をHuman IdPと共有するissuerへ移し、`sub` を委譲元の人間、`act` を代理のAgentとした。Agent Runtimeが `subject_token` として人間のID Tokenを持ち、その供給源であるRefresh Tokenは Human IdP Connection としてAgent OPが保持する。Agentごとのクライアント登録は作らず、Agent個体は `cnf.jkt` と `act` で識別する。
 - 2026-08-30：ルートにあった目次ファイル `SPEC.md` の内容を本ファイル（`docs/README.md`）に統合し、`SPEC.md` を削除した。
 - 2026-08-30：人間向けの可視化画面として[11. アクティビティタイムライン](./11-activity-timeline.md)を追加した。Security Detection（09）とは別に、ログイン・権限決定・Agent実行・遮断を時系列で見せるActivity Eventを新設し、Automation App内の機能として位置づけた（RULE-54〜RULE-58）。
+- 2026-08-30：11のイベント配信を、実行中に逐次配信する方式から、Task（`provisioning` / `task-{n}` / `lifecycle`）が完了してからまとめて再生する方式へ改めた（RULE-59）。再生は文字の一覧だけでなく、呼び出しの経路をアニメーションで示し、遮断はその経路が途中で止まる動きで表す。

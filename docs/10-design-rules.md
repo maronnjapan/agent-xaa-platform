@@ -105,3 +105,4 @@
 | RULE-56 | Activity Feedの参照範囲はAccess Tokenの`sub`と一致する`human_subject`のイベントに限る。他ユーザーのログイン操作やAgentは表示しない | [11. §2](./11-activity-timeline.md#2-基本方針)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
 | RULE-57 | ブラウザはFirestoreへ直接アクセスしない。Activity EventはAutomation Appの認証済みセッションを介してのみ配信する | [11. §4](./11-activity-timeline.md#4-配信経路)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
 | RULE-58 | デモ用に台本化したActivity Eventには`is_simulated`を付与し、実イベントと視覚的に区別する。台本の再生は操作者自身のセッション範囲に閉じる | [11. §6.2](./11-activity-timeline.md#62-台本で補う)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
+| RULE-59 | Activity Timelineは実行中のイベントを逐次配信しない。ログイン〜Provisioning、Taskごとの処理、Agent終了はそれぞれの終端イベントが記録されてから、一連の流れをまとめて再生する | [11. §2](./11-activity-timeline.md#2-基本方針)、[11. §3.3](./11-activity-timeline.md#33-task境界)、[11. §4](./11-activity-timeline.md#4-配信経路) |

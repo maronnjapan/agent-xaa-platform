@@ -17,6 +17,8 @@ Security Detection（[09](./09-security-monitoring.md)）は、ログから異�
 
 - **可視化と判断を分離する**：本画面はAgentやToolの実行を止めたり許可したりしない。表示する遮断は、Tool Executor（[04. §7](./04-tool-catalog.md#7-agentに任意httpを許さない)）、Policy Engine（[03. §6](./03-authorization.md#6-policy-engine)）、Security Detection（[09. §6](./09-security-monitoring.md#6-response)）がすでに下した決定である。
 - **自分の範囲だけを見せる**：表示対象はAccess Tokenの`sub`と一致する`human_subject`のイベントに閉じる。他ユーザーのログインやAgentは表示しない。Control Plane APIで`human_subject`を`sub`に固定する既存の考え方（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)）をここでも使う。全ユーザー横断のダッシュボードは今回の対象外とする（[§8](#8-今後の検討事項)）。
+- **完了してから、まとめて再生する**：実行中のイベントを逐次配信することはしない。常時接続の配信経路は接続維持や順序保証の負担が大きく、途中経過を文字で流すだけでは効果も薄い。ログイン〜Provisioning、Taskごとの処理、Agent終了のそれぞれが完了した時点で、その一連の流れをまとめて再生する（[§3.3](#33-task境界)、[§4](#4-配信経路)）。実行中かどうかだけを素早く知りたい場合は、既存の状況確認（[02. §5](./02-automation-design.md#5-実行中agentの操作)）を使う。
+- **一覧だけで終わらせない**：完了した処理は、文字の一覧に加えて、実際に発生した呼び出しの経路をアニメーションで再生する。遮断はその経路がどこで止まったかを動きで示す（[§5.2](#52-再生の中身)）。
 - **人間の操作とAgentの操作を1本の時系列にする**：ログインや追加指示のような人間自身の操作と、Agentの実行結果を別々の画面に分けない。ユーザーから見れば「自分が指示し、Agentが動いた」という1つの流れだからである。
 - **表示専用のイベントを別系統で持つ**：Security Detectionが収集する詳細ログ（[09. §2](./09-security-monitoring.md#2-収集するログ)）はDPoP検証結果やID-JAGの`jti`など技術的な内容であり、そのままでは人間向けの説明にならない。本書はこれとは別に、意味のある区切りごとに人間向けの説明文を持つ**Activity Event**を新たに定義する（[§3](#3-activity-event)）。既存の詳細ログを置き換えるものではなく、その横に並ぶ軽量な系統である。
 - **遮断のデモは実際の拒否経路を使う**：Tool Executorの拒否やPolicy EngineのDENYは、デモのための特別な演出ではなく実際に動いている仕組みである。安全に再現できるものは実際に操作して見せ、実演が危険または非現実的なものだけ台本化した表示で補う（[§6](#6-侵害を見せるデモ)）。
@@ -33,6 +35,7 @@ activity_event:
   trace_id: trace-9a01
   human_subject: user-123
   agent_id: agent-001         # ログインなどAgent作成前のイベントはnull
+  task_id: task-2             # 再生の単位（3.3）。provisioning / task-{n} / lifecycle
   occurred_at: "2026-08-29T10:01:05+09:00"
   source: agent-runtime       # 発行元アプリ
   phase: tool_call            # login / work_definition / authorization / provisioning / tool_call / security / lifecycle
@@ -49,7 +52,7 @@ activity_event:
 
 `title`と`message`は発行元のアプリがイベントを出す時点で生成する。生データを画面側で人間向けの文章へ変換するロジックは持たせない。理由を最もよく知っているのは、その判断を下した本人（Policy Engine、Tool Executorなど）だからである。
 
-`outcome`は3値に絞る。`denied`と`blocked`のような細分化はしない。ユーザーから見れば「権限が足りず断られた」も「実行中に拒否された」も同じ「止められた」であり、区別する意味が薄いためである。ただし`phase`が`tool_call`か`security`かで、画面上の強調度を変える（[§5.2](#52-表示のルール)）。
+`outcome`は3値に絞る。`denied`と`blocked`のような細分化はしない。ユーザーから見れば「権限が足りず断られた」も「実行中に拒否された」も同じ「止められた」であり、区別する意味が薄いためである。ただし`phase`が`tool_call`か`security`かで、画面上の強調度を変える（[§5.3](#53-表示のルール)）。
 
 ### 3.2 発行するイベントの例
 
@@ -74,6 +77,20 @@ activity_event:
 
 CAPABILITY_DECIDEDは`denied`側も表示する。却下されたCapabilityとその理由（Delegatable Permission外、Organization Policy違反など）は、実際には何も実行されていなくても「何が許されなかったか」を示す情報であり、遮断の理解に欠かせない。
 
+### 3.3 Task境界
+
+再生の単位は`task_id`でまとめる。`task_id`は次の3種類のいずれかを持つ。
+
+| task_id | 範囲 | 終端イベント |
+|---|---|---|
+| `provisioning` | ログインからAgent作成完了まで | AGENT_PROVISIONED |
+| `task-{n}` | 最初のWork Definition実行、または追加指示1回ごとの一連の処理 | TASK_COMPLETED（成功）／TASK_BLOCKED（権限外のため一部拒否）／TASK_FAILED（それ以外の失敗） |
+| `lifecycle` | Agentの終了 | AGENT_EXPIRED／AGENT_STOPPED／AGENT_QUARANTINED／AGENT_REVOKED_SECURITY |
+
+終端イベントが記録された`task_id`だけが再生の対象になる。終端イベントがまだ無い`task_id`は「実行中」として名前だけ示し、途中経過を先出しで再生しない（[§4](#4-配信経路)）。
+
+TASK_COMPLETED、TASK_BLOCKED、TASK_FAILEDはAgent Runtimeが発行する。1回の指示に対する処理は複数のTool呼び出しを含みうるため、それらがすべて終わった時点でAgent Runtimeが結果を判定する。
+
 ## 4. 配信経路
 
 ```mermaid
@@ -88,62 +105,66 @@ flowchart LR
 
     TOPIC -->|push subscription| SUB[Automation App<br/>Activity Subscriber]
     SUB -->|write| FS[(Firestore<br/>users/human_subject/activity)]
-    SUB -->|SSE| BROWSER[ブラウザ<br/>タイムライン画面]
-    FS -.->|初回読み込み| BROWSER
+    BROWSER[ブラウザ<br/>タイムライン画面] -->|task_idごとに要求| SUB
+    SUB -->|終端イベントが揃った<br/>Taskだけ返す| BROWSER
 ```
 
 各アプリはActivity Eventを`agent-activity-stream`というPub/Subトピックへ直接publishする。Security Detectionへの経路（Cloud Logging → Log Sink / Pub/Sub、[09. §4](./09-security-monitoring.md#4-正規化と保存)）とは別系統とし、Cloud Loggingを経由しない。フォレンジック用の詳細ログと、表示用の軽量イベントとで求める速さと形式が異なるためである。
 
-Automation Appはこのトピックをpush subscriptionで受け、`human_subject`ごとにFirestore（`users/{human_subject}/activity/{event_id}`）へ書き込む。画面が開かれている間はAutomation AppがサーバーサイドでFirestoreを購読し、Server-Sent Eventsでブラウザへ転送する。ページを開いた直後はFirestoreから直近の履歴を読み、以降はSSEで追記を受け取る。
+Automation Appはこのトピックをpush subscriptionで受け、`human_subject`ごとにFirestore（`users/{human_subject}/activity/{event_id}`）へ書き込む。この書き込み自体はリアルタイムに行うが、ブラウザへは配信しない。
 
-ブラウザからFirestoreへ直接アクセスすることはしない。Automation Appの認証済みセッションを介した配信だけを許す。Firestoreへ直接アクセスさせると、Human IdPが発行するAccess Tokenとは別に、Firestore用の認可の仕組みを新たに持ち込むことになるためである。
+ブラウザがタイムライン画面を開いたとき、または一覧を更新したときに、Automation Appは`task_id`ごとに終端イベント（[§3.3](#33-task境界)）の有無を確認し、揃っているTaskだけをまとめて返す。終端イベントがまだ無い`task_id`は「実行中」として件数や名前だけを示し、中身は返さない。常時接続の配信経路は持たない。
 
-`agents/{agent_id}/state`（[02. §5](./02-automation-design.md#5-実行中agentの操作)）とは役割が異なる。`state`は現在の状態のスナップショットであり、停止や追加指示の判断材料として使う。`users/{human_subject}/activity`は過去に起きたことの記録であり、タイムライン表示にだけ使う。
+ブラウザからFirestoreへ直接アクセスすることはしない。取得はAutomation Appの認証済みセッションを介してのみ行う。Firestoreへ直接アクセスさせると、Human IdPが発行するAccess Tokenとは別に、Firestore用の認可の仕組みを新たに持ち込むことになるためである。
+
+`agents/{agent_id}/state`（[02. §5](./02-automation-design.md#5-実行中agentの操作)）とは役割が異なる。`state`は現在の状態のスナップショットであり、停止や追加指示の判断材料として使う。`users/{human_subject}/activity`は完了したTaskの記録であり、終わった後の再生にだけ使う。
 
 ## 5. 画面
 
-### 5.1 タイムラインの例
+### 5.1 画面の構成
 
-Google Calendarの予定を整理するAgent（[02. §1](./02-automation-design.md#1-基本方針)の例）で、ユーザーが追加指示によって権限外の操作を試した場合の表示例を示す。
+タイムライン画面は2段になる。
+
+1. **一覧**：ユーザーの全Agentについて、完了した`task_id`を新しい順に並べる。各行はAgentの目的、区分（`provisioning` / `task-{n}` / `lifecycle`）、終端の`outcome`、完了時刻を示す。実行中の`task_id`は「実行中」の行として名前だけ出し、選べない。
+2. **再生**：一覧から1件選ぶと、そのTaskに含まれるActivity Eventをアニメーションで再生する（[§5.2](#52-再生の中身)）。
+
+Google Calendarの予定を整理するAgent（[02. §1](./02-automation-design.md#1-基本方針)の例）で、追加指示によって権限外の送信を試みた場合の一覧を示す。
 
 ```text
-[10:00:00] [情報]   ログインしました
-
-[10:00:15] [情報]   Automation Design AIが「Google Calendarから予定を取得し、
-                     重要な予定を整理する」を提案しました
-
-[10:00:40] [情報]   作業内容を確定しました
-
-[10:00:42] [成功]   許可：calendar.event.read
-                     isolation_level = standard（risk_score 12）
-
-[10:00:50] [成功]   Agent agent-001 を作成しました（有効期限 2026-08-30 10:00）
-
-[10:01:05] [成功]   google.calendar.events.list を実行しました（12件取得）
-
-[10:01:07] [成功]   google.calendar.events.list を実行しました（重要な予定3件を抽出）
-
-[10:03:00] [情報]   追加指示を送信しました：
-                     「抽出した予定を取引先にもメールして」
-
-[10:03:01] [遮断]   mail.message.send は許可されたToolに含まれないため、
-                     実行を拒否しました
-                     （このAgentに許可された操作：calendar.event.read のみ）
-
-[10:05:00] [情報]   Agentを停止しました
+provisioning   Agent agent-001 の作成                          成功   10:00:50
+task-1         予定を取得して整理する                           成功   10:01:07
+task-2         抽出した予定を取引先にもメールする                 遮断   10:03:01
+lifecycle      Agentの終了                                     成功   10:05:00
 ```
 
-`[遮断]`の行は、ユーザーが自分から権限外の指示を試した結果であり、実際にTool Executorが下した拒否である（[§6.1](#61-実操作で見せる)）。
+`task-2`は、ユーザーが自分から権限外の指示を試した結果であり、実際にTool Executorが下した拒否である（[§6.1](#61-実操作で見せる)）。これを選ぶと[§5.2](#52-再生の中身)の再生が始まる。
 
-### 5.2 表示のルール
+### 5.2 再生の中身
 
-- `outcome`が`blocked`の行は、`info`や`success`と明確に区別できる見た目にする（枠線の色、アイコンなど、具体的な意匠は実装時に決める）。
+再生は、そのTaskで実際に呼び出しが発生したアプリを結ぶ図に、呼び出しの動きを重ねたものである。図に含める登場人物はTaskごとに異なり、実際に登場したアプリだけを表示する（`task-1`ならAgent Runtime、Agent OP、Resource AS、Resource APIだけで足り、Authorization Platformは登場しない）。
+
+再生は次の順で進む。
+
+1. そのTaskのActivity Eventを`occurred_at`の順に並べる。
+2. 1件ずつ、発生元から宛先へ向かう動きを表示し、到達した時点でそのイベントの`message`を示す。
+3. `outcome`が`blocked`のイベントは、宛先の手前で止め、到達させない。同時に`message`（拒否の理由）を示す。`task-2`の例では、Agent RuntimeからResource APIへ向かう動きがTool Executorの位置で止まり、「mail.message.send は許可されたToolに含まれないため、実行を拒否しました」を示す。
+4. 全イベントを表示し終えたら、そのTaskの結果（成功／遮断）を静止した状態で残す。
+
+再生の間隔は実際の経過時間に比例させない。Provisioning中のConsent待ちのように数分かかる区間もあれば、Tool呼び出しのように数百ミリ秒で終わる区間もあり、実時間のまま再生すると間延びするか速すぎるかのどちらかになる。1ステップあたり一定の長さで進め、長さそのものは実装時に調整する。
+
+一覧の各行は、再生を見る前後どちらでも[§3.1](#31-スキーマ)の`detail`を開けるようにし、技術的な内容はそこで確認できるようにする。
+
+### 5.3 表示のルール
+
+- 一覧・再生のどちらでも、`outcome`が`blocked`の行は`info`や`success`と明確に区別できる見た目にする（色、アイコンなど、具体的な意匠は実装時に決める）。
 - `phase`が`security`の`blocked`は、`tool_call`の`blocked`よりさらに強く強調する。前者はプロトコル違反や隔離など攻撃的な操作を示し、後者は権限外の依頼という通常運用でも起こりうる拒否だからである。両者を同じ強さで示すと、日常的な権限エラーのたびに「侵害」のような印象を与えてしまう。
 - `detail`は既定で折りたたみ、必要な人だけが技術的な内容（Capabilityの一覧、Policy ID、Finding IDなど）を開けるようにする。
-- 複数のAgentを持つユーザーには、Agentごとの見出し（目的、Effective Capability、Isolation Level、残り有効時間）でタイムラインを区切る。人間自身の操作（ログイン、追加指示）はどの見出しにも属させず、常にAgentの区切りをまたいで独立に並べる。
-- `is_simulated: true`のイベントには常時「デモ実行（模擬）」の表示を付け、実イベントと同じ見た目にはしない（[§6.2](#62-台本で補う)）。
+- 一覧はAgentごとに区切る。`provisioning`と`lifecycle`は各Agentの先頭と末尾に固定で並べ、`task-{n}`はその間に完了順で並べる。
+- `is_simulated: true`のTaskには常時「デモ実行（模擬）」の表示を付け、実イベントと同じ見た目にはしない（[§6.2](#62-台本で補う)）。
 
 ## 6. 侵害を見せるデモ
+
+権限外の指示や組織ポリシー違反は、Tool ExecutorやPolicy Engineがその場で判定するため、操作した直後にTaskが完了扱いになる。完了してから再生する設計（[§2](#2-基本方針)）にしても、デモの体感速度はほとんど変わらない。
 
 ### 6.1 実操作で見せる
 
@@ -174,7 +195,7 @@ Google Calendarの予定を整理するAgent（[02. §1](./02-automation-design.
 ## 7. アクセス制御
 
 - タイムラインの参照範囲はAccess Tokenの`sub`と一致する`human_subject`に限る（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)と同じ考え方）。
-- ブラウザはFirestoreへ直接アクセスしない。配信はAutomation Appの認証済みセッションを介してのみ行う（[§4](#4-配信経路)）。
+- ブラウザはFirestoreへ直接アクセスしない。取得はAutomation Appの認証済みセッションを介してのみ行う（[§4](#4-配信経路)）。
 - [§6.2](#62-台本で補う)の台本再生も操作者自身のセッション範囲に閉じる。他ユーザーのタイムラインへ`is_simulated`イベントを注入することはできない。
 
 ## 8. 今後の検討事項
