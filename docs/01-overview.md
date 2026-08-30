@@ -46,7 +46,7 @@ GCP上の配置は [08](./08-gcp-infrastructure.md)、各文書で決めた原�
 
 | アプリ（Cloud Runにデプロイされる単位） | その中で動く機能 |
 |---|---|
-| **Automation App** | Web UI、日報管理、**Automation Design AI**（Vertex AI呼び出しモジュール）、Agent操作（状況確認、停止、追加指示） |
+| **Automation App** | Web UI、日報管理、**Automation Design AI**（Vertex AI呼び出しモジュール）、Agent操作（状況確認、停止、追加指示）、アクティビティタイムライン（[11](./11-activity-timeline.md)） |
 | **Authorization Platform** | Work Definition構造化、**Authorization AI Agent**（Vertex AI呼び出しモジュール）、**Policy Engine**、Capability Taxonomy |
 | **Agent Provisioner** | Provisioning Transaction、**Tool / Connector Catalog**の解決、XAA静的設定の生成、Agent登録またはDedicated OP作成、Agent Runtime起動 |
 | **Lifecycle Manager** | 期限監視、Revoke / Destroy、Re-Provisioning起動 |

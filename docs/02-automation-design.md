@@ -123,6 +123,8 @@ Automation Appから、作成済みAgentに対して以下の操作ができる�
 | 停止 | Agentを即時停止し、Agent Identity Domainを `REVOKED` → `DESTROYED` へ | Lifecycle Managerへ停止を依頼する（[07. §6](./07-lifecycle.md#6-expiration--緊急停止)） |
 | 追加指示 | 実行中のAgentへ追加の指示を与える | Firestoreの `agents/{agent_id}/instructions` へ追記し、Agent Runtimeが各ステップの前に読み取る |
 
+状況確認が現在の状態のスナップショットであるのに対し、ログインからAgentの実行までを時系列で追いたい場合は[11. アクティビティタイムライン](./11-activity-timeline.md)を使う。
+
 制約：
 
 - 追加指示による処理は、Agent生成時に確定したEffective Agent Permissionを超えてはならない。既存Agentの権限昇格は行わない。追加指示で権限外のToolが必要になった場合、Tool Executorは実行を拒否し、ユーザーへその旨を返す。

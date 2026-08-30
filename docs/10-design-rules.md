@@ -95,3 +95,13 @@
 | RULE-40 | AgentごとのBaselineをAgent Definitionから構築する | [09. §5.4](./09-security-monitoring.md#54-agent-baseline) |
 | RULE-41 | 異常なAgentをAgent Identity Domain単位でQuarantine / Revoke / Destroyできるようにする | [09. §6](./09-security-monitoring.md#6-response) |
 | RULE-42 | Platform側のService AccountにSecurity Logの削除権限を与えない | [09. §4](./09-security-monitoring.md#4-正規化と保存) |
+
+## アクティビティタイムライン
+
+| ID | ルール | 出典 |
+|---|---|---|
+| RULE-54 | Activity Monitoring UIは人間向けの可視化だけを行い、認可判断や検知判断は行わない。表示するのはPolicy Engine、Tool Executor、Security Detectionがすでに下した決定である | [11. §2](./11-activity-timeline.md#2-基本方針) |
+| RULE-55 | Activity Eventは、Security Detectionが収集する詳細ログ（09）とは別系統のPub/Subトピックとする。発行元のアプリが人間向けの説明文をイベント生成時に埋め込む | [11. §3](./11-activity-timeline.md#3-activity-event)、[11. §4](./11-activity-timeline.md#4-配信経路) |
+| RULE-56 | Activity Feedの参照範囲はAccess Tokenの`sub`と一致する`human_subject`のイベントに限る。他ユーザーのログイン操作やAgentは表示しない | [11. §2](./11-activity-timeline.md#2-基本方針)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
+| RULE-57 | ブラウザはFirestoreへ直接アクセスしない。Activity EventはAutomation Appの認証済みセッションを介してのみ配信する | [11. §4](./11-activity-timeline.md#4-配信経路)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
+| RULE-58 | デモ用に台本化したActivity Eventには`is_simulated`を付与し、実イベントと視覚的に区別する。台本の再生は操作者自身のセッション範囲に閉じる | [11. §6.2](./11-activity-timeline.md#62-台本で補う)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |

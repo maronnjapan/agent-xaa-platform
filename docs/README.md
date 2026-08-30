@@ -29,6 +29,7 @@ Human IdPにAgentの文脈を持ち込まないよう、issuerを1つに保っ�
 | 08 | [GCP実行基盤](./08-gcp-infrastructure.md) | Project構成、デプロイ単位と内部機能、アプリ間の呼び出し関係、GCP Service Account、鍵と秘密情報、データストア、ネットワーク |
 | 09 | [セキュリティ監視](./09-security-monitoring.md) | ログ収集、正規化と保存、検知の段階、Risk Score、Security AI、Response |
 | 10 | [設計ルール](./10-design-rules.md) | 各文書で決めた原則の一覧 |
+| 11 | [アクティビティタイムライン](./11-activity-timeline.md) | 人間向けの可視化画面。Activity Event、配信経路、画面表示、侵害を見せるデモの作り方 |
 
 ## 全体構成図
 
@@ -50,3 +51,4 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 - 2026-08-30：Control Plane API（Authorization Platform、Agent Provisioner、Lifecycle Manager）のHuman Access Token検証を明文化した。`human_subject` は Access Token の `sub` を正とし（RULE-43）、DPoP検証では `cnf.jkt` と Proof の鍵の一致を確認する（RULE-44）。
 - 2026-08-30：Cross App Accessを `draft-ietf-oauth-identity-assertion-authz-grant` へ準拠させた（RULE-45〜RULE-53）。ID-JAGの発行者をHuman IdPと共有するissuerへ移し、`sub` を委譲元の人間、`act` を代理のAgentとした。Agent Runtimeが `subject_token` として人間のID Tokenを持ち、その供給源であるRefresh Tokenは Human IdP Connection としてAgent OPが保持する。Agentごとのクライアント登録は作らず、Agent個体は `cnf.jkt` と `act` で識別する。
 - 2026-08-30：ルートにあった目次ファイル `SPEC.md` の内容を本ファイル（`docs/README.md`）に統合し、`SPEC.md` を削除した。
+- 2026-08-30：人間向けの可視化画面として[11. アクティビティタイムライン](./11-activity-timeline.md)を追加した。Security Detection（09）とは別に、ログイン・権限決定・Agent実行・遮断を時系列で見せるActivity Eventを新設し、Automation App内の機能として位置づけた（RULE-54〜RULE-58）。
