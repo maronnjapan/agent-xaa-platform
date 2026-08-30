@@ -3,6 +3,8 @@
 Security Detectionは、Identity、Authorization、Token、Tool、APIの各ログからAgentの異常を検知し、Lifecycle Managerへ隔離や失効を依頼するアプリである。
 アプリの配置と権限は [08. §2](./08-gcp-infrastructure.md#2-デプロイ単位と内部機能) と [08. §5](./08-gcp-infrastructure.md#5-service-account一覧) を参照。
 
+本書が扱うのは検知と自動対応であり、判断の主体は機械である。操作している人間向けに、判断済みの結果を時系列で見せる画面は[11. アクティビティタイムライン](./11-activity-timeline.md)を参照。
+
 ## 1. 基本方針
 
 すべてのログをLLMへ直接送ることはしない。

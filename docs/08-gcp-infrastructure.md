@@ -167,6 +167,7 @@ flowchart LR
 | Google Bridge → Google OAuth AS | OAuth Client Secret（Secret Manager）とRefresh Token（Credential DB） |
 | 各アプリ → Cloud Logging → Pub/Sub → Security Detection | Cloud Loggingの標準経路。Security Detectionは `sa-security` でSubscribe |
 | Cloud Logging → BigQuery（`agent-security-prod`） | Log Sink。Sink用のService Accountにだけ書き込み権限を付与 |
+| 各アプリ → Pub/Sub（`agent-activity-stream`）→ Automation App | Cloud Loggingを経由しない別系統。発行元アプリのService AccountでPublishし、Automation Appが `sa-automation-app` でSubscribeしてFirestore（`users/*/activity`）へ書き込む（[11. §4](./11-activity-timeline.md#4-配信経路)） |
 | Security Detection → Lifecycle Manager | Cloud Run IAM |
 
 ## 4. GCP Service Accountとは
@@ -226,7 +227,7 @@ Blast Radiusの比較は [05. §5](./05-identity.md#5-isolation-model) を参照
 
 | Service Account | 付与する | 付与しない |
 |---|---|---|
-| `sa-automation-app` | Authorization Platform / Provisioner / Lifecycle Managerの `run.invoker`。Vertex AI推論。Cloud SQL（日報、`agent_definition`）。Firestore（`agents/*/state` 読み取り、`agents/*/instructions` 書き込み） | Signing Key。Secret。Credential DB。Authorization DBの書き込み。Tool Catalog |
+| `sa-automation-app` | Authorization Platform / Provisioner / Lifecycle Managerの `run.invoker`。Vertex AI推論。Cloud SQL（日報、`agent_definition`）。Firestore（`agents/*/state` 読み取り、`agents/*/instructions` 書き込み、`users/*/activity` 書き込み）。Pub/Sub Subscribe（`agent-activity-stream`） | Signing Key。Secret。Credential DB。Authorization DBの書き込み。Tool Catalog |
 | `sa-authorization` | Vertex AI推論。Cloud SQL（`authorization`、`capability_taxonomy`）。Lifecycle Managerの `run.invoker`。Pub/Sub Subscribe（Human Permission変更） | Signing Key。Refresh Token。Client Secret。Resource APIの直接実行。Agent Runtimeの操作 |
 | `sa-provisioner` | Shared OP / Google Bridgeの `run.invoker`。Cloud SQL（`provisioning`、`tool_catalog`、`agent_definition`）。Firestore（`agents/*` 書き込み）。Agent OPへのIdP Connection作成依頼と状態確認。Cloud Run Job Executionの起動。FULL_ISOLATION用のCloud Run Service、Service Account、KMS Key、IAM Bindingの作成 | Refresh Token。Client Secret。既存Agent Keyでの署名。Authorization DBの書き込み。Security Project |
 | `sa-lifecycle` | Job Executionの取り消し。OP / Bridge / Native AS / Provisionerの `run.invoker`。KMS Keyの無効化。Dedicated Cloud Run ServiceとService Accountの削除。Firestore（`agents/*` 削除） | Refresh Token。Client Secret。署名 |
@@ -241,6 +242,8 @@ Blast Radiusの比較は [05. §5](./05-identity.md#5-isolation-model) を参照
 `sa-provisioner` と `sa-lifecycle` はCloud Run ServiceやService Account、KMS Keyを作成および削除できるため、Project内で最も強い権限を持つ。
 両アプリは内部公開に限定し、ProvisionerはHuman Access Token（DPoP-bound）を伴う要求だけを受け付ける。
 Tokenの検証手順は [05. §2.1](./05-identity.md#21-受け取り側の検証手順) にある。
+
+Activity Event（[11](./11-activity-timeline.md)）を発行するアプリのService Account（`sa-automation-app`、`sa-authorization`、`sa-provisioner`、`sa-shared-agent-op`、`sa-op-<agent>`、`sa-agent-runtime`、`sa-agent-<agent>`、`sa-lifecycle`、`sa-security`）には、`agent-activity-stream`へのPub/Sub Publish権限を追加で付与する。表の「付与する」列には既存の主要な権限だけを示し、この横断的な権限は行ごとに繰り返さない。
 
 ## 6. 鍵と秘密情報
 
@@ -294,13 +297,14 @@ DB UserはService Accountに対応させ、Cloud SQL IAM認証で接続する。
 
 ### 7.2 Firestore
 
-Agent単位で高速に読み書きするものはFirestoreに置く。
+Agent単位、またはユーザー単位で高速に読み書きするものはFirestoreに置く。
 
 | パス | 内容 | 書く者 | 読む者 |
 |---|---|---|---|
 | `agents/{agent_id}` | Agent Registration（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)） | Provisioner、Lifecycle Manager | Agent OP |
 | `agents/{agent_id}/state` | Runtime Checkpoint、Agent Status | Agent Runtime | Automation App、Lifecycle Manager |
 | `agents/{agent_id}/instructions` | ユーザーからの追加指示 | Automation App | Agent Runtime |
+| `users/{human_subject}/activity` | Activity Event（[11](./11-activity-timeline.md)） | Automation App（`agent-activity-stream`のSubscriber） | Automation App（Web UI経由で本人へ配信） |
 
 いずれのストアにもRaw Token、Refresh Token（暗号化前）、Private Key、Client Secretは保存しない。
 
@@ -328,9 +332,9 @@ Cloud Run IAMは「どのアプリが呼べるか」を決め、ID-JAGは「ど�
 | Cloud Scheduler | Lifecycle Managerの定期起動 |
 | Vertex AI | Automation Design AI、Authorization AI Agent、Agent Reasoning、Security AIの推論 |
 | Cloud SQL（PostgreSQL） | §7.1の論理DB |
-| Firestore | Agent Registration、Runtime Checkpoint、追加指示 |
+| Firestore | Agent Registration、Runtime Checkpoint、追加指示、Activity Event |
 | Cloud KMS | ID-JAG署名鍵、`actor_token` 署名鍵、Resource AS署名鍵、Connector暗号化鍵、IdP Connection暗号化鍵 |
 | Secret Manager | OAuth Client Secret |
-| Pub/Sub | Human Permission変更イベント、Security Detectionへのログ配信 |
+| Pub/Sub | Human Permission変更イベント、Security Detectionへのログ配信、Activity Event配信（`agent-activity-stream`） |
 | Cloud Logging | 全アプリのログ収集とLog Sink |
 | BigQuery（`agent-security-prod`） | Security Data Lake、長期監査ログ、Security Findings |
