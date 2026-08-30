@@ -59,6 +59,9 @@ ConnectionとAgentの関係は2層に分ける。
 
 これにより、同じユーザーが2つ目のAgentを作るときに再度Consentは不要であり（必要なscopeがConnectionに含まれていれば）、Agentの失効はBinding削除で確実に行える。
 
+Human IdPに対するCross App Accessの委譲にも同じ2層の考え方を使う。
+ただしHuman IdPは自社のものであり、短寿命の付与を毎回作れるため、ConnectionをAgentごとに分ける（[05. §4.1](./05-identity.md#41-human-idp-connection)）。
+
 ## 4. Runtime Flow
 
 ```mermaid

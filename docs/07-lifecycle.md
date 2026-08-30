@@ -35,9 +35,10 @@ Agent Identity生成の前に、以下から必要な設定をすべて解決し
 ```text
 Effective Capability + Tool / Connector Catalog + Security Profile
     ↓
-Agent ID / Signing Key / Client Credential
+Agent ID / Agent Client Credential
 Allowed Tools（Tool Manifest）
 XAA Static Configuration（audience / resource / scope）
+Human IdP Connection（Agentごとのrefresh token）
 Isolation Level に応じたインフラ
 expires_at（<= 24h）
 ```
@@ -60,6 +61,10 @@ Google Consentなどの外部認可で処理が一時中断されても復元で
 }
 ```
 
+中断を伴う認可は2つある。
+Human IdPに対する `openid offline_access` の認可（[05. §4.1](./05-identity.md#41-human-idp-connection)）と、外部SaaSに対するConsent（[06. §5](./06-oauth-bridge.md#5-google-consent)）である。
+どちらも同じTransactionで復元し、リダイレクトで返すのは `transaction_id` とone-time codeだけとする。
+
 ### 3.3 End-to-End Provisioning Flow
 
 参加者はアプリ（デプロイ単位）であり、アプリ内部の機能は自己呼び出しとして示す。
@@ -78,7 +83,7 @@ sequenceDiagram
     participant RUN as Agent Runtime (Cloud Run Job)
 
     U->>HIDP: OIDC Login + DPoP Key
-    HIDP-->>AUTO: ID Token + DPoP-bound Access Token
+    HIDP-->>AUTO: ID Token (aud=automation-app) + DPoP-bound Access Token
     U->>AUTO: 日報作成 / 自動化相談
     AUTO->>AUTO: Automation Design AI: Work Definition Proposal
     U->>AUTO: 修正 / 承認
@@ -93,6 +98,20 @@ sequenceDiagram
     PROV->>PROV: Token / Proof検証、human_subject == sub
     PROV->>PROV: Create Provisioning Transaction
     PROV->>PROV: Tool / Connector Catalog: Resolve Allowed Tools + XAA Config
+    PROV->>PROV: Generate Agent ID / Agent Client Credential
+    PROV->>PROV: Set expires_at <= 24h
+    PROV-->>AUTO: IDP_CONSENT_REQUIRED
+    AUTO-->>U: Redirect to Human IdP (client=agent-platform)
+    U->>HIDP: Authorization + Consent (openid offline_access)
+    HIDP-->>OP: Redirect to /xaa/callback (code)
+    OP->>HIDP: Code Exchange
+    HIDP-->>OP: ID Token + Refresh Token
+    OP->>OP: Create Human IdP Connection (encrypted RT, expires_at)
+    OP-->>U: Redirect to Automation App (transaction_id + one-time code)
+    U->>AUTO: Consent完了
+    AUTO->>PROV: Resume Transaction + AT (aud=agent-provisioner)
+    PROV->>OP: Verify IdP Connection
+    OP-->>PROV: READY
     alt Google Consent Required
         PROV-->>AUTO: CONSENT_REQUIRED
         AUTO-->>U: Redirect to Google Bridge
@@ -104,8 +123,6 @@ sequenceDiagram
         GB-->>PROV: READY
     end
     PROV->>GB: Create Agent Binding (expires_at)
-    PROV->>PROV: Generate Agent ID / Signing Key (KMS) / Client Credential
-    PROV->>PROV: Set expires_at <= 24h
     alt STANDARD
         PROV->>OP: Register Agent in Shared OP
     else FULL_ISOLATION
@@ -121,7 +138,10 @@ sequenceDiagram
 Token検証の具体的な手順は [05. §2.1](./05-identity.md#21-受け取り側の検証手順) にある。
 Provisionerは、この検証を通らない要求をProvisioning Transactionの作成前に拒否する。
 
-通常Agentでは「Agent Creation ≠ Infrastructure Creation」であり、Shared OP上にAgent固有のRegistration / Key / Configのみを生成する。
+Human IdP Connectionを先に作るのは、これがAgentの `subject_token` の供給源であり、これが無いとAgentは1度もResourceへアクセスできないためである。
+IdPに有効なセッションがあり同意済みであれば、この往復は `prompt=none` で無操作になる。
+
+通常Agentでは「Agent Creation ≠ Infrastructure Creation」であり、Shared OP上にAgent固有のRegistration / Key / Config / IdP Connectionのみを生成する。
 FULL_ISOLATIONでは「Agent Creation = Dedicated Infrastructure Provisioning」である（[05. §5](./05-identity.md#5-isolation-model)）。
 
 ## 4. Agent Runtime
@@ -149,8 +169,9 @@ Agent Lifetimeの保証をCloud Run timeoutだけに依存しない。
 | レイヤー | 強制手段 |
 |---|---|
 | Runtime | Cloud Run Job timeout |
-| Identity | Agent Registration の `expires_at`、Agent OPによるID-JAG発行停止 |
-| Authorization | Native XAA Connection expiration |
+| Identity | Agent Registration の `expires_at`、Agent OPによるToken Exchangeの拒否 |
+| Delegation | Human IdP ConnectionのRefresh Token失効。`subject_token` を取り直せなくなる |
+| Authorization | ID-JAGとAccess Tokenの短い有効期限。ID-JAGの `exp` は `expires_at` を超えない |
 | Connection | Bridge Agent Binding expiration |
 | Cleanup | Lifecycle Managerによる定期チェックと強制破棄 |
 
@@ -160,6 +181,7 @@ Agent Runtimeは稼働中、Task Context、Conversation Context、Execution Stat
 Automation Appからの状況確認と追加指示はこのCheckpointを介して行う（[02. §5](./02-automation-design.md#5-実行中agentの操作)）。
 
 Raw Token、Refresh Token、Private Key、Client Secretは保存しない。
+ExecutionのDPoP鍵もCheckpointへ書かず、Execution終了とともに失う（[05. §7](./05-identity.md#7-native-xaa-runtime-flow)）。
 
 ## 5. Disposable設計
 
@@ -173,36 +195,37 @@ Agent OPとRuntimeは、Template-based、Immutableに近い、Automated Provisio
 ```text
  1. Agent Runtime停止（Job Execution cancel）
  2. Agent OPからの新規ID-JAG発行停止
- 3. Native XAA Connection無効化
+ 3. Human IdP ConnectionのRefresh TokenをHuman IdPへRevoke要求し、レコードを削除
  4. Bridge Agent Binding無効化
  5. 発行済みCredentialを失効可能な範囲でRevoke（異常時は外部Refresh Tokenも Revoke）
- 6. Agent Signing Key Disable（→ Destroy Scheduled）
+ 6. Agent Client Credential失効。Dedicated OPの場合はID-JAG署名鍵をDisable（→ Destroy Scheduled）
  7. Agent Runtime State削除
- 8. Dedicated OPが存在する場合はCloud Run Service削除
+ 8. Dedicated OPが存在する場合はCloud Run ServiceとID-JAG署名鍵を削除
  9. Dedicated Service Accountが存在する場合はDisable / Delete
 10. Agent Registration / Config削除
 11. 必要な監査情報のみSecurity Planeへ保持
 ```
 
-Agent OPの削除だけでは不十分である。
-既にAccess Tokenが払い出されている可能性があるため、Resource Authorization Server側とBridge側のConnection / Bindingも停止する。
+Agent OPの停止だけでは不十分である。
+既にAccess Tokenが払い出されている可能性があるため、Bridge側のBindingも停止する。
+3のRevokeはAgentごとの付与に対して行うため、同じユーザーの他のAgentと本人のSSOセッションは残る（[05. §4.1](./05-identity.md#41-human-idp-connection)）。
 
 ```mermaid
 sequenceDiagram
     participant LIFE as Lifecycle Manager
     participant RUN as Agent Runtime
     participant OP as Agent OP
+    participant HIDP as Human IdP
     participant BR as Google Bridge
-    participant AS as Native Resource AS
     participant KMS as Cloud KMS
     participant CFG as Agent Registration / State
 
     LIFE->>LIFE: expires_at reached / stop requested / quarantine
     LIFE->>RUN: Cancel Job Execution
     LIFE->>OP: Disable ID-JAG issuance
+    OP->>HIDP: Revoke Refresh Token (Human IdP Connection)
     LIFE->>BR: Disable Agent Binding
-    LIFE->>AS: Disable XAA Connection
-    LIFE->>KMS: Disable Signing Key
+    LIFE->>KMS: Disable Dedicated ID-JAG Signing Key
     LIFE->>CFG: Delete Runtime State / Registration
     alt FULL_ISOLATION
         LIFE->>OP: Delete Dedicated Cloud Run Service / SA

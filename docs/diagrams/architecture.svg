@@ -6,7 +6,7 @@
 <rect x="200" y="70" width="960" height="120" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
 <text x="206.0" y="85.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Control Plane</text>
 <rect x="200" y="250" width="380" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
-<text x="206.0" y="265.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Agent OP</text>
+<text x="206.0" y="265.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Agent OP / same issuer as Human IdP</text>
 <rect x="220" y="570" width="500" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
 <text x="226.0" y="585.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Data / Keys</text>
 <rect x="240" y="705" width="560" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
@@ -41,6 +41,9 @@
 <path d="M 650.0 315.0 L 580.0 314.9" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="595.8" y="306.9" width="38.4" height="13" fill="#ffffff"/>
 <text x="615.0" y="316.9" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">ID-JAG</text>
+<path d="M 200.0 349.0 L 165.0 349.0 L 165.0 325.0 L 130.0 325.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="144.4" y="341.0" width="76.2" height="13" fill="#ffffff"/>
+<text x="182.5" y="351.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">subject_token</text>
 <path d="M 910.0 315.0 L 960.0 315.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="915.8" y="307.0" width="38.4" height="13" fill="#ffffff"/>
 <text x="935.0" y="317.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">ID-JAG</text>

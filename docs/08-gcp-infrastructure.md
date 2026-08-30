@@ -45,7 +45,9 @@ flowchart TB
         L1[期限監視 / Revoke / Destroy / Re-Provisioning]
     end
     subgraph OP["Shared Agent OP / Dedicated Agent OP（Cloud Run Service）"]
-        O1[Agent認証 / ID-JAG発行 / KMS署名 / 期限確認]
+        O1[Agent認証 / subject_token・actor_token検証]
+        O2[ID-JAG発行 / KMS署名 / 期限確認]
+        O3[Human IdP Connection / subject_token払い出し]
     end
     subgraph GB["Google Bridge（Cloud Run Service）"]
         G1[ID-JAG検証 / Consent / Refresh Token管理 / Access Token払い出し]
@@ -76,12 +78,34 @@ flowchart TB
 | Authorization Platform | Cloud Run Service | 内部 | `sa-authorization` |
 | Agent Provisioner | Cloud Run Service | 内部 | `sa-provisioner` |
 | Lifecycle Manager | Cloud Run Service。Cloud Schedulerから定期起動 | 内部 | `sa-lifecycle` |
-| Shared Agent OP | Cloud Run Service（1つ） | 内部 | `sa-shared-agent-op` |
-| Dedicated Agent OP | Cloud Run Service（FULL_ISOLATION Agentごとに1つ） | 内部 | `sa-op-<agent>` |
+| Shared Agent OP | Cloud Run Service（1つ） | 内部API。Human IdPのOAuth Callbackだけ公開 | `sa-shared-agent-op` |
+| Dedicated Agent OP | Cloud Run Service（FULL_ISOLATION Agentごとに1つ） | 同上 | `sa-op-<agent>` |
 | Google Bridge | Cloud Run Service | 内部API。OAuth Callbackだけ公開 | `sa-google-bridge` |
 | Native Resource AS / API | Cloud Run Service（社内Resourceの場合） | 内部 | `sa-native-resource-as` / `sa-native-resource-api` |
 | Agent Runtime | Cloud Run Job。STANDARDは共通のJob定義、FULL_ISOLATIONはAgent専用のJob定義。1 Agent = 1 Execution | 非公開（HTTP Ingressなし） | `sa-agent-runtime` / `sa-agent-<agent>` |
 | Security Detection | Cloud Run Service | 内部 | `sa-security` |
+
+### 2.1 Human IdPとAgent OPの配置
+
+Cross App Accessの成立にはID-JAGの `iss` がHuman IdPのissuer識別子である必要がある一方、Human IdPにAgentの文脈は持ち込まない（[05. §3.2](./05-identity.md#32-issuerを分けずデプロイだけ分ける理由)）。
+そのため、1つのissuer `https://idp.example.com` をExternal Application Load Balancerで受け、パスでバックエンドを分ける。
+
+| パス | バックエンド | 公開 |
+|---|---|---|
+| `/authorize` `/token` `/userinfo` `/logout` | Human IdP（Cloud Run Service） | 公開 |
+| `/.well-known/openid-configuration` | Human IdP（Cloud Run Service） | 公開 |
+| `/jwks.json` | Cloud Storage（Backend Bucket） | 公開 |
+| `/xaa/token` | Agent OP（Cloud Run Service） | 内部からのみ到達可 |
+| `/xaa/callback` | Agent OP（Cloud Run Service） | 公開 |
+
+`/jwks.json` をアプリではなくBucketで配信するのは、Human IdPとAgent OPのどちらか一方が落ちてももう一方の署名検証が続くようにするためである。
+両アプリは自分の公開鍵をこのBucketへ書き、Resource ASはBucketの内容だけを読む。
+Bucketへの書き込みは各アプリのService Accountに限り、削除権限は与えない。
+
+`/xaa/token` はAgent Runtimeだけが呼ぶ。
+公開する必要はないため、Cloud Armorとロードバランサ側の制限に加えて、Cloud Run IngressをInternal限定にしたバックエンドへ向ける。
+`/xaa/callback` はユーザーのブラウザがHuman IdPからリダイレクトされて到達するため公開する。
+これはGoogle BridgeのOAuth Callbackと同じ位置づけである（[06. §5](./06-oauth-bridge.md#5-google-consent)）。
 
 ## 3. アプリ間の呼び出し関係
 
@@ -116,7 +140,8 @@ flowchart LR
     LIFE -->|Revoke| OP
     LIFE -->|Revoke| GB
     LIFE -->|Re-Provision| PROV
-    RUN -->|ID-JAG要求| OP
+    RUN -->|Token Exchange| OP
+    OP -->|Code Exchange / Refresh / Revoke| HIDP
     RUN -->|ID-JAG| GB
     RUN -->|ID-JAG / Access Token| NAS
     GB -->|Refresh Token| GOOGLE
@@ -134,7 +159,8 @@ flowchart LR
 | Agent Provisioner → Shared Agent OP / Google Bridge | Cloud Run IAM |
 | Agent Provisioner → GCP API | `sa-provisioner` でCloud Run Job Executionの起動と、FULL_ISOLATION用のCloud Run Service、Service Account、KMS Key、IAM Bindingの作成 |
 | Lifecycle Manager → Agent Runtime / OP / Bridge / Native AS / KMS | Cloud Run IAMとGCP API。Cloud SchedulerからのOIDC Tokenで定期起動 |
-| Agent Runtime → Agent OP | Layer 1：Cloud Run IAM（`sa-agent-runtime` または `sa-agent-<agent>`）。Layer 2：Agent Client Credential（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)） |
+| Agent Runtime → Agent OP | Layer 1：Cloud Run IAM（`sa-agent-runtime` または `sa-agent-<agent>`）。Layer 2：Agent Client Credential（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)）。要求には `subject_token`、`actor_token`、DPoP Proofを添える |
+| Agent OP → Human IdP | `agent-platform` としてのクライアント認証。Authorization Code Exchange、`refresh_token` grant、Token Revocation |
 | Agent Runtime → Google Bridge | Cloud Run IAMに加えてID-JAG |
 | Agent Runtime → Native Resource AS / Resource API | ID-JAG、そしてAccess Token。Cloud Run IAMは社内Resourceの場合に追加してよいが、XAAの代替にはしない |
 | Agent Runtime → Google API | Google Bridgeが返したGoogle Access Token |
@@ -147,14 +173,15 @@ flowchart LR
 
 GCP Service Accountは、GCP上で動くアプリ（Cloud Run ServiceやJob）が**GCPのIAMに対して名乗る身元**である。
 「AI Agentが外部サービスへアクセスするときに名乗る身元」ではない。
-本システムでその役割を担うのは、Agent OPが発行するID-JAG（Agent Identity）である。
+本システムでその役割を担うのは、Agent OPが発行するID-JAGである。
+ID-JAGは人間（`sub`）とAgent（`act`）の両方を運ぶ（[05. §6.4](./05-identity.md#64-id-jag)）。
 
 | | GCP Service Account | Agent Identity（ID-JAG） |
 |---|---|---|
-| 誰の身元か | Cloud Run Service / Jobというアプリ | 1つのAI Agent |
+| 誰の身元か | Cloud Run Service / Jobというアプリ | 1人の人間と、その代理として動く1つのAI Agent |
 | 誰に対して名乗るか | GCP IAM（KMS、Secret Manager、Cloud SQL、Firestore、他のCloud Run） | Resource Authorization Server、OAuth Bridge |
-| 何が決まるか | そのアプリがどのGCPリソースを使えるか | そのAgentがどのResourceへどのscopeでアクセスできるか |
-| 誰が発行するか | GCP | Agent OP |
+| 何が決まるか | そのアプリがどのGCPリソースを使えるか | どの人間の代理として、どのAgentが、どのResourceへどのscopeでアクセスできるか |
+| 誰が発行するか | GCP | Human IdPと共有するissuer（Agent OPが署名） |
 | いつ作るか | アプリのデプロイ時。Dedicated OPと専用Runtimeの分だけProvisioning時 | Agent Provisioning時 |
 | 寿命 | アプリと同じ。Dedicated分はAgentと同じ | 最大24時間 |
 
@@ -176,9 +203,9 @@ STANDARD Agentは1つのJob定義を共有するため、Service Accountも共�
 実行は 1 Agent = 1 Execution であり、コンテナ、プロセス、メモリ、Tool Manifest、Agent Client CredentialはAgentごとに独立している（[07. §4.1](./07-lifecycle.md#41-実行形態)）。
 複数のAgentを1つのAI Agentプロセスで動かす構成ではない。
 
-Service Accountが共有されていても、Agent OPが「どのAgentとしてID-JAGを発行するか」はService Accountでは決まらない。
-それを決めるのは、Provisioning時にそのExecutionにだけ渡すAgent Client Credentialである（[05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る)）。
-Agent AのExecutionはAgent BのClient Credentialを持たないため、Agent Bとして名乗れない。
+Service Accountが共有されていても、Agent OPが「どのAgentからの要求か」はService Accountでは決まらない。
+それを決めるのは、Provisioning時にそのExecutionにだけ渡すAgent Client Credentialと、そのAgentの鍵で署名した `actor_token` である（[05. §6.2](./05-identity.md#62-actor_token本システム独自のプロファイル)）。
+Agent AのExecutionはAgent BのClient Credentialを持たず、Agent Bの鍵で署名を依頼することもできないため、Agent Bとして名乗れない。
 
 STANDARD AgentごとにService Accountを分けない理由は3つある。
 
@@ -201,11 +228,11 @@ Blast Radiusの比較は [05. §5](./05-identity.md#5-isolation-model) を参照
 |---|---|---|
 | `sa-automation-app` | Authorization Platform / Provisioner / Lifecycle Managerの `run.invoker`。Vertex AI推論。Cloud SQL（日報、`agent_definition`）。Firestore（`agents/*/state` 読み取り、`agents/*/instructions` 書き込み） | Signing Key。Secret。Credential DB。Authorization DBの書き込み。Tool Catalog |
 | `sa-authorization` | Vertex AI推論。Cloud SQL（`authorization`、`capability_taxonomy`）。Lifecycle Managerの `run.invoker`。Pub/Sub Subscribe（Human Permission変更） | Signing Key。Refresh Token。Client Secret。Resource APIの直接実行。Agent Runtimeの操作 |
-| `sa-provisioner` | Shared OP / Google Bridgeの `run.invoker`。Cloud SQL（`provisioning`、`tool_catalog`、`agent_definition`）。Firestore（`agents/*` 書き込み）。Cloud Run Job Executionの起動。FULL_ISOLATION用のCloud Run Service、Service Account、KMS Key、IAM Bindingの作成 | Refresh Token。Client Secret。既存Agent Keyでの署名。Authorization DBの書き込み。Security Project |
+| `sa-provisioner` | Shared OP / Google Bridgeの `run.invoker`。Cloud SQL（`provisioning`、`tool_catalog`、`agent_definition`）。Firestore（`agents/*` 書き込み）。Agent OPへのIdP Connection作成依頼と状態確認。Cloud Run Job Executionの起動。FULL_ISOLATION用のCloud Run Service、Service Account、KMS Key、IAM Bindingの作成 | Refresh Token。Client Secret。既存Agent Keyでの署名。Authorization DBの書き込み。Security Project |
 | `sa-lifecycle` | Job Executionの取り消し。OP / Bridge / Native AS / Provisionerの `run.invoker`。KMS Keyの無効化。Dedicated Cloud Run ServiceとService Accountの削除。Firestore（`agents/*` 削除） | Refresh Token。Client Secret。署名 |
-| `sa-shared-agent-op` | STANDARD AgentのKMS Keyでの署名（`cloudkms.signerVerifier`）。Firestore（`agents/*` 読み取り） | Dedicated OP用Key。Refresh Token。Client Secret。Authorization DB。Provisionerの権限 |
-| `sa-op-<agent>` | そのAgentのKMS Keyでの署名。そのAgentのRegistration読み取り | 他AgentのKey。Refresh Token。Authorization DBの書き込み。Provisionerの権限 |
-| `sa-agent-runtime` | Shared OP / Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Secret Manager。Credential DB。Signing Keyの管理。Authorization DBの書き込み。Provisionerの権限 |
+| `sa-shared-agent-op` | Shared OPのID-JAG署名鍵での署名（`cloudkms.signerVerifier`）。Firestore（`agents/*` 読み取り）。Cloud SQL（`idp_connection`）。IdP Connection Encryption Keyでの暗号化と復号。JWKS Bucketへの自鍵の書き込み | Dedicated OP用Key。Human IdPのSSO署名鍵。Google Refresh Token。Authorization DB。Provisionerの権限 |
+| `sa-op-<agent>` | そのAgentのID-JAG署名鍵の利用。そのAgentのRegistrationと `idp_connection` 行の読み取り。JWKS Bucketへの自鍵の書き込み | 他AgentのKeyとIdP Connection。Human IdPのSSO署名鍵。Google Refresh Token。Authorization DBの書き込み。Provisionerの権限 |
+| `sa-agent-runtime` | Shared OP / Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Secret Manager。Credential DB。`idp_connection`。KMS鍵の利用。Authorization DBの書き込み。Provisionerの権限 |
 | `sa-agent-<agent>` | `dedicated-op-<agent>` の `run.invoker`。Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Shared OPの `run.invoker`。上記 `sa-agent-runtime` と同じ |
 | `sa-google-bridge` | Google OAuth Client Secretの読み取り。Credential DBの読み書き。Connector Encryption Keyでの暗号化と復号 | Agent OP Signing Key。Authorization DBの書き込み。Agent Runtimeの操作 |
 | `sa-native-resource-as` | Resource AS Signing Keyでの署名。Resource側の認可DB | Agent OP Signing Key。Platform側DB |
@@ -223,13 +250,24 @@ Tokenの検証手順は [05. §2.1](./05-identity.md#21-受け取り側の検証
 
 | Key Ring | 鍵 | 使う者 |
 |---|---|---|
-| `agent-op-signing` | Agentごとの署名鍵（`agent-001-key`、`finance-001-key` など） | STANDARDは `sa-shared-agent-op`、FULL_ISOLATIONは `sa-op-<agent>` のみ |
+| `idjag-signing` | ID-JAG署名鍵。Shared OPに1つ、Dedicated OPごとに1つ | STANDARDは `sa-shared-agent-op`、FULL_ISOLATIONは `sa-op-<agent>` のみ |
 | `resource-as-signing` | Native Resource ASのAccess Token署名鍵 | `sa-native-resource-as` |
-| `connector-encryption` | Refresh Tokenの暗号化鍵 | `sa-google-bridge` |
+| `connector-encryption` | 外部SaaSのRefresh Tokenの暗号化鍵 | `sa-google-bridge` |
+| `idp-connection-encryption` | Human IdP ConnectionのRefresh Tokenの暗号化鍵 | `sa-shared-agent-op`、`sa-op-<agent>` |
 
-Agentの署名鍵はAgent単位で作り、Dedicated OPではOP、Service Account、鍵を1対1で対応させる。
-Agent破棄時は鍵を即時Disableし、Destroyは予約する。
-秘密鍵はKMSの外へ出さず、署名はすべてKMS APIで行う。
+`idjag-signing` の鍵は共有issuerのJWKSへ公開する。
+Human IdPのSSO署名鍵とは別鍵とし、`kid` も分ける。
+この鍵で `typ` が `oauth-id-jag+jwt` 以外のJWTを署名しないことを不変条件とする（[05. §3.3](./05-identity.md#33-agent-op署名鍵の制約)）。
+
+Human IdP ConnectionのRefresh Tokenを `connector-encryption` と別鍵にするのは、Google Bridgeの侵害で人間のIdentity Assertionまで取得できる状態を作らないためである。
+
+Dedicated OPではOP、Service Account、ID-JAG署名鍵を1対1で対応させる。
+鍵は破棄時に即時Disableし、Destroyは予約する。
+KMSに置いた秘密鍵はKMSの外へ出さず、署名はすべてKMS APIで行う。
+
+KMSに置かない鍵が2つある。
+Agent Client Credentialの秘密鍵はProvisionerが生成してExecutionへ渡し、ExecutionのDPoP鍵はExecution内のメモリで生成する。
+どちらもExecutionの終了とともに失われ、`expires_at` より長く残らない（[05. §9](./05-identity.md#9-tokenの種類と保持ルール)）。
 
 ### 6.2 Secret Manager
 
@@ -252,6 +290,7 @@ DB UserはService Accountに対応させ、Cloud SQL IAM認証で接続する。
 | `agent_definition` | Agent Definition、Work Definition | `sa-automation-app`、`sa-provisioner` |
 | `provisioning` | Provisioning Transaction | `sa-provisioner`、`sa-lifecycle` |
 | `connector`（Credential DB） | Google Connection、暗号化Refresh Token、Agent Binding | `sa-google-bridge` |
+| `idp_connection` | Human IdP Connection。Agentごとの暗号化Refresh Token（[05. §4.1](./05-identity.md#41-human-idp-connection)） | `sa-shared-agent-op`、`sa-op-<agent>` |
 
 ### 7.2 Firestore
 
@@ -267,8 +306,8 @@ Agent単位で高速に読み書きするものはFirestoreに置く。
 
 ## 8. ネットワークと公開範囲
 
-Internetへ公開するのは、Automation AppとGoogle BridgeのOAuth Callbackだけである。
-Google Consent後のリダイレクト先はAutomation Appとし、Automation AppがProvisionerのTransaction再開をServer-to-Serverで呼ぶ（[06. §5](./06-oauth-bridge.md#5-google-consent)）。
+Internetへ公開するのは、Automation App、Google BridgeのOAuth Callback、Agent OPのOAuth Callback（`/xaa/callback`）、およびissuerのメタデータとJWKSだけである。
+Consent後のリダイレクト先はいずれもAutomation Appとし、Automation AppがProvisionerのTransaction再開をServer-to-Serverで呼ぶ（[06. §5](./06-oauth-bridge.md#5-google-consent)、[07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow)）。
 それ以外のCloud Run ServiceはIngressを内部に限定し、Cloud Run IAMで呼び出し元のService Accountを絞る。
 Agent RuntimeはCloud Run Jobであり、受信するHTTPエンドポイントを持たない。
 
@@ -284,11 +323,13 @@ Cloud Run IAMは「どのアプリが呼べるか」を決め、ID-JAGは「ど�
 |---|---|
 | Cloud Run Service | Automation App、Authorization Platform、Agent Provisioner、Lifecycle Manager、Shared / Dedicated Agent OP、Google Bridge、Native Resource AS / API、Security Detection |
 | Cloud Run Job | Agent Runtime（timeout 24h） |
+| Cloud Load Balancing | issuer `https://idp.example.com` のパス分割（§2.1） |
+| Cloud Storage | 共有JWKS（`/jwks.json`）のBackend Bucket |
 | Cloud Scheduler | Lifecycle Managerの定期起動 |
 | Vertex AI | Automation Design AI、Authorization AI Agent、Agent Reasoning、Security AIの推論 |
 | Cloud SQL（PostgreSQL） | §7.1の論理DB |
 | Firestore | Agent Registration、Runtime Checkpoint、追加指示 |
-| Cloud KMS | Agent署名鍵、Resource AS署名鍵、Connector暗号化鍵 |
+| Cloud KMS | ID-JAG署名鍵、`actor_token` 署名鍵、Resource AS署名鍵、Connector暗号化鍵、IdP Connection暗号化鍵 |
 | Secret Manager | OAuth Client Secret |
 | Pub/Sub | Human Permission変更イベント、Security Detectionへのログ配信 |
 | Cloud Logging | 全アプリのログ収集とLog Sink |

@@ -39,10 +39,11 @@ flowchart TB
 | Human IdP | Client ID、audience、scope、認証結果、DPoP検証結果、送信元IP、デバイス情報 |
 | Authorization Platform（Authorization AI Agent） | Agent Draft ID、Work Definition IDとそのHash、推論したCapability、Confidence、Capability Taxonomyのバージョン、AIモデルのバージョン |
 | Authorization Platform（Policy Engine） | Proposed Capability、Effective Capability、Security Profile、Isolation Level、ALLOW / DENY、Policy ID、Decision Reason |
-| Agent Provisioner | Issuer、Isolation Level、Dedicated OPの有無、Provisioned Tool、Provisioned XAA Connection（audience、resource、scope）、外部Connectorの状態、created / expires / destroyed |
-| Agent OP | OP Runtime ID、Shared / Dedicated、ID-JAG要求（audience、resource、scope）、発行結果、期限確認結果、grant type、client ID、エラーコード |
+| Agent Provisioner | Isolation Level、Dedicated OPの有無、Provisioned Tool、静的XAA設定（audience、resource、scope）、IdP Connectionと外部Connectorの状態、created / expires / destroyed |
+| Agent OP | OP Runtime ID、Shared / Dedicated、Token Exchange要求（audience、resource、scope）、`subject_token` の `iss` と `aud` と `sub`、`actor_token` の `sub` と `jti`、委譲関係の照合結果、DPoP検証結果、発行したID-JAGの `jti` と `kid` と `cnf.jkt`、期限確認結果、エラーコード |
+| Agent OP（Human IdP Connection） | `idp_connection_id`、Refresh Token Rotationの結果、再利用検知、`subject_token` 再取得の成否、Revoke要求の結果 |
 | Google Bridge | ID-JAG issuerと検証結果、Connection ID、要求されたresourceとscope、Agent期限の検証結果、Google Token Refreshの結果、Access Token払い出し結果 |
-| Native Resource AS | ID-JAG issuerとsubject、audience、resource、scope、Token発行結果、認可判定、Agent期限の検証結果 |
+| Native Resource AS | ID-JAG の `iss` と `sub` と `act` と `client_id`、audience、resource、scope、`cnf.jkt` とDPoP Proofの照合結果、Token発行結果、認可判定 |
 | Resource API / Google API（取得できる場合） | Tool ID、API operation、HTTP Method、Resource、Response Status、実行結果、Latency |
 | Agent Runtime | Task ID、Execution ID、Tool ID、要求した操作、対象Resource、結果、Agent Age、expires_at、Span ID |
 
@@ -53,8 +54,8 @@ Work Definitionの全文は無条件にSecurity AIへ送らない。
 
 | 残さないもの | 相関に使う代替 |
 |---|---|
-| Raw Access Token、Raw ID-JAG、Raw DPoP Proof | `jti`、Token fingerprint |
-| Refresh Token、Private Key、Client Secret、Authorization Code | key thumbprint、`connection_id` |
+| Raw Access Token、Raw ID-JAG、Raw DPoP Proof、Raw subject_token、Raw actor_token | `jti`、`kid`、`jkt`、Token fingerprint |
+| Refresh Token、Private Key、Client Secret、Authorization Code | key thumbprint、`connection_id`、`idp_connection_id` |
 | （上記のいずれにも該当しない相関キー） | `request_id`、`trace_id` |
 
 ## 4. 正規化と保存
@@ -83,8 +84,24 @@ unknown issuer / invalid client / invalid ID-JAG
 invalid DPoP Proof / replayed DPoP Proof / DPoP key binding mismatch (cnf.jkt)
 human_subject mismatch (body vs token sub)
 unauthorized Tool
-expired Bridge Connection / expired XAA Connection
+expired Bridge Connection / expired Human IdP Connection
 ```
+
+Cross App Accessの導入に伴い、次の3つを追加する。
+いずれも既存のログ項目では拾えないため、§2で挙げた項目を前提とする。
+
+| 検知 | 何を示すか |
+|---|---|
+| ID-JAGの `sub` が、`actor_token` の `agent_id` に対応するAgent Registrationの `human_subject` と一致しない | 委譲関係の偽装。ドラフト §9.7 が名指しで警告している攻撃であり、[05. §6.3](./05-identity.md#63-agent-opの検証手順) の7で拒否したものを記録する |
+| Agent OPの `kid` で署名されたJWTの `typ` が `oauth-id-jag+jwt` 以外 | ID-JAG署名鍵の目的外使用。SSO用ID Tokenの偽造を試みている（[05. §3.3](./05-identity.md#33-agent-op署名鍵の制約)） |
+| Token Exchangeの `audience`、`resource`、`scope` が静的XAA設定の範囲外 | Runtime侵害、またはAgent OPの設定改竄 |
+
+2つ目はAgent OP自身のログだけでは検出できない。
+侵害されたAgent OPは自分の不正な発行をログへ書かないためである。
+Resource AS側で受け取ったJWTの `kid` と `typ` を突き合わせ、Agent OPの発行記録に対応するものが無いID-JAGを検出する。
+
+Human IdP ConnectionのRefresh Token再利用検知も、Protocol Validationとして扱う（[05. §4.1](./05-identity.md#41-human-idp-connection)）。
+保持者はAgent OPだけであるため、再利用は漏洩の証拠になる。
 
 ### 5.2 Rule-based Detection
 
@@ -92,11 +109,11 @@ expired Bridge Connection / expired XAA Connection
 
 | 分類 | 例 |
 |---|---|
-| Token | Token要求の急増。ID-JAGの大量発行。Google Token Refresh失敗の急増。認証失敗の急増 |
+| Token | Token要求の急増。ID-JAGの大量発行。Google Token Refresh失敗の急増。`subject_token` 再取得の急増。認証失敗の急増 |
 | Authorization | 大量の401 / 403。異常なscope要求。未知のaudienceやresource |
 | Tool | 未知のToolの利用。ProvisioningされていないToolの実行。普段使わないResourceへのアクセス |
 | Lifetime | Agent Lifetimeの超過。期限後のアクセス |
-| Isolation | Cross-Agent IdP Access。Dedicated OPから別AgentのIssuerで発行しようとする試み。Dedicated OPから他AgentのConfigへのアクセス |
+| Isolation | Cross-Agent IdP Access。Dedicated OPから他AgentのConfigやIdP Connectionへのアクセス。ある `actor_token` に対して複数の `human_subject` のID-JAGが発行されている状態 |
 | Authorization AI | 存在しないCapabilityの生成。Capability Taxonomy外の権限生成。AI結果とPolicy Decisionの異常な乖離 |
 
 ### 5.3 Correlation
@@ -141,7 +158,10 @@ Baselineからの逸脱として扱う例：通常使わないTool、Effective C
 | 60〜79 | HIGH |
 | 80〜100 | CRITICAL |
 
-Scoreの要素：Protocol Violation、Authorization Violation、Authorization AI Anomaly、Behavior Deviation、Token / API Request Rate、Resource Sensitivity、Cross-Agent Activity、DPoP Failure、Privilege Escalation Attempt、Agent Expiration Violation、Isolation Boundary Violation。
+Scoreの要素：Protocol Violation、Authorization Violation、Authorization AI Anomaly、Behavior Deviation、Token / API Request Rate、Resource Sensitivity、Cross-Agent Activity、DPoP Failure、Delegation Mismatch、Signing Key Misuse、Privilege Escalation Attempt、Agent Expiration Violation、Isolation Boundary Violation。
+
+Delegation MismatchとSigning Key Misuseは、単発でもCRITICALとして扱う。
+前者は委譲されていないAgentとしてResourceへ届こうとした事象であり、後者はissuerの署名鍵が意図した用途の外で使われた事象だからである。
 
 LOWは保存と観測にとどめ、MEDIUM以上をSecurity Findingとして次の段階へ渡す。
 
@@ -174,6 +194,6 @@ Findingに応じて、Security DetectionはLifecycle Managerへ次のいずれ�
 ACTIVE → SUSPICIOUS → QUARANTINED → REVOKED → DESTROYED
 ```
 
-QUARANTINEDではAgent OPの新規ID-JAG発行を止め、REVOKED以降は [07. §6](./07-lifecycle.md#6-expiration--緊急停止) のCleanupを実行する。
+QUARANTINEDではAgent OPの新規ID-JAG発行と `subject_token` の払い出しを止め、REVOKED以降は [07. §6](./07-lifecycle.md#6-expiration--緊急停止) のCleanupを実行する。
 判断が曖昧な場合はHuman Reviewへ回す。
 侵害時の影響範囲がIsolation Levelでどう変わるかは [05. §5](./05-identity.md#5-isolation-model) を参照。

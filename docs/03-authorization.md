@@ -203,5 +203,5 @@ flowchart LR
 | Authorization AI Agent | What capabilities does that work require? | Proposed Capability |
 | Policy Engine | What may the Agent actually do? | Effective Capability + Security Profile |
 | Tool / Connector Catalog | How is that capability technically executed? | Tool / Connector Definition |
-| Agent OP | Who is the Agent? | ID-JAG |
+| Agent OP | On whose behalf, and as which Agent? | ID-JAG |
 | Tool Executor | Execute the predefined technical workflow | API Response |
