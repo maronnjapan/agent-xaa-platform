@@ -403,7 +403,7 @@ KMS クライアントを呼ぶ箇所をこのファイル1つに閉じる。
 - `kms-signer.ts` に `createKmsEs256Signer(options: { keyVersionName: string; kidPrefix: string; client?: KeyManagementServiceClient }): Es256Signer` を実装する。
 - `sign(data)` は `sha256(data)` をローカルで計算し、`client.asymmetricSign({ name: keyVersionName, digest: { sha256 } })` を呼ぶ。`data` そのものを KMS へ送らない。
 - 応答の `signature` を `derToRawEcdsaSignature(sig, 32)` へ通して返す。
-- `kid` は `deriveKid(kidPrefix, keyVersionName)` で決める。`keyVersionName` の末尾のバージョン番号を取り出し、`${kidPrefix}-${version}` を返す（例：`op-shared-1`、`dedicated-op-slot-2-1`）。
+- `kid` は `deriveKid(kidPrefix, keyVersionName)` で決める。`keyVersionName` の末尾のバージョン番号を取り出し、`${kidPrefix}-${version}` を返す（例：`op-shared-1`、`idjag-aaaaaaaaaaaa-1`）。
 - `@google-cloud/kms` の import をこのファイル以外に書かない。`asymmetricSign` の呼び出しもこの1か所に限る。
 - `getPublicKey` は同ファイルに `fetchKmsPublicJwk(keyVersionName): Promise<PublicJwkEs256>` として置き、JWKS 生成にのみ使う旨を JSDoc に書く。
 
@@ -616,9 +616,9 @@ Firestore のドキュメント、API のリクエスト本文、seed の入力�
 - Ajv は `new Ajv({ strict: true, allErrors: false, removeAdditional: false })` で1インスタンスを作り、`ajv-formats` の `date-time` と `uri` と `uuid` を有効にする。`allErrors: true` にしない（エラー本文に内部情報を載せないため）。
 - 全スキーマに `additionalProperties: false` と `required` を明記する。省略を許さない。
 - `validator.ts` は `compile<S extends JSONSchema>(schema: S): (data: unknown) => asserts data is FromSchema<S>` を export する。検証失敗は `SchemaValidationError`（`schemaId` と `instancePath` を持つ）を投げる。
-- `agent-registration.schema.ts` には `agent_id`、`human_subject`、`status`（`ACTIVE` / `EXPIRING` / `QUARANTINED` / `REVOKED`）、`expires_at`、`isolation_level`（`standard` / `full_isolation`）、`dedicated_op_slot_index`、`client_auth`（`jwk_thumbprint` と `public_jwk`）、`xaa_static_config` への参照を置く。
+- `agent-registration.schema.ts` には `agent_id`、`human_subject`、`status`（`ACTIVE` / `EXPIRING` / `QUARANTINED` / `REVOKED`）、`expires_at`、`isolation_level`（`standard` / `full_isolation`）、`dedicated_op`、`client_auth`（`jwk_thumbprint` と `public_jwk`）、`xaa_static_config` への参照を置く。
 - `xaa-static-config.schema.ts` には `allowed_audiences`、`resources`、`scopes`、`trusted_resource_as`、`expires_at` を置く（REQ-05-035 の型分離に対応する形を用意する。判定ロジックは Agent OP 側）。
-- `platform-endpoints.schema.ts` は DEC-IAC-06 の `platform_endpoints` オブジェクトの形（`issuer` / `jwks_url` / `xaa_token_url` / 各サービス URL / `slots`）を定義する。httpClient と seed がこのスキーマで読む。
+- `platform-endpoints.schema.ts` は DEC-IAC-06 の `platform_endpoints` オブジェクトの形（`issuer` / `jwks_url` / `xaa_token_url` / 各サービス URL）を定義する。httpClient と seed がこのスキーマで読む。
 - Ajv インスタンスをアプリごとに作らせない。`packages/xaa-contracts` から `ajv` を import する箇所を `validator.ts` の1件に限る。
 
 **完了条件**
@@ -884,15 +884,15 @@ DEC-APP-04 は、生成物を `apps/<app>/src/oidc/` にコミットし、手編
 ### T-PKG-29 infra の静的検査スクリプトを CI に組み込む
 
 **概要**
-DEC-IAC-04、DEC-IAC-08、DEV-07、DEV-13 は、Terraform と実装コードに対する4つの禁止事項を検査で固定すると定めている。
+DEC-IAC-04、DEC-IAC-08、DEC-IAC-25、DEV-13 は、Terraform と実装コードに対する4つの禁止事項を検査で固定すると定めている。
 スクリプトの中身は infra とアプリの各領域が書くが、実行の枠組みと失敗時の扱いをこの領域で用意する。
 `terraform` バイナリを必要としない grep ベースの検査だけをこのジョブに置く。
 
-**対象要件** なし（DEC-IAC-04、DEC-IAC-08、DEV-07、DEV-13 に基づく基盤タスク）
+**対象要件** なし（DEC-IAC-04、DEC-IAC-08、DEC-IAC-25、DEV-13 に基づく基盤タスク）
 **前提タスク** T-PKG-27
 **成果物**
 - `infra/tests/no-kms-key-version.sh`
-- `infra/tests/no-runtime-gcp-mutation.sh`
+- `infra/tests/runtime-mutation-scope.sh`
 - `infra/tests/no-firestore-sdk-in-frontend.sh`
 - `infra/tests/run-static-checks.sh`
 - `.github/workflows/ci.yml`（`infra-static-checks` ジョブを追加）
@@ -900,7 +900,7 @@ DEC-IAC-04、DEC-IAC-08、DEV-07、DEV-13 は、Terraform と実装コードに�
 **実装方針**
 - 4スクリプトすべての先頭に `set -euo pipefail` を置き、検査対象が0件だったときも失敗させる（対象ディレクトリの消失を成功と誤認しないため）。
 - `no-kms-key-version.sh`：`infra/**/*.tf` を `google_kms_crypto_key_version` で grep し、1件でもあれば終了コード 1（DEC-IAC-04）。
-- `no-runtime-gcp-mutation.sh`：`apps/provisioner/src/` と `apps/lifecycle/src/` を対象に、`@google-cloud/run` の `createService` / `deleteService` / `updateService`、`@google-cloud/kms` の `createCryptoKey` / `createKeyRing`、`google-auth-library` 経由の `iam.googleapis.com` 呼び出しを grep し、1件でもあれば終了コード 1（DEV-07）。KMS の `createCryptoKeyVersion` と `destroyCryptoKeyVersion` は許可する（DEC-IAC-08）。
+- `runtime-mutation-scope.sh`：`apps/provisioner/src/` と `apps/lifecycle-manager/src/` を対象に、GCP の作成と削除と更新の呼び出し（`@google-cloud/run` の `createService` / `deleteService` / `updateService` / `createJob` / `deleteJob`、`@google-cloud/kms` の `createCryptoKey` / `destroyCryptoKeyVersion`、`iam.googleapis.com` の Service Account 作成と削除）が、`assertRuntimeName` を同一関数内で呼ぶ経路にだけ現れることを検査する（DEC-IAC-08）。加えて、Terraform 管理のサービス名（`human-idp` / `shared-agent-op` / `automation-app` / `authorization` / `provisioner` / `lifecycle` / `security-detection` / `resource-docs-as` / `resource-docs-api` / `resource-finance-as` / `resource-finance-api` / `agent-op-callback`）が文字列リテラルとしてこれらの呼び出しの引数に現れたら終了コード 1 にする。`createKeyRing` はどこにも現れてはならない。
 - `no-firestore-sdk-in-frontend.sh`：`apps/automation-app/src/client/` と esbuild の出力先 `apps/automation-app/public/` を `firebase`、`@firebase`、`firestore` で grep し、1件でもあれば終了コード 1（DEV-13）。
 - `forbidden-roles.sh` は Terraform の plan JSON を読むため、この grep ジョブではなく infra 領域の apply 後検査に置く。このジョブからは呼ばない。
 - `run-static-checks.sh` は3スクリプトを順に実行し、1つでも失敗したら残りも実行してから非ゼロで終わる（どれが落ちたかを1回のログで分かるようにする）。
@@ -909,8 +909,9 @@ DEC-IAC-04、DEC-IAC-08、DEV-07、DEV-13 は、Terraform と実装コードに�
 **完了条件**
 - [ ] `bash infra/tests/run-static-checks.sh` が現状のリポジトリで終了コード 0 を返す。
 - [ ] `infra/envs/demo/` に `resource "google_kms_crypto_key_version" "x" {}` を書いたファイルを置くと終了コード 1 になる。
-- [ ] `apps/provisioner/src/` に `client.createService(` を含むファイルを置くと終了コード 1 になる。
-- [ ] `infra/tests/` を空にすると、検査対象0件として終了コード 1 になる。
+- [ ] `apps/provisioner/src/` に `assertRuntimeName` を呼ばない `client.createService(` を含むファイルを置くと終了コード 1 になる。
+- [ ] `apps/lifecycle-manager/src/` に `client.deleteService({ name: "human-idp" })` を含むファイルを置くと終了コード 1 になる。
+- [ ] `apps/provisioner/src/` の対象ディレクトリを削除すると、検査対象0件として終了コード 1 になる。
 
 ---
 
@@ -929,7 +930,7 @@ specs 7章は `docs/deviations.md` を4列表に固定し、4列すべてが埋�
 - `.github/workflows/ci.yml`（`docs-deviations` ジョブを追加）
 
 **実装方針**
-- `docs/deviations.md` の表は5列（逸脱ID、逸脱した RULE / docs 節、代替実装、固定するテスト、相互運用を期待しない範囲）で、判定対象は3列目から5列目とする。specs 7章の DEV-01 から DEV-15 の内容をそのまま転記する。
+- `docs/deviations.md` の表は5列（逸脱ID、逸脱した RULE / docs 節、代替実装、固定するテスト、相互運用を期待しない範囲）で、判定対象は3列目から5列目とする。specs 7章の DEV-01 から DEV-15 の内容をそのまま転記する。DEV-07 は取り下げ行として扱い、4列の非空検査から除外する。
 - `check-deviations.mjs` は次を検査する。(1) 表のヘッダが期待どおりであること、(2) 逸脱ID が `DEV-\d{2}` で連番かつ重複が無いこと、(3) 3列目のバッククォート内のパスがすべて実在すること（ディレクトリ指定は末尾 `/` を許す）、(4) 4列目の `パス::テスト名` のパスが実在し、そのファイル内にテスト名の文字列が含まれること、(5) 5列目が空でないこと。
 - 4列目は `/` 区切りで複数のテスト名を並べる形式を許す（`dpop.spec.ts::rejects htu mismatch / iat out of window / ...`）。分割してそれぞれを grep する。
 - テスト名の照合は `it('` や `test('` の直後の文字列に対する部分一致とする。完全一致にすると `it.each` の記述で落ちるため。
@@ -963,7 +964,7 @@ specs 7章は `docs/deviations.md` を4列表に固定し、4列すべてが埋�
 | REQ-05-047 | Agent OP と Provisioner | T-OP と T-PROV（offline_access の中断と再開） |
 | REQ-05-048 | Agent OP | T-OP（/xaa/callback の応答内容） |
 | REQ-05-051 | Agent OP | T-OP（/xaa/subject-token） |
-| REQ-05-061 | Infra | T-INFRA（スロット鍵の kid と共有 JWKS 掲載） |
+| REQ-05-061 | Agent OP | T-OP-06（専用署名鍵の kid と共有 JWKS 掲載） |
 | REQ-05-071 | Agent OP | T-OP（RULE-49 の委譲照合ステップ） |
 | REQ-05-072 | Agent OP | T-OP-10（expires_at と status 判定） |
 | REQ-05-073 | Agent OP | T-OP（静的 XAA 設定との照合） |

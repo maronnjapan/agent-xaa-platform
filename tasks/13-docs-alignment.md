@@ -2,7 +2,7 @@
 
 この領域は、`docs/` 配下の設計文書を実装の確定内容へ一致させ、そのずれが再発しないように機械検査で固定する。
 扱うのは4つある。
-1つ目は要件と逸脱の台帳（`docs/requirements.md` と `docs/deviations.md`）、2つ目は設計ルールの機械可読化と改訂（`docs/rules.json` と `docs/10-design-rules.md`）、3つ目は単一 GCP プロジェクトとスロット方式へ合わせた本文の書き換え、4つ目は用語辞書と構成図とリンクの整合検査である。
+1つ目は要件と逸脱の台帳（`docs/requirements.md` と `docs/deviations.md`）、2つ目は設計ルールの機械可読化と改訂（`docs/rules.json` と `docs/10-design-rules.md`）、3つ目は単一 GCP プロジェクトと実装の識別子へ合わせた本文の書き換え、4つ目は用語辞書と構成図とリンクの整合検査である。
 他領域が書くコードやインフラは扱わないが、逸脱表とトレーサビリティ表がそれらの成果物パスとテスト名を参照するため、参照先が実在することの検査はこの領域が持つ。
 
 | 前提 | 内容 |
@@ -49,7 +49,9 @@
 
 **概要**
 RULE-45 は、ドラフトから逸脱する箇所について「逸脱していること」と「相互運用を期待しない範囲」を文書に明示することを求めている。
-確定済みの逸脱15件（DEV-01 から DEV-15）を4列表として起票し、以後の設計判断の変更がこの表を経由するようにする。
+確定済みの逸脱を4列表として起票し、以後の設計判断の変更がこの表を経由するようにする。
+DEV-01 から DEV-15 の採番のうち DEV-07（FULL_ISOLATION のスロット方式）は取り下げる。
+Dedicated OP は docs の記述どおり実行時に作り消すため、RULE-32 と RULE-33 に逸脱が生じない（DEC-IAC-07）。
 `tasks/00-decisions.md` は本ファイルを逸脱の正本として参照している。
 
 **対象要件** REQ-10-004
@@ -59,15 +61,18 @@ RULE-45 は、ドラフトから逸脱する箇所について「逸脱してい
 
 **実装方針**
 - 表の列を `逸脱ID` に加えて4列とする。`逸脱した RULE / docs 節` / `代替実装（ファイルパス）` / `固定するテスト（パス::テスト名）` / `相互運用を期待しない範囲`。列を増やさない。
-- 行は DEV-01 から DEV-15 まで欠番なしで並べ、内容は確定仕様の逸脱一覧をそのまま写す。要約したり言い換えたりしない。
+- 行は DEV-01 から DEV-15 まで並べ、内容は確定仕様の逸脱一覧をそのまま写す。要約したり言い換えたりしない。
+- DEV-07 の行だけは「取り下げ」とし、`逸脱した RULE / docs 節` 列に「なし（DEC-IAC-07 により実行時作成へ戻したため RULE-32 と RULE-33 に逸脱なし）」、残る3列に `-` を書く。他の逸脱 ID を繰り上げない。既存の文書とタスクが DEV-08 以降を参照しているため、採番を動かさない。
 - `固定するテスト` 列は `packages/xaa-crypto/test/dpop.spec.ts::rejects htu mismatch` の形式で書く。パスとテスト名を `::` で区切り、テスト名は実装側の `it(...)` の文字列と完全一致させる。1行に複数のテストを書く場合は ` / ` で区切る。
-- 節 `## 2. REQ-10-004 が挙げる7件との対応` を置き、要件が列挙する7件と DEV-ID の対応を表にする。DPoP 非対応は DEV-01、private_key_jwt 非対応は DEV-02、受領側 grant_type は DEV-06、`cnf` claim は DEV-04、`actor_token` 独自プロファイルは DEV-03、監査ログの dataset 分離は DEV-14、FULL_ISOLATION のスロット方式は DEV-07 とする。
+- 節 `## 2. REQ-10-004 が挙げる7件との対応` を置き、要件が列挙する7件と DEV-ID の対応を表にする。DPoP 非対応は DEV-01、private_key_jwt 非対応は DEV-02、受領側 grant_type は DEV-06、`cnf` claim は DEV-04、`actor_token` 独自プロファイルは DEV-03、監査ログの dataset 分離は DEV-14、FULL_ISOLATION は実行時作成のままとしたため逸脱を起票しない。
 - REQ-10-004 の本文にある「Agent Client Credential は client_secret_basic」は確定判断で `client_assertion_jwt` へ置き換わっている。DEV-02 の記述を正とし、要件本文の旧記述を書き写さない。
 - 節 `## 3. 逸脱ではないもの` を置き、`jwt-dpop` から `jwt-bearer` への訂正、ID-JAG の `aud` を URN にする案の不採用、`actor_token` 署名鍵を KMS に置くという docs 08 §9 の誤りの3件を書く。これらを逸脱表の行にしない。
 - 節 `## 4. 逸脱を増やすときの手順` を置き、4列すべてを埋めること、DEV-ID を末尾に追番することを書く。既存 ID の再利用と欠番を禁じる。
 
 **完了条件**
-- [ ] `docs/deviations.md` に `DEV-01` から `DEV-15` の15行があり、各行の `逸脱ID` を除く4列がすべて非空である
+- [ ] `docs/deviations.md` に `DEV-01` から `DEV-15` の15行がある
+- [ ] DEV-07 を除く14行で、`逸脱ID` を除く4列がすべて非空である
+- [ ] DEV-07 の行に「取り下げ」の文字列がある
 - [ ] REQ-10-004 が挙げる7件すべてに対応する DEV-ID が対応表に書かれている
 - [ ] `grep -c '^| \*\*DEV-' docs/deviations.md` の結果が 15 である
 - [ ] `grep -n 'client_secret_basic' docs/deviations.md` が DEV-02 の「相互運用を期待しない範囲」列（maronn の client-auth の説明）以外にヒットしない
@@ -90,7 +95,7 @@ RULE-45 は、ドラフトから逸脱する箇所について「逸脱してい
 
 **実装方針**
 - `scripts/check-deviations.ts` は引数 `--strict` の有無で2モードを持つ。
-- 既定モード（`--strict` なし）は、DEV-ID が `^DEV-\d{2}$` であること、ID が一意かつ01から連番であること、`逸脱ID` を除く4列がすべて非空であること、`固定するテスト` 列の全項目が `<path>::<name>` の形であること、`代替実装` 列に1つ以上のパス形式の文字列（`apps/`、`packages/`、`infra/`、`e2e/` のいずれかで始まる）が含まれることを検査する。
+- 既定モード（`--strict` なし）は、DEV-ID が `^DEV-\d{2}$` であること、ID が一意かつ01から連番であること、`逸脱ID` を除く4列がすべて非空であること（「取り下げ」と書かれた行は4列すべてが `-` または「なし」で始まる文字列であることだけを確認して次へ進む）、`固定するテスト` 列の全項目が `<path>::<name>` の形であること、`代替実装` 列に1つ以上のパス形式の文字列（`apps/`、`packages/`、`infra/`、`e2e/` のいずれかで始まる）が含まれることを検査する。
 - `--strict` モードは既定モードに加えて、`代替実装` 列の各パスがファイルまたはディレクトリとして実在すること、`固定するテスト` 列の各 `path` が実在し、その中に `name` が `grep -F` で1件以上ヒットすることを検査する。
 - どちらのモードも、違反を1行1件で標準エラーへ出し、1件でもあれば `process.exit(1)` する。違反時に警告だけ出して 0 で終わる分岐を作らない。
 - CI ジョブ名は既定モードが `docs:deviations`、strict モードが `docs:deviations-strict` とする。`docs:deviations` は本タスクの時点で必須ジョブにし、`docs:deviations-strict` は全実装フェーズ完了後に必須化する。この切り替え時期を `docs/deviations.md` の節4に書く。
@@ -141,7 +146,7 @@ RULE 改訂そのものは T-DOCS-05 で行い、本タスクは移行と生成�
 ### T-DOCS-05 確定判断に合わせて RULE 10件を改訂する
 
 **概要**
-DPoP の実装位置、スロット方式、単一プロジェクト、issuer の配置、JWKS の書き込み範囲、Firestore Security Rules の不採用を、ルール本文へ反映する。
+DPoP の実装位置、単一プロジェクト、issuer の配置、JWKS の書き込み範囲、Firestore Security Rules の不採用を、ルール本文へ反映する。
 改訂しないまま残すと、逸脱表の行と RULE 本文が食い違い、どちらが正かが判断できなくなる。
 対象は RULE-06 / 32 / 33 / 34 / 42 / 44 / 47 / 49 / 53 / 57 の10件で、RULE-50 は文面を変えない。
 
@@ -157,8 +162,8 @@ DPoP の実装位置、スロット方式、単一プロジェクト、issuer �
 - 改訂後の `text` を次で確定する。言い換えず、この文をそのまま入れる。
 - RULE-06：「Human Control Plane の Access Token は DPoP-bound とする。Agent Runtime から Agent OP への Token Exchange と Native Resource AS への提示でも DPoP を必須とし、ID-JAG を `cnf.jkt` で束縛する。DPoP はライブラリの機能ではなく `packages/xaa-crypto` の自前実装であり、対応するのは Runtime から Agent OP、Runtime から Resource AS と Resource API、Automation App から Control Plane の3経路に限る。Bridge から外部 SaaS への外向きは Bearer とする」
 - RULE-44：「DPoP 検証では、Access Token の `cnf.jkt` と DPoP Proof の鍵の一致を必ず確認する。Access Token と併用する Proof には `ath` を必須とし、検証は 署名、typ、htm、htu、iat 窓、jti 重複、ath 一致 の順で行う。Proof が添付されていることの確認だけで済ませない」
-- RULE-32：「FULL_ISOLATION は、Terraform が固定数（変数 `dedicated_slot_count`、既定 2）事前作成した Isolation Slot をリースして与える。1スロットは専用 Cloud Run Service、専用 Service Account、専用 KMS 鍵、専用 Cloud Run Job 定義、専用 IAM Binding を持つ。Agent Provisioner は空きスロットの払い出しだけを行い、実行時に GCP リソースを作成、削除、更新しない」
-- RULE-33：「スロットの Service Account は、そのスロットの鍵にだけ署名できる。スロットは Agent 間で再利用されるため、Agent 単位の設定分離は IAM ではなくアプリ側のパスガードで担保し、失効は鍵バージョンのローテーションで行う」
+- RULE-32：改訂しない。「FULL_ISOLATIONはDedicated OP、専用Service Account、専用KMS Key、専用Job定義、専用IAM Bindingを持つ」は実装のとおりである。同時に存在できる Agent 数の上限（`max_full_isolation_agents`、既定 5）は制約であってルールの変更ではないため、docs 05 §5 の本文へ追記する（T-DOCS-07）
+- RULE-33：改訂しない。「Dedicated OPのService Accountは、そのAgentの鍵にだけ署名できる」は実装のとおりである。Firestore のパス単位の分離が IAM で表現できずアプリ側のパスガードに依存する点だけを、docs 08 §7.2 の注記として書く
 - RULE-34：「実行系と監査ログを同一 GCP Project 内で、BigQuery dataset と Service Account と IAM で分離する。Platform 側の Service Account に監査 dataset の削除権限を与えない。同一プロジェクトの Owner は実行系と監査ログの両方に届くため、プロジェクトを分ける構成より保護は弱い」
 - RULE-42：「Platform 側の Service Account に Security Log の削除権限を与えない。監査 dataset の IAM は authoritative な binding で固定し、削除可能なロールを一切付与しないことで満たす」
 - RULE-47：「Human IdP に Agent の文脈を持ち込まない。issuer は1つに保ち、Agent の文脈は別デプロイへ分ける。パスに置くか別ホストに置くかは配置プロファイル `issuer_profile` で選ぶ」
@@ -211,39 +216,47 @@ DPoP の実装位置、スロット方式、単一プロジェクト、issuer �
 
 ---
 
-### T-DOCS-07 FULL_ISOLATION の記述をスロット事前作成方式へ書き換える
+### T-DOCS-07 FULL_ISOLATION の記述を実装の識別子へ合わせる
 
 **概要**
-制約1により、Dedicated OP と専用 SA と専用鍵は Terraform が固定数を事前作成し、Provisioner は空きスロットをリースするだけになる。
-実行時に GCP リソースを作る前提の記述が docs 05 §5 と docs 08 §5 に残っているため、これをスロット方式へ改める。
-`sa-provisioner` の権限記述も同時に狭める。
+docs 05 §5 と docs 07 §3.3 と docs 08 §5 は、Dedicated OP と専用 SA と専用鍵を Provisioning 時に作り Cleanup で消すと書いており、実装もそのとおりにする（DEC-IAC-07）。
+方式そのものに変更は無く、書き換えるのは識別子の形と、実行時作成に伴う運用上の制約の追記である。
 
 **対象要件** REQ-10-009
 **前提タスク** T-DOCS-05
 **成果物**
-- `docs/05-identity.md`（§5 の書き換え）
-- `docs/08-gcp-infrastructure.md`（§5 と §6.1 の書き換え）
-- `docs/07-lifecycle.md`（§3.3 の Provisioning Flow の書き換え）
+- `docs/05-identity.md`（§5 の識別子と追記）
+- `docs/08-gcp-infrastructure.md`（§4.2 と §5 と §6.1 の識別子）
+- `docs/07-lifecycle.md`（§6 の Cleanup 手順の追記）
 
 **実装方針**
-- docs 05 §5 の比較表の `Agent OP プロセス` 行の FULL_ISOLATION 側を「Terraform が事前作成した Isolation Slot の Cloud Run Service `dedicated-op-slot-<nn>`（`nn` は 01 から `dedicated_slot_count` まで）」へ変える。`dedicated-op-<agent>` という Agent 名を含む識別子を docs から消す。
-- `ID-JAG署名鍵（KMS）` 行の FULL_ISOLATION 側を「スロットごとに1つ。スロットの Service Account のみ署名可」へ、`Agent Runtime` 行を「スロット専用 Job 定義と専用 SA `sa-agent-slot-<nn>`」へ、`IAM Binding` 行を「`sa-agent-slot-<nn>` から `dedicated-op-slot-<nn>` のみ」へ変える。
-- 「FULL_ISOLATIONの例」のコードブロックを `Agent finance-001（slot-01 をリース）` の形へ書き換え、リソース名をすべて `slot-01` 基準にする。
-- 同節へ小見出し `#### スロット方式で縮まるもの` を追加し、次の3点を書く。同時に実行できる FULL_ISOLATION Agent の上限が `dedicated_slot_count` になること、スロットは Agent 間で再利用されるため Agent 単位の失効は鍵バージョンのローテーションに依存すること、枯渇時は Policy Engine が STANDARD へ降格せず 503 を返すこと。
-- 「Provisioning分岐」の mermaid の `CLASS -->|FULL_ISOLATION| DEDICATED[Deploy Dedicated OP + Dedicated Runtime + IAM]` を `CLASS -->|FULL_ISOLATION| LEASE[Lease free Isolation Slot / 503 if exhausted]` へ変える。
-- docs 08 §5 の `sa-provisioner` 行の「付与する」列から「FULL_ISOLATION用のCloud Run Service、Service Account、KMS Key、IAM Bindingの作成」を削除し、「Cloud Run Job Execution の起動」と「Firestore（`agents/*` と `slots/*` の読み書き）」だけを残す。「付与しない」列へ「Cloud Run Admin。Service Account Admin。KMS 鍵の作成」を追加する。
-- `sa-lifecycle` 行の「付与する」列から「Dedicated Cloud Run ServiceとService Accountの削除」を削除し、「KMS 鍵バージョンの追加と無効化」を残す。「付与しない」列へ「Cloud Run Admin。Service Account Admin」を追加する。
-- `sa-op-<agent>` 行を `sa-op-slot-<nn>` へ、`sa-agent-<agent>` 行を `sa-agent-slot-<nn>` へ改名し、権限の記述をスロット基準へ書き換える。
-- §5 直後の「`sa-provisioner` と `sa-lifecycle` はCloud Run ServiceやService Account、KMS Keyを作成および削除できる」という段落を削除し、「Provisioner と Lifecycle Manager は GCP リソースを作成も削除もしない。両アプリの権限は Job Execution の起動と取り消し、KMS 鍵バージョンの追加と無効化、Firestore の読み書きに限る」へ差し替える。
-- docs 08 §6.1 の `idjag-signing` 行の「Dedicated OPごとに1つ」を「スロットごとに1つ」へ、使う者の列を `sa-op-slot-<nn>` へ変える。
-- docs 07 §3.3 の Provisioning Flow のうち Dedicated OP をデプロイするステップを、Firestore の `slots/*` に対する `runTransaction` でのリース取得へ書き換える。
-- tfstate に対する権限検査（`infra/tests/provisioner-permissions.test.ts` に相当）は infra 領域が作る。本タスクは docs 側の記述だけを扱い、対応関係は T-DOCS-14 のトレーサビリティ表で結ぶ。
+- Agent 名を含む識別子 `dedicated-op-<agent>` と `sa-op-<agent>` と `sa-agent-<agent>` を、実装の名前 `dedicated-op-<short>` と `sa-op-<short>` と `sa-agent-<short>` へ改める。
+  `<short>` が `agent_id` の乱数部の末尾12文字であることを docs 05 §5 に1文で書く。
+  Service Account の `account_id` が6文字以上30文字以内という GCP の制限に収めるための短縮であることを理由として添える。
+- docs 05 §5 の比較表の `ID-JAG署名鍵（KMS）` 行の FULL_ISOLATION 側を「Agent ごとに1つ（`idjag-<short>`）。その Agent の Service Account のみ署名可」へ、`Agent Runtime` 行を「専用 Job `agent-runtime-<short>` と専用 SA `sa-agent-<short>`」へ、`IAM Binding` 行を「`sa-agent-<short>` から `dedicated-op-<short>` のみ」へ変える。
+- 「FULL_ISOLATIONの例」のコードブロックのリソース名を上記の形へ揃える。
+- 同節へ小見出し `#### 実行時作成に伴う制約` を追加し、次の3点を書く。
+  同時に存在できる FULL_ISOLATION Agent の上限が `max_full_isolation_agents`（既定 5）であり、その理由が Project あたりの Service Account 数の上限（既定100）と、削除した Service Account が30日間その枠を占め続ける GCP の制限であること。
+  上限に達したとき Policy Engine は STANDARD へ降格せず、Provisioner が 503 `full_isolation_capacity_reached` を返すこと。
+  KMS の CryptoKey は削除できないため、Cleanup は鍵バージョンの破棄予約までを行い、空の CryptoKey が Key Ring に残ること。破棄予約された鍵バージョンに課金は発生しない。
+- 「Provisioning分岐」の mermaid の `CLASS -->|FULL_ISOLATION| DEDICATED[Deploy Dedicated OP + Dedicated Runtime + IAM]` はそのまま残す。
+  実装がこのとおりであるため書き換えない。
+- docs 08 §5 の `sa-provisioner` 行の「付与する」列を、カスタムロール名まで含めた形へ具体化する。
+  「Cloud Run Service と Job の作成（`dedicated_op_creator`）」「Service Account の作成（`dedicated_sa_creator`）」「`idjag-signing` と `idp-connection-encryption` の Key Ring への `roles/cloudkms.admin`」を書く。
+  「付与しない」列へ「`roles/run.admin`。`roles/iam.serviceAccountAdmin`。`roles/owner`。KMS の署名権限」を追加する。
+- `sa-lifecycle` 行の「付与する」列へ「Cloud Run Service と Job と Service Account の削除（`dedicated_op_destroyer`）」と「KMS 鍵バージョンの破棄予約」を書き、「付与しない」列へ `sa-provisioner` と同じ4件を書く。
+- §5 直後の「`sa-provisioner` と `sa-lifecycle` はCloud Run ServiceやService Account、KMS Keyを作成および削除できるため、Project内で最も強い権限を持つ」という段落は残す。
+  実装がこのとおりであるため削らない。
+  その段落へ「触れてよい対象は `dedicated-op-` と `sa-op-` と `sa-agent-` と `idjag-` と `idpconn-` と `agent-runtime-` の6接頭辞で始まり、ラベル `xaa-managed=runtime` を持つものに限る。この境界は IAM では表現できないため、アプリ側の `assertRuntimeName` と CI の静的検査で担保する」を1文追記する。
+- docs 08 §6.1 の `idjag-signing` 行の使う者の列を `sa-op-<short>` へ変える。
+- docs 07 §6 の Cleanup 手順の step8 と step9 へ「削除対象は Firestore の `dedicated_resources/{agent_id}` に記録した完全修飾名から取り、作成の逆順で消す」を追記する。
 
 **完了条件**
 - [ ] `grep -rn 'dedicated-op-<agent>\|sa-op-<agent>\|sa-agent-<agent>' docs/ --include='*.md'` のヒットが 0 件になる
-- [ ] `docs/05-identity.md` の §5 に `dedicated_slot_count` と `dedicated-op-slot-` の両方の文字列がある
-- [ ] `docs/08-gcp-infrastructure.md` の `sa-provisioner` 行の「付与しない」列に `Cloud Run Admin` が含まれる
-- [ ] `docs/07-lifecycle.md` の §3.3 に「Cloud Run Service を作成する」旨の記述が残っていない（`grep -n 'Dedicated OP.*作成\|Deploy Dedicated' docs/07-lifecycle.md` が 0 件）
+- [ ] `docs/05-identity.md` の §5 に `max_full_isolation_agents` と `full_isolation_capacity_reached` の両方の文字列がある
+- [ ] `docs/05-identity.md` に `#### 実行時作成に伴う制約` の小見出しが1つある
+- [ ] `docs/08-gcp-infrastructure.md` に `dedicated_op_creator` と `dedicated_op_destroyer` と `xaa-managed=runtime` の3つの文字列がある
+- [ ] `docs/07-lifecycle.md` に `dedicated_resources` の文字列がある
 
 ---
 
@@ -262,7 +275,7 @@ docs 01 §3.1、docs 08 §5、docs 08 §7 に Cloud SQL 前提の記述が残っ
 
 **実装方針**
 - docs 01 §3.1 の「Tool / Connector Catalogはアプリではなく、Cloud SQL上の定義データ（`tool_catalog`）と、それを読むProvisioner内のロジックである」を「Tool / Connector Catalog はアプリではなく、Firestore のコレクション `catalog/tools` と `catalog/connectors` に置く定義データと、それを読む Provisioner 内のロジックである」へ書き換える。
-- docs 08 §7 の見出し構成を保ったまま、Cloud SQL のテーブル定義を Firestore のコレクション定義へ置き換える。コレクション名は `agents` / `slots` / `catalog/tools` / `catalog/connectors` / `idp_connections` / `documents` / `payments` / `authorization` / `capability_taxonomy` を使い、これ以外を作らない。
+- docs 08 §7 の見出し構成を保ったまま、Cloud SQL のテーブル定義を Firestore のコレクション定義へ置き換える。コレクション名は `agents` / `dedicated_resources` / `catalog/tools` / `catalog/connectors` / `idp_connections` / `documents` / `payments` / `authorization` / `capability_taxonomy` を使い、これ以外を作らない。
 - docs 08 §7.1 の論理DB分離（DB User による分離）の記述を削除し、「データ層の責務分離は DB の GRANT ではなく、`packages/gcp/src/firestore-guard.ts` の許可マトリクスによるパスガードで強制する。IAM はデータベース単位の `roles/datastore.user` のみを付与する」へ差し替える。同じ段落に DEV-05 へのリンクを置く。
 - docs 08 §5 の各 Service Account 行から `Cloud SQL（...）` の記述を消し、`Firestore（<コレクション名>）` へ置き換える。コレクション名は前項の9個から選ぶ。
 - docs 08 §9 の使用するGCPサービス一覧から Cloud SQL の行を削除する。同じ表にある「Cloud KMS: actor_token 署名鍵」の行も削除する（`actor_token` の鍵は Execution 内にのみ存在し KMS に置かないため）。
@@ -338,7 +351,7 @@ docs 01 の §3.2 から §3.4 で定義した用語について、対応する�
 
 ---
 
-### T-DOCS-11 構成図を単一プロジェクトとスロット方式へ更新して再生成する
+### T-DOCS-11 構成図を単一プロジェクト構成へ更新して再生成する
 
 **概要**
 `docs/diagrams/generate.py` のレイアウト定義を書き換え、png と svg と drawio を再生成する。
@@ -523,7 +536,7 @@ docs 05 §9 の8行を単一の定数表と1対1で対応させ、表に無い�
 - テスト実行ジョブは別ワークフローに任せ、このワークフローに `vitest` を含めない。`tests/docs/*.test.ts` は通常のテストジョブで動く。
 - `docs/README.md` の文書構成表へ5行追加する。`requirements.md`（全要件の索引）、`deviations.md`（ドラフトと設計ルールからの逸脱）、`rules.json`（設計ルールの正本）、`rule-traceability.md`（ルールと実装とテストの対応）、`glossary.md`（用語と実装識別子）。
 - `docs/README.md` の「全体構成図」節の表に `generate.py` の再生成コマンドとして `pnpm gen:diagrams` を追記する。
-- 変更履歴へ2行追記する。1行目に単一プロジェクトとスロット方式への書き換え、2行目に文書検査の CI 必須化。日付は `2026-08-30` を使う。
+- 変更履歴へ2行追記する。1行目に単一プロジェクト構成への書き換え、2行目に文書検査の CI 必須化。日付は `2026-08-30` を使う。
 
 **完了条件**
 - [ ] `pnpm check:docs` が exit code 0 で終了する

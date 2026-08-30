@@ -2,13 +2,13 @@
 
 Agent Provisioner は、Automation App から承認済みの Agent Definition を受け取り、動作する Agent を1体作り出す Control Plane アプリである。
 Tool / Connector Catalog は、抽象 Capability を「どの API を、どの認証方式で、どの audience と resource と scope で呼ぶか」へ翻訳する定義データである。
-この領域では、Catalog の定義とその解決、Provisioning Transaction と Consent の中断と再開、Agent Registration と Agent Client Credential の生成、Agent OP へ注入する XAA 静的設定と Agent Runtime へ渡す Tool Manifest の生成、FULL_ISOLATION 用スロットのリース、Cloud Run Job Execution の起動までを作る。
+この領域では、Catalog の定義とその解決、Provisioning Transaction と Consent の中断と再開、Agent Registration と Agent Client Credential の生成、Agent OP へ注入する XAA 静的設定と Agent Runtime へ渡す Tool Manifest の生成、FULL_ISOLATION の Dedicated OP 一式の実行時作成、Cloud Run Job Execution の起動までを作る。
 Provisioner は GCP リソースを1つも作らない。
 作るのは Firestore 上のレコードと、Cloud Run Job Execution の起動要求だけである（DEC-IAC-07、DEC-IAC-08）。
 
 | 前提 | 内容 |
 |---|---|
-| 依存する領域 | Infra（Terraform のスロット一式、Job 定義、Firestore、Pub/Sub、platform_endpoints）、Authorization（`authorization_decisions` と `human_permissions`）、Agent OP（Registration の読み出しと IdP Connection の作成）、Runtime（Tool Manifest の消費）、Bridge（Agent Binding、既定では無効） |
+| 依存する領域 | Infra（KMS Key Ring、作成権限、Job 定義、Firestore、Pub/Sub、platform_endpoints）、Authorization（`authorization_decisions` と `human_permissions`）、Agent OP（Registration の読み出しと IdP Connection の作成）、Runtime（Tool Manifest の消費）、Bridge（Agent Binding、既定では無効） |
 | このファイルのタスク数 | 32件 |
 | 主に満たす設計ルール | RULE-03, RULE-04, RULE-11, RULE-16, RULE-19, RULE-20, RULE-22, RULE-25, RULE-26, RULE-29, RULE-31, RULE-32, RULE-43, RULE-44, RULE-50, RULE-51, RULE-55, RULE-59 |
 
@@ -220,8 +220,8 @@ Registration へ書くのは audience と resource と scope の3集合だけで
 - `apps/provisioner/test/registration-keys.spec.ts`
 
 **実装方針**
-- スキーマの `properties` は `agent_id` / `human_subject` / `client_auth` / `idp_connection_id` / `allowed_audiences` / `resources` / `scopes` / `created_at` / `expires_at` / `status` / `dedicated_op_slot_index` の11件のみとする。
-- `dedicated_op_slot_index` は `integer | null` とし、STANDARD では null を書く。DEC-IAC-07 のスロット判定に使うため、docs 05 §4 の10キーへこれ1件だけを追加する。
+- スキーマの `properties` は `agent_id` / `human_subject` / `client_auth` / `idp_connection_id` / `allowed_audiences` / `resources` / `scopes` / `created_at` / `expires_at` / `status` / `dedicated_op` の11件のみとする。
+- `dedicated_op` は boolean とし、STANDARD では false を書く。Cleanup が Dedicated OP 一式の削除を要するかの判定に使うため、docs 05 §4 の10キーへこれ1件だけを追加する。
 - `additionalProperties: false` を指定し、`api_base_url` / `api_method` / `api_path` / `tool_id` / `description` / `issuer` / `subject` を書き込もうとすると Ajv 検証で失敗させる。
 - `client_auth` の `properties` は `method`（定数 `client_assertion_jwt`）/ `jwk_thumbprint` / `public_jwk` の3件に固定する。`public_jwk` は EC 公開鍵の `kty` / `crv` / `x` / `y` / `kid` / `alg` / `use` のみを許し、`d` を持つ場合は検証に失敗させる。
 - スナップショットテストで Firestore へ書かれたドキュメントのキー集合を配列として固定する。
@@ -398,7 +398,7 @@ Cloud SQL ではなく Firestore の `provisioning_transactions` コレクショ
 - `apps/provisioner/test/transaction.spec.ts`
 
 **実装方針**
-- ドキュメント `provisioning_transactions/{transaction_id}` のフィールドは `transaction_id` / `human_subject` / `agent_id` / `required_capabilities` / `required_connectors` / `isolation_level` / `status` / `pending_step` / `slot_index` / `created_at` / `expires_at` の11件とする。
+- ドキュメント `provisioning_transactions/{transaction_id}` のフィールドは `transaction_id` / `human_subject` / `agent_id` / `required_capabilities` / `required_connectors` / `isolation_level` / `status` / `pending_step` / `dedicated_short_id` / `created_at` / `expires_at` の11件とする。
 - `status` は `CREATED` / `WAITING_IDP_CONSENT` / `WAITING_EXTERNAL_CONSENT` / `RESUMABLE` / `PROVISIONING` / `COMPLETED` / `FAILED` / `ABANDONED` の8値。
 - `transaction_id` は `txn_` + 16バイト乱数の base64url とする。
 - `expires_at` は `created_at + 30分` で固定する。TTL は環境変数で変えられるようにせず、定数 `TRANSACTION_TTL_SECONDS = 1800` として置く。
@@ -410,7 +410,7 @@ Cloud SQL ではなく Firestore の `provisioning_transactions` コレクショ
 **完了条件**
 - [ ] `pnpm vitest run apps/provisioner/test/transaction.spec.ts` が緑になり、`COMPLETED` から `PROVISIONING` への遷移が `invalid_transaction_transition` を投げることを assert している
 - [ ] TTL 経過後に `abandon` を呼ぶと status が `ABANDONED` になり、紐づく IdP Connection への revoke 依頼が1回行われ、Isolation Slot が `FREE` に戻るテストが通る
-- [ ] `abandon` を同じ Transaction へ2回呼んでもスロットの状態が変わらないテストが通る
+- [ ] `abandon` を同じ Transaction へ2回呼んでも `dedicated_resources` の状態が変わらないテストが通る
 - [ ] 未知フィールドを含むドキュメントが Ajv 検証に失敗するテストが通る
 
 ---
@@ -550,7 +550,7 @@ STANDARD で共有するのは Cloud Run Service のプロセスだけであり�
 - `agent_id` は `agent_` + 16バイト乱数の base64url とする。決定的な連番にしない。
 - `status` は `ACTIVE` / `REVOKED` / `EXPIRED` の3値。作成時は `ACTIVE`。docs 07 §2 の他の状態は Lifecycle 側が別フィールドで持ち、Registration の `status` を4値以上にしない。
 - 書き込み前に T-PROV-07 の Ajv スキーマで検証し、失敗したら書き込まない。
-- STANDARD でも `dedicated_op_slot_index` に null を明示的に書く。フィールドを省略しない。
+- STANDARD でも `dedicated_op` に null を明示的に書く。フィールドを省略しない。
 - `idp_connection_id` は Agent OP が作成した Connection の ID を受け取って書く。Provisioner 側で生成しない。
 - 同一 `human_subject` に対する Registration 数の上限をここでは設けない。上限は Lifecycle 側の関心とする。
 
@@ -578,7 +578,7 @@ docs 07 §5 と §7 の「更新するより捨てて作り直す」を構成で
 - `agents` コレクションへの書き込みは `registration-writer.ts` の `createRegistration` / `transitionStatus` / `deleteRegistration` の3関数のみを通す。
 - `firestore-guard.ts` の許可マトリクスで、`agents` パスへの書き込みをこのモジュールからの呼び出しに限定する。他モジュールからの `set` / `update` は `forbidden_registration_write` を投げる。
 - `transitionStatus(agentId, next)` は `ACTIVE -> REVOKED` と `ACTIVE -> EXPIRED` の2遷移のみを許可し、それ以外は `invalid_status_transition` を投げる。
-- `allowed_audiences` / `resources` / `scopes` / `expires_at` / `human_subject` / `client_auth` / `dedicated_op_slot_index` を引数に取る更新関数を実装しない。
+- `allowed_audiences` / `resources` / `scopes` / `expires_at` / `human_subject` / `client_auth` / `dedicated_op` を引数に取る更新関数を実装しない。
 - モジュールの export 一覧をスナップショットテストで固定し、更新系の関数が増えたら失敗させる。
 - Agent OP 側にも同じ制約を課すため、Agent OP は `agents` を read-only で読む。書き込み権限を許可マトリクスに追加しない。
 
@@ -706,91 +706,131 @@ Provisioner は Connection の作成を依頼し、その状態を確認する�
 
 ---
 
-### T-PROV-24 Isolation Slot のリースを実装する
+### T-PROV-24 Dedicated OP 一式を実行時に作成する
 
 **概要**
-FULL_ISOLATION は Terraform で事前作成したスロットのリース方式にする（DEC-IAC-07、DEV-07）。
-Provisioner は Firestore のトランザクションで空きスロットを1つ確保するだけで、GCP リソースを作成も更新もしない。
+FULL_ISOLATION の Agent に対して、専用の Agent OP と署名鍵と Service Account と Runtime Job を Provisioning 時に作る（DEC-IAC-07）。
+docs 07 §3.3 の「FULL_ISOLATION では Agent Creation = Dedicated Infrastructure Provisioning」をそのまま実装する。
+作ったものは台帳へ記録し、Cleanup と掃除がその台帳だけを見て消せるようにする。
 
 **対象要件** REQ-01-011, REQ-05-057, REQ-07-014, REQ-08-008
-**前提タスク** T-PROV-13
+**前提タスク** T-PROV-13, T-IAC-14
 **成果物**
-- `apps/provisioner/src/slot.ts`
-- `apps/provisioner/test/slot.spec.ts`
-- `infra/tests/no-runtime-gcp-mutation.sh`
+- `apps/provisioner/src/dedicated.ts`
+- `apps/provisioner/src/dedicated-names.ts`
+- `apps/provisioner/test/dedicated.spec.ts`
+- `infra/tests/runtime-mutation-scope.sh`
 
 **実装方針**
-- コレクションは `isolation_slots/{slot_index}` に統一する。要件に出る `dedicated_op_slots` と `dedicated_slot` は別名として採用しない。
-- フィールドは `slot_index` / `status` / `assigned_agent_id` / `assigned_at` / `service_url` / `service_account_email` / `kms_key_name` / `job_name` の8件。`status` は `FREE` と `ASSIGNED` の2値。
-- ドキュメントは Terraform が書き出した `platform_endpoints.slots` を読む起動時の upsert で作る。Terraform のスロット数と行数を一致させ、余分な行は削除する。
-- `allocateDedicatedOpSlot(agentId)` は Firestore の `runTransaction` の中で `status === "FREE"` の行を `slot_index` の昇順で1件取り、`status = "ASSIGNED"` と `assigned_agent_id` と `assigned_at` を書く。空きが無ければ `{ ok: false, available: 0, capacity: N }` を返す。
-- `releaseDedicatedOpSlot(agentId)` は同じトランザクションで `assigned_agent_id === agentId` の行を `FREE` に戻し、`assigned_agent_id` と `assigned_at` を null にする。
-- 確保したスロットの `slot_index` を Agent Registration の `dedicated_op_slot_index` へ書く。スロット Service の env を書き換えない。担当判定はスロット Service 側が静的 env `SLOT_INDEX` と Registration の値を比較して行う。
-- Cloud Run Admin と IAM Admin と KMS Admin のクライアントを import しない。KMS 鍵バージョンのローテーションは Lifecycle（T-LIFE-10）が行う。
-- `infra/tests/no-runtime-gcp-mutation.sh` は `apps/provisioner/src` と `apps/lifecycle/src` に対し、`@google-cloud/run` の `ServicesClient`、`@google-cloud/iam`、`@google-cloud/kms` の `createCryptoKey` の使用が0件であることを検査する。
+- `dedicated-names.ts` に `shortId(agentId)` を置く。
+  `agent_id` の乱数部の末尾12文字を返し、名前はすべてこの値から組み立てる。
+  作る名前は `dedicated-op-<short>`、`sa-op-<short>`、`idjag-<short>`、`idpconn-<short>`、`agent-runtime-<short>`、`sa-agent-<short>` の6つに固定する。
+  Service Account の `account_id` は6文字以上30文字以内という GCP の制限があるため、`sa-op-<short>` は18文字、`sa-agent-<short>` は21文字に収まる。
+- 作成順序を固定する。
+  (1) `sa-op-<short>` を作る。
+  (2) `sa-agent-<short>` を作る。
+  (3) `idjag-<short>` を `idjag-signing` Key Ring に `EC_SIGN_P256_SHA256` で作る。
+  (4) `idpconn-<short>` を `idp-connection-encryption` Key Ring に `ENCRYPT_DECRYPT` で作る。
+  (5) `packages/xaa-contracts/src/dedicated-iam.ts` の定数だけを使って IAM Binding を張る。
+  (6) `dedicated-op-<short>` を Cloud Run Service として作る。ingress は INTERNAL、SA は `sa-op-<short>`、env は `AGENT_ID` ではなく `AGENT_ID` と `IDJAG_KMS_KEY` と `IDP_CONNECTION_KMS_KEY` を渡す。
+  (7) `agent-runtime-<short>` を Cloud Run Job として作る。SA は `sa-agent-<short>`、`task_timeout` は Agent の `expires_at` までの残り秒。
+  各段の完了ごとに `dedicated_resources/{agent_id}` の `created[]` へ完全修飾名を追記する。
+- 作成するすべてのリソースにラベル `xaa-managed=runtime` と `xaa-agent-id=<agent_id>` を付ける（DEC-IAC-25）。
+  ラベルを付けられない Service Account には `description` へ `xaa-managed=runtime agent=<agent_id>` を書く。
+- 触れてよい名前を1か所でガードする。
+  `assertRuntimeName(name)` を `dedicated-names.ts` に置き、`dedicated-op-` / `sa-op-` / `sa-agent-` / `idjag-` / `idpconn-` / `agent-runtime-` の6接頭辞のいずれかで始まらない名前を渡したら例外にする。
+  GCP の作成呼び出しは必ずこの関数を通す。
+- IAM のロール名をこのファイルへ直書きしない。
+  `dedicated-iam.ts` の定数を import して使う。
+- IAM の反映には最大数分の遅延がある。
+  (6) の Cloud Run Service を作った直後に `dedicated-op-<short>` へ health check を1回投げ、成功するまで最大120秒、5秒間隔で待つ。
+  120秒を超えたら `dedicated_provisioning_timeout` で失敗させ、逆順の補償（T-PROV-28）へ入る。
+- STANDARD の Agent に対してこのモジュールを呼ばない。
+  呼び出し口は `isolation_level === 'full_isolation'` の分岐の中だけに置く。
+- `infra/tests/runtime-mutation-scope.sh` は `apps/provisioner/src` と `apps/lifecycle-manager/src` を走査し、GCP の作成と削除と更新の呼び出しが `assertRuntimeName` を通る経路にだけ現れることを検査する。
+  Terraform 管理の名前（`human-idp` / `shared-agent-op` / `automation-app` など T-IAC-08 の `locals.service_names` の値）が文字列リテラルとして GCP クライアント呼び出しの引数に現れたら失敗させる。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/slot.spec.ts` が緑になり、`exhaustion returns 503` と `allocation is atomic with transaction` の2テストが含まれる
-- [ ] スロット数2の環境で並行に3リクエストを投げても `ASSIGNED` が2件を超えないことを assert する並行テストが通る
-- [ ] 1件を `releaseDedicatedOpSlot` で解放すると次の払い出しが成功するテストが通る
-- [ ] `bash infra/tests/no-runtime-gcp-mutation.sh` が終了コード0で通る
-- [ ] `grep -rn "@google-cloud/run\|@google-cloud/iam" apps/provisioner/src` の結果が Job Execution 用の `JobsClient` の行のみである
+- [ ] `pnpm vitest run apps/provisioner/test/dedicated.spec.ts` が緑になり、6リソースが上記の順序で作られることを assert している
+- [ ] `assertRuntimeName('human-idp')` が例外になり、`assertRuntimeName('dedicated-op-abc123def456')` が例外にならないテストが通る
+- [ ] 作成した6リソースすべてに `xaa-managed=runtime` と `xaa-agent-id` が付くことを assert するテストが通る
+- [ ] (3) の途中で失敗させたとき、`dedicated_resources/{agent_id}.created` に (1) と (2) の2件だけが残るテストが通る
+- [ ] `bash infra/tests/runtime-mutation-scope.sh` が終了コード0で通る
+- [ ] `grep -rn "roles/" apps/provisioner/src/dedicated.ts` の結果が `dedicated-iam` の import 行だけになる
 
 ---
 
-### T-PROV-25 スロット枯渇を 503 で返す
+### T-PROV-25 FULL_ISOLATION の同時実行数の上限で 503 を返す
 
 **概要**
-FULL_ISOLATION 要求時にスロットが無い場合、Provisioning Transaction を作らずに 503 を返す（RULE-32）。
-Policy Engine 側で STANDARD へ自動降格しない方針に合わせ、Provisioner でも降格しない（specs 5.2）。
+FULL_ISOLATION の Agent 数に上限を置き、上限に達していたら Provisioning Transaction を作らずに 503 を返す（DEC-IAC-23）。
+上限を置く理由はコストではなく、Project あたりの Service Account 数の上限（既定100）と、削除した Service Account が30日間その枠を占め続けるという GCP の制限である。
 
 **対象要件** REQ-02-020
 **前提タスク** T-PROV-24
 **成果物**
 - `apps/provisioner/src/routes/provisioning.ts`
-- `apps/provisioner/test/slot-exhaustion.spec.ts`
+- `apps/provisioner/src/capacity.ts`
+- `apps/provisioner/test/full-isolation-capacity.spec.ts`
 
 **実装方針**
-- 応答本文は `{ error: "dedicated_op_slot_exhausted", available: 0, capacity: N }` に固定する。要件に出た `no_isolation_slot_available` と `slot_unavailable` と `resource_exhausted` は別名として採用しない。
-- `capacity` は `isolation_slots` の全行数とし、Terraform 変数 `dedicated_slot_count` の値と一致する。
-- スロット払い出しは Provisioning Transaction の作成より前に実行する。枯渇時は Transaction を1行も作らない。
-- 枯渇時に `isolation_level` を `standard` へ書き換えて続行する分岐を実装しない。
+- 上限値は環境変数 `MAX_FULL_ISOLATION_AGENTS`（T-IAC-13 が Terraform 変数から注入、既定 5）から読む。
+  アプリ側に既定値を持たせず、未設定なら起動時に例外で落とす。
+- `countActiveFullIsolation()` は `agents` のうち `meta.isolation_level === 'full_isolation'` かつ `meta.status` が `DESTROYED` 以外の件数を返す。
+  破棄済みを数えないのは、Service Account の30日枠は掃除で回収されるまで戻らないが、その回収は Lifecycle の責務であり Provisioning を止める理由にはならないためである。
+- 確認と確保を `runTransaction` の中で行う。
+  件数が上限未満であることの確認、`dedicated_resources/{agent_id}` の作成、`provisioning_transactions/{id}` の作成を同一トランザクションで行う。
+  並行要求で上限を超えないことをこのトランザクションで担保する。
+- 応答本文は `{ error: "full_isolation_capacity_reached", active: N, capacity: M }` に固定する。
+  `dedicated_op_slot_exhausted` と `no_isolation_slot_available` と `slot_unavailable` と `resource_exhausted` は別名として採用しない。
+- 上限に達したとき `isolation_level` を `standard` へ書き換えて続行する分岐を実装しない。
 - 応答に `Retry-After: 60` を付ける。
-- 枯渇は構造化ログへ `event: "slot_exhausted"` として出し、Activity Event としては発行しない。
+- 上限到達は構造化ログへ `event: "full_isolation_capacity_reached"` として出し、Activity Event としては発行しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/slot-exhaustion.spec.ts` が緑になり、全スロット割り当て済みの状態で 503 と `dedicated_op_slot_exhausted` が返ることを assert している
-- [ ] 503 の後に `provisioning_transactions` の件数が増えないテストが通る
-- [ ] 応答の `capacity` が `isolation_slots` の行数と一致するテストが通る
-- [ ] `grep -rn "no_isolation_slot_available\|slot_unavailable" apps/ packages/` の結果が0件である
+- [ ] `pnpm vitest run apps/provisioner/test/full-isolation-capacity.spec.ts` が緑になり、上限到達時に 503 と `full_isolation_capacity_reached` が返ることを assert している
+- [ ] 503 の後に `provisioning_transactions` と `dedicated_resources` の件数がどちらも増えないテストが通る
+- [ ] `MAX_FULL_ISOLATION_AGENTS=2` で並行に3件の FULL_ISOLATION 要求を投げても成功が2件を超えないテストが通る
+- [ ] `MAX_FULL_ISOLATION_AGENTS` 未設定で起動すると例外になるテストが通る
+- [ ] `grep -rn "dedicated_op_slot_exhausted\|no_isolation_slot_available\|slot_unavailable" apps/ packages/` の結果が0件である
 
 ---
 
-### T-PROV-26 スロット返却の内部 API を実装する
+### T-PROV-26 作成したリソースの台帳を書き出す
 
 **概要**
-スロットの返却は Lifecycle Manager の Cleanup から呼ばれる（docs 07 §6）。
-Provisioner が返却の入口を内部 API として提供し、二重返却と他 Agent のスロット返却を拒む。
+実行時に作った GCP リソースの完全修飾名を Firestore へ記録する（DEC-IAC-23）。
+Cleanup と掃除はこの台帳だけを見て消す対象を決め、名前を組み立て直さない。
+作成の途中で落ちても、作れたところまでが台帳に残るため回収できる。
 
 **対象要件** REQ-01-011, REQ-05-057
 **前提タスク** T-PROV-24
 **成果物**
-- `apps/provisioner/src/routes/slots.ts`
-- `apps/provisioner/test/slot-release.spec.ts`
+- `apps/provisioner/src/dedicated-ledger.ts`
+- `apps/provisioner/test/dedicated-ledger.spec.ts`
 
 **実装方針**
-- ルートは `POST /internal/slots/release`。ボディは `{ agent_id }` の1キーのみ。
-- 呼び出し元は `sa-lifecycle` に限る。Cloud Run の `run.invoker` に加え、ID トークンの `email` クレームが `sa-lifecycle` のアドレスと一致することをアプリ側でも確認し、不一致は 403 とする。
-- 処理は `releaseDedicatedOpSlot(agentId)` を呼ぶだけとし、Registration の削除と IdP Connection の revoke はここで行わない。それらは Lifecycle 側の Cleanup（T-LIFE-05）が順に呼ぶ。
-- 該当スロットが無い場合も 200 を返す。冪等にし、二重呼び出しでエラーにしない。
-- 応答は `{ released: boolean, slot_index: number | null }`。
-- KMS 鍵バージョンのローテーションをこのハンドラで行わない。
+- コレクションは `dedicated_resources/{agent_id}` に統一する。
+  要件に出る `dedicated_op_slots` と `isolation_slots` と `dedicated_slot` は別名として採用しない。
+- フィールドは `agent_id` / `status` / `created` / `created_at` / `expires_at` / `last_error` の6件。
+  `status` は `CREATING` と `READY` と `FAILED` と `RELEASED` の4値。
+- `created` は要素が `{ kind, name, created_at }` の配列とする。
+  `kind` は `service_account` / `crypto_key` / `iam_binding` / `cloud_run_service` / `cloud_run_job` の5値。
+  `name` は GCP の完全修飾名を入れる。短縮名やテンプレート文字列を入れない。
+- 1リソースを作るたびに、その直後に `created` へ1件追記する。
+  まとめて最後に書かない。
+  途中で落ちたときに何が残っているかを台帳が正しく示すためである。
+- 台帳の書き込みは冪等にする。
+  同じ `name` の要素を二重に追記しない。
+- Lifecycle Manager は `dedicated_resources/{agent_id}.created` を逆順に読んで消す。
+  Provisioner はこの台帳を消さない。
+  消すのは Lifecycle（T-LIFE-09）だけとする。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/slot-release.spec.ts` が緑になり、同じ `agent_id` で2回呼んでも200が返り2回目の `released` が false になることを assert している
-- [ ] `sa-lifecycle` 以外の SA の ID トークンで呼ぶと 403 になるテストが通る
-- [ ] 返却後に `isolation_slots` の該当行が `status: "FREE"` かつ `assigned_agent_id: null` になるテストが通る
-- [ ] このハンドラから KMS クライアントが呼ばれないことを assert するテストが通る
+- [ ] `pnpm vitest run apps/provisioner/test/dedicated-ledger.spec.ts` が緑になる
+- [ ] 6リソースの作成後に `created` が6件で、`kind` が5種すべてを含むことを assert するテストが通る
+- [ ] 同じ `name` を2回追記しても `created` が増えないテストが通る
+- [ ] 3件目の作成で失敗させたとき `status` が `FAILED` かつ `created` が2件、`last_error` が空でないことを assert するテストが通る
 
 ---
 
@@ -805,20 +845,22 @@ STANDARD の Agent 生成で Cloud Run Service も Service Account も KMS Key �
 **成果物**
 - `apps/provisioner/src/orchestrator.ts`
 - `apps/provisioner/test/standard-branch.spec.ts`
-- `infra/tests/no-runtime-gcp-mutation.sh`
+- `infra/tests/runtime-mutation-scope.sh`
 
 **実装方針**
 - STANDARD 分岐で行うのは、Registration の作成、Agent OP への XAA 静的設定の注入（Registration の書き込みで兼ねる）、IdP Connection 作成依頼、Bridge Agent Binding 作成（Bridge 有効時のみ）、共有 Job `agent-runtime-standard` への Execution 起動の5つに限る。
 - STANDARD の Execution は常に `sa-agent-runtime` で動かす。Provisioner が Service Account を作る呼び出しを置かない。
 - テストダブルとして GCP Admin API クライアントのモックを注入し、STANDARD 経路での呼び出し回数が0であることを assert する。
-- `orchestrator.ts` から到達可能な GCP クライアントは Firestore と Pub/Sub と Cloud Run Jobs の `JobsClient` の3つに限る。
+- STANDARD 分岐から到達可能な GCP クライアントは Firestore と Pub/Sub と Cloud Run Jobs の `JobsClient` の3つに限る。
+- Cloud Run Service と Service Account と KMS 鍵を作るのは FULL_ISOLATION 分岐（T-PROV-24）だけであり、STANDARD 分岐からそのモジュールを import しない。
 - Agent の識別は Execution へ渡した Agent Client Credential と、その鍵で署名した `actor_token` だけで行う。Execution ごとに SA を分ける分岐を書かない。
 
 **完了条件**
 - [ ] `pnpm vitest run apps/provisioner/test/standard-branch.spec.ts` が緑になり、GCP Admin API モックの呼び出し回数が0であることを assert している
 - [ ] STANDARD の E2E 実行後に `terraform plan` が差分0を返す
 - [ ] STANDARD Agent を10体 Provisioning しても `gcloud iam service-accounts list` の件数が変わらないことを検証手順として `e2e` に記録する
-- [ ] `grep -rn "createServiceAccount\|createService(" apps/provisioner/src` の結果が0件である
+- [ ] `grep -rn "createServiceAccount\|createService(" apps/provisioner/src` の結果が `dedicated.ts` の行だけである
+- [ ] `grep -rn "dedicated" apps/provisioner/src/orchestrator.ts` の結果が `isolation_level === 'full_isolation'` の分岐の中だけに現れる
 
 ---
 
@@ -841,14 +883,14 @@ Connection が READY でない状態で外部 Consent 以降へ進む経路を�
 - 各ステップは `{ id, run, compensate }` の3プロパティを持つ。`compensate` が不要なステップは明示的に `noop` を置き、省略しない。
 - 現在位置は Transaction の `pending_step` に保存し、Resume はそこから再開する。
 - `verify_idp_connection` が `READY` を返すまで `external_consent` 以降のステップを実行しない。順序違反の呼び出しは 409 と `{ error: "precondition_failed", expected_step, actual_step }` を返す。
-- 失敗時は、実行済みステップの `compensate` を逆順で呼ぶ。`register_agent` の補償は Registration 削除、`create_agent_binding` の補償は Binding 無効化、`idp_consent` の補償は Connection の revoke 依頼、スロット確保の補償は `releaseDedicatedOpSlot`。
-- スロット確保は `generate_agent_identity` の前、Transaction 作成の前に行う（T-PROV-25 の順序）。補償配列にはスロットを最後に返却する要素として先頭に置く。
+- 失敗時は、実行済みステップの `compensate` を逆順で呼ぶ。`register_agent` の補償は Registration 削除、`create_agent_binding` の補償は Binding 無効化、`idp_consent` の補償は Connection の revoke 依頼、`create_dedicated_resources` の補償は `destroyDedicatedResources`。
+- FULL_ISOLATION の同時数チェックは `generate_agent_identity` の前、Transaction 作成の前に行う（T-PROV-25 の順序）。Dedicated OP 一式の作成はその後に行い、補償配列には削除を最後に走らせる要素として先頭に置く。
 - 補償処理自体が失敗しても残りの補償を続行し、失敗の一覧を構造化ログへ出す。例外で中断しない。
 
 **完了条件**
 - [ ] `pnpm vitest run apps/provisioner/test/order.spec.ts` が緑になり、正常系のステップ実行ログが上記11段と順序まで一致することを assert している
 - [ ] IdP Connection が未 READY の状態で `create_agent_binding` へ到達できず 409 `precondition_failed` になるテストが通る
-- [ ] `register_agent` で意図的に失敗させると、Binding が無効化され Connection が REVOKED になりスロットが `FREE` に戻ることを assert する統合テストが緑になる
+- [ ] `register_agent` で意図的に失敗させると、Binding が無効化され Connection が REVOKED になり、実行時に作った GCP リソースが1つも残らないことを assert する統合テストが緑になる
 - [ ] 補償の1つを失敗させても残りの補償が実行され、失敗一覧がログに出るテストが通る
 
 ---
@@ -869,7 +911,7 @@ Agent は常駐 Service ではなく Job Execution として動く（RULE-04）�
 - 起動は `@google-cloud/run` の `JobsClient.runJob` を使い、`overrides.containerOverrides[0].env` に env を積む。
 - 渡す env は `AGENT_ID` / `AGENT_CLIENT_ID` / `AGENT_CLIENT_PRIVATE_JWK` / `AGENT_EXPIRES_AT` / `OP_TOKEN_ENDPOINT` / `AGENT_OP_BASE_URL` / `XAA_CONFIG_JSON` / `TOOL_MANIFEST_JSON` の8件に固定する。要件に現れた `AGENT_CLIENT_PRIVATE_KEY` と `AGENT_SIGNING_JWK` と `EXPIRES_AT` は別名として採用しない。
 - `AGENT_CLIENT_ID` は `agent-platform` を入れる。Agent ごとの client_id を作らない（RULE-50）。
-- 起動先の Job 名は、STANDARD が `agent-runtime-standard`、FULL_ISOLATION が `agent-runtime-slot-{slot_index}`。名前は `platform_endpoints` から引き、文字列連結で組み立てない。
+- 起動先の Job 名は、STANDARD が `agent-runtime-standard`、FULL_ISOLATION が `agent-runtime-<short>`。名前は `platform_endpoints` から引き、文字列連結で組み立てない。
 - 起動前に同一 `agent_id` の Execution が RUNNING でないことを Firestore の `agents/{agent_id}.execution_name` の有無で確認し、存在すれば 409 と `{ error: "execution_already_running" }` を返す。
 - Job 定義の `task_count=1` / `parallelism=1` / `max_retries=0` / `task_timeout` は Terraform 側で設定する。Provisioner から `overrides` でこれらを変更しない。
 - 起動応答の Execution 名を Registration の `status` 遷移ではなく、Transaction の `pending_step` の完了記録として保持する。
@@ -915,7 +957,7 @@ Dynamic Client Registration を呼ばない。
 
 **概要**
 docs 09 §2 が求める Provisioning のログ項目を出す。
-スロット方式にしたため `slot_id` を必須項目に加える（DEC-IAC-07）。
+実行時作成にしたため `dedicated_short_id` を必須項目に加える（DEC-IAC-07）。
 Raw Token と秘密鍵をログへ出さない（RULE-38）。
 
 **対象要件** REQ-09-007
@@ -927,8 +969,8 @@ Raw Token と秘密鍵をログへ出さない（RULE-38）。
 
 **実装方針**
 - 1回の Provisioning の完了時に `event: "provisioning_completed"` の1行を Cloud Logging へ JSON で出す。
-- 必須フィールドは `agent_id` / `human_subject` / `transaction_id` / `isolation_level` / `dedicated_op` / `slot_id` / `provisioned_tools` / `allowed_audiences` / `resources` / `scopes` / `idp_connection_status` / `connector_states` / `created_at` / `expires_at` の14件。
-- `dedicated_op` は boolean、`slot_id` は FULL_ISOLATION のとき `slot-{slot_index}` の文字列、STANDARD のとき null。
+- 必須フィールドは `agent_id` / `human_subject` / `transaction_id` / `isolation_level` / `dedicated_op` / `dedicated_short_id` / `provisioned_tools` / `allowed_audiences` / `resources` / `scopes` / `idp_connection_status` / `connector_states` / `created_at` / `expires_at` の14件。
+- `dedicated_op` は boolean、`dedicated_short_id` は FULL_ISOLATION のとき `<short>`（`agent_id` の乱数部の末尾12文字）、STANDARD のとき null。
 - `destroyed_at` は Lifecycle 側の Cleanup ログが持つ。ここでは出さない。
 - 出力前に、値が3つのドット区切りの base64url 文字列に一致する要素を再帰的に探し、見つかったら `log_contains_token` を投げてログを出さない。
 - ログのシンクは Terraform の Log Sink で BigQuery の `security_audit` dataset へ入る。アプリ側で BigQuery へ直接書かない。
@@ -936,8 +978,8 @@ Raw Token と秘密鍵をログへ出さない（RULE-38）。
 **完了条件**
 - [ ] `pnpm vitest run apps/provisioner/test/provisioning-log.spec.ts` が緑になり、14フィールドがすべて存在することを assert している
 - [ ] JWT 形式の文字列を含む値を渡すと `log_contains_token` が投げられログが出ないテストが通る
-- [ ] `e2e/test/provision-log.spec.ts` で STANDARD と FULL_ISOLATION を各1回実行し、FULL_ISOLATION 側のログの `slot_id` が非 null であることを assert する
-- [ ] STANDARD 側のログの `slot_id` が null かつ `dedicated_op` が false であることを assert する
+- [ ] `e2e/test/provision-log.spec.ts` で STANDARD と FULL_ISOLATION を各1回実行し、FULL_ISOLATION 側のログの `dedicated_short_id` が非 null であることを assert する
+- [ ] STANDARD 側のログの `dedicated_short_id` が null かつ `dedicated_op` が false であることを assert する
 
 ---
 

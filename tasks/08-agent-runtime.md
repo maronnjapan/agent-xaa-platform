@@ -37,7 +37,7 @@ DEC-APP-02 の「Agent Runtime だけ HTTP を listen しない素の Node エ�
 
 **実装方針**
 - `main.ts` は `async function main(): Promise<number>` を1つだけ持ち、末尾で `process.exit(code)` を呼ぶ。`hono` と `@hono/node-server` を `apps/agent-runtime` の dependencies に入れない。
-- `packages/xaa-contracts/src/runtime-env.ts` に `RUNTIME_ENV_KEYS` を定義する。値は `AGENT_ID` / `HUMAN_SUBJECT` / `TASK_ID` / `AGENT_CREATED_AT` / `AGENT_EXPIRES_AT` / `AGENT_OP_BASE_URL` / `TOOL_MANIFEST` / `TOOL_MANIFEST_SHA256` / `AGENT_CLIENT_PRIVATE_JWK` / `ISOLATION_LEVEL` / `SLOT_INDEX` / `VERTEX_MODE` / `VERTEX_MODEL` / `PUBSUB_MODE` / `STORE_MODE` / `ACTIVITY_TOPIC` / `GOOGLE_CLOUD_PROJECT` / `LOG_LEVEL` の18個とし、他の名前を Runtime と Provisioner のどちらにも書かない。
+- `packages/xaa-contracts/src/runtime-env.ts` に `RUNTIME_ENV_KEYS` を定義する。値は `AGENT_ID` / `HUMAN_SUBJECT` / `TASK_ID` / `AGENT_CREATED_AT` / `AGENT_EXPIRES_AT` / `AGENT_OP_BASE_URL` / `TOOL_MANIFEST` / `TOOL_MANIFEST_SHA256` / `AGENT_CLIENT_PRIVATE_JWK` / `ISOLATION_LEVEL` / `AGENT_ID` / `VERTEX_MODE` / `VERTEX_MODEL` / `PUBSUB_MODE` / `STORE_MODE` / `ACTIVITY_TOPIC` / `GOOGLE_CLOUD_PROJECT` / `LOG_LEVEL` の18個とし、他の名前を Runtime と Provisioner のどちらにも書かない。
 - `FORBIDDEN_ENV_KEYS` に `HUMAN_ACCESS_TOKEN` / `HUMAN_REFRESH_TOKEN` / `SESSION_ID` / `SUBJECT_TOKEN` / `CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN` / `IDP_CONNECTION_ID` を置く。`loadEnv()` の先頭でこれらの存在を検査し、1つでもあれば `forbidden_env_key` をログへ出して exit code 78 で即終了する。
 - `execution_id` は `CLOUD_RUN_EXECUTION`、タスク番号は `CLOUD_RUN_TASK_INDEX` から読む。未設定なら `local-<uuid>` を使い、この2つは `RUNTIME_ENV_KEYS` に含めない（Cloud Run が注入するため）。
 - 終了コードを4値に固定する。`0` 完走、`10` Agent 期限超過、`20` 拒否を含む完了、`30` それ以外の失敗、`78` 起動パラメータ不正。
@@ -104,7 +104,7 @@ REQ-05-091 の「Runtime の SA に KMS 署名権限と Secret Manager 参照を
 - `AgentClientKey` 型が公開するのは `signCompactJws(header, payload): Promise<string>` の1メソッドのみとする。`toJSON()` は文字列 `[redacted]` を返す実装を明示的に置き、`JSON.stringify` で鍵情報が出ないようにする。
 - 用途を actor_token の署名（T-RUN-09）と Agent OP 向け client_assertion の署名（T-RUN-09）の2つに限る。Resource AS と Resource API 向けのリクエスト組み立て関数は `AgentClientKey` を引数型に取らない。
 - `scripts/check-runtime-credentials.mjs` が `apps/agent-runtime/src` を走査し、`refresh_token` / `client_secret` / `REFRESH_TOKEN` / `CLIENT_SECRET` / `idp_connections` / `secretmanager` / `metadata.google.internal` / `169.254.169.254` の出現を0件で要求する。非ゼロ終了で CI を落とす。
-- `infra/tests/runtime-sa-roles.sh` が `sa-agent-runtime` と `sa-agent-slot-*` のロール集合を許可リスト（`roles/datastore.user`, `roles/run.invoker`, `roles/aiplatform.user`, `roles/pubsub.publisher`, `roles/logging.logWriter`）と完全一致で検査し、`roles/cloudkms.signerVerifier` と `roles/secretmanager.secretAccessor` の不在を要求する。
+- `infra/tests/runtime-sa-roles.sh` が `sa-agent-runtime` と `sa-agent-*` のロール集合を許可リスト（`roles/datastore.user`, `roles/run.invoker`, `roles/aiplatform.user`, `roles/pubsub.publisher`, `roles/logging.logWriter`）と完全一致で検査し、`roles/cloudkms.signerVerifier` と `roles/secretmanager.secretAccessor` の不在を要求する。
 
 **完了条件**
 - [ ] `apps/agent-runtime/test/credential-boundary.spec.ts::agent client key is not serializable` が緑（`JSON.stringify` の結果に `"d"` が現れない）
@@ -854,7 +854,7 @@ docs 05 §7 の Runtime Flow を、STANDARD の Document 経路と FULL_ISOLATIO
 - `e2e/test/runtime/runtime-flow-finance.spec.ts`
 
 **実装方針**
-- Finance 側は `isolation_level=full_isolation` で Provision し、スロットを1枠リースする。
+- Finance 側は `isolation_level=full_isolation` で Provision し、Dedicated OP 一式を実行時に作る。
 - 各シナリオで6件をアサートする。
   ID-JAG の `sub` が委譲元の `human_subject` に一致すること。
   ID-JAG の `act.sub` が `urn:xaa:agent:<agent_id>` に一致すること。
@@ -862,7 +862,7 @@ docs 05 §7 の Runtime Flow を、STANDARD の Document 経路と FULL_ISOLATIO
   ID-JAG の `cnf.jkt` が Execution の DPoP 鍵の RFC 7638 thumbprint に一致すること。
   Access Token の `cnf` が同じ thumbprint を持つこと。
   Access Token の `act` が ID-JAG の `act` を引き継いでいること。
-- 各シナリオの終了時にスロットを返却し、次のテストへ状態を持ち越さない。
+- 各シナリオの終了時に Cleanup を走らせて実行時に作った GCP リソースを消し、次のテストへ状態を持ち越さない。
 
 **完了条件**
 - [ ] `pnpm test:e2e -- runtime/runtime-flow-docs` が緑になる。

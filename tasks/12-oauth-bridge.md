@@ -61,7 +61,7 @@ Authorization ヘッダの Google 発行 ID トークンを検証し、`email` �
 **実装方針**
 - `verifyGoogleIdToken(token, audience)` を `src/middleware/google-id-token.ts` に実装する。検証順序は 署名（`https://www.googleapis.com/oauth2/v3/certs` の JWKS、TTL 3600 秒でキャッシュ）→ `iss === "https://accounts.google.com"` → `aud === config.bridgeInternalBaseUrl` → `exp` → `email_verified === true` に固定する。
 - `callerAuthz(allowed: CallerRole[])` を Hono ミドルウェアとして実装する。`CallerRole` は `runtime` | `provisioner` | `lifecycle` の3値。
-- 許可リストは `config` から作る。`runtime` は `CALLER_SA_RUNTIME` と `CALLER_SA_SLOTS`（カンマ区切りの `sa-agent-slot-01@...` 形式）の和集合、`provisioner` は `CALLER_SA_PROVISIONER`、`lifecycle` は `CALLER_SA_LIFECYCLE`。突き合わせは文字列の完全一致で行い、接尾辞一致や正規表現を使わない。
+- 許可リストは `config` から作る。`runtime` は `CALLER_SA_RUNTIME` と `CALLER_SA_SLOTS`（カンマ区切りの `sa-agent-aaaaaaaaaaaa@...` 形式）の和集合、`provisioner` は `CALLER_SA_PROVISIONER`、`lifecycle` は `CALLER_SA_LIFECYCLE`。突き合わせは文字列の完全一致で行い、接尾辞一致や正規表現を使わない。
 - ルートへの適用は `POST /token` が `["runtime"]`、`POST /connections/check` と `POST /connections/verify` と `POST /bindings` が `["provisioner"]`、`POST /bindings/:agent_id/disable` と `DELETE /bindings/:agent_id` が `["lifecycle"]`。
 - 許可外は HTTP 403 と `{"error":"forbidden_caller"}` を返し、拒否理由に SA の email を含めない。同時に `emitProtocolValidation("forbidden_bridge_caller", {route, caller_email})` を呼ぶ（T-SEC-11 が配線する共通ヘルパを使う）。
 - ID トークンが無い、壊れている、`aud` が違う場合も同じ 403 `forbidden_caller` に寄せ、401 と 403 を使い分けない。
@@ -268,7 +268,7 @@ Rotation で新しい Refresh Token が返った場合の再暗号化と、SaaS 
 - 応答の 200 では `access_token` / `expires_in` / `scope` のみを取り出す。`id_token` が返っても捨てる。
 - 応答に `refresh_token` が含まれる場合は `encryptRefreshToken` で暗号化し、`bridge_connections/{id}` の `encrypted_refresh_token` を単一フィールド更新で上書きする。旧暗号文を別フィールドや別コレクションへ退避しない。
 - 応答が 4xx かつ本文の `error === "invalid_grant"` の場合は Connection を `status="REVOKED"` に更新し、Agent へ HTTP 400 と `{"error":"connection_revoked"}` を返す。それ以外の 4xx / 5xx は Connection の status を変えず HTTP 502 と `{"error":"invalid_grant"}` を返す。
-- 復号した Refresh Token を格納する変数のスコープを関数内に閉じ、戻り値・例外メッセージ・ログのいずれにも渡さない。
+- 復号した Refresh Token を格納する変数のスコープを関数内に閉じ、戻り値と例外メッセージとログのいずれにも渡さない。
 - 再試行を実装しない。SaaS 側のタイムアウトは 10 秒で打ち切る。
 
 **完了条件**
@@ -505,7 +505,7 @@ one-time code を単回消費し、Connection が要求 scope を満たすこと
 
 ---
 
-### T-BRIDGE-18 Agent Binding の作成・無効化・削除 API を実装する
+### T-BRIDGE-18 Agent Binding の作成と無効化と削除の API を実装する
 
 **概要**
 `enable_google_bridge=true` のときのみ有効なタスク。

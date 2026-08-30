@@ -243,7 +243,7 @@ RULE-47 と RULE-50 に対応する。
 - `.github/workflows/ci.yml` へジョブ `idp:purity` を追加
 
 **実装方針**
-- `check-human-idp-purity.sh` は `apps/human-idp/src` を対象に `agent_id`、`agents/`、`isolation`、`capability`、`dedicated_op_slot` を grep し、固定文字列 `agent-platform` と `AGENT_OP_CALLBACK_URI` を除いて 1件でも残れば非ゼロ終了する。
+- `check-human-idp-purity.sh` は `apps/human-idp/src` を対象に `agent_id`、`agents/`、`isolation`、`capability`、`dedicated_op` を grep し、固定文字列 `agent-platform` と `AGENT_OP_CALLBACK_URI` を除いて 1件でも残れば非ゼロ終了する。
 - Human IdP が読むデータは `idp_users` / `idp_sessions`（同意記録を含む） / `idp_tokens` / `idp_transactions` に限る。T-IDP-04 の許可マトリクスがこの4つを超えないことを同スクリプトで検査する。
 - `/register` を実装しない。生成物にも存在しないため、ルート追加を禁止するテストで固定する。
 - 検査対象から `apps/human-idp/test` と `generated-baseline/` を除外する。

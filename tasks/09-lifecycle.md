@@ -4,11 +4,11 @@ Lifecycle Manager は、作られた Agent を止めて消すための単一の�
 Agent は最大でも数時間から24時間で死ぬ短命な存在であり、期限到達、ユーザーによる停止、セキュリティ検知、人間の権限変更、人間の Identity 無効化のどれが起きても、その Agent に紐づく Identity と鍵と Config と Connection と実行中プロセスをまとめて破棄する必要がある。
 このアプリはその破棄手順（Cleanup 11ステップ）と、Agent の状態遷移の唯一の書き込み経路と、定期実行の sweep と、権限縮小時の作り直し（Re-Provisioning）を持つ。
 新しい Agent を作る処理は持たず、必要なときは Agent Provisioner の内部 API へ委譲する。
-GCP リソースの作成と削除も行わない。Terraform が作ったスロットを借りて返すだけである。
+FULL_ISOLATION の Dedicated OP 一式については、Provisioner が実行時に作ったものを台帳に従って削除する。
 
 | 前提 | 内容 |
 |---|---|
-| 依存する領域 | prov（Agent Provisioner の内部 API と Agent Registration の書式）、op（Agent OP の `/internal/*`）、res（Resource AS の `/internal/revoke-by-actor`）、authz（権限再評価からの Re-Provisioning 依頼）、sec（構造化ログと監査レコード）、iac（Cloud Scheduler、スロット、KMS、Pub/Sub、endpoints.json）、bridge（Agent Binding の Disable、既定では無効） |
+| 依存する領域 | prov（Agent Provisioner の内部 API と Agent Registration の書式）、op（Agent OP の `/internal/*`）、res（Resource AS の `/internal/revoke-by-actor`）、authz（権限再評価からの Re-Provisioning 依頼）、sec（構造化ログと監査レコード）、iac（Cloud Scheduler、KMS Key Ring、Pub/Sub、endpoints.json）、bridge（Agent Binding の Disable、既定では無効） |
 | このファイルのタスク数 | 17件 |
 | 主に満たす設計ルール | RULE-25, RULE-26, RULE-27, RULE-28, RULE-29, RULE-32, RULE-33, RULE-41, RULE-43, RULE-51, RULE-55 |
 
@@ -49,8 +49,8 @@ DEC-ID-13 が定める DPoP 適用経路の3番目（Automation App から Contr
 - DPoP の検証は `packages/xaa-crypto/src/dpop.ts` の `verifyDpopProof` を呼ぶ。`jti` 重複排除は Firestore `dpop_jti` を使い、TTL は `iat` 許容窓と同じ 300 秒にする。自前で JWT や Thumbprint の実装を書かない。
 - `internal-oidc.ts` は Cloud Scheduler と他アプリの SA から届く Google 署名の OIDC ID Token を検証し、`email` が `sa-lifecycle` の呼び出し元許可リスト（`ALLOWED_CALLER_SAS` の CSV）に含まれるかを見る。含まれなければ 403 `caller_not_allowed`。
 - `ownership.ts` の `assertAgentOwnership(agentId, sub)` は Firestore `agents/{agent_id}/meta` の `human_subject` を先に読み、ドキュメント不在なら `AgentNotFound`、不一致なら `ForbiddenSubject` を投げる。存在の有無を 403 と 404 で区別する点は REQ-07-025 の要求どおりとし、他の API では 404 に寄せない。
-- Firestore へのアクセスはすべて `packages/xaa-contracts` の Firestore パスガード経由にし、`lifecycle-manager` の許可接頭辞を `agents/`、`idp_connections`、`isolation_slots`、`provisioning_transactions`、`dpop_jti` の5つに限る（DEC-IAC-22）。
-- `endpoints.ts` は起動時に `PLATFORM_ENDPOINTS_URI`（非公開 GCS の `endpoints.json`）を1回読み、Agent OP とスロット OP と Provisioner と Resource AS 2種と Bridge の URL をメモリに保持する。URL をコードへハードコードしない。
+- Firestore へのアクセスはすべて `packages/xaa-contracts` の Firestore パスガード経由にし、`lifecycle-manager` の許可接頭辞を `agents/`、`idp_connections`、`dedicated_resources`、`provisioning_transactions`、`dpop_jti` の5つに限る（DEC-IAC-22）。
+- `endpoints.ts` は起動時に `PLATFORM_ENDPOINTS_URI`（非公開 GCS の `endpoints.json`）を1回読み、Agent OP と Provisioner と Resource AS 2種と Bridge の URL をメモリに保持する。URL をコードへハードコードしない。
 - 環境変数は `PROJECT_ID` / `REGION` / `FIRESTORE_DATABASE_ID`（既定 `xaa`）/ `ISSUER` / `SELF_AUDIENCE`（既定 `lifecycle-manager`）/ `PLATFORM_ENDPOINTS_URI` / `AGENT_MAX_LIFETIME_SECONDS` / `EXPIRING_WINDOW_SECONDS`（既定 60）/ `PUBSUB_MODE` / `STORE_MODE` の10個に固定する。
 
 **完了条件**
@@ -110,16 +110,16 @@ Provisioner が書き、Lifecycle Manager が読んで消す関係を型で固�
 - `apps/lifecycle-manager/test/domain.spec.ts`
 
 **実装方針**
-- JSON Schema の必須フィールドを `agent_id` / `human_subject` / `isolation_level` / `registration_id` / `kms_key_name` / `dedicated_op_slot_index` / `job_execution_name` / `idp_connection_id` / `bridge_binding_ids` / `created_at` / `expires_at` / `status` / `cleanup_step_results` の13にする。`additionalProperties: false` と `strict` を守り、TypeScript 型は json-schema-to-ts で導出する（DEC-APP-05）。
-- `isolation_level` は `standard` と `full_isolation` の2値。`dedicated_op_slot_index` は `standard` のとき `null`、`full_isolation` のとき 0 以上の整数にする。Schema の `if/then` でこの対応を強制する。
+- JSON Schema の必須フィールドを `agent_id` / `human_subject` / `isolation_level` / `registration_id` / `kms_key_name` / `dedicated_op` / `job_execution_name` / `idp_connection_id` / `bridge_binding_ids` / `created_at` / `expires_at` / `status` / `cleanup_step_results` の13にする。`additionalProperties: false` と `strict` を守り、TypeScript 型は json-schema-to-ts で導出する（DEC-APP-05）。
+- `isolation_level` は `standard` と `full_isolation` の2値。`dedicated_op` は `standard` のとき `null`、`full_isolation` のとき 0 以上の整数にする。Schema の `if/then` でこの対応を強制する。
 - `bridge_binding_ids` は配列にし、`enable_google_bridge=false` の既定構成では空配列を入れる。省略可にしない。
-- `kms_key_name` はスロット専用 ID-JAG 署名鍵の完全修飾名（`projects/../locations/../keyRings/idjag-signing/cryptoKeys/..`）を入れる。STANDARD では共有鍵の名前を入れるが、Cleanup はこの値でローテーションを行わない（T-LIFE-09 で分岐する）。
+- `kms_key_name` は専用 ID-JAG 署名鍵の完全修飾名（`projects/../locations/../keyRings/idjag-signing/cryptoKeys/..`）を入れる。STANDARD では共有鍵の名前を入れるが、Cleanup はこの値でローテーションを行わない（T-LIFE-09 で分岐する）。
 - `domain.ts` の `loadDomain(agentId): Promise<AgentIdentityDomain>` は `agents/{agent_id}/meta` を読み、Ajv で検証してから返す。検証に落ちたら `DomainSchemaViolation` を投げ、Cleanup を中断せずステップ結果へ記録できるようにする。
 - `deleteDomain(agentId)` は `agents/{agent_id}` を配下の `state` と `instructions` と `manifest` と `meta` ごと再帰削除する。単一ドキュメントの削除で済ませない。
 - Provisioner 側の書き込みと同じ Schema を参照させるため、Schema は `packages/xaa-contracts` に置き、両アプリから import する。アプリ側で型を再定義しない。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/domain.spec.ts::rejects standard with slot index / rejects full_isolation without slot index` が緑。
+- [ ] `apps/lifecycle-manager/test/domain.spec.ts::rejects standard with dedicated resources / rejects full_isolation without dedicated resources` が緑。
 - [ ] 同ファイルの `::deleteDomain removes state, instructions, manifest and meta` が、4サブドキュメントを作った後の削除で `agents/{agent_id}` 配下のドキュメント数が 0 になることを assert する。
 - [ ] `pnpm --filter xaa-contracts test` が Schema の `additionalProperties: false` を破る入力を拒否するケースを含めて緑。
 - [ ] `e2e/test/lifecycle-domain.spec.ts::provisioner writes a domain that lifecycle can load` が、Provisioner が書いた meta を `loadDomain` が検証なしエラーで読めることを assert する。
@@ -143,7 +143,7 @@ docs 07 §6 の Cleanup を、順序が固定された11ステップのオーケ
 
 **実装方針**
 - 公開関数は `cleanupAgent(agentId: string, reason: CleanupReason): Promise<CleanupOutcome>` の1本にする。`CleanupReason` は `EXPIRED` / `USER_STOP` / `QUARANTINE` / `IDENTITY_DISABLED` / `REPROVISION` の union type とする。
-- ステップ ID を `runtime_cancel` / `issuance_disable` / `idp_connection_revoke` / `bridge_binding_disable` / `credential_revoke` / `client_credential_revoke` / `runtime_state_delete` / `slot_release` / `sa_unassign` / `registration_delete` / `audit_persist` の11個に固定し、この順の配列を `steps.ts` に持つ。順序を呼び出し側から差し替えられるようにしない。
+- ステップ ID を `runtime_cancel` / `issuance_disable` / `idp_connection_revoke` / `bridge_binding_disable` / `credential_revoke` / `client_credential_revoke` / `runtime_state_delete` / `dedicated_destroy` / `dedicated_sa_delete` / `registration_delete` / `audit_persist` の11個に固定し、この順の配列を `steps.ts` に持つ。順序を呼び出し側から差し替えられるようにしない。
 - 各ステップは `{ id, run(ctx): Promise<'succeeded' | 'skipped'> }` のインタフェースにする。`ctx` は `{ domain, reason, clients, logger }` の4つだけを渡し、ステップ間で値を受け渡さない。
 - ステップ結果は `agents/{agent_id}/meta.cleanup_step_results` に `{ step, status, attempts, last_error_code, updated_at }` の配列で保存する。`status` は `succeeded` / `failed` / `skipped` の3値。
 - 既に `succeeded` か `skipped` のステップは再実行しない。これで 2回目以降の `cleanupAgent` は残りのステップだけを実行する。
@@ -151,7 +151,7 @@ docs 07 §6 の Cleanup を、順序が固定された11ステップのオーケ
 - 開始時に `status` を `REVOKED` へ遷移させる（既に REVOKED なら遷移しない）。11ステップすべてが `succeeded` か `skipped` になったときだけ `writeStatus(agentId, 'DESTROYED')` を呼ぶ。1件でも `failed` が残る間は DESTROYED にしない。
 - 同一 Agent への同時実行は `agents/{agent_id}/meta.cleanup_lock`（`{ holder, acquired_at }`）を `runTransaction` で CAS して防ぐ。ロック保持は既定 300 秒で失効させ、失効したロックは奪える。
 - `attempts` が `CLEANUP_MAX_ATTEMPTS`（既定 5）に達したステップは以後 `failed` のまま再試行せず、`cleanup_exhausted` を構造化ログへ出す。無限再試行を作らない。
-- Terraform が作ったリソースの削除 API をこのファイルから呼ばない。呼び出しは T-LIFE-09 のスロット返却に閉じる。
+- GCP リソースの削除 API をこのファイルから呼ばない。呼び出しは T-LIFE-09 に閉じる。
 
 **完了条件**
 - [ ] `apps/lifecycle-manager/test/cleanup.spec.ts::runs 11 steps in fixed order` が、記録された実行順が `steps.ts` の配列と完全一致することを assert する。
@@ -183,7 +183,7 @@ docs 01 §4 の `LIFE -.-> AGENT` と `LIFE -.-> OP` の2本の破線がこれ�
 - `cloud-run.ts` は `@google-cloud/run` の `ExecutionsClient` を使い、`cancelExecution({ name })` を呼ぶ。`name` は Domain の `job_execution_name` をそのまま使い、文字列連結で組み立て直さない。
 - cancel の冪等化は3つの分岐で行う。gRPC コード 5（NOT_FOUND）は `skipped`、既に `CANCELLED` / `SUCCEEDED` / `FAILED` の Execution は `succeeded`、それ以外の失敗は例外にして枠組み側へ返す。
 - `job_execution_name` が `null`（Execution 起動前に Cleanup へ入った場合）は `skipped` を返す。
-- `agent-op.ts` の `disableIssuance(agentId)` は `POST /internal/agents/{agent_id}/disable-issuance` を呼ぶ。宛先ホストは Domain の `isolation_level` と `dedicated_op_slot_index` から `endpoints.json` を引いて決め、STANDARD は共有 Agent OP、FULL_ISOLATION は該当スロットの OP にする。
+- `agent-op.ts` の `disableIssuance(agentId)` は `POST /internal/agents/{agent_id}/disable-issuance` を呼ぶ。宛先ホストは Domain の `isolation_level` と `dedicated_op` から `endpoints.json` を引いて決め、STANDARD は共有 Agent OP、FULL_ISOLATION は `dedicated_resources` の台帳が持つ Dedicated OP の URL にする。
 - 呼び出しは `packages/xaa-contracts` の `httpClient` ラッパ経由にする（DEC-TEST-01）。fetch を直接書かない。認証は `sa-lifecycle` の OIDC ID Token（audience は宛先 Cloud Run URL）を Authorization ヘッダへ付ける。
 - Agent OP 側は Registration の `status` を `REVOKED` にし、既に `REVOKED` なら 200 を返す契約とする（エンドポイント本体の実装は領域 op が行う）。Lifecycle 側は 200 と 404 の両方を `succeeded` として扱い、404 は Registration が既に消えている場合とみなす。
 - 5xx とタイムアウト（既定 10 秒）は例外にして再試行対象へ回す。リトライをこのステップの中でループさせない。
@@ -192,7 +192,7 @@ docs 01 §4 の `LIFE -.-> AGENT` と `LIFE -.-> OP` の2本の破線がこれ�
 **完了条件**
 - [ ] `apps/lifecycle-manager/test/cleanup-runtime-cancel.spec.ts::treats NOT_FOUND and already-finished executions as done` が緑。
 - [ ] 同ファイルの `::does not call delete APIs` が、モックした Cloud Run クライアントの `deleteService` と `deleteJob` の呼び出し回数が 0 であることを assert する。
-- [ ] `apps/lifecycle-manager/test/cleanup-issuance-disable.spec.ts::targets the slot OP for full_isolation agents` が、`dedicated_op_slot_index=1` の Agent でスロット1の URL が呼ばれることを assert する。
+- [ ] `apps/lifecycle-manager/test/cleanup-issuance-disable.spec.ts::targets the dedicated OP for full_isolation agents` が、台帳の URL が呼ばれることを assert する。
 - [ ] `e2e/test/lifecycle-expire-revoke.spec.ts::second invocation returns 200 and token exchange stays invalid_grant` が、期限切れ Agent に対し sweep を2回起動しても2回目がエラーにならず、その後の `/xaa/token` が `invalid_grant` を返すことを assert する。
 
 ---
@@ -201,7 +201,7 @@ docs 01 §4 の `LIFE -.-> AGENT` と `LIFE -.-> OP` の2本の破線がこれ�
 
 **概要**
 Agent ごとに払い出された Human IdP Connection の Refresh Token を Human IdP へ Revoke し、Connection レコードを消す。
-Refresh Token を保持するのは Agent OP だけであり（RULE-51）、FULL_ISOLATION ではスロット専用の暗号鍵で暗号化されているため、Lifecycle Manager は復号せず Agent OP の内部 API へ委譲する。
+Refresh Token を保持するのは Agent OP だけであり（RULE-51）、FULL_ISOLATION では専用の暗号鍵で暗号化されているため、Lifecycle Manager は復号せず Agent OP の内部 API へ委譲する。
 同じユーザーの他 Agent の Connection と本人の SSO セッションを巻き込まないことがこのステップの要点である。
 
 **対象要件** REQ-05-053
@@ -266,7 +266,7 @@ step4 で Bridge の Agent Binding を無効化し、step5 で Native Resource A
 
 **概要**
 残る4ステップとして、Agent Client Credential の失効、Runtime State の削除、Agent Registration と Config の削除、監査情報の保存を実装する。
-step8 と step9 はスロット返却へ置き換えるため T-LIFE-09 で扱う。
+step8 と step9 は Dedicated OP 一式の削除であり T-LIFE-09 で扱う。
 Cleanup の後に Firestore へ何も残さないことをこのタスクで確定させる。
 
 **対象要件** REQ-07-020
@@ -279,10 +279,10 @@ Cleanup の後に Firestore へ何も残さないことをこのタスクで確�
 - `apps/lifecycle-manager/test/cleanup-tail-steps.spec.ts`
 
 **実装方針**
-- step6（`client_credential_revoke`）は Agent OP の `POST /internal/agents/{agent_id}/credentials/revoke` を呼び、Registration の `jwk_thumbprint` を削除して `client_credential_status` を `REVOKED` にさせる。これにより `client_assertion_jwt`（DEC-ID-11）の検証が以後失敗する。共有 ID-JAG 署名鍵をここで無効化しない。無効化は FULL_ISOLATION のスロット鍵に限り T-LIFE-09 が行う。
+- step6（`client_credential_revoke`）は Agent OP の `POST /internal/agents/{agent_id}/credentials/revoke` を呼び、Registration の `jwk_thumbprint` を削除して `client_credential_status` を `REVOKED` にさせる。これにより `client_assertion_jwt`（DEC-ID-11）の検証が以後失敗する。共有 ID-JAG 署名鍵をここで無効化しない。破棄予約は FULL_ISOLATION の専用鍵に限り T-LIFE-09 が行う。
 - step7（`runtime_state_delete`）は `agents/{agent_id}/state` と `agents/{agent_id}/instructions` を削除する。`meta` はこの時点では残す（step11 の監査保存が読むため）。
 - step10（`registration_delete`）は Agent OP の `POST /internal/agents/{agent_id}/delete` で Registration と XAA Static Config を消し、続けてローカルの `agents/{agent_id}/manifest` を削除する。
-- step11（`audit_persist`）は Cleanup の要約を構造化ログとして1件出し、その後に `deleteDomain(agentId)` で `agents/{agent_id}` を配下ごと削除する。ログ項目は `agent_id` / `human_subject` / `isolation_level` / `dedicated_op_slot_index` / `reason` / `started_at` / `finished_at` / `step_results` / `job_execution_name` / `idp_connection_id` / `bridge_binding_ids` の11項目にする。BigQuery への取り込みは Log Sink 経由とし、このアプリから BigQuery クライアントを呼ばない（T-SEC-06 が受ける）。
+- step11（`audit_persist`）は Cleanup の要約を構造化ログとして1件出し、その後に `deleteDomain(agentId)` で `agents/{agent_id}` を配下ごと削除する。ログ項目は `agent_id` / `human_subject` / `isolation_level` / `dedicated_op` / `reason` / `started_at` / `finished_at` / `step_results` / `job_execution_name` / `idp_connection_id` / `bridge_binding_ids` の11項目にする。BigQuery への取り込みは Log Sink 経由とし、このアプリから BigQuery クライアントを呼ばない（T-SEC-06 が受ける）。
 - ログ出力は共通ログヘルパ（`packages/xaa-contracts/src/logging.ts` の `emitStructuredLog`）経由に限る。Raw Token、Refresh Token、鍵素材、JWT 形式文字列を含めない（RULE-38）。
 - 各ステップは対象が既に無い場合に `skipped` を返す。削除前に存在確認の読み取りを行い、`NOT_FOUND` を例外にしない。
 
@@ -291,45 +291,65 @@ Cleanup の後に Firestore へ何も残さないことをこのタスクで確�
 - [ ] 同ファイルの `::does not disable the shared idjag key for standard agents` が、KMS の `disableCryptoKeyVersion` 呼び出し回数 0 を assert する。
 - [ ] 同ファイルの `::audit log has the 11 required fields and no JWT-shaped string` が緑。
 - [ ] 同ファイルの `::each tail step is skipped when the target is already gone` が緑。
-- [ ] `e2e/test/lifecycle-cleanup.spec.ts::registration, idp connection, bridge binding, runtime state and slot lease are all gone` が緑。
+- [ ] `e2e/test/lifecycle-cleanup.spec.ts::registration, idp connection, bridge binding and runtime state are all gone` が緑。
 
 ---
 
-### T-LIFE-09 Cleanup step8 と step9 をスロット返却へ置き換えて実装する
+### T-LIFE-09 Cleanup step8 と step9 で Dedicated OP 一式を削除する
 
 **概要**
-docs 07 §6 の step8 と step9 は Dedicated Cloud Run Service と Service Account の削除だが、これらは Terraform 管理リソースであり実行時に消すと state と食い違う。
-DEC-IAC-07 と DEV-07 に従い、スロットのリース返却と鍵バージョンのローテーションへ置き換える。
-返却後に旧 kid で署名された ID-JAG が検証できなくなることが、削除の代わりに効く統制になる。
+docs 07 §6 の step8 と step9 のとおり、FULL_ISOLATION の Dedicated Cloud Run Service と ID-JAG 署名鍵と Service Account を実行時に削除する（DEC-IAC-07）。
+これらは Terraform の管理対象外であり、消しても state と食い違わない。
+消す対象は `dedicated_resources/{agent_id}.created` の台帳から取り、名前を組み立て直さない。
 
 **対象要件** REQ-07-023, REQ-08-010
-**前提タスク** T-LIFE-08, T-PROV-12
+**前提タスク** T-LIFE-08, T-PROV-26
 **成果物**
-- `apps/lifecycle-manager/src/cleanup/steps/slot-release.ts`
-- `apps/lifecycle-manager/src/cleanup/steps/sa-unassign.ts`
-- `apps/lifecycle-manager/src/slot.ts`
+- `apps/lifecycle-manager/src/cleanup/steps/dedicated-destroy.ts`
+- `apps/lifecycle-manager/src/cleanup/steps/dedicated-sa-delete.ts`
+- `apps/lifecycle-manager/src/dedicated.ts`
 - `apps/lifecycle-manager/src/clients/kms.ts`
-- `apps/lifecycle-manager/test/slot-release.spec.ts`
-- `infra/tests/no-runtime-gcp-mutation.sh`（Lifecycle Manager の検査対象追加）
+- `apps/lifecycle-manager/test/dedicated-destroy.spec.ts`
+- `infra/tests/runtime-mutation-scope.sh`（Lifecycle Manager を検査対象に追加）
 
 **実装方針**
-- STANDARD の Agent では step8 と step9 の両方を `skipped` にする。スロットを持たないため何もしない。
-- FULL_ISOLATION の step8 は4つの処理をこの順で行う。(1) KMS の `createCryptoKeyVersion` でスロット鍵に新バージョンを作り、`ENABLED` になるまで最大10回、1秒間隔でポーリングする。(2) `getPublicKey` で新バージョンの公開鍵を取り、JWKS バケットへ `keys/idjag-slot<index>-<version>.json` を書く。(3) 旧バージョンを `disableCryptoKeyVersion` で無効化し、旧 kid の JWKS オブジェクトを削除する。(4) `isolation_slots/{slot_index}` の `active_key_version` を新バージョンへ更新する。
-- ES256 の非対称鍵には primary version が存在しないため、REQ-08-010 の「primary へ昇格」は `isolation_slots/{slot_index}.active_key_version` の更新で表す。`updateCryptoKeyPrimaryVersion` を呼ばない。スロット OP はこの台帳値を読んで署名バージョンを選ぶ。
-- JWKS の集約は jwks-publish Job が行う。このステップはオブジェクトの書き込みと削除までとし、`jwks.json` を直接書かない（DEC-IAC-13）。
-- 環境変数 `ASSIGNED_AGENT_ID` を書き換える実装を持たない。REQ-07-023 (a) の「環境変数を空にする」は、DEC-IAC-07 が Cloud Run の env 書き換えを禁じているため、台帳 `isolation_slots/{slot_index}.agent_id` を `null` にすることで表す。スロット OP は Registration の `dedicated_op_slot_index` と自分の `SLOT_INDEX` の一致で担当を判定する。
-- スロット専用 Job の実行中 Execution の cancel は step1 で済んでいる。step8 で再度 cancel しない。
-- 返却は `runTransaction` の中で `status` を `allocated` から `free` へ CAS し、同時に `agent_id` を `null`、`released_at` を現在時刻にする。既に `free` なら `skipped` を返す。
-- step9（`sa_unassign`）は常に `skipped` を返し、理由コード `managed_by_terraform` を結果へ記録する。Service Account の削除 API と IAM 変更 API をこのアプリから呼ばない。
-- `infra/tests/no-runtime-gcp-mutation.sh` の禁止シンボル一覧に `deleteService` / `deleteJob` / `deleteServiceAccount` / `setIamPolicy` / `updateCryptoKeyPrimaryVersion` / `updateService` を加え、`apps/lifecycle-manager/src` と `apps/provisioner/src` を検査対象にする。
+- STANDARD の Agent では step8 と step9 の両方を `skipped` にし、理由コード `no_dedicated_resources` を結果へ記録する。
+- 削除対象は `dedicated_resources/{agent_id}.created` を**逆順**に読んで決める。
+  作成の逆順で消すことで、IAM Binding が残ったまま Service Account を消す状態を作らない。
+- step8（`dedicated_destroy`）が消すのは4種とする。
+  `cloud_run_job` を `deleteJob` で消す。
+  `cloud_run_service` を `deleteService` で消す。
+  `crypto_key` の各鍵バージョンを `destroyCryptoKeyVersion` で破棄予約する。
+  `iam_binding` を対象リソースの IAM Policy から取り除く。
+- KMS の CryptoKey は GCP の仕様で削除できない。
+  鍵バージョンの破棄予約までを行い、空の CryptoKey を Key Ring に残す（DEC-IAC-25）。
+  破棄予約された鍵バージョンには課金が発生しないため、残っても費用は増えない。
+  破棄予約と同時に JWKS バケットの `keys/idjag-<short>-<version>.json` を削除する。
+- step9（`dedicated_sa_delete`）は `service_account` を `deleteServiceAccount` で消す。
+  削除した Service Account の ID は30日間再利用できないが、`<short>` は `agent_id` の乱数部から導くため衝突しない。
+  この点を実装のコメントに書く。
+- 消す前に必ず `assertRuntimeName(name)`（T-PROV-24 と同じ関数を `packages/xaa-contracts` 経由で共有する）を通す。
+  `dedicated-op-` / `sa-op-` / `sa-agent-` / `idjag-` / `idpconn-` / `agent-runtime-` の6接頭辞で始まらない名前を渡したら例外にし、削除を実行しない。
+  Terraform 管理のリソースを消す事故をここで止める。
+- 各リソースの削除が成功するたびに、台帳の該当要素へ `deleted_at` を書く。
+  まとめて最後に書かない。
+  途中で落ちても、残っているものが台帳から分かるようにする。
+- 削除は冪等にする。
+  対象が既に存在しない場合（`NOT_FOUND`）は成功として扱い、`deleted_at` を書いて次へ進む。
+- すべての要素に `deleted_at` が付いたら `dedicated_resources/{agent_id}.status` を `RELEASED` にする。
+  台帳のドキュメント自体は消さない。
+  掃除（T-LIFE-10）と監査がこの記録を使う。
+- `infra/tests/runtime-mutation-scope.sh` の検査対象に `apps/lifecycle-manager/src` を加える。
+  削除系 API の呼び出しが `assertRuntimeName` を通る経路にだけ現れることと、Terraform 管理の名前が文字列リテラルとして削除呼び出しの引数に現れないことを検査する。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/slot-release.spec.ts::returns the slot to free and clears agent_id` が緑。
-- [ ] 同ファイルの `::creates a new key version, disables the old one and updates active_key_version` が、3つの KMS 呼び出しの順序と台帳更新を assert する。
-- [ ] 同ファイルの `::skips both steps for standard agents` が緑。
-- [ ] 同ファイルの `::calls no delete or IAM mutation API` が、モック GCP クライアントの削除系 API 呼び出し回数 0 を assert する。
-- [ ] `bash infra/tests/no-runtime-gcp-mutation.sh` が終了コード 0 を返す。
-- [ ] `e2e/test/lifecycle-slot-release.spec.ts::old kid fails verification and new kid appears in JWKS` が緑で、FULL_ISOLATION の E2E 実行後に `terraform plan -detailed-exitcode` が 0 を返す。
+- [ ] `apps/lifecycle-manager/test/dedicated-destroy.spec.ts::deletes in reverse creation order` が緑で、Job、Service、鍵バージョン、IAM Binding、Service Account の順を assert する。
+- [ ] 同ファイルの `::skips both steps for standard agents` が緑で、理由コード `no_dedicated_resources` を assert する。
+- [ ] 同ファイルの `::treats NOT_FOUND as success and is idempotent on second run` が緑。
+- [ ] 同ファイルの `::refuses to delete a terraform-managed name` が、`human-idp` を台帳に混ぜたとき例外になり削除 API が1回も呼ばれないことを assert する。
+- [ ] 同ファイルの `::schedules key version destruction and never calls deleteCryptoKey` が緑。
+- [ ] `bash infra/tests/runtime-mutation-scope.sh` が終了コード 0 を返す。
+- [ ] `e2e/test/lifecycle-dedicated-destroy.spec.ts::old kid fails verification and dedicated service is gone` が緑で、FULL_ISOLATION の E2E 実行後に `terraform plan -detailed-exitcode` が 0 を返す。
 
 ---
 
@@ -350,12 +370,15 @@ Cloud Scheduler から定期起動され、期限に達した Agent を状態遷
 
 **実装方針**
 - エンドポイントは `POST /internal/tick` にする。REQ-07-024 の `POST /sweep` は、内部専用ルートを `/internal/` 配下に置くこのリポジトリの規約に合わせて改名したものであり、別名のエイリアスを作らない。認証は T-LIFE-01 の `internal-oidc.ts` で行い、呼び出し元を Cloud Scheduler の SA に限る。
-- 実行順は (a) EXPIRING 判定、(b) EXPIRED 判定と Cleanup 起動、(c) 失敗ステップの再試行、(d) Transaction の ABANDONED 化 の4段に固定する。
+- 実行順は (a) EXPIRING 判定、(b) EXPIRED 判定と Cleanup 起動、(c) 失敗ステップの再試行、(d) Transaction の ABANDONED 化、(e) 孤児となった実行時作成リソースの掃除 の5段に固定する。
 - (a) は `status == ACTIVE` かつ `expires_at - now <= EXPIRING_WINDOW_SECONDS`（既定 60）の Agent を `EXPIRING` へ遷移させる。Cleanup は起動しない。
 - (b) は `expires_at <= now` かつ `status` が `ACTIVE` / `EXPIRING` / `EXPIRED` のいずれかの Agent について、`EXPIRING` を経由して `EXPIRED` まで遷移させたうえで `cleanupAgent(agentId, 'EXPIRED')` を呼ぶ。ACTIVE から EXPIRED への直行は状態機械が拒否するため、同一 tick 内で2回 `writeStatus` を呼ぶ。
 - (c) は `status == REVOKED` かつ `cleanup_step_results` に `failed` を含む Agent に対し `cleanupAgent(agentId, 元の reason)` を再実行する。`reason` は `meta.cleanup_reason` に保存しておいた値を使い、`EXPIRED` へ書き換えない。
 - (d) は `provisioning_transactions` のうち `status` が `WAITING_EXTERNAL_CONSENT` または `IN_PROGRESS` で `created_at + TRANSACTION_TTL_SECONDS`（既定 1800）を過ぎたものを `ABANDONED` にする。Transaction に紐づく Agent が既に存在する場合はその Cleanup も起動する。
-- 1回の tick で処理する件数の上限を `SWEEP_BATCH_SIZE`（既定 50）にし、超過分は次回へ回す。応答は 200 と `{ scanned, expiring, expired, retried, abandoned }` の5カウンタにする。
+- (e) は DEC-IAC-25 の掃除である。ラベル `xaa-managed=runtime` を持つ Cloud Run Service と Job、`description` に `xaa-managed=runtime` を持つ Service Account、`idjag-signing` と `idp-connection-encryption` の Key Ring 内で `idjag-` と `idpconn-` で始まる CryptoKey を列挙し、ラベルの `xaa-agent-id` に対応する Agent が Firestore に存在しないか `status` が `DESTROYED` のものを削除対象にする。削除は T-LIFE-09 の `dedicated-destroy.ts` を再利用し、`assertRuntimeName` を必ず通す。
+  Provisioner が作成の途中で落ちて台帳に記録できなかったリソースは、この経路だけが回収できる。台帳が空でもラベルから対象を特定できるようにするのが、ラベルを必須にした理由である。
+  1回の tick で削除する件数の上限を `SWEEP_ORPHAN_LIMIT`（既定 10）にする。
+- 1回の tick で処理する件数の上限を `SWEEP_BATCH_SIZE`（既定 50）にし、超過分は次回へ回す。応答は 200 と `{ scanned, expiring, expired, retried, abandoned, orphans_deleted }` の6カウンタにする。
 - 多重起動の排他は T-LIFE-04 の `cleanup_lock` に任せ、sweep 全体を跨ぐグローバルロックを作らない。ロックを取れなかった Agent はその tick では飛ばし、カウンタに含めない。
 - Firestore のクエリは `expires_at` と `status` の複合インデックスを前提にする。必要なインデックス定義は `infra/envs/demo/firestore.tf` へ追加する。
 
@@ -364,6 +387,9 @@ Cloud Scheduler から定期起動され、期限に達した Agent を状態遷
 - [ ] 同ファイルの `::takes an expired agent to DESTROYED in a single tick` が緑。
 - [ ] 同ファイルの `::two concurrent ticks call each cleanup step exactly once` が緑。
 - [ ] 同ファイルの `::retries only failed steps and keeps the original reason` が緑。
+- [ ] 同ファイルの `::deletes a labelled resource whose agent no longer exists` が緑。
+- [ ] 同ファイルの `::leaves a labelled resource whose agent is still ACTIVE` が緑。
+- [ ] 同ファイルの `::never deletes a resource without the xaa-managed label` が緑。
 - [ ] 同ファイルの `::abandons stale provisioning transactions` が緑。
 - [ ] `POST /internal/tick` を Cloud Scheduler 以外の SA の OIDC トークンで呼ぶと 403 になることを `apps/lifecycle-manager/test/sweep.spec.ts::rejects unknown caller` が assert する。
 
@@ -591,13 +617,13 @@ Re-Provisioning の中止時の通知と監査ログもここでまとめて扱�
 - テスト手順を (1) 3分寿命の Agent を Provision、(2) 期限前の Token Exchange が成功することを確認、(3) クロックを4分進める、(4) `POST /internal/tick` を1回呼ぶ、(5) 各層の拒否を確認、の5段で書く。
 - 拒否の確認は3点にする。Agent OP の `/xaa/token` が `invalid_grant`（Registration の `expires_at` 判定）、ID-JAG の `exp` cap が現在時刻以下になり発行されないこと、`/xaa/subject-token` が IdP Connection の `expires_at` 超過で失敗すること。Bridge 経路の `expired_bridge_connection` は `enable_google_bridge=true` のときだけ実行するケースとして分ける。
 - `AGENT_EXPIRED` が1件だけ publish されること、Cleanup 完了前には publish されないことを assert する。イベント数の assert を tick 1回目と2回目の両方で行う。
-- Cleanup 完了後に `agents/{agent_id}` が Firestore に存在しないこと、`isolation_slots` に割り当てが残っていないことを最後に確認する。
+- Cleanup 完了後に `agents/{agent_id}` が Firestore に存在しないこと、`dedicated_resources` に割り当てが残っていないことを最後に確認する。
 - Playwright の追加指示送信とタイムライン表示の確認をこのファイルへ書かない。重複した経路を2か所で持たない。
 
 **完了条件**
 - [ ] `e2e/test/lifecycle-expired-demo.spec.ts::token exchange fails with invalid_grant after expiry` が緑。
 - [ ] 同ファイルの `::subject-token retrieval fails after the idp connection expires` が緑。
 - [ ] 同ファイルの `::emits AGENT_EXPIRED exactly once across two ticks` が緑。
-- [ ] 同ファイルの `::leaves no agent document and no slot allocation` が緑。
+- [ ] 同ファイルの `::leaves no agent document and no dedicated resources` が緑。
 - [ ] `apps/lifecycle-manager/test/expiring-window.spec.ts::a 3 minute agent passes ACTIVE, EXPIRING, EXPIRED and DESTROYED in order` が緑。
 - [ ] `infra/envs/demo/terraform.tfvars.verify` を使った `terraform validate` が成功する。

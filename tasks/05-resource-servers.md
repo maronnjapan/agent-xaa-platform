@@ -646,7 +646,7 @@ REQ-01-018 と REQ-08-044 の「IAM 通過を理由にスキップしない」�
 - Resource AS は Access Token の payload へ `isolation_level` を引き継ぐ（T-RES-08）。
 - Resource API は T-RES-11 の検証を通過した後、`c.get('xaa').isolationLevel` が `full_isolation` でなければ 403 `insufficient_isolation` を返す。AS で検査済みであることを理由に省略しない。
 - docs 側の AS と API はこの検証を持たない。共通パッケージへ入れず、finance の2アプリにだけ置く。
-- 呼び出し元 SA がスロット専用 SA であること、Cloud Run IAM を通過したことを理由に検証を飛ばす分岐を書かない。
+- 呼び出し元 SA が Agent 専用 SA であること、Cloud Run IAM を通過したことを理由に検証を飛ばす分岐を書かない。
 
 **完了条件**
 - [ ] `isolation_level=standard` の ID-JAG の受領が finance AS で 403 `insufficient_isolation` になるテストが緑になる

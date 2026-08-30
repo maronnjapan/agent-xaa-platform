@@ -196,7 +196,7 @@ Rule-based Detection の Tool 分類と Lifetime 分類は、このログの `to
 - イベント名は `authz_ai.infer` / `policy.decide` / `provisioner.provision` / `resource_api.access` / `runtime.tool_call` の5つとする。
 - Authorization AI Agent は `agent_draft_id`、`work_definition_id`、`work_definition_hash`（SHA-256 の hex 全長）、`proposed_capabilities`（Capability ID の配列）、`confidence`、`taxonomy_version`、`model_version` を出す。Work Definition の本文フィールドを受け取る引数を関数シグネチャに持たせない。
 - Policy Engine は `proposed_capabilities`、`effective_capabilities`、`security_profile`、`isolation_level`、`decision`（`ALLOW` / `DENY`）、`policy_id`、`decision_reason`（Policy 定義に書かれた固定文字列の ID であり自由文でない）を出す。
-- Agent Provisioner は `isolation_level`、`dedicated_op_slot_index`（STANDARD なら `null`）、`provisioned_tools`、`static_xaa`（`audience` と `resource` と `scope` の3キーを持つオブジェクト）、`idp_connection_state`、`connector_state`、`created_at`、`expires_at`、`destroyed_at` を出す。
+- Agent Provisioner は `isolation_level`、`dedicated_op`（STANDARD なら `null`）、`provisioned_tools`、`static_xaa`（`audience` と `resource` と `scope` の3キーを持つオブジェクト）、`idp_connection_state`、`connector_state`、`created_at`、`expires_at`、`destroyed_at` を出す。
 - Resource API は `tool_id`、`operation`、`http_method`、`resource`、`response_status`、`outcome`、`latency_ms` の7項目を必ず出す。specs 5.1 の「7項目を必須で出す」に一致させる。
 - Agent Runtime は `task_id`、`execution_id`、`tool_id`、`requested_operation`、`target_resource`、`result`、`agent_age_seconds`、`expires_at`、`span_id` を出す。`agent_age_seconds` は Runtime が Agent Registration の `created_at` から計算し、Cloud Run のコンテナ起動時刻から計算しない。
 - `work_definition_hash` の計算関数は `packages/xaa-contracts/src/work-definition.ts` の1か所に置き、Authorization と Security Detection の双方がそれを import する。
@@ -299,10 +299,10 @@ IaC で管理できることを優先し、SQL ファイルを Terraform の `fi
 - 4本の View はいずれも `occurred_at`、`agent_id`、`human_subject`、`trace_id`、`detection_code`、`detail`（JSON 文字列）の6列を返す。列構成を揃え、後段が `UNION ALL` で1本に束ねられるようにする。
 - `delegation_mismatch` は `agent_op.token_exchange` イベントのうち `delegation_match = false` の行を返す。判定は Agent OP が同期で済ませており、SQL 側で再判定しない（DEC-SEC-02）。
 - `signing_key_misuse` は `resource_as.redeem` を左表、`id_jag_ledger` を右表にした LEFT JOIN で、`ledger.jti IS NULL` または `received_typ != 'oauth-id-jag+jwt'` の行を返す。JOIN の向きを Resource AS 起点に固定し、Agent OP 起点で書かない。
-- `cross_agent_access` は `agent_op.idp_connection` と `runtime.tool_call` から、あるログ行の `agent_id` に紐づく `idp_connection_id` または `dedicated_op_slot_index` が、`slots` リース履歴の当該時刻の担当 agent_id と一致しない行を返す。リース履歴は Firestore の `slots/{slot_id}` を毎時 BigQuery へ書き出すテーブル `slot_leases` を参照する。
+- `cross_agent_access` は `agent_op.*` のログ行のうち、Dedicated OP に注入された `op_agent_id` と、要求が指す `agent_id` が一致しない行を返す。Dedicated OP は Agent と1対1で作られるため、この2値の不一致がそのまま横方向アクセスを表す。外部の履歴テーブルとの突き合わせを要しない。
 - `dpop_replay` は `dpop_result = 'replayed_dpop_proof'` の行に加え、同一 `dpop_jti` が2回以上出現する組を `GROUP BY dpop_jti HAVING COUNT(*) > 1` で拾う。両方を `UNION ALL` する。
 - View の中で `SELECT *` を書かない。列を明示する。
-- `slot_leases` の書き出し Job は T-SEC-23 で実装する。このタスクでは空テーブルを Terraform で作るところまでとする。
+- 追加のテーブルを作らない。`op_agent_id` は T-OP-30 の Token Exchange ログが必ず出す項目であり、View はそれだけを読む。
 
 **完了条件**
 - [ ] `terraform -chdir=infra/envs/shared apply` の後、`bq query --use_legacy_sql=false 'SELECT * FROM security_audit.v_delegation_mismatch LIMIT 1'` が構文エラーなく終了する（4 View すべて）。
@@ -720,31 +720,30 @@ DEC-IAC-16 の `agent_max_lifetime_seconds` を上限の唯一の出どころに
 ### T-SEC-23 Rule-based Detection の Isolation 分類を実装する
 
 **概要**
-Cross-Agent IdP Access、スロットのリース中 agent_id と一致しないアクセス、同一 `actor_token` の `sub` に対する複数 `human_subject` の ID-JAG 発行の3条件を Rule Hit にする。
-スロット判定は DEC-IAC-07 のリース方式に合わせ、Firestore の `slots/{slot_id}` のリース履歴と突き合わせる。
+Cross-Agent IdP Access、Dedicated OP の `op_agent_id` と要求の `agent_id` が一致しないアクセス、同一 `actor_token` の `sub` に対する複数 `human_subject` の ID-JAG 発行の3条件を Rule Hit にする。
+判定はログ行の中で完結させ、外部の履歴テーブルを引かない。
 Isolation は RULE-31 から RULE-33 の中心であり、要件は blocker である。
 
 **対象要件** REQ-09-034
 **前提タスク** T-SEC-19, T-SEC-09
 **成果物**
 - `apps/security-detection/src/rules/isolation.ts`
-- `apps/security-detection/src/batch/export-slot-leases.ts`
 - `infra/envs/demo/scheduler.tf`（リース書き出しジョブの追加）
 - `apps/security-detection/test/rules-isolation.spec.ts`
 
 **実装方針**
 - 条件(1)は、あるイベントの `agent_id` に対し `attributes.idp_connection_id` が、Firestore の `agents/{agent_id}.idp_connection_id` と一致しない場合。1件で HIGH。
-- 条件(2)は、`attributes.slot_index` を持つイベントについて、その時刻に当該スロットをリースしていた `agent_id` が Firestore のリース履歴と一致しない場合。1件で HIGH。時刻は `[leased_at, released_at)` の半開区間で判定し、`released_at` が未設定なら現在まで有効とみなす。
+- 条件(2)は、`attributes.op_agent_id` を持つイベントについて、その値が同じ行の `agent_id` と一致しない場合。1件で HIGH。Dedicated OP は Agent と1対1であるため、時刻による区間判定を要しない。
 - 条件(3)は、10分窓の `id_jag.issued` を `act_sub` でグループ化し、その中の `sub` の distinct 件数が2以上なら1件で HIGH。Hit は `act_sub` ごとに1件だけ出す。
-- `export-slot-leases.ts` は `slots/*` のリース履歴を BigQuery テーブル `slot_leases`（列は `slot_id`、`agent_id`、`leased_at`、`released_at`）へ 1 時間ごとに書き出す。書き出しは `WRITE_TRUNCATE` の全置換にし、差分更新を書かない。Cloud Scheduler の `schedule = "0 * * * *"` で起動する。
-- スロットに関する GCP リソースの作成や更新をこのコードから行わない（DEC-IAC-07、DEV-07）。読み取りだけにする。
-- `rule_id` は `isolation.cross_agent_idp` / `isolation.slot_mismatch` / `isolation.multi_subject_actor` の3つに固定する。
+- 履歴を書き出すバッチを作らない。判定に要る値はすべてログ行の中にある。
+- GCP リソースの作成や更新をこのコードから行わない。読み取りだけにする。
+- `rule_id` は `isolation.cross_agent_idp` / `isolation.dedicated_op_mismatch` / `isolation.multi_subject_actor` の3つに固定する。
 
 **完了条件**
 - [ ] `apps/security-detection/test/rules-isolation.spec.ts::cross agent idp access hits high` が緑になる。
-- [ ] `::slot lease mismatch hits high` が、slot-01 のリース中 agent が `agent-a` のときに `agent-b` のイベントが Hit することを検査する。
+- [ ] `::dedicated op mismatch hits high` が、`op_agent_id` が `agent-a` の行に `agent_id` が `agent-b` として現れたとき Hit することを検査する。
 - [ ] `::same act sub with two subjects hits high once` が、`act.sub` 同一で `sub` が user-A と user-B の発行記録2件を入力して Hit が1件になることを検査する。
-- [ ] `bash infra/tests/no-runtime-gcp-mutation.sh` が `apps/security-detection/src` に GCP リソース変更 API の呼び出しが無いことを検査して0で終了する。
+- [ ] `bash infra/tests/runtime-mutation-scope.sh` が `apps/security-detection/src` に GCP リソース変更 API の呼び出しが無いことを検査して0で終了する。
 
 ---
 
@@ -814,7 +813,7 @@ Rule-based Detection の Token 分類と Tool 分類と Baseline 逸脱判定は
 
 **概要**
 Baseline に対する逸脱を6条件で判定する関数を実装する。
-条件は Expected Tools 外の Tool、Effective Capability に対応しない Tool、Expected Resources 外の Resource、Expected Rate 上限の大幅超過、別 Agent の OP スロットへのアクセス、`expires_at` 後のアクセスである。
+条件は Expected Tools 外の Tool、Effective Capability に対応しない Tool、Expected Resources 外の Resource、Expected Rate 上限の大幅超過、別 Agent の Dedicated OP へのアクセス、`expires_at` 後のアクセスである。
 docs 09 §5.4 の「ID-JAG 500 回」は4つ目の具体例として固定テストへ入れる。
 
 **対象要件** REQ-09-040
@@ -825,7 +824,7 @@ docs 09 §5.4 の「ID-JAG 500 回」は4つ目の具体例として固定テス
 
 **実装方針**
 - `detectDeviations(baseline: AgentBaseline, batch: ValidatedBatch): Deviation[]` を実装する。`Deviation` は `{ kind, observed, expected, occurred_at, trace_id }` の5フィールド。
-- `kind` は `unexpected_tool` / `capability_mismatch` / `unexpected_resource` / `rate_exceeded` / `foreign_slot_access` / `access_after_expiry` の6値に固定する。
+- `kind` は `unexpected_tool` / `capability_mismatch` / `unexpected_resource` / `rate_exceeded` / `foreign_dedicated_op_access` / `access_after_expiry` の6値に固定する。
 - 判定ロジックは T-SEC-21 から T-SEC-23 の Rule 実装を再利用せず、Baseline を基準にした独立した判定として書く。Rule Hit は閾値超過の警報であり、Deviation は Security AI へ渡す逸脱の記述であるため、出力の型を分ける。
 - `rate_exceeded` の閾値は Expected Rate の `max` そのものとし、`thresholds.json` の倍率を掛けない。倍率は Rule 側の役割であることを `deviation.ts` の先頭コメントで明記する。
 - `capability_mismatch` は Tool 定義の `required_capability` が `baseline.effective_capabilities` に含まれないかで判定する。Tool ID の一致だけで判定しない。
@@ -873,7 +872,7 @@ docs 09 §5.3 の4イベントの例が1件の `potential_agent_compromise` に�
 ### T-SEC-28 human_subject 単位と全体単位の Correlation を実装する
 
 **概要**
-Agent A から Agent B や C の Dedicated OP スロットへの横方向アクセスは Agent 単体のログでは見えない。
+Agent A から Agent B や C の Dedicated OP への横方向アクセスは Agent 単体のログでは見えない。
 Correlation を `agent_id` だけで分割せず、`human_subject` 単位と全体単位の窓でも集計する。
 同一 `human_subject` の複数 Agent にまたがる Isolation Rule Hit が 10 分窓で2件以上あれば1件の Finding にまとめる。
 
@@ -887,12 +886,12 @@ Correlation を `agent_id` だけで分割せず、`human_subject` 単位と全�
 - 窓を3つ作る。`byAgent`（T-SEC-27 の既存）、`bySubject`、`global`。3つとも同じ 10 分の固定窓境界を使う。
 - `bySubject` の判定は、`category === 'isolation'` の Rule Hit を `human_subject` でまとめ、関与する `agent_id` の distinct 件数が2以上なら `cross_agent_lateral_movement` の Finding を1件作る。
 - この Finding が作られた場合、寄与した Isolation Rule Hit を `byAgent` 側の Finding へは含めない。二重計上を避けるため、Correlation の実行順を `bySubject` → `byAgent` → `global` に固定し、消費済みの Hit を `Set<string>`（Hit の ID）で除外する。
-- `global` 窓は、同一の `slot_index` に対して異なる `human_subject` の Isolation Hit が現れた場合に `platform_wide_isolation_breach` を1件作る。件数閾値は2以上とする。
+- `global` 窓は、同一の `dedicated_short_id` に対して異なる `human_subject` の Isolation Hit が現れた場合に `platform_wide_isolation_breach` を1件作る。件数閾値は2以上とする。
 - `finding_id` は T-SEC-27 と同じ規則で作り、キーに `agent_id` の代わりに `human_subject` または `'global'` を使う。
 - Agent ごとに Finding を分割して出す実装を残さない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/correlation-cross-agent.spec.ts::two foreign slot accesses become one cross agent finding` が、Agent A のログに Agent B と Agent C のスロットへのアクセスが各1件ある入力に対して Finding が2件ではなく1件になることを検査する。
+- [ ] `apps/security-detection/test/correlation-cross-agent.spec.ts::two foreign dedicated op accesses become one cross agent finding` が、Agent A のログに Agent B と Agent C の Dedicated OP へのアクセスが各1件ある入力に対して Finding が2件ではなく1件になることを検査する。
 - [ ] `::consumed hits do not appear in per agent findings` が緑になる。
 - [ ] `::single isolation hit stays in per agent finding` が1件だけのときは `byAgent` 側に残ることを検査する。
 - [ ] `::correlation runs in fixed order` が spy で `bySubject` → `byAgent` → `global` の順を検査する。
@@ -1147,7 +1146,7 @@ Activity Event に Raw なログや Token を含めない。
 
 **概要**
 docs 05 §5 の Blast Radius 表を検証する統合テストを置く。
-FULL_ISOLATION のスロット間到達が拒否されること、STANDARD では Shared OP が全 STANDARD Agent の Registration を読めること、Runtime 侵害時に到達できる範囲が短期トークンと Execution の DPoP 鍵と Agent Client Credential に限られることを固定する。
+FULL_ISOLATION の Agent 間の到達が拒否されること、STANDARD では Shared OP が全 STANDARD Agent の Registration を読めること、Runtime 侵害時に到達できる範囲が短期トークンと Execution の DPoP 鍵と Agent Client Credential に限られることを固定する。
 2つ目は許容リスクであり、テスト名にそう書く。
 
 **対象要件** REQ-05-062
@@ -1155,10 +1154,10 @@ FULL_ISOLATION のスロット間到達が拒否されること、STANDARD で�
 **成果物**
 - `e2e/test/security/blast-radius.spec.ts`
 - `packages/gcp/src/firestore-guard.ts`（許可マトリクスの参照）
-- `e2e/src/fixtures/two-slot-agents.ts`
+- `e2e/src/fixtures/two-isolated-agents.ts`
 
 **実装方針**
-- ケース(a)は、slot-01 の SA の資格情報で `agents/{slot02_agent_id}` と `idp_connections/{slot02_connection_id}` を読む試行が `firestore-guard` の許可マトリクスで拒否されることを assert する。IAM ではなくアプリ側パスガードで拒否される点を DEV-05 のとおりコメントに書く。
+- ケース(a)は、Agent A の `sa-op-<shortA>` の資格情報で `agents/{agentB_id}` と `idp_connections/{agentB_connection_id}` を読む試行が `firestore-guard` の許可マトリクスで拒否されることを assert する。IAM ではなくアプリ側パスガードで拒否される点を DEV-05 のとおりコメントに書く。
 - ケース(b)のテスト名を `allows shared op to read all standard registrations (accepted risk)` とする。`accepted risk` の文字列をテスト名に含め、grep で検出できるようにする。
 - ケース(c)は、Agent Runtime のプロセスから到達できるものを列挙する形で検査する。到達できること: Execution の DPoP 秘密鍵、Agent Client Credential、有効期限内の Access Token。到達できないこと: Human IdP Connection の Refresh Token（KMS 暗号化済みで Runtime に復号権限が無い）、ID-JAG 署名鍵（KMS 内、Runtime に `cloudkms.signer` が無い）、Resource AS の署名鍵（GCS の非公開バケット、Runtime に読み取り権限が無い）。
 - 到達不能側は、実際に Runtime の SA で当該 API を呼んで 403 になることを assert する。モックで代替しない。
@@ -1166,7 +1165,7 @@ FULL_ISOLATION のスロット間到達が拒否されること、STANDARD で�
 - 攻撃コードを書かない。既存の SDK 呼び出しを別 SA の資格情報で実行するだけにする。
 
 **完了条件**
-- [ ] `e2e/test/security/blast-radius.spec.ts::denies slot-01 sa from reading slot-02 registration` が緑になる。
+- [ ] `e2e/test/security/blast-radius.spec.ts::denies agent-a dedicated sa from reading agent-b registration` が緑になる。
 - [ ] `::allows shared op to read all standard registrations (accepted risk)` が緑で、`grep -c "accepted risk" e2e/test/security/blast-radius.spec.ts` が1以上を返す。
 - [ ] `::runtime cannot reach refresh token, id-jag signing key, resource as signing key` が3つとも 403 になることを検査する。
 - [ ] `::runtime can reach dpop key, client credential, access token` が緑になる。
@@ -1182,4 +1181,4 @@ FULL_ISOLATION のスロット間到達が拒否されること、STANDARD で�
 |---|---|---|
 | REQ-05-022 | Protocol Validation イベントの型と送出点の配置（T-SEC-12） | Identity 領域の保護ミドルウェア（DPoP 検証と Access Token 検証の実装） |
 | REQ-05-075 | 10ステップの順序表と送出の固定（T-SEC-13） | Agent OP 領域の `/xaa/token` 実装（T-OP のステップ関数の組み立て） |
-| REQ-05-062 | Blast Radius の検証テスト（T-SEC-37） | Isolation スロットの Terraform 定義と `firestore-guard` の許可マトリクス（IaC 領域と共通基盤領域） |
+| REQ-05-062 | Blast Radius の検証テスト（T-SEC-37） | Dedicated OP 一式の実行時作成（T-PROV-24）と `firestore-guard` の許可マトリクス（共通基盤領域） |

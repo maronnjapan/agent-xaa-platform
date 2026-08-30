@@ -2,7 +2,7 @@
 
 この領域は、プラットフォーム全体が載る GCP 上の土台を Terraform だけで組み立てる。
 単一の GCP プロジェクトの中に、Cloud Run の Service と Job、専用 Service Account、KMS 鍵、Firestore、Pub/Sub、Cloud Scheduler、Cloud Logging と Log Sink、BigQuery 監査 dataset、GCS バケット、Artifact Registry を配置し、誰がどのサービスを呼べるかを IAM で固定する。
-FULL_ISOLATION 用の隔離スロットも実行時に作らず、Terraform で事前に固定数だけ作って払い出す形にする。
+FULL_ISOLATION の Dedicated OP 一式だけは例外として Terraform で作らず、Provisioner が実行時に作る。Terraform はその入れ物と権限までを用意する。
 アプリのコードは別領域が書くが、そのコードが読む接続先とモード切替の値は、この領域が Terraform の出力として供給する。
 最後に、構成が意図どおりであることを機械的に検査するスクリプトと、apply から destroy までの運用手順を用意する。
 
@@ -134,7 +134,7 @@ RULE-35 と DEC-IAC-17 に対応する。
 **実装方針**
 - モジュールの入力は `account_id`（string）、`display_name`（string）、`project_id`（string）の3つ。出力は `email` と `member`（`serviceAccount:<email>` 形式）の2つ。
 - `locals.service_accounts` に固定 SA を並べる。`sa-human-idp` `sa-automation-app` `sa-authorization` `sa-provisioner` `sa-lifecycle` `sa-shared-agent-op` `sa-google-bridge` `sa-security` `sa-resource-finance-as` `sa-resource-finance-api` `sa-resource-docs-as` `sa-resource-docs-api` `sa-agent-runtime` `sa-scheduler` `sa-pubsub-push` `sa-seed` `sa-jwks-publish` `sa-stub-saas-op` の18件。
-- スロット由来の `sa-op-slot-<n>` と `sa-agent-slot-<n>` はこの台帳に書かず、T-IAC-13 の isolation-slot モジュールが作る。台帳側には `locals.slot_service_accounts` としてモジュール出力を集約する参照だけを置く。
+- `sa-op-<short>` と `sa-agent-<short>` は Provisioner が実行時に作るため、この台帳に書かない。台帳のコメントに「この2種は実行時作成であり Terraform では作らない」と1行書く（DEC-IAC-07）。
 - `account_id` は6文字以上30文字以下という GCP 制約に収まることを、モジュールの `variable validation` で `can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.account_id))` により検査する。
 - `google_service_account_key` を作らない。認証は Cloud Run のワークロード ID に依存する。
 
@@ -149,7 +149,7 @@ RULE-35 と DEC-IAC-17 に対応する。
 ### T-IAC-06 Cloud Run Service の共通モジュールを作る
 
 **概要**
-14の常設 Service とスロットの Service を1つのモジュールから作り、ingress と scaling と SA の既定値を1か所で決める。
+常設の Service を1つのモジュールから作り、ingress と scaling と SA の既定値を1か所で決める。
 デフォルト SA の指定を variable validation で apply エラーにする。
 REQ-08-004 に対応する。
 
@@ -189,7 +189,7 @@ DEC-IAC-05 と DEC-IAC-06 に対応する。
 **実装方針**
 - `data "google_project" "this"` から `number` を取り、`locals.run_url = { for s in local.service_names : s => "https://${s}-${data.google_project.this.number}.${var.region}.run.app" }` を作る。
 - 他のどのファイルからも `google_cloud_run_v2_service.*.uri` を参照しない。参照は `local.run_url[...]` に統一する。
-- `locals.platform_endpoints` を次のキーで組み立てる。`issuer`（`issuer_profile` により human-idp の URL または LB ホスト）、`jwks_uri`、`xaa_token_url`、`xaa_callback_url`、`subject_token_url`、`authorization_url`、`provisioner_url`、`lifecycle_url`、`resource_docs_as_issuer`、`resource_docs_api_resource`、`resource_finance_as_issuer`、`resource_finance_api_resource`、`bridge_internal_url`、`stub_saas_op_issuer`、`slots`（`[{index, op_url, job_name, runtime_sa}]`）、`agent_max_lifetime_seconds`、`vertex_model`、`vertex_location`。
+- `locals.platform_endpoints` を次のキーで組み立てる。`issuer`（`issuer_profile` により human-idp の URL または LB ホスト）、`jwks_uri`、`xaa_token_url`、`xaa_callback_url`、`subject_token_url`、`authorization_url`、`provisioner_url`、`lifecycle_url`、`resource_docs_as_issuer`、`resource_docs_api_resource`、`resource_finance_as_issuer`、`resource_finance_api_resource`、`bridge_internal_url`、`stub_saas_op_issuer`、`agent_max_lifetime_seconds`、`vertex_model`、`vertex_location`。
 - `google_storage_bucket_object "platform_endpoints"` を非公開バケット `${var.project_id}-platform-config` の `platform-endpoints.json` として作り、`content = jsonencode(local.platform_endpoints)` を書く。
 - 同じ内容を `output "platform_endpoints"` としても出す。`sensitive = false` にする。秘密値をこのマップに入れない。
 - `infra/tests/endpoints-shape.sh` は apply 後に `gcloud storage cat` でオブジェクトを取得し、上記キーがすべて存在すること、`issuer` と `jwks_uri` が `https://` で始まることを `jq` で検査する。
@@ -198,7 +198,7 @@ DEC-IAC-05 と DEC-IAC-06 に対応する。
 - [ ] `grep -rn 'google_cloud_run_v2_service\..*\.uri' infra/envs/` が0件
 - [ ] `terraform plan` の出力に `platform-endpoints.json` の `content` が `(known after apply)` ではなく具体値として現れる
 - [ ] `bash infra/tests/endpoints-shape.sh` が exit code 0 を返す
-- [ ] `terraform output -json platform_endpoints | jq -e '.slots | length == 2'` が成功する（`dedicated_slot_count = 2` のとき）
+- [ ] `terraform output -json platform_endpoints | jq -e 'has("slots") | not'` が成功する（実行時作成のリソースは endpoints に載せない）
 
 ---
 
@@ -243,7 +243,7 @@ REQ-05-031 と REQ-08-014 に対応する。
 **実装方針**
 - `human-idp`（SA=`sa-human-idp`、ingress=`INGRESS_TRAFFIC_ALL`）、`shared-agent-op`（`sa-shared-agent-op`、`INGRESS_TRAFFIC_INTERNAL_ONLY`）、`agent-op-callback`（`sa-shared-agent-op`、`INGRESS_TRAFFIC_ALL`）の3件を作る。
 - `shared-agent-op` と `agent-op-callback` は同一イメージを使い、環境変数 `AGENT_OP_ROLE=token` と `AGENT_OP_ROLE=callback` で面を切り替える。イメージを2種類に分けない。
-- `shared-agent-op` に注入する環境変数は `SLOT_INDEX` を持たせず、`ISOLATION_MODE=shared` を与える。スロット側との差はこの1つだけにする。
+- `shared-agent-op` に注入する環境変数は `AGENT_ID` を持たせず、`ISOLATION_MODE=shared` を与える。Dedicated OP との差はこの1つだけにする。
 - `human-idp` に `ISSUER`、`JWKS_URI`、`JWKS_BUCKET`、`JWKS_KEY_PREFIX=idp`、`SSO_KEY_WRAP_KMS_KEY` を注入する。
 - `shared-agent-op` に `ISSUER`（Human IdP と同一文字列）、`IDJAG_KMS_KEY`（`shared-agent-op-idjag` の完全修飾名）、`IDP_CONNECTION_KMS_KEY`、`JWKS_KEY_PREFIX=agent-op`、`ALLOWED_AUDIENCES`（2つの Resource AS issuer の JSON 配列）、`ALLOWED_RESOURCES`（2つの Resource API URL の JSON 配列）を注入する。
 - `run.invoker` の付与はこのタスクで書かず、T-IAC-15 の `invoker_edges` に集約する。
@@ -338,58 +338,80 @@ REQ-08-006 と REQ-07-037 に対応する。
 
 ---
 
-### T-IAC-13 FULL_ISOLATION スロットのモジュールを作り固定数だけ事前作成する
+### T-IAC-13 実行時作成の受け皿を Terraform に用意する
 
 **概要**
-FULL_ISOLATION の Dedicated Agent OP を実行時に作らず、Terraform で固定数のスロットとして先に作る。
-1スロットは Cloud Run Service と Job と2つの SA と2つの KMS 鍵と IAM Binding からなる。
-REQ-01-010、REQ-05-056、REQ-08-007 と DEC-IAC-07 に対応する。
+FULL_ISOLATION の Dedicated OP 一式は Provisioner が実行時に作るため、Terraform では作らない（DEC-IAC-07）。
+Terraform が用意するのは、鍵の置き場である KMS Key Ring と、実行時作成の同時数を縛る変数と、作られたリソースを見分けるためのラベル規約である。
+REQ-01-010、REQ-05-056、REQ-08-007 に対応する。
 
 **対象要件** REQ-01-010, REQ-05-056, REQ-08-007
 **前提タスク** T-IAC-12
-**成果物** `infra/modules/isolation-slot/main.tf`, `infra/modules/isolation-slot/variables.tf`, `infra/modules/isolation-slot/outputs.tf`, `infra/envs/demo/slots.tf`, `infra/envs/demo/variables-slots.tf`
+**成果物** `infra/envs/shared/kms.tf`（Key Ring 部分）, `infra/envs/demo/variables-isolation.tf`, `infra/envs/demo/locals-runtime-labels.tf`, `infra/tests/no-dedicated-op-in-tf.sh`
 
 **実装方針**
-- 変数名を `dedicated_slot_count`（number、既定 2、`validation` で 1 以上 4 以下）に確定する。`dedicated_op_slot_count` と `full_isolation_slot_count` という名前の変数を定義しない。
-- `slots.tf` で `for_each = toset([for i in range(var.dedicated_slot_count) : format("%02d", i + 1)])` としてモジュールを呼ぶ。`count` ではなく `for_each` を使い、スロット数を減らしたときに末尾以外が破壊されないようにする。
-- 1スロットが作るのは、`dedicated-op-slot-<n>`（Cloud Run Service、INTERNAL、SA=`sa-op-slot-<n>`）、`agent-runtime-slot-<n>`（Cloud Run Job、SA=`sa-agent-slot-<n>`）、`sa-op-slot-<n>`、`sa-agent-slot-<n>`、`dedicated-op-slot-<n>-idjag`（KMS ASYMMETRIC_SIGN 鍵）、`idp-connection-slot-<n>`（KMS ENCRYPT_DECRYPT 鍵）、`sa-agent-slot-<n>` から `dedicated-op-slot-<n>` への `roles/run.invoker` の7件。
-- スロット Service に注入する env は `SLOT_INDEX = <n>`、`ISOLATION_MODE = full_isolation`、`IDJAG_KMS_KEY`、`IDP_CONNECTION_KMS_KEY` と共通接続情報のみ。Agent 固有の値を注入しない。担当 Agent の判定は Agent Registration の `dedicated_op_slot_index == SLOT_INDEX` でアプリ側が行う。
-- KMS 鍵は shared state ではなく demo state に置かず、shared state の `kms.tf` にスロット分もまとめて作り、demo からは `terraform_remote_state` で完全修飾名を受け取る。理由は DEC-IAC-03 の「KMS 鍵は destroy 対象から外す」。モジュールの入力に `idjag_kms_key_id` と `idp_connection_kms_key_id` を取り、モジュール内で鍵を作らない。
-- 実行時にスロットの env を書き換えるコードを一切書かない。スロットの払い出しは Firestore の `isolation_slots/{slot_index}` のリースで行い、その実装は T-PROV 領域が担当する。
-- モジュール出力は `slot_index`、`op_url`、`op_service_account_email`、`job_name`、`runtime_service_account_email` の5つ。
+- `idjag-signing` と `idp-connection-encryption` の Key Ring を shared state に作る。
+  Key Ring は削除できないため demo state に置かない。
+  Provisioner が実行時に作る CryptoKey はこの2つの Key Ring の中に入る。
+- 変数 `max_full_isolation_agents`（number、既定 5、`validation` で 1 以上 20 以下）を定義する。
+  Cloud Run Service へ環境変数 `MAX_FULL_ISOLATION_AGENTS` として渡す。
+  この値は Provisioner の同時数チェック（T-PROV-25）が使う。
+- `dedicated_slot_count` と `dedicated_op_slot_count` と `full_isolation_slot_count` という変数を定義しない。
+- `locals-runtime-labels.tf` に `runtime_label_key = "xaa-managed"` と `runtime_label_value = "runtime"` を定義し、`terraform output` で公開する。
+  Provisioner と Lifecycle と掃除スクリプトはこの値を参照し、ラベル名を各所に直書きしない。
+- `dedicated-op-` / `sa-op-` / `sa-agent-` / `idjag-` / `idpconn-` / `agent-runtime-` で始まる名前のリソースを `*.tf` に書かない。
+  この6接頭辞は実行時作成の名前空間として予約する。
+- `infra/tests/no-dedicated-op-in-tf.sh` は `infra/**/*.tf` を走査し、上記6接頭辞のいずれかを `name` または `account_id` または `crypto_key_id` に持つリソース定義が0件であることを検査する。
+  Terraform と実行時の両方が同じ名前を作りに行く事故を防ぐ。
 
 **完了条件**
-- [ ] `-var dedicated_slot_count=2` で apply すると上記7リソースが2組作られ、直後の `terraform plan` が `No changes.` を返す
-- [ ] `-var dedicated_slot_count=1` で apply し直すと slot-02 のリソースだけが destroy され、slot-01 は置換されない
-- [ ] `gcloud run services describe dedicated-op-slot-01 --format='value(spec.template.spec.containers[0].env)'` に `SLOT_INDEX=01` が含まれ、`AGENT_ID` が含まれない
-- [ ] `grep -rn 'google_kms_crypto_key' infra/modules/isolation-slot/` が0件
+- [ ] `terraform -chdir=infra/envs/shared apply` 後に `gcloud kms keyrings list --location=<region>` が `idjag-signing` と `idp-connection-encryption` を含む
+- [ ] `terraform -chdir=infra/envs/demo output max_full_isolation_agents` が既定で `5` を返す
+- [ ] `bash infra/tests/no-dedicated-op-in-tf.sh` が終了コード0で通る
+- [ ] `grep -rn "dedicated_slot_count\|isolation-slot" infra/` が0件になる
+- [ ] `terraform -chdir=infra/envs/demo plan` の出力に `google_cloud_run_v2_service` として `dedicated-op-` で始まる名前が現れない
 
 ---
 
-### T-IAC-14 スロット SA の許可範囲を固定し相互到達を遮断する
+### T-IAC-14 Dedicated OP 一式に付ける IAM の雛形を定義する
 
 **概要**
-スロットの SA は、自分のスロットの鍵と自分のスロットの OP にだけ到達できる。
-共有 Runtime と Dedicated OP の相互到達、およびスロット間の相互到達を IAM の定義そのもので不可能にする。
+Provisioner が実行時に作る Dedicated OP と専用 Runtime へ、どの権限を付けてどの権限を付けないかを1か所に定義する。
+Terraform では作らないが、付与する内容は Terraform 管理の定数として置き、Provisioner はそれを読んで適用する。
+これにより「何を付けたか」がコードとレビュー対象に残る。
 REQ-05-058、REQ-05-059、REQ-08-022 に対応する。
 
 **対象要件** REQ-05-058, REQ-05-059, REQ-08-022
 **前提タスク** T-IAC-13
-**成果物** `infra/modules/isolation-slot/iam.tf`, `infra/envs/demo/locals-invoker.tf`（`slot_edges` 部分）, `infra/tests/slot-isolation.sh`
+**成果物** `infra/envs/demo/locals-dedicated-iam.tf`, `packages/xaa-contracts/src/dedicated-iam.ts`, `infra/tests/dedicated-iam-shape.sh`
 
 **実装方針**
-- `sa-op-slot-<n>` に付与するのは、`dedicated-op-slot-<n>-idjag` への `roles/cloudkms.signerVerifier`、`idp-connection-slot-<n>` への `roles/cloudkms.cryptoKeyEncrypterDecrypter`、Firestore の `roles/datastore.user`、JWKS バケットの `roles/storage.objectCreator`、`agent-activity-stream` の `roles/pubsub.publisher` の5件だけ。
-- `sa-agent-slot-<n>` に付与するのは、`dedicated-op-slot-<n>` への `roles/run.invoker`、`google-bridge` と `resource-docs-as` と `resource-finance-as` への `roles/run.invoker`、`roles/aiplatform.user`、Firestore の `roles/datastore.user`、`agent-activity-stream` の publisher だけ。KMS と Secret Manager の権限を与えない。
-- 禁止する3組を IAM に書かない。`sa-agent-runtime` から `dedicated-op-slot-*`、`sa-agent-slot-<n>` から `shared-agent-op`、`sa-agent-slot-<n>` から `dedicated-op-slot-<m>`（m ≠ n）。
-- Firestore は IAM ではパスを分けられないため、他スロットの Agent Registration と IdP Connection への到達は `packages/gcp` の firestore-guard で止める。この点を `infra/modules/isolation-slot/iam.tf` のコメントに DEV-05 と DEV-07 を引いて書く。
-- `infra/tests/slot-isolation.sh` は `terraform plan -json` を走査し、上記の禁止3組に該当する `google_cloud_run_v2_service_iam_member` と `google_kms_crypto_key_iam_member` が0件であることを検査する。
+- `locals-dedicated-iam.tf` に `dedicated_op_sa_roles` と `dedicated_agent_sa_roles` の2つのリストを定義し、`terraform output` で JSON として公開する。
+- `sa-op-<short>` に付けるのは5件だけとする。
+  自分の `idjag-<short>` への `roles/cloudkms.signerVerifier`。
+  自分の `idpconn-<short>` への `roles/cloudkms.cryptoKeyEncrypterDecrypter`。
+  Firestore の `roles/datastore.user`。
+  JWKS バケットの `roles/storage.objectCreator`。
+  `agent-activity-stream` の `roles/pubsub.publisher`。
+- `sa-agent-<short>` に付けるのは6件だけとする。
+  自分の `dedicated-op-<short>` への `roles/run.invoker`。
+  `google-bridge` と `resource-docs-as` と `resource-finance-as` への `roles/run.invoker`。
+  `roles/aiplatform.user`。
+  Firestore の `roles/datastore.user`。
+  `agent-activity-stream` の `roles/pubsub.publisher`。
+- どちらにも Secret Manager の権限と、他 Agent の鍵への権限と、Provisioner と Lifecycle を呼ぶ権限を付けない。
+- `sa-agent-<short>` に `shared-agent-op` への `roles/run.invoker` を付けない。
+  共有 OP と Dedicated OP の相互到達を作らないためであり、docs 05 §5 の Blast Radius がこの1行に依存する。
+- `packages/xaa-contracts/src/dedicated-iam.ts` は同じ内容を TypeScript の定数として持ち、Provisioner はこれを読んで Binding を作る。
+  Terraform 側の output と TypeScript 側の定数が一致することを `infra/tests/dedicated-iam-shape.sh` が突き合わせる。
+- 実行時に作った Binding が上記以外を含まないことは、T-PROV-24 の作成処理が定数だけを使うことで担保する。
+  Provisioner のコードにロール名を直書きしない。
 
 **完了条件**
-- [ ] `bash infra/tests/slot-isolation.sh` が exit code 0 を返す
-- [ ] `sa-op-slot-01` の資格情報で `dedicated-op-slot-02-idjag` に asymmetricSign を要求すると PERMISSION_DENIED になる
-- [ ] `sa-agent-slot-01` の ID Token で `shared-agent-op` を呼ぶと 403 を返す
-- [ ] `sa-agent-slot-01` の ID Token で `dedicated-op-slot-02` を呼ぶと 403 を返す
-- [ ] `sa-agent-runtime` の ID Token で `dedicated-op-slot-01` を呼ぶと 403 を返す
+- [ ] `bash infra/tests/dedicated-iam-shape.sh` が終了コード0で通り、Terraform output と TypeScript 定数の差分が0件であることを出力する
+- [ ] `dedicated_op_sa_roles` の要素数が5、`dedicated_agent_sa_roles` の要素数が6である
+- [ ] `grep -n "shared-agent-op" infra/envs/demo/locals-dedicated-iam.tf` が0件になる
+- [ ] `grep -rn "roles/" apps/provisioner/src` の結果が `dedicated-iam` を import する行だけになる
 
 ---
 
@@ -406,7 +428,7 @@ REQ-01-022、REQ-05-012、REQ-08-021 と DEC-IAC-15 に対応する。
 
 **実装方針**
 - `locals.invoker_edges` を `{ "<caller_sa>|<target_service>" = { member = ..., service = ... } }` の1階層マップにする。ネストしたマップにしない。
-- 定義するエッジは次のとおり。`sa-automation-app` → `authorization` `provisioner` `lifecycle`。`sa-authorization` → `lifecycle`。`sa-provisioner` → `shared-agent-op` `google-bridge` `agent-op-callback`。`sa-lifecycle` → `shared-agent-op` `dedicated-op-slot-*` `google-bridge` `resource-docs-as` `resource-finance-as` `provisioner`。`sa-agent-runtime` → `shared-agent-op` `google-bridge` `resource-docs-as` `resource-finance-as`。`sa-agent-slot-<n>` → `dedicated-op-slot-<n>` `google-bridge` `resource-docs-as` `resource-finance-as`。`sa-security` → `lifecycle`。`sa-scheduler` → `lifecycle`。`sa-pubsub-push` → `authorization` `automation-app` `security-detection`。`sa-lifecycle` → `resource-docs-api` `resource-finance-api`（`/internal/revoke-by-actor` のため）。`sa-agent-runtime` と `sa-agent-slot-<n>` → `resource-docs-api` `resource-finance-api`。
+- 定義するエッジは次のとおり。`sa-automation-app` → `authorization` `provisioner` `lifecycle`。`sa-authorization` → `lifecycle`。`sa-provisioner` → `shared-agent-op` `google-bridge` `agent-op-callback`。`sa-lifecycle` → `shared-agent-op` `dedicated-op-*` `google-bridge` `resource-docs-as` `resource-finance-as` `provisioner`。`sa-agent-runtime` → `shared-agent-op` `google-bridge` `resource-docs-as` `resource-finance-as`。`sa-agent-<short>` → `dedicated-op-<short>` `google-bridge` `resource-docs-as` `resource-finance-as`。`sa-security` → `lifecycle`。`sa-scheduler` → `lifecycle`。`sa-pubsub-push` → `authorization` `automation-app` `security-detection`。`sa-lifecycle` → `resource-docs-api` `resource-finance-api`（`/internal/revoke-by-actor` のため）。`sa-agent-runtime` と `sa-agent-<short>` → `resource-docs-api` `resource-finance-api`。
 - `google-bridge` 宛のエッジは `enable_google_bridge` が true のときだけマップに入れる。
 - `google_cloud_run_v2_service_iam_member` を `for_each = local.invoker_edges` で生成する。`google_cloud_run_v2_service_iam_binding` と `_iam_policy` を使わない。allUsers の付与だけは T-IAC-16 で別に書く。
 - `google_project_iam_member` で `roles/run.invoker` を付与しない。プロジェクト全体への invoker を作らない。
@@ -483,17 +505,17 @@ REQ-08-029、REQ-05-032、REQ-05-046、DEC-IAC-03、DEC-IAC-04、DEC-IAC-12 に�
 
 **対象要件** REQ-08-029, REQ-05-032, REQ-05-046
 **前提タスク** T-IAC-04
-**成果物** `infra/envs/shared/kms.tf`, `infra/envs/shared/outputs.tf`, `infra/envs/shared/variables-slots.tf`
+**成果物** `infra/envs/shared/kms.tf`, `infra/envs/shared/outputs.tf`
 
 **実装方針**
 - Key Ring を5つ作る。`sso-signing` `idjag-signing` `resource-as-signing` `connector-encryption` `idp-connection-encryption`。すべて `location = var.region`。
-- `idjag-signing` に `shared-agent-op-idjag` と、スロット数分の `dedicated-op-slot-<n>-idjag` を作る。`purpose = ASYMMETRIC_SIGN`、`version_template.algorithm = EC_SIGN_P256_SHA256`。
+- `idjag-signing` に `shared-agent-op-idjag` だけを作る。`purpose = ASYMMETRIC_SIGN`、`version_template.algorithm = EC_SIGN_P256_SHA256`。FULL_ISOLATION の `idjag-<short>` は Provisioner が実行時に同じ Key Ring の中へ作るため、Terraform では作らない。
 - `sso-signing` に `human-idp-sso-wrap`、`resource-as-signing` に `resource-docs-as-wrap` と `resource-finance-as-wrap` を作る。いずれも `purpose = ENCRYPT_DECRYPT`。DEC-ID-17 により Human IdP と Resource AS の署名鍵は KMS の非対称鍵にできないため、封筒暗号用の対称鍵として作る。REQ-05-032 の RS256 指定との差異と、kid による分離が保たれる点を `kms.tf` のコメントに DEV-10 を引いて書く。
-- `connector-encryption` に `google-connector`、`idp-connection-encryption` に `idp-connection` とスロット数分の `idp-connection-slot-<n>` を作る。いずれも `purpose = ENCRYPT_DECRYPT`。
+- `connector-encryption` に `google-connector`、`idp-connection-encryption` に `idp-connection` を作る。いずれも `purpose = ENCRYPT_DECRYPT`。FULL_ISOLATION の `idpconn-<short>` は実行時作成のため Terraform では作らない。
 - 全 CryptoKey に `destroy_scheduled_duration = "86400s"` と `lifecycle { prevent_destroy = true }` を設定する。
 - `google_kms_crypto_key_version` リソースを1つも書かない。初期バージョンは CryptoKey 作成時に GCP が暗黙生成するものだけを使う。
 - shared の `outputs.tf` から全鍵の `id`（完全修飾名）をマップで出力し、demo が `terraform_remote_state` で受け取る。
-- shared state のスロット数は demo と同じ変数名 `dedicated_slot_count` を使い、両者に同じ値を渡す運用を Makefile で担保する。
+- Key Ring は削除できないため shared state に置き、demo の destroy で消えないようにする。
 
 **完了条件**
 - [ ] `gcloud kms keyrings list --location <region> --format='value(name)'` が5件を返す
@@ -507,7 +529,7 @@ REQ-08-029、REQ-05-032、REQ-05-046、DEC-IAC-03、DEC-IAC-04、DEC-IAC-12 に�
 
 **概要**
 署名と復号の権限を CryptoKey 単位でだけ付与し、プロジェクトレベルの KMS ロールを誰にも与えない。
-これにより Agent OP が Human IdP の鍵で署名できず、スロット間で鍵が混ざらない状態を作る。
+これにより Agent OP が Human IdP の鍵で署名できず、Agent 間で鍵が混ざらない状態を作る。
 REQ-08-030 に対応する。
 
 **対象要件** REQ-08-030
@@ -516,7 +538,7 @@ REQ-08-030 に対応する。
 
 **実装方針**
 - `locals.kms_bindings` を `{ "<key_name>|<sa_key>" = { key_id, member, role } }` の1階層マップにし、`google_kms_crypto_key_iam_member` を `for_each` で生成する。
-- 付与するのは次の組み合わせだけ。`sa-shared-agent-op` → `shared-agent-op-idjag`（signerVerifier）。`sa-op-slot-<n>` → `dedicated-op-slot-<n>-idjag`（signerVerifier）。`sa-human-idp` → `human-idp-sso-wrap`（cryptoKeyEncrypterDecrypter）。`sa-resource-docs-as` → `resource-docs-as-wrap`（同）。`sa-resource-finance-as` → `resource-finance-as-wrap`（同）。`sa-google-bridge` → `google-connector`（同）。`sa-shared-agent-op` → `idp-connection`（同）。`sa-op-slot-<n>` → `idp-connection-slot-<n>`（同）。`sa-lifecycle` → `idjag-signing` の全鍵（`roles/cloudkms.admin`、鍵バージョンの追加と無効化のため）。
+- 付与するのは次の組み合わせだけ。`sa-shared-agent-op` → `shared-agent-op-idjag`（signerVerifier）。`sa-op-<short>` → `dedicated-op-<short>-idjag`（signerVerifier）。`sa-human-idp` → `human-idp-sso-wrap`（cryptoKeyEncrypterDecrypter）。`sa-resource-docs-as` → `resource-docs-as-wrap`（同）。`sa-resource-finance-as` → `resource-finance-as-wrap`（同）。`sa-google-bridge` → `google-connector`（同）。`sa-shared-agent-op` → `idp-connection`（同）。`sa-op-<short>` → `idpconn-<short>`（同）。`sa-lifecycle` → `idjag-signing` の全鍵（`roles/cloudkms.admin`、鍵バージョンの追加と無効化のため）。
 - `google_project_iam_member` で `roles/cloudkms.*` を付与しない。`google_kms_key_ring_iam_member` も使わない。付与は CryptoKey 単位に限る。
 - `sa-lifecycle` の `cloudkms.admin` は `idjag-signing` Key Ring の鍵だけに限る。他の Key Ring の鍵に付けない。
 - `infra/tests/kms-iam.sh` は `terraform plan -json` を走査し、`google_project_iam_member` に `cloudkms` を含む role が0件であること、`google_kms_crypto_key_iam_member` の集合が `locals.kms_bindings` と完全一致することを検査する。
@@ -525,7 +547,7 @@ REQ-08-030 に対応する。
 - [ ] `bash infra/tests/kms-iam.sh` が exit code 0 を返す
 - [ ] `gcloud projects get-iam-policy <project_id> --flatten=bindings --format='value(bindings.role)' | grep cloudkms` が0件
 - [ ] `sa-shared-agent-op` の資格情報で `human-idp-sso-wrap` の decrypt を要求すると PERMISSION_DENIED になる
-- [ ] `sa-op-slot-01` の資格情報で `dedicated-op-slot-02-idjag` の asymmetricSign を要求すると PERMISSION_DENIED になる
+- [ ] `sa-op-aaaaaaaaaaaa` の資格情報で `dedicated-op-bbbbbbbbbbbb-idjag` の asymmetricSign を要求すると PERMISSION_DENIED になる
 
 ---
 
@@ -544,7 +566,7 @@ REQ-08-016、REQ-05-027、REQ-10-010、DEC-IAC-13 に対応する。
 - バケット名を `${var.project_id}-jwks` とし、`uniform_bucket_level_access = true`、`force_destroy = true`、`location = var.region`、`public_access_prevention = "inherited"` で作る。
 - `allUsers` に `roles/storage.objectViewer` をバケットレベルで付与する。
 - 書き込みは `roles/storage.objectCreator` だけを付与する。`roles/storage.objectAdmin` と `roles/storage.objectUser` と `roles/storage.legacyBucketWriter` を誰にも付与しない。
-- prefix 限定は `google_storage_bucket_iam_member` の `condition` で行う。`resource.name.startsWith("projects/_/buckets/<bucket>/objects/keys/<prefix>-")` の形にする。prefix は `sa-human-idp` が `idp`、`sa-shared-agent-op` が `agent-op`、`sa-op-slot-<n>` が `op-slot-<n>`、`sa-resource-docs-as` が `res-docs`、`sa-resource-finance-as` が `res-finance`。
+- prefix 限定は `google_storage_bucket_iam_member` の `condition` で行う。`resource.name.startsWith("projects/_/buckets/<bucket>/objects/keys/<prefix>-")` の形にする。prefix は `sa-human-idp` が `idp`、`sa-shared-agent-op` が `agent-op`、`sa-op-<short>` が `idjag-<n>`、`sa-resource-docs-as` が `res-docs`、`sa-resource-finance-as` が `res-finance`。
 - `jwks.json` そのものへの書き込みは `sa-jwks-publish` にだけ許す。他の SA に `jwks.json` の作成権限を与えない。
 - 空の `jwks.json` を `google_storage_bucket_object` として作らない。初回の公開は T-IAC-21 の Job が行う。
 - `infra/tests/jwks-bucket.sh` は `terraform plan -json` を走査し、バケットが1つであること、削除を含むロールが誰にも付いていないこと、`issuer_profile=direct` の plan に `google_compute_*` が現れないことを検査する。
@@ -572,7 +594,7 @@ DEC-IAC-13 に対応する。
 - Cloud Run Job `jwks-publish`（SA=`sa-jwks-publish`、`task_timeout_seconds = 120`）を `cloud-run-job` モジュールで作る。
 - `sa-jwks-publish` に付与するのは JWKS バケットの `roles/storage.objectViewer` と、`jwks.json` に限定した条件付きの `roles/storage.objectCreator` の2件だけ。
 - Job のロジックは、`keys/` プレフィックスの全オブジェクトを列挙し、各 JSON を `keys[]` として読み、`kid` で重複排除して `{ "keys": [...] }` を書き出す。`kid` が重複した場合は `updated` が新しい方を残す。
-- `kid` の接頭辞が `idp-` `agent-op-` `op-slot-` `res-docs-` `res-finance-` のいずれでもないオブジェクトを無視する。エラーにせずスキップし、スキップ件数を標準出力へ出す。
+- `kid` の接頭辞が `idp-` `agent-op-` `idjag-` `res-docs-` `res-finance-` のいずれでもないオブジェクトを無視する。エラーにせずスキップし、スキップ件数を標準出力へ出す。
 - `jwks.json` の書き込みに `if-generation-match` を使わない。Job は同時に1本しか走らせない前提とし、Makefile の `seed` ターゲットから直列で呼ぶ。
 - 鍵の生成そのものは各アプリの自己ブートストラップ（DEC-ID-17）が行う。この Job で鍵を作らない。
 
@@ -678,9 +700,9 @@ REQ-01-012、REQ-08-035、REQ-08-036、REQ-08-037、REQ-03-020 の代替実装�
 **実装方針**
 - `google_sql_database_instance`、`google_sql_database`、`google_sql_user`、`google_project_iam_member` の `roles/cloudsql.*` を1つも書かない。
 - `packages/gcp/src/access-matrix.json` を `{ "<app>": { "read": ["<path pattern>"], "write": ["<path pattern>"] } }` の形で書く。`<app>` は Cloud Run に注入される `APP_NAME` 環境変数の値と一致させる。
-- マトリクスの内容を、REQ-08-037 の GRANT 表を Firestore パスへ読み替えて確定する。`authorization` は `human_permissions/**` `delegatable_permissions/**` `organization_policies/**` `risk_policies/**` の read と write、`capability_taxonomy/**` の read のみ、`catalog_*` への到達なし。`provisioner` は `catalog_connectors/**` `catalog_tools/**` の read のみ、`agents/**` `agent_registrations/**` `provisioning_transactions/**` `isolation_slots/**` の read と write。`automation-app` は `agents/**` `users/*/activity/**` の read と write。`shared-agent-op` と `op-slot-<n>` は `idp_connections/**` `agent_registrations/**` の read と write。`lifecycle` は `agents/**` `agent_registrations/**` `isolation_slots/**` の read と write、`idp_connections/**` は delete のみ。`google-bridge` は `connector_bindings/**` の read と write のみ。
+- マトリクスの内容を、REQ-08-037 の GRANT 表を Firestore パスへ読み替えて確定する。`authorization` は `human_permissions/**` `delegatable_permissions/**` `organization_policies/**` `risk_policies/**` の read と write、`capability_taxonomy/**` の read のみ、`catalog_*` への到達なし。`provisioner` は `catalog_connectors/**` `catalog_tools/**` の read のみ、`agents/**` `agent_registrations/**` `provisioning_transactions/**` `dedicated_resources/**` の read と write。`automation-app` は `agents/**` `users/*/activity/**` の read と write。`shared-agent-op` と `idjag-<n>` は `idp_connections/**` `agent_registrations/**` の read と write。`lifecycle` は `agents/**` `agent_registrations/**` `dedicated_resources/**` の read と write、`idp_connections/**` は delete のみ。`google-bridge` は `connector_bindings/**` の read と write のみ。
 - `firestore-guard.ts` は `assertPath(app: string, mode: "read"|"write"|"delete", path: string): void` を公開し、マトリクスに合致しないときに `FirestoreGuardError` を throw する。パターンの照合は先頭一致ではなくセグメント単位のグロブで行い、`agents2/` が `agents/**` にマッチしないようにする。
-- スロット間の分離は `idp_connections/{agent_id}` と `agent_registrations/{agent_id}` の `agent_id` をスロットのリース情報と突き合わせて判定する。マトリクスとは別の関数 `assertAgentOwnership(slotIndex, agentId)` に分ける。
+- Dedicated OP 間の分離は `idp_connections/{agent_id}` と `agent_registrations/{agent_id}` の `agent_id` を、その Dedicated OP に注入された `AGENT_ID` と突き合わせて判定する。マトリクスとは別の関数 `assertAgentOwnership(ownAgentId, agentId)` に分ける。
 - `infra/tests/no-cloudsql.sh` は `grep -rn 'google_sql_\|cloudsql' infra/` が0件であることを検査する。コメント中の言及も禁止する。
 
 **完了条件**
@@ -765,14 +787,14 @@ REQ-08-024、REQ-08-025、REQ-11-004 に対応する。
 - `google_pubsub_topic "agent_activity_stream"` を `name = "agent-activity-stream"` で作る。
 - `pubsub-push` モジュールの入力は `topic`、`subscription_name`、`push_endpoint`、`oidc_service_account`、`audience`、`ack_deadline_seconds`、`message_retention_duration`。出力は `subscription_name`。
 - subscription は `activity-to-automation-app` の1本だけ。`push_config.push_endpoint` を `${local.run_url["automation-app"]}/internal/activity`、`oidc_token.service_account_email` を `sa-pubsub-push`、`oidc_token.audience` を `local.run_url["automation-app"]` にする。`ack_deadline_seconds = 60`、`message_retention_duration = "600s"`、dead letter policy なし。
-- `roles/pubsub.publisher` をトピック単位で付与する対象を、`sa-automation-app` `sa-authorization` `sa-provisioner` `sa-lifecycle` `sa-shared-agent-op` `sa-op-slot-<n>` `sa-agent-runtime` `sa-agent-slot-<n>` `sa-security` `sa-google-bridge` の10系統に固定する。`sa-google-bridge` を含める理由（Consent 完了イベント）をコメント1行で書く。
+- `roles/pubsub.publisher` をトピック単位で付与する対象を、`sa-automation-app` `sa-authorization` `sa-provisioner` `sa-lifecycle` `sa-shared-agent-op` `sa-op-<short>` `sa-agent-runtime` `sa-agent-<short>` `sa-security` `sa-google-bridge` の10系統に固定する。`sa-google-bridge` を含める理由（Consent 完了イベント）をコメント1行で書く。
 - `roles/pubsub.subscriber` は `sa-automation-app` にだけ付与する。
 - `google_project_iam_member` で `roles/pubsub.publisher` を誰にも付与しない。
 - `infra/tests/activity-topic.sh` は plan JSON を走査し、トピックが1つ、push subscription が1つ、publisher の member 集合が上記10系統と完全一致、subscriber が1件であることを検査する。
 
 **完了条件**
 - [ ] `bash infra/tests/activity-topic.sh` が exit code 0 を返す
-- [ ] `gcloud pubsub topics get-iam-policy agent-activity-stream --format='value(bindings.members)' | tr ',' '\n' | wc -l` が `dedicated_slot_count` を含めた件数と一致する
+- [ ] `gcloud pubsub topics get-iam-policy agent-activity-stream --format='value(bindings.members)' | tr ',' '\n' | wc -l` が `max_full_isolation_agents` を含めた件数と一致する
 - [ ] `gcloud projects get-iam-policy <project_id> --flatten=bindings --format='value(bindings.role)' | grep pubsub.publisher` が0件
 - [ ] Provisioner が publish した1件のイベントが `users/{human_subject}/activity` 配下に現れる e2e が green
 
@@ -891,7 +913,7 @@ REQ-07-035 に対応する。
 ### T-IAC-33 Cloud Scheduler から Lifecycle Manager を定期起動する
 
 **概要**
-期限到達 Agent の Cleanup とスロット返却を、Cloud Scheduler が定期的に叩く形で駆動する。
+期限到達 Agent の Cleanup と、実行時に作った GCP リソースの掃除を、Cloud Scheduler が定期的に叩く形で駆動する。
 呼び出しは OIDC トークンで認証し、専用 SA を使う。
 REQ-08-026 に対応する。
 
@@ -994,30 +1016,59 @@ REQ-08-047 に対応する。
 
 ---
 
-### T-IAC-37 Provisioner と Lifecycle の SA から作成系ロールを外す
+### T-IAC-37 Provisioner と Lifecycle の作成権限を名前空間で絞る
 
 **概要**
-Provisioner と Lifecycle は実行時に GCP リソースを作らないため、作成系のロールを持つ必要がない。
-Job Execution の起動と取り消し、KMS の鍵バージョン操作、Firestore の読み書きに限る。
-REQ-08-009、REQ-08-011、DEC-IAC-08 に対応する。
+Provisioner と Lifecycle は Dedicated OP 一式を実行時に作り消すため、作成系のロールが要る（DEC-IAC-07、DEC-IAC-08）。
+Project 内で最も強い2つの SA になるので、与える範囲をリソース種別と名前の接頭辞で絞り、Terraform 管理のリソースへ手が届かないようにする。
+REQ-08-009、REQ-08-011 に対応する。
 
 **対象要件** REQ-08-009, REQ-08-011
 **前提タスク** T-IAC-36
-**成果物** `infra/envs/demo/iam-provisioner.tf`, `infra/envs/demo/iam-lifecycle.tf`, `infra/envs/demo/custom-roles.tf`
+**成果物** `infra/envs/demo/iam-provisioner.tf`, `infra/envs/demo/iam-lifecycle.tf`, `infra/envs/demo/custom-roles.tf`, `infra/tests/forbidden-roles.sh`（追記）
 
 **実装方針**
-- `sa-provisioner` に付与するのは、`shared-agent-op` と `google-bridge` と `agent-op-callback` への `run.invoker`（T-IAC-15 側）、`agent-runtime-standard` と `agent-runtime-slot-<n>` への `roles/run.jobsExecutorWithOverrides`、Firestore の `datastore.user`、`agent-activity-stream` の publisher、config バケットの `objectViewer` の6種。
-- `sa-lifecycle` に付与するのは、`agent-runtime-standard` と `agent-runtime-slot-<n>` への `roles/run.jobsExecutorWithOverrides`、Execution 取り消し用のカスタムロール、T-IAC-15 の `run.invoker` 群、`idjag-signing` Key Ring の各鍵への `roles/cloudkms.admin`、Firestore の `datastore.user`、`agent-activity-stream` の publisher、`agent_lifecycle_audit` テーブルの `dataEditor`、config バケットの `objectViewer` の8種。
-- Execution 取り消し用のカスタムロールを `google_project_iam_custom_role "run_execution_canceller"` として作り、`permissions` を `run.executions.cancel` と `run.executions.get` の2件だけにする。`roles/run.developer` を使わない。
-- 両 SA に `roles/run.admin`、`roles/iam.serviceAccountAdmin`、`roles/cloudkms.admin`（`idjag-signing` 以外）、`roles/resourcemanager.projectIamAdmin`、`roles/secretmanager.*` を付与しない。
-- `sa-lifecycle` に `roles/cloudkms.signerVerifier` を付与しない。鍵バージョンの追加と無効化だけを許し、署名を許さない。
+- `sa-provisioner` に付与するのは9種とする。
+  `shared-agent-op` と `google-bridge` と `agent-op-callback` への `run.invoker`（T-IAC-15 側）。
+  `agent-runtime-standard` への `roles/run.jobsExecutorWithOverrides`。
+  Cloud Run Service と Job を作るためのカスタムロール `dedicated_op_creator`。
+  Service Account を作るためのカスタムロール `dedicated_sa_creator`。
+  `idjag-signing` と `idp-connection-encryption` の各 Key Ring への `roles/cloudkms.admin`。
+  Firestore の `datastore.user`。
+  `agent-activity-stream` の publisher。
+  config バケットの `objectViewer`。
+- `sa-lifecycle` に付与するのは8種とする。
+  `agent-runtime-standard` への `roles/run.jobsExecutorWithOverrides`。
+  Execution 取り消し用のカスタムロール `run_execution_canceller`。
+  Cloud Run Service と Job と Service Account を消すためのカスタムロール `dedicated_op_destroyer`。
+  `idjag-signing` と `idp-connection-encryption` の各 Key Ring への `roles/cloudkms.admin`。
+  T-IAC-15 の `run.invoker` 群。
+  Firestore の `datastore.user`。
+  `agent-activity-stream` の publisher。
+  `agent_lifecycle_audit` テーブルの `dataEditor`。
+- カスタムロールを4つ作り、`permissions` を最小にする。
+  `run_execution_canceller` は `run.executions.cancel` と `run.executions.get` の2件。
+  `dedicated_op_creator` は `run.services.create` と `run.services.get` と `run.services.setIamPolicy` と `run.jobs.create` と `run.jobs.get` の5件。
+  `dedicated_sa_creator` は `iam.serviceAccounts.create` と `iam.serviceAccounts.get` と `iam.serviceAccounts.actAs` の3件。
+  `dedicated_op_destroyer` は `run.services.delete` と `run.jobs.delete` と `iam.serviceAccounts.delete` と `run.services.get` と `run.jobs.get` と `iam.serviceAccounts.get` の6件。
+  `roles/run.admin` と `roles/iam.serviceAccountAdmin` と `roles/editor` を使わない。
+- 両 SA に `roles/resourcemanager.projectIamAdmin` と `roles/secretmanager.*` と `roles/owner` を付与しない。
+- `sa-provisioner` と `sa-lifecycle` に `roles/cloudkms.signerVerifier` を付与しない。
+  鍵の作成と鍵バージョンの操作だけを許し、署名を許さない。
+  `roles/cloudkms.admin` は署名権限を含まないため、この2つは両立する。
+- 名前の接頭辞による境界は IAM では表現できない。
+  Terraform 管理のリソースを実行時に変更しないことは、T-PROV-24 と T-LIFE-09 の実装側（触れてよい接頭辞6種のガード）と `infra/tests/runtime-mutation-scope.sh` で担保する。
+  この分担を `iam-provisioner.tf` のコメントに書く。
+- `infra/tests/forbidden-roles.sh` に、両 SA が `roles/owner` と `roles/editor` と `roles/run.admin` と `roles/iam.serviceAccountAdmin` と `roles/resourcemanager.projectIamAdmin` を持たないことの検査を追記する。
 
 **完了条件**
-- [ ] `sa-lifecycle` の資格情報で `google-oauth-client-secret` の読み取りが PERMISSION_DENIED になる
-- [ ] `sa-lifecycle` の資格情報で `shared-agent-op-idjag` の鍵バージョン DISABLE が成功する
-- [ ] `sa-lifecycle` の資格情報で `shared-agent-op-idjag` の asymmetricSign が PERMISSION_DENIED になる
-- [ ] `gcloud iam roles describe run_execution_canceller --project <project_id> --format='value(includedPermissions)'` が2件を返す
-- [ ] `sa-provisioner` の資格情報で `gcloud run services update` が PERMISSION_DENIED になる
+- [ ] `gcloud iam roles list --project <project_id> --format='value(name)'` が上記4つのカスタムロールを含む
+- [ ] `gcloud iam roles describe dedicated_op_creator --project <project_id> --format='value(includedPermissions)'` が5件を返す
+- [ ] `gcloud iam roles describe dedicated_op_destroyer --project <project_id> --format='value(includedPermissions)'` が6件を返す
+- [ ] `sa-provisioner` の資格情報で `google-oauth-client-secret` の読み取りが PERMISSION_DENIED になる
+- [ ] `sa-provisioner` の資格情報で `idjag-signing` Key Ring 内の鍵に対する asymmetricSign が PERMISSION_DENIED になる
+- [ ] `sa-lifecycle` の資格情報で `gcloud run services delete human-idp` が PERMISSION_DENIED にならない代わりに、`infra/tests/runtime-mutation-scope.sh` がコード側でこの呼び出しが書けないことを検査して終了コード0を返す
+- [ ] `bash infra/tests/forbidden-roles.sh` が終了コード0で通る
 
 ---
 
@@ -1059,8 +1110,8 @@ REQ-08-049 と DEC-APP-10 に対応する。
 
 **実装方針**
 - 変数 `vertex_model`（string、既定 `gemini-2.5-flash`）と `vertex_location`（string、既定 `us-central1`）を定義する。
-- `roles/aiplatform.user` を付与するのは `sa-automation-app` `sa-authorization` `sa-agent-runtime` `sa-agent-slot-<n>` `sa-security` の5系統だけ。`google_project_iam_member` で付与する（Vertex AI はリソース単位の付与ができないため）。
-- `sa-provisioner` `sa-lifecycle` `sa-shared-agent-op` `sa-op-slot-<n>` `sa-google-bridge` `sa-resource-*` `sa-human-idp` `sa-seed` `sa-jwks-publish` `sa-stub-saas-op` に付与しない。
+- `roles/aiplatform.user` を付与するのは `sa-automation-app` `sa-authorization` `sa-agent-runtime` `sa-agent-<short>` `sa-security` の5系統だけ。`google_project_iam_member` で付与する（Vertex AI はリソース単位の付与ができないため）。
+- `sa-provisioner` `sa-lifecycle` `sa-shared-agent-op` `sa-op-<short>` `sa-google-bridge` `sa-resource-*` `sa-human-idp` `sa-seed` `sa-jwks-publish` `sa-stub-saas-op` に付与しない。
 - 5系統の Cloud Run Service と Job に `VERTEX_MODEL` と `VERTEX_LOCATION` と `VERTEX_MODE`（既定 `live`）を環境変数で注入する。
 - `infra/tests/vertex-scope.sh` は plan JSON を走査し、`roles/aiplatform.user` の member 集合が上記5系統と完全一致することを検査する。さらに `grep -rnE 'gemini-[0-9]' apps/ packages/` が0件であることを確認する。
 
@@ -1085,7 +1136,7 @@ DEC-IAC-15 と DEC-IAC-19 に対応する。
 
 **実装方針**
 - `reachability-cases.json` を `[{ "caller_sa": ..., "target": ..., "path": "/healthz", "expect": 200 or 403 }]` の配列にする。許可エッジは `terraform output -json invoker_edges` から生成し、拒否ケースは手書きで最低6件を固定する。
-- 拒否ケースに必ず含めるのは、`sa-automation-app` → `shared-agent-op`、`sa-agent-runtime` → `authorization`、`sa-agent-runtime` → `dedicated-op-slot-01`、`sa-agent-slot-01` → `shared-agent-op`、`sa-agent-slot-01` → `dedicated-op-slot-02`、認証なし → `authorization` の6件。
+- 拒否ケースに必ず含めるのは、`sa-automation-app` → `shared-agent-op`、`sa-agent-runtime` → `authorization`、`sa-agent-runtime` → `dedicated-op-aaaaaaaaaaaa`、`sa-agent-aaaaaaaaaaaa` → `shared-agent-op`、`sa-agent-aaaaaaaaaaaa` → `dedicated-op-bbbbbbbbbbbb`、認証なし → `authorization` の6件。
 - 呼び出しは `gcloud auth print-identity-token --impersonate-service-account=<sa> --audiences=<url>` で ID Token を取り、`curl -o /dev/null -w '%{http_code}'` で status code だけを見る。レスポンス本文を評価しない。
 - 実行者に `roles/iam.serviceAccountTokenCreator` が必要な点を、スクリプトの冒頭コメントと `infra/README.md` に書く。権限が無い場合は前提不足として exit code 2 で終了し、テスト失敗（exit 1）と区別する。
 - 失敗時は `caller / target / expected / actual` の4項目を1行で出し、全ケースを実行してから最後に非ゼロ終了する。最初の失敗で止めない。
@@ -1140,13 +1191,13 @@ REQ-01-022 と REQ-08-022 に対応する。
 - `terraform output -json invoker_edges` の期待集合と、全 Cloud Run Service の `gcloud run services get-iam-policy --format=json` から抽出した `roles/run.invoker` の member 集合を突き合わせる。
 - 比較は集合の完全一致で行う。期待に無い実測（余分）と、実測に無い期待（不足）の両方を別々に列挙する。
 - `allUsers` の付与は `locals.public_services` の期待集合と別途突き合わせる。`invoker_edges` に混ぜない。
-- 禁止3組（`sa-agent-runtime` → `dedicated-op-slot-*`、`sa-agent-slot-<n>` → `shared-agent-op`、`sa-agent-slot-<n>` → `dedicated-op-slot-<m>` で m ≠ n）を明示的に検査し、1件でも見つかったら他の差分に関わらず exit code 1 にする。
+- 禁止3組（`sa-agent-runtime` → `dedicated-op-*`、`sa-agent-<short>` → `shared-agent-op`、`sa-agent-<short>` → `dedicated-idjag-<m>` で m ≠ n）を明示的に検査し、1件でも見つかったら他の差分に関わらず exit code 1 にする。
 - Cloud Run Job の `run.invoker` は検査対象にしない。Job は invoker ではなく `jobsExecutorWithOverrides` で制御するため。
 - 出力は差分表形式（`種別 / caller / target`）で標準エラーへ出す。
 
 **完了条件**
 - [ ] `bash infra/tests/invoker-matrix.sh` が apply 直後に exit code 0 を返す
-- [ ] `gcloud run services add-iam-policy-binding shared-agent-op --member=serviceAccount:sa-agent-slot-01@... --role=roles/run.invoker` の後に同スクリプトが exit code 1 を返す
+- [ ] `gcloud run services add-iam-policy-binding shared-agent-op --member=serviceAccount:sa-agent-aaaaaaaaaaaa@... --role=roles/run.invoker` の後に同スクリプトが exit code 1 を返す
 - [ ] `allUsers` の比較が `locals.public_services` に対して行われ、`invoker_edges` の件数に含まれていない
 - [ ] 禁止3組の検査結果が、他の差分と区別できるラベル付きで出力される
 
@@ -1157,22 +1208,22 @@ REQ-01-022 と REQ-08-022 に対応する。
 **概要**
 実行時に GCP リソースを作らないこと、KMS の鍵バージョンを Terraform で管理しないこと、VPC と Cloud SQL を作らないことを、コードの静的検査で固定する。
 これらは apply 後には検出しにくいため、CI で常時走らせる。
-DEV-07、DEC-IAC-04、DEC-IAC-09 に対応する。
+DEC-IAC-04、DEC-IAC-09、DEC-IAC-25 に対応する。
 
 **対象要件** REQ-01-010, REQ-05-056, REQ-08-043
 **前提タスク** T-IAC-25
-**成果物** `infra/tests/no-runtime-gcp-mutation.sh`, `infra/tests/no-kms-key-version.sh`, `infra/tests/static-all.sh`, `.github/workflows/infra-static.yml`
+**成果物** `infra/tests/runtime-mutation-scope.sh`, `infra/tests/no-kms-key-version.sh`, `infra/tests/static-all.sh`, `.github/workflows/infra-static.yml`
 
 **実装方針**
-- `no-runtime-gcp-mutation.sh` は `apps/provisioner/src` と `apps/lifecycle/src` と `apps/agent-runtime/src` を対象に、禁止パターンを grep する。`@google-cloud/run` の `ServicesClient` と `JobsClient` の `create` `delete` `update` `patch`、`@google-cloud/kms` の `createCryptoKey` `createKeyRing`、`google.iam` の `createServiceAccount`、`run.googleapis.com/v2/projects/.*/services` への直接 HTTP 呼び出し。`ExecutionsClient` の `run` と `cancel` は許可する。
+- `runtime-mutation-scope.sh` は `apps/provisioner/src` と `apps/lifecycle/src` と `apps/agent-runtime/src` を対象に、禁止パターンを grep する。`@google-cloud/run` の `ServicesClient` と `JobsClient` の `create` `delete` `update` `patch`、`@google-cloud/kms` の `createCryptoKey` `createKeyRing`、`google.iam` の `createServiceAccount`、`run.googleapis.com/v2/projects/.*/services` への直接 HTTP 呼び出し。`ExecutionsClient` の `run` と `cancel` は許可する。
 - 許可と禁止の境界をスクリプト冒頭のコメントに明記する。Job Execution の起動と取り消しだけが実行時に許される GCP の変更操作である旨を書く。
 - `no-kms-key-version.sh` は `grep -rn 'google_kms_crypto_key_version' infra/` が0件であることを検査する。ヒットした場合は DEC-IAC-04 の理由を標準エラーに出す。
-- `static-all.sh` は `single-project.sh` `no-cloudsql.sh` `no-firestore-rules.sh` `public-surface.sh` `no-runtime-gcp-mutation.sh` `no-kms-key-version.sh` `kms-iam.sh` `slot-isolation.sh` を順に実行し、1つでも失敗したら非ゼロ終了する。途中で止めず全件実行してから集計する。
+- `static-all.sh` は `single-project.sh` `no-cloudsql.sh` `no-firestore-rules.sh` `public-surface.sh` `runtime-mutation-scope.sh` `no-kms-key-version.sh` `kms-iam.sh` `no-dedicated-op-in-tf.sh` `dedicated-iam-shape.sh` を順に実行し、1つでも失敗したら非ゼロ終了する。途中で止めず全件実行してから集計する。
 - `.github/workflows/infra-static.yml` は GCP 認証を必要としないこれらの検査だけを走らせる。apply を伴う検査（reachability、forbidden-roles、invoker-matrix）はこのワークフローに入れない。
 
 **完了条件**
 - [ ] `bash infra/tests/static-all.sh` が exit code 0 を返す
-- [ ] `apps/provisioner/src` に `new ServicesClient().createService(` を追加したブランチで `no-runtime-gcp-mutation.sh` が exit code 1 を返す
+- [ ] `apps/provisioner/src` に `new ServicesClient().createService(` を追加したブランチで `runtime-mutation-scope.sh` が exit code 1 を返す
 - [ ] `infra/envs/shared/kms.tf` に `google_kms_crypto_key_version` を1件足したブランチで `no-kms-key-version.sh` が exit code 1 を返す
 - [ ] CI ジョブ `infra-static` が GCP 認証情報なしで green
 
@@ -1242,12 +1293,17 @@ DEC-IAC-19 に対応する。
 **成果物** `Makefile`, `infra/tfvars/demo.tfvars.example`, `infra/tfvars/verify.tfvars`
 
 **実装方針**
-- ターゲットは `bootstrap` `shared-apply` `images` `demo-apply` `seed` `verify` `demo-destroy` `all` の8つ。
+- ターゲットは `bootstrap` `shared-apply` `images` `demo-apply` `seed` `verify` `purge-runtime` `demo-destroy` `all` の9つ。
 - `demo-apply` は `terraform apply` の後に `verify` を必ず呼ぶ。`verify` は `reachability.sh` と `forbidden-roles.sh` と `invoker-matrix.sh` の3件を順に実行し、1件でも失敗したら非ゼロ終了する。
 - `seed` は `jwks-publish` Job の実行、`seed` Job の実行の順で直列に呼ぶ。並列実行しない。
 - `images` は `scripts/build-push.sh` を呼び、タグに `git rev-parse --short HEAD` を使う。`latest` タグを使わない。
-- `shared-apply` と `demo-apply` に同じ `dedicated_slot_count` を渡す。値は `infra/tfvars/*.tfvars` の1か所で定義し、Makefile が両方へ `-var-file` で渡す。
-- `verify.tfvars` は検証プロファイルとし、`agent_max_lifetime_seconds = 3600`、`dedicated_slot_count = 2`、`issuer_profile = "direct"`、`enable_google_bridge = false` を書く。
+- `purge-runtime` は `scripts/purge-runtime-resources.sh` を呼ぶ。
+  ラベル `xaa-managed=runtime` を持つ Cloud Run Service と Job、`description` に同じ印を持つ Service Account、`idjag-` と `idpconn-` で始まる CryptoKey の鍵バージョンを列挙して消す。
+  実行時に作った Dedicated OP 一式は Terraform の state に載らないため、`terraform destroy` では消えない（DEC-IAC-25）。
+- `demo-destroy` は `purge-runtime` を先に呼んでから `terraform destroy` を実行する。順序を逆にしない。
+  Terraform を先に消すと Cloud Run と Service Account を列挙する経路が残らず、孤児を回収できなくなる。
+- `max_full_isolation_agents` は demo state だけが使う。shared state へは渡さない。
+- `verify.tfvars` は検証プロファイルとし、`agent_max_lifetime_seconds = 3600`、`max_full_isolation_agents = 2`、`issuer_profile = "direct"`、`enable_google_bridge = false` を書く。
 - `all` は `shared-apply` `images` `demo-apply` `seed` を順に呼ぶ。`bootstrap` と `demo-destroy` は `all` に含めない。
 - 各ターゲットの先頭に `@echo` で何をするかを1行出す。手順の暗黙知を Makefile 外に残さない。
 
@@ -1255,6 +1311,8 @@ DEC-IAC-19 に対応する。
 - [ ] `make all` が空プロジェクト（bootstrap 済み）に対してエラーなく完走する
 - [ ] `make demo-apply` が `verify` の失敗時に非ゼロで終了する
 - [ ] `make demo-destroy && make demo-apply && make seed` が連続で成功する
+- [ ] FULL_ISOLATION の Agent を1体作った直後に `make demo-destroy` を実行すると、`gcloud run services list --filter='metadata.labels.xaa-managed=runtime'` と `gcloud iam service-accounts list --filter='description:xaa-managed=runtime'` がどちらも0件を返す
+- [ ] `make purge-runtime` を2回続けて実行しても2回とも終了コード0で終わる
 - [ ] `grep -c ':latest' Makefile scripts/build-push.sh` が0を返す
 
 ---
