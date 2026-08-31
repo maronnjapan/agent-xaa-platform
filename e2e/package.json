@@ -9,6 +9,7 @@
   "dependencies": {
     "@maronn-openid-connect/core": "0.2.0",
     "@xaa/agent-op": "workspace:*",
+    "@xaa/authorization": "workspace:*",
     "@xaa/contracts": "workspace:*",
     "@xaa/crypto": "workspace:*",
     "@xaa/gcp": "workspace:*",

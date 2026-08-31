@@ -6,18 +6,19 @@
       "organization_policies/**",
       "risk_policies/**",
       "capability_taxonomy/**",
+      "catalog_tools/**",
       "authorization_decisions/**",
       "policy_decisions/**",
-      "ai_proposals/**"
+      "ai_proposals/**",
+      "work_definitions/**",
+      "dpop_jti/**"
     ],
     "write": [
-      "human_permissions/**",
-      "delegatable_permissions/**",
-      "organization_policies/**",
-      "risk_policies/**",
       "authorization_decisions/**",
       "policy_decisions/**",
-      "ai_proposals/**"
+      "ai_proposals/**",
+      "work_definitions/**",
+      "dpop_jti/**"
     ]
   },
   "provisioner": {
@@ -166,22 +167,24 @@
   },
   "seed": {
     "read": [
+      "capability_taxonomy/**",
       "catalog_connectors/**",
       "catalog_tools/**",
-      "capability_taxonomy/**",
-      "human_permissions/**",
       "delegatable_permissions/**",
+      "human_permissions/**",
       "organization_policies/**",
-      "risk_policies/**"
+      "risk_policies/**",
+      "work_definitions/**"
     ],
     "write": [
+      "capability_taxonomy/**",
       "catalog_connectors/**",
       "catalog_tools/**",
-      "capability_taxonomy/**",
-      "human_permissions/**",
       "delegatable_permissions/**",
+      "human_permissions/**",
       "organization_policies/**",
-      "risk_policies/**"
+      "risk_policies/**",
+      "work_definitions/**"
     ]
   },
   "resource-docs-as": {

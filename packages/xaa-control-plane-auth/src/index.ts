@@ -21,17 +21,26 @@ export const STEP_TABLE = [
 
 export type ControlPlaneAuthOptions = AccessTokenOptions & DpopOptions & HumanSubjectOptions;
 
+/**
+ * Runs the steps in order, stopping at the first refusal.
+ *
+ * A step that refuses returns a Response, and that Response is what the caller must
+ * receive — dropping it would leave the request with no answer at all. A step that
+ * passes returns nothing and the next one runs.
+ */
 function compose(middlewares: MiddlewareHandler[]): MiddlewareHandler {
   return async (context, finalNext) => {
     let index = -1;
-    const dispatch = async (position: number): Promise<void> => {
+    const dispatch = async (position: number): Promise<Response | void> => {
       if (position <= index) throw new Error('middleware next called more than once');
       index = position;
       const middleware = middlewares[position];
-      if (middleware) await middleware(context, () => dispatch(position + 1));
-      else await finalNext();
+      if (!middleware) return finalNext();
+      let downstream: Response | undefined;
+      const result = await middleware(context, async () => { downstream = (await dispatch(position + 1)) ?? undefined; });
+      return result ?? downstream;
     };
-    await dispatch(0);
+    return dispatch(0);
   };
 }
 

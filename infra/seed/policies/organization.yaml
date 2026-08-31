@@ -1,3 +1,15 @@
-- policy_id: default-organization-policy
-  effect: allow
-  description: Default validation policy
+# docs 03 §2. Two shapes, and the difference is deliberate.
+#
+# org-001 keeps mail.message.send and narrows who may receive: banning outside mail
+# by removing the capability would also stop the internal mail the work needs.
+# org-002 removes a capability only when none of its connectors is approved at all.
+- policy_id: org-001
+  type: capability_constraint
+  match: { capability_id: mail.message.send }
+  constraint:
+    recipient_domain_allowlist: [example.com]
+- policy_id: org-002
+  type: capability_deny
+  match:
+    connector_not_in: [internal-docs-api, internal-finance-api, stub-saas-calendar]
+  reason_code: org_policy_denied

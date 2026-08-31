@@ -12,7 +12,16 @@ describe('access token middleware', () => {
     app.post('/protected', (context) => context.json(context.get('accessToken')));
     return app.request('/protected', { method: 'POST', headers: { Authorization: `DPoP ${token}` } });
   }
-  it('rejects tampered signature (401)', async () => expect((await request(`${(await accessToken(issuer.pair)).slice(0, -1)}x`)).status).toBe(401));
+  it('rejects a tampered payload (401)', async () => {
+    // The payload segment is altered rather than the signature's last character:
+    // that character only carries padding bits, so changing it can leave the
+    // decoded signature identical and the test would pass or fail by luck.
+    const [header, payload, signature] = (await accessToken(issuer.pair)).split('.');
+    const tampered = Buffer.from(JSON.stringify({
+      ...JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')), sub: 'someone-else',
+    })).toString('base64url');
+    expect((await request(`${header}.${tampered}.${signature}`)).status).toBe(401);
+  });
   it('rejects typ=JWT id token (401 invalid_token)', async () => expect(await (await request(await accessToken(issuer.pair, {}, 'JWT'))).json()).toEqual({ error: 'invalid_token' }));
   it('rejects aud=authorization-platform on agent-provisioner (401 invalid_audience)', async () => expect(await (await request(await accessToken(issuer.pair), { audience: 'agent-provisioner' })).json()).toEqual({ error: 'invalid_audience' }));
   it('rejects missing scope (403 insufficient_scope)', async () => expect((await request(await accessToken(issuer.pair), { scope: 'agent:provision' })).status).toBe(403));

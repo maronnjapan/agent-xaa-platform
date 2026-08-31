@@ -43,6 +43,9 @@
     },
     {
       "path": "../packages/xaa-logging"
+    },
+    {
+      "path": "../apps/authorization"
     }
   ]
 }

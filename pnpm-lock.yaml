@@ -98,12 +98,36 @@ importers:
 
   apps/authorization:
     dependencies:
+      '@google-cloud/pubsub':
+        specifier: 6.0.1
+        version: 6.0.1
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/control-plane-auth':
+        specifier: workspace:*
+        version: link:../../packages/xaa-control-plane-auth
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/vertex':
+        specifier: workspace:*
+        version: link:../../packages/xaa-vertex
       hono:
         specifier: 4.13.5
         version: 4.13.5
+      yaml:
+        specifier: 2.8.1
+        version: 2.8.1
     devDependencies:
       '@types/node':
         specifier: 22.18.1
@@ -113,7 +137,7 @@ importers:
         version: 5.9.2
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(vite@8.2.2(@types/node@22.18.1)(yaml@2.9.0))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(vite@8.2.2(@types/node@22.18.1)(yaml@2.8.1))
 
   apps/automation-app:
     dependencies:
@@ -500,6 +524,9 @@ importers:
       '@xaa/agent-op':
         specifier: workspace:*
         version: link:../apps/agent-op
+      '@xaa/authorization':
+        specifier: workspace:*
+        version: link:../apps/authorization
       '@xaa/contracts':
         specifier: workspace:*
         version: link:../packages/xaa-contracts

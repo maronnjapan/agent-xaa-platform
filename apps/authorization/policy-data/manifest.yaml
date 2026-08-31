@@ -1,0 +1,10 @@
+# Where each policy file lives and which collection it lands in.
+#
+# The files themselves are under infra/seed/policies so Terraform uploads exactly
+# what the Policy Engine reads: keeping a second authoring copy beside the app would
+# let the deployed policy and the tested policy drift apart.
+files:
+  - { path: ../../../infra/seed/policies/delegatable.yaml, collection: delegatable_permissions, key: capability_id }
+  - { path: ../../../infra/seed/policies/organization.yaml, collection: organization_policies, key: policy_id }
+  - { path: ../../../infra/seed/policies/risk.yaml, collection: risk_policies, key: policy_id }
+  - { path: ../../../infra/seed/capabilities.yaml, collection: capability_taxonomy, key: capability_id }

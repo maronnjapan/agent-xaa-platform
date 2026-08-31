@@ -1,8 +1,14 @@
-- capability_id: calendar.event.read
-- capability_id: calendar.event.write
-- capability_id: mail.message.read
-- capability_id: mail.message.send
-- capability_id: document.read
-- capability_id: document.write
-- capability_id: finance.payment.read
-- capability_id: finance.payment.approve
+# RULE-11, the delegation step. A capability the human holds is not automatically one
+# an agent may hold for them. Every capability is listed explicitly, because absence
+# means "not delegatable" and a silent omission would then look like a policy.
+#
+# calendar.event.write is withheld: writing to someone's calendar is visible to their
+# colleagues and hard to undo, so it stays with the human.
+- { capability_id: calendar.event.read, delegatable: true, policy_id: del-001 }
+- { capability_id: calendar.event.write, delegatable: false, policy_id: del-002 }
+- { capability_id: mail.message.read, delegatable: true, policy_id: del-003 }
+- { capability_id: mail.message.send, delegatable: true, policy_id: del-004 }
+- { capability_id: document.read, delegatable: true, policy_id: del-005 }
+- { capability_id: document.write, delegatable: true, policy_id: del-006 }
+- { capability_id: finance.payment.read, delegatable: true, policy_id: del-007 }
+- { capability_id: finance.payment.approve, delegatable: true, policy_id: del-008 }

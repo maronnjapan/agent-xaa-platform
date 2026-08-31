@@ -1,5 +1,5 @@
 import { audienceIncludes } from '@xaa/contracts';
-import { createJwksCache, decodeJwsUnverified, verifyCompactJws } from '@xaa/crypto';
+import { createJwksCache, decodeJwsUnverified, verifyCompactJws, verifyCompactJwsRs256 } from '@xaa/crypto';
 import type { MiddlewareHandler } from 'hono';
 import type { ControlPlaneVariables, VerifiedAccessToken } from './types.js';
 import { emitProtocolValidation, type ProtocolValidationEmitter } from './protocol-validation.js';
@@ -32,7 +32,13 @@ export function accessTokenMiddleware(options: AccessTokenOptions): MiddlewareHa
       const token = match[1]!;
       const unverified = decodeJwsUnverified(token);
       if (typeof unverified.header.kid !== 'string') throw new Error('invalid token');
-      const verified = await verifyCompactJws(token, { publicKey: await jwks.getKey(unverified.header.kid), allowedTyp: ['at+jwt'] });
+      // Human IdP signs with RS256 because core's discovery builder requires an
+      // RS256 key; everything else on the platform is ES256. The header chooses the
+      // verifier, and any other alg falls through to invalid_token.
+      const publicKey = await jwks.getKey(unverified.header.kid);
+      const verified = unverified.header.alg === 'RS256'
+        ? await verifyCompactJwsRs256(token, { publicKey, allowedTyp: ['at+jwt'] })
+        : await verifyCompactJws(token, { publicKey, allowedTyp: ['at+jwt'] });
       const payload = verified.payload;
       const now = Math.floor((options.now?.() ?? Date.now()) / 1000);
       if (payload.iss !== options.issuer || typeof payload.exp !== 'number' || payload.exp < now - 60 || (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || payload.nbf > now + 60)) || payload.nonce !== undefined || payload.at_hash !== undefined) throw new Error('invalid token');

@@ -1,48 +1,54 @@
+# The Capability Taxonomy. `default_characteristics` uses the seven keys of
+# docs 03 §7; the taxonomy owns capability_risk, sensitive_resource, admin_permission
+# and personal_data_access, and the Authorization AI may only contribute
+# write_operation, external_communication and financial_operation.
 - capability_id: calendar.event.read
   resource: calendar
   object: event
   action: read
   description: Read calendar events
-  default_characteristics: { capability_risk: low, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: false }
+  default_characteristics: { capability_risk: low, sensitive_resource: false, admin_permission: false, personal_data_access: true }
 - capability_id: calendar.event.write
   resource: calendar
   object: event
   action: write
   description: Write calendar events
-  default_characteristics: { capability_risk: medium, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: true, financial_operation: false }
+  default_characteristics: { capability_risk: medium, sensitive_resource: false, admin_permission: false, personal_data_access: true }
 - capability_id: mail.message.read
   resource: mail
   object: message
   action: read
   description: Read mail
-  default_characteristics: { capability_risk: medium, resource_sensitivity: high, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: false }
+  default_characteristics: { capability_risk: medium, sensitive_resource: true, admin_permission: false, personal_data_access: true }
 - capability_id: mail.message.send
   resource: mail
   object: message
   action: send
   description: Send mail
-  default_characteristics: { capability_risk: high, resource_sensitivity: high, admin_permission: false, personal_data_access: true, write_permission: true, financial_operation: false }
+  default_characteristics: { capability_risk: medium, sensitive_resource: true, admin_permission: false, personal_data_access: true }
 - capability_id: document.read
   resource: document
   object: document
   action: read
   description: Read documents
-  default_characteristics: { capability_risk: low, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: false }
+  default_characteristics: { capability_risk: low, sensitive_resource: false, admin_permission: false, personal_data_access: true }
 - capability_id: document.write
   resource: document
   object: document
   action: write
   description: Write documents
-  default_characteristics: { capability_risk: medium, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: true, financial_operation: false }
+  default_characteristics: { capability_risk: medium, sensitive_resource: false, admin_permission: false, personal_data_access: true }
 - capability_id: finance.payment.read
   resource: finance
   object: payment
   action: read
   description: Read payments
-  default_characteristics: { capability_risk: high, resource_sensitivity: high, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: true }
+  default_characteristics: { capability_risk: high, sensitive_resource: true, admin_permission: false, personal_data_access: true }
+# financial_operation is stated by the taxonomy, not inferred: it is what forces
+# FULL_ISOLATION, and the AI must not be able to talk the platform out of it.
 - capability_id: finance.payment.approve
   resource: finance
   object: payment
   action: approve
   description: Approve payments
-  default_characteristics: { capability_risk: critical, resource_sensitivity: high, admin_permission: true, personal_data_access: true, write_permission: true, financial_operation: true }
+  default_characteristics: { capability_risk: high, sensitive_resource: true, admin_permission: true, personal_data_access: true, financial_operation: true }

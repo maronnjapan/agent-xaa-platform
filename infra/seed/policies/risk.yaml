@@ -1,4 +1,26 @@
-- policy_id: finance-approval
-  capability_id: finance.payment.approve
-  requires_approval: true
-  isolation_level: full_isolation
+# RULE-12. The isolation level is decided here and nowhere else.
+#
+# risk-001 is the one that matters: a financial operation runs in full isolation
+# whatever the aggregate score works out to. There is deliberately no rule that
+# lowers an isolation level, so no combination of low scores can dilute it.
+- policy_id: risk-001
+  when: { financial_operation: true }
+  weight: 40
+  min_isolation_level: full_isolation
+  reason_code: financial_operation
+  added_constraint: { max_amount: 100000 }
+- policy_id: risk-002
+  when: { sensitive_resource: true }
+  weight: 25
+  min_isolation_level: standard
+  reason_code: sensitive_resource
+- policy_id: risk-003
+  when: { write_operation: true }
+  weight: 15
+  min_isolation_level: standard
+  reason_code: write_permission
+- policy_id: risk-004
+  when: { external_communication: true }
+  weight: 10
+  min_isolation_level: standard
+  reason_code: external_communication
