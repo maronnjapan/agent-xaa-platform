@@ -1,16 +1,1 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "composite": true,
-    "useUnknownInCatchVariables": false,
-    "noUncheckedIndexedAccess": false
-  },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "src/oidc/conformance.test.ts"
-  ]
-}
+{"extends": "../../tsconfig.base.json", "compilerOptions": {"rootDir": "src", "outDir": "dist", "composite": true, "useUnknownInCatchVariables": false, "noUncheckedIndexedAccess": false}, "include": ["src/**/*.ts"], "exclude": ["src/oidc/conformance.test.ts"], "references": [{"path": "../../packages/xaa-crypto"}]}

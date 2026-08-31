@@ -1,1 +1,45 @@
-{"name":"@xaa/google-bridge","version":"0.0.0","private":true,"type":"module","main":"dist/server.js","scripts":{"build":"tsc -p tsconfig.json","typecheck":"tsc -p tsconfig.json --noEmit","test":"vitest --config ../../vitest.package.config.ts run"},"dependencies":{"@hono/node-server":"2.1.1","hono":"4.13.5"},"devDependencies":{"@types/node":"22.18.1","typescript":"5.9.2","vitest":"4.1.11"}}
+{
+  "name": "@xaa/google-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./app": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./src/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@google-cloud/kms": "6.0.0",
+    "@google-cloud/secret-manager": "6.1.0",
+    "@hono/node-server": "2.1.1",
+    "@maronn-openid-connect/experimental": "0.0.6",
+    "@xaa/contracts": "workspace:*",
+    "@xaa/crypto": "workspace:*",
+    "@xaa/gcp": "workspace:*",
+    "@xaa/logging": "workspace:*",
+    "@xaa/stub-saas-op": "workspace:*",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  }
+}

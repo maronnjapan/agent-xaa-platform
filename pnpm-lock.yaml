@@ -199,9 +199,39 @@ importers:
 
   apps/google-bridge:
     dependencies:
+      '@google-cloud/kms':
+        specifier: 6.0.0
+        version: 6.0.0
+      '@google-cloud/secret-manager':
+        specifier: 6.1.0
+        version: 6.1.0
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@maronn-openid-connect/experimental':
+        specifier: 0.0.6
+        version: 0.0.6(@maronn-openid-connect/core@0.2.0)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/stub-saas-op':
+        specifier: workspace:*
+        version: link:../stub-saas-op
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: 3.0.1
+        version: 3.0.1(ajv@8.20.0)
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -576,6 +606,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -595,9 +628,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
-      '@maronn-openid-connect/core':
-        specifier: 0.2.0
-        version: 0.2.0
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -638,6 +671,9 @@ importers:
       '@xaa/gcp':
         specifier: workspace:*
         version: link:../packages/gcp
+      '@xaa/google-bridge':
+        specifier: workspace:*
+        version: link:../apps/google-bridge
       '@xaa/human-idp':
         specifier: workspace:*
         version: link:../apps/human-idp
@@ -665,6 +701,12 @@ importers:
       '@xaa/resource-guard':
         specifier: workspace:*
         version: link:../packages/xaa-resource-guard
+      '@xaa/stub-saas-api':
+        specifier: workspace:*
+        version: link:../apps/stub-saas-api
+      '@xaa/stub-saas-op':
+        specifier: workspace:*
+        version: link:../apps/stub-saas-op
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -1115,6 +1157,10 @@ packages:
   '@google-cloud/run@4.0.0':
     resolution: {integrity: sha512-GLYw8igLBCOricmPSCLARn6u/UsviUFua50gZNAIuDcx9HD8Esl30UgnS4d8Vul8zW4DJEr9HsHsDLJDRLDypg==}
     engines: {node: '>=22'}
+
+  '@google-cloud/secret-manager@6.1.0':
+    resolution: {integrity: sha512-IrXjT1z2yW98htydkopcxdhNVh4rpAzO3oTVzKymfdnzmzCKWVxhfwYWWvIor1bzgQN4sa21Wv0CMDokJyTt7A==}
+    engines: {node: '>=18'}
 
   '@google-cloud/storage@7.18.0':
     resolution: {integrity: sha512-r3ZwDMiz4nwW6R922Z1pwpePxyRwE5GdevYX63hRmAQUkUQJcBH/79EnQPDv5cOv1mFBgevdNWQfi3tie3dHrQ==}
@@ -2728,6 +2774,12 @@ snapshots:
   '@google-cloud/run@4.0.0':
     dependencies:
       google-gax: 6.1.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@google-cloud/secret-manager@6.1.0':
+    dependencies:
+      google-gax: 5.0.8
     transitivePeerDependencies:
       - supports-color
 

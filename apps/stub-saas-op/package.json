@@ -11,12 +11,26 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
-    "@maronn-openid-connect/core": "0.2.0",
+    "@xaa/crypto": "workspace:*",
     "hono": "4.13.5"
   },
   "devDependencies": {
     "@types/node": "22.18.1",
     "typescript": "5.9.2",
     "vitest": "4.1.11"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./app": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./src/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
   }
 }

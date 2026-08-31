@@ -2,7 +2,11 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
-const apps = ['human-idp', 'resource-docs-as', 'resource-finance-as', 'stub-saas-op'];
+// The platform's own OIDC providers. `stub-saas-op` is not among them: it stands in for
+// an external SaaS during tests, so it is a fixture rather than a provider this platform
+// operates, and generating it from the same toolchain would prove nothing about the
+// platform while leaving a second copy of that toolchain to keep in step.
+const apps = ['human-idp', 'resource-docs-as', 'resource-finance-as'];
 const errors = [];
 
 async function files(path, prefix = '') {

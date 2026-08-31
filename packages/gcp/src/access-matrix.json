@@ -109,16 +109,17 @@
     "read": [
       "agent_bindings/**",
       "bridge_connections/**",
+      "connector_definitions/**",
       "bridge_consent_states/**",
       "bridge_consent_codes/**",
-      "dpop_jti/**"
+      "bridge_dpop_jti/**"
     ],
     "write": [
       "agent_bindings/**",
       "bridge_connections/**",
       "bridge_consent_states/**",
       "bridge_consent_codes/**",
-      "dpop_jti/**"
+      "bridge_dpop_jti/**"
     ]
   },
   "agent-runtime": {
@@ -186,6 +187,7 @@
       "capability_taxonomy/**",
       "catalog_connectors/**",
       "catalog_tools/**",
+      "connector_definitions/**",
       "delegatable_permissions/**",
       "human_permissions/**",
       "organization_policies/**",
@@ -197,6 +199,7 @@
       "capability_taxonomy/**",
       "catalog_connectors/**",
       "catalog_tools/**",
+      "connector_definitions/**",
       "delegatable_permissions/**",
       "human_permissions/**",
       "organization_policies/**",

@@ -15,6 +15,7 @@
     "@xaa/contracts": "workspace:*",
     "@xaa/crypto": "workspace:*",
     "@xaa/gcp": "workspace:*",
+    "@xaa/google-bridge": "workspace:*",
     "@xaa/human-idp": "workspace:*",
     "@xaa/lifecycle-manager": "workspace:*",
     "@xaa/logging": "workspace:*",
@@ -24,6 +25,8 @@
     "@xaa/resource-finance-api": "workspace:*",
     "@xaa/resource-finance-as": "workspace:*",
     "@xaa/resource-guard": "workspace:*",
+    "@xaa/stub-saas-api": "workspace:*",
+    "@xaa/stub-saas-op": "workspace:*",
     "hono": "4.13.5"
   },
   "devDependencies": {
