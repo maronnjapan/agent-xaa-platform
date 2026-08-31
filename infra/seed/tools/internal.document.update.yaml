@@ -7,5 +7,5 @@ token_provider: null
 api: { base_url: "${resource:docs}", method: PATCH, path: "/documents/{id}" }
 parameters: { id: { type: string, required: true }, body: { type: string } }
 constraints: {}
-response_schema: { type: object }
+response_schema: { type: object, allowlist: [document_id, version, updated_at] }
 risk_level: medium

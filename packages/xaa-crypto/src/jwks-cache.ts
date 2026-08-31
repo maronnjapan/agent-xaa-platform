@@ -1,4 +1,4 @@
-import { importPublicJwk } from './keys.js';
+import { importPublicJwk, importRsaPublicJwk } from './keys.js';
 import { XaaCryptoError } from './errors.js';
 
 export interface JwksCache {
@@ -36,7 +36,12 @@ export function createJwksCache(options: {
         if (!jwk || typeof jwk !== 'object' || typeof (jwk as Record<string, unknown>).kid !== 'string') continue;
         const kid = (jwk as Record<string, unknown>).kid as string;
         if (options.allowedKidPrefixes && !options.allowedKidPrefixes.some((prefix) => kid.startsWith(prefix))) continue;
-        try { next.set(kid, await importPublicJwk(jwk)); } catch { /* Ignore unsupported keys in a mixed JWKS. */ }
+        // The shared JWK Set mixes EC (Agent OP, Human IdP SSO) and RSA (Resource
+        // AS) keys, so both shapes are imported; anything else is skipped.
+        const kty = (jwk as Record<string, unknown>).kty;
+        try {
+          next.set(kid, kty === 'RSA' ? await importRsaPublicJwk(jwk) : await importPublicJwk(jwk));
+        } catch { /* Ignore unsupported keys in a mixed JWKS. */ }
       }
       keys = next;
       fetchedAt = now();

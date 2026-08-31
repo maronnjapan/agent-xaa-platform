@@ -1,3 +1,6 @@
 import { serve } from '@hono/node-server';
 import createApp from './app.js';
-serve({ fetch: createApp().fetch, port: Number(process.env.PORT ?? 8080) });
+import { createRuntimeDeps } from './runtime.js';
+
+const deps = await createRuntimeDeps();
+serve({ fetch: createApp(deps).fetch, port: deps.port });

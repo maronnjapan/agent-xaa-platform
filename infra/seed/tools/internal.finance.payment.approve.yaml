@@ -7,5 +7,5 @@ token_provider: null
 api: { base_url: "${resource:finance}", method: POST, path: "/payments/{id}/approve" }
 parameters: { id: { type: string, required: true }, amount: { type: number, required: true } }
 constraints: { max_amount: 1000000 }
-response_schema: { type: object }
+response_schema: { type: object, allowlist: [payment_id, status, approved_by, approved_by_agent, approved_at] }
 risk_level: critical

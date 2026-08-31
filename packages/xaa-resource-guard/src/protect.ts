@@ -1,5 +1,5 @@
 import { AGENT_URN_PREFIX, audienceIncludes } from '@xaa/contracts';
-import { createJwksCache, decodeJwsUnverified, verifyCompactJws, verifyDpopProof, XaaCryptoError, type JtiStore } from '@xaa/crypto';
+import { createJwksCache, decodeJwsUnverified, verifyCompactJws, verifyCompactJwsRs256, verifyDpopProof, XaaCryptoError, type JtiStore } from '@xaa/crypto';
 import type { Context, MiddlewareHandler } from 'hono';
 
 export interface XaaResourceContext {
@@ -40,7 +40,13 @@ export function createResourceProtection(options: ResourceProtectionOptions): Mi
     try {
       const decoded = decodeJwsUnverified(accessToken);
       if (typeof decoded.header.kid !== 'string') return unauthorized();
-      const verified = await verifyCompactJws(accessToken, { publicKey: await jwks.getKey(decoded.header.kid), allowedTyp: ['at+jwt'] });
+      // The Resource AS signs with RS256 (00b) while every other token on this
+      // platform is ES256. The algorithm is read from the header and dispatched to
+      // the matching verifier; anything outside these two is rejected outright.
+      const publicKey = await jwks.getKey(decoded.header.kid);
+      const verified = decoded.header.alg === 'RS256'
+        ? await verifyCompactJwsRs256(accessToken, { publicKey, allowedTyp: ['at+jwt'] })
+        : await verifyCompactJws(accessToken, { publicKey, allowedTyp: ['at+jwt'] });
       const payload = verified.payload;
       const now = Math.floor((options.now?.() ?? Date.now()) / 1000);
       if (payload.iss !== options.asIssuer || !audienceIncludes(payload.aud, options.resourceUri) || typeof payload.exp !== 'number' || payload.exp < now - 60 || (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || payload.nbf > now + 60)) || (payload.iat !== undefined && (typeof payload.iat !== 'number' || payload.iat > now + 60))) return unauthorized();

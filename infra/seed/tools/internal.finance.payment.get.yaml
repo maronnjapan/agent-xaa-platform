@@ -7,5 +7,5 @@ token_provider: null
 api: { base_url: "${resource:finance}", method: GET, path: "/payments/{id}" }
 parameters: { id: { type: string, required: true } }
 constraints: {}
-response_schema: { type: object }
+response_schema: { type: object, allowlist: [payment_id, amount, currency, status, counterparty, memo] }
 risk_level: high

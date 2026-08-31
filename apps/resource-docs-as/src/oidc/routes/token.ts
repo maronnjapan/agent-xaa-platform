@@ -1,3 +1,6 @@
+// XAA-PATCH:REQ-05-085 begin
+import { redeemHandler } from '../../idjag/redeem.js';
+// XAA-PATCH:REQ-05-085 end
 import { Hono } from 'hono';
 import {
   validateGrantTypeSupported,
@@ -53,6 +56,129 @@ import {
   refreshTokenStore as defaultRefreshTokenStore,
 } from '../store.js';
 import type { RegisteredClient } from '../config.js';
+import {
+  IdJagError,
+  JWT_BEARER_GRANT_TYPE,
+  ID_JAG_TOKEN_TYPE,
+  TOKEN_EXCHANGE_GRANT_TYPE,
+  TOKEN_TYPE_ID_TOKEN,
+  matchesIdJagIssuanceRequest,
+  processIdJagIssuanceRequest,
+  processIdJagRedemptionRequest,
+  resolveIdJagActor,
+  type IdJagAccessTokenInfo,
+  type IdJagActorTokenResolver,
+  type IdJagTrustedIdentityProvider,
+} from '@maronn-openid-connect/experimental/id-jag';
+import type { JwkSet } from '@maronn-openid-connect/core';
+
+/**
+ * EXPERIMENTAL — Cross-App Access (XAA) / ID-JAG settings
+ * (draft-ietf-oauth-identity-assertion-authz-grant-04).
+ *
+ * Issuing side (this OP as the IdP, draft §4.3):
+ * - allowedAudiences: resource authorization server issuers this IdP may issue
+ *   an ID-JAG for. Empty by default (fail safe): every issuance request is
+ *   rejected with invalid_target until you list the peer AS issuers here.
+ *   Adding an entry grants that cross-app connection on behalf of every user —
+ *   there is no per-user consent screen in this flow.
+ * - idJagLifetimeSeconds: ID-JAG lifetime. Keep it short (draft example: 300);
+ *   clients are expected to request a fresh one instead of holding it.
+ * - allowedScopes: optional cap on the scopes an ID-JAG may carry. undefined
+ *   passes the requested scopes through (the resource AS applies its own
+ *   policy again on redemption).
+ * - allowRefreshTokenSubjects: whether a refresh token this OP issued may stand
+ *   in for the ID Token as the subject_token (draft §4.3 MAY), so a client can
+ *   request a fresh ID-JAG after its ID Token expired without a new SSO round
+ *   trip. Validated exactly like the standard refresh_token grant (rotation
+ *   reuse revokes the token family; online tokens require the login session to
+ *   be alive); the refresh token is NOT consumed. Grants without the openid
+ *   scope are refused — their refresh token replaces no identity assertion.
+ * - allowActorTokens: whether an actor_token (identifying who acts on the
+ *   subject's behalf) is accepted and recorded as the ID-JAG's act claim
+ *   (RFC 8693 §4.1). The draft defines no normative actor processing (§9.7
+ *   sketches extensions), so this is an opt-in extension and defaults to
+ *   false — an actor_token is rejected until you flip it, whatever else is
+ *   configured. Every token type identifier RFC 8693 §3 defines is accepted
+ *   the same way; the type alone decides nothing.
+ * - actorTokenResolver: validates the actor_token's CONTENT (signature,
+ *   revocation, whose token it is) — for every accepted type, this OP's own
+ *   ID Tokens included. The library only checks the request structure and the
+ *   shape of what you return. Return the act value ({ sub, act? }) for a valid
+ *   token, null for an invalid one (answered with a fixed invalid_request), or
+ *   throw IdJagError to pick the response yourself. The default below handles
+ *   ID Tokens this OP issued to the authenticated client; extend or replace it
+ *   to cover the other types. Clearing it rejects every actor_token.
+ *
+ * Consuming side (this OP as the resource authorization server, draft §4.4):
+ * - trustedIdentityProviders: the IdPs whose ID-JAGs are accepted on the
+ *   jwt-bearer grant. Empty by default (fail safe). Keys come from the inline
+ *   `jwks` when present, otherwise from `jwksUri` (fetched and cached below).
+ *   Never derive the key source from the assertion itself.
+ */
+const defaultIdJagActorTokenResolver: IdJagActorTokenResolver = async ({
+  actorToken,
+  actorTokenType,
+  clientId,
+  issuer,
+  jwks,
+}) =>
+  actorTokenType === TOKEN_TYPE_ID_TOKEN
+    ? resolveIdJagActor({ actorToken, issuer, clientId, jwks })
+    : null;
+
+export const idJagConfig = {
+  allowedAudiences: [] as string[],
+  idJagLifetimeSeconds: 300,
+  allowedScopes: undefined as string[] | undefined,
+  allowRefreshTokenSubjects: true,
+  allowActorTokens: false,
+  actorTokenResolver: defaultIdJagActorTokenResolver as IdJagActorTokenResolver | undefined,
+  trustedIdentityProviders: [] as Array<{ issuer: string; jwksUri?: string; jwks?: JwkSet }>,
+};
+
+/**
+ * EXPERIMENTAL — jwks_uri cache for trusted identity providers.
+ *
+ * A fetched JWKS is reused for 300 seconds, so a signing-key rotation at the
+ * IdP can take up to that long to be picked up (a verification that fails
+ * within the window is answered as an untrusted assertion). The fetch target
+ * comes exclusively from the static idJagConfig above — never from request or
+ * assertion content — which is what keeps this endpoint SSRF-free.
+ */
+const idJagJwksCache = new Map<string, { jwks: JwkSet; expiresAt: number }>();
+const ID_JAG_JWKS_CACHE_TTL_MS = 300_000;
+
+async function resolveTrustedIdentityProviders(): Promise<IdJagTrustedIdentityProvider[]> {
+  const resolved: IdJagTrustedIdentityProvider[] = [];
+  for (const entry of idJagConfig.trustedIdentityProviders) {
+    if (entry.jwks !== undefined) {
+      resolved.push({ issuer: entry.issuer, jwks: entry.jwks });
+      continue;
+    }
+    if (entry.jwksUri === undefined) {
+      // An entry with neither jwks nor jwksUri can never verify anything; skip
+      // it so the assertion is answered with the fixed untrusted description.
+      continue;
+    }
+    const cached = idJagJwksCache.get(entry.jwksUri);
+    if (cached !== undefined && cached.expiresAt > Date.now()) {
+      resolved.push({ issuer: entry.issuer, jwks: cached.jwks });
+      continue;
+    }
+    // A failed fetch propagates: the generic catch turns it into server_error,
+    // which is honest — the assertion was never evaluated, so invalid_grant
+    // would wrongly blame the client for an outage on this side.
+    const response = await fetch(entry.jwksUri);
+    if (!response.ok) {
+      throw new Error(`Fetching the JWKS of trusted IdP ${entry.issuer} failed with status ${response.status}`);
+    }
+    const jwks = (await response.json()) as JwkSet;
+    idJagJwksCache.set(entry.jwksUri, { jwks, expiresAt: Date.now() + ID_JAG_JWKS_CACHE_TTL_MS });
+    resolved.push({ issuer: entry.issuer, jwks });
+  }
+  return resolved;
+}
 
 export const tokenApp = new Hono<{ Variables: Record<string, any> }>();
 
@@ -129,6 +255,32 @@ tokenApp.post('/', async (c) => {
   }
 
   const params = rawParams;
+// XAA-PATCH:REQ-05-085 begin
+  // DEC-ID-21: only Agent OP issues an ID-JAG, so the exchange grant is refused
+  // here before anything else runs and this AS's signing key stays an Access Token
+  // key (RULE-48).
+  if (params.grant_type === TOKEN_EXCHANGE_GRANT_TYPE) {
+    c.header('Cache-Control', 'no-store');
+    c.header('Pragma', 'no-cache');
+    return c.json({ error: 'unsupported_grant_type', error_description: 'This authorization server does not issue grants' }, 400);
+  }
+
+  // DEC-ID-14 / REQ-05-085: for the jwt-bearer grant, client authentication is
+  // possession of the key the ID-JAG was bound to, not a shared secret. The
+  // generated client_secret pipeline below is bypassed for this grant alone, and
+  // redeemHandler performs the cnf.jkt-to-proof comparison instead. Reaching the
+  // route through Cloud Run IAM grants nothing (REQ-08-044).
+  if (params.grant_type === JWT_BEARER_GRANT_TYPE) {
+    const redemptionResolver = c.get('tokenClientResolver') ?? defaultTokenClientResolver;
+    const redemptionClient = await redemptionResolver.findClient(typeof params.client_id === 'string' ? params.client_id : '');
+    if (redemptionClient === null) {
+      c.header('Cache-Control', 'no-store');
+      c.header('Pragma', 'no-cache');
+      return c.json({ error: 'invalid_client', error_description: 'Client authentication failed' }, 401);
+    }
+    return redeemHandler(c, params, redemptionClient);
+  }
+// XAA-PATCH:REQ-05-085 end
 
   try {
     const tokenClientResolver = c.get('tokenClientResolver') ?? defaultTokenClientResolver;
@@ -170,6 +322,182 @@ tokenApp.post('/', async (c) => {
     await verifyClientSecret(tokenClient, presentedCredentials.clientSecret);
 
     const authenticatedClientId = presentedCredentials.clientId;
+
+    // --- EXPERIMENTAL: ID-JAG issuance (Cross-App Access, draft §4.3) ------
+    // A token-exchange request whose requested_token_type is the ID-JAG URN.
+    // Dispatched right after client authentication and BEFORE the plain
+    // token-exchange branch (same grant_type URN) and core's
+    // validateGrantTypeSupported. The subject_token must be an ID Token this OP
+    // issued to the authenticated client; the result is a signed grant JWT for
+    // the resource authorization server named by `audience` — not an access
+    // token (the response carries token_type N_A).
+    //
+    // Backed by @maronn-openid-connect/experimental, whose API is NOT stable: it may change
+    // in a breaking way between releases. The underlying specification is an
+    // IETF draft (-04) and may itself change. Do not build production code on
+    // this without pinning versions.
+    if (matchesIdJagIssuanceRequest(params)) {
+      const idJagIssuanceConfig = c.get('config');
+      // The ID-JAG is signed with a registered RS256 key so the peer AS can
+      // verify it against this OP's JWKS endpoint (same key-selection contract
+      // as JARM: RS256 is pinned, the active key may be a different alg).
+      const idJagSigningKeys = (c.get('signingKeys') as SigningKey[] | undefined) ?? [];
+      let idJagSigningKey: SigningKey;
+      try {
+        idJagSigningKey = selectSigningKeyByAlg(idJagSigningKeys, 'RS256');
+      } catch {
+        c.header('Cache-Control', 'no-store');
+        c.header('Pragma', 'no-cache');
+        return c.json(
+          { error: 'server_error', error_description: 'No RS256 signing key registered for ID-JAG issuance' },
+          500,
+        );
+      }
+      // The subject_token is verified against the same JWKS that id_token_hint
+      // uses (the OP's own ID Token signing keys) — draft §4.3.3 requires the
+      // assertion's audience to be the authenticated client, which
+      // processIdJagIssuanceRequest checks.
+      const idJagJwks = await c.get('jwksProvider')();
+
+      const idJagIssuanceResponse = await processIdJagIssuanceRequest({
+        params,
+        client: tokenClient,
+        issuer: idJagIssuanceConfig.issuer,
+        jwks: idJagJwks,
+        signingKey: idJagSigningKey,
+        allowedAudiences: idJagConfig.allowedAudiences,
+        allowedScopes: idJagConfig.allowedScopes,
+        lifetimeSeconds: idJagConfig.idJagLifetimeSeconds,
+        // Extension (draft §9.7): when enabled, an actor_token is recorded as
+        // the ID-JAG's act claim. Every accepted token type goes through the
+        // same resolver, which owns the content validation.
+        allowActorTokens: idJagConfig.allowActorTokens,
+        ...(idJagConfig.actorTokenResolver === undefined
+          ? {}
+          : { actorTokenResolver: idJagConfig.actorTokenResolver }),
+        ...(idJagConfig.allowRefreshTokenSubjects
+          ? { refreshTokenResolver, authenticationSessionResolver }
+          : {}),
+      });
+
+      // RFC 6749 §5.1: token responses MUST NOT be cached. The ID-JAG itself is
+      // not persisted — it is a self-contained signed grant the peer AS
+      // verifies by signature and exp.
+      c.header('Cache-Control', 'no-store');
+      c.header('Pragma', 'no-cache');
+      return c.json(idJagIssuanceResponse);
+    }
+
+    // Generated without --enable token-exchange: the exchange grant exists here
+    // only to issue ID-JAGs, so any other requested_token_type is answered with
+    // a pointer instead of falling through to unsupported_grant_type (discovery
+    // does advertise the exchange grant in this build).
+    if (params.grant_type === TOKEN_EXCHANGE_GRANT_TYPE) {
+      c.header('Cache-Control', 'no-store');
+      c.header('Pragma', 'no-cache');
+      return c.json(
+        {
+          error: 'invalid_request',
+          error_description: `This authorization server only supports requested_token_type ${ID_JAG_TOKEN_TYPE} for token exchange`,
+        },
+        400,
+      );
+    }
+
+    // --- EXPERIMENTAL: ID-JAG redemption (Cross-App Access, draft §4.4) ----
+    // The jwt-bearer grant (RFC 7523 §2.1). The assertion must be an ID-JAG
+    // (typ oauth-id-jag+jwt) issued by one of idJagConfig.trustedIdentityProviders
+    // for THIS issuer and for the authenticated client. This OP then issues its
+    // own access token — the IdP never mints tokens for this AS.
+    //
+    // No ID Token is issued (this is not an OIDC authentication flow: the
+    // openid scope only grants UserInfo access) and no refresh token is issued
+    // (draft §4.4.3 SHOULD NOT — re-presenting the still-valid ID-JAG replaces
+    // the refresh token).
+    if (params.grant_type === JWT_BEARER_GRANT_TYPE) {
+      const idJagRedemptionConfig = c.get('config');
+      const idJagIdentityProviders = await resolveTrustedIdentityProviders();
+
+      const idJagGrant = await processIdJagRedemptionRequest({
+        params,
+        client: tokenClient,
+        issuer: idJagRedemptionConfig.issuer,
+        identityProviders: idJagIdentityProviders,
+        configuredExpiresIn: idJagRedemptionConfig.accessTokenExpiresIn,
+      });
+
+      // config / privateKey / keyId are bound further down for the standard
+      // grants. This branch reads them on its own so the generated output is
+      // unchanged when the feature is off; it returns, so nothing runs twice.
+      const idJagTokenIssuer: AccessTokenIssuer =
+        idJagRedemptionConfig.accessTokenFormat === 'opaque'
+          ? createOpaqueAccessTokenIssuer()
+          : createJwtAccessTokenIssuer();
+
+      // Same aud policy as the standard token route: the UserInfo endpoint
+      // stays a permanent member (RFC 9068 §3); the ID-JAG's resource claim
+      // (RFC 8707) contributes the requested resources.
+      const idJagAudience = buildAccessTokenAudience({
+        userInfoEndpoint: `${idJagRedemptionConfig.issuer}/userinfo`,
+        requested: idJagGrant.requestedResources,
+        issuer: idJagRedemptionConfig.issuer,
+      });
+
+      const idJagIssuedAt = Math.floor(Date.now() / 1000);
+      const idJagAccessTokenPayload = buildAccessTokenPayload({
+        issuer: idJagRedemptionConfig.issuer,
+        subject: idJagGrant.subject,
+        clientId: idJagGrant.clientId,
+        scope: idJagGrant.scope,
+        audience: idJagAudience,
+        expiresIn: idJagGrant.expiresIn,
+        issuedAt: idJagIssuedAt,
+      });
+      const idJagAccessToken = await idJagTokenIssuer.issue({
+        payload: {
+          ...idJagAccessTokenPayload,
+          // RFC 8693 §4.1: an act claim carried by the ID-JAG is preserved on
+          // the issued access token, so downstream services still see WHO acts
+          // on the subject's behalf (dropping it would silently turn the
+          // delegation into impersonation).
+          ...(idJagGrant.actor === undefined ? {} : { act: idJagGrant.actor }),
+        },
+        privateKey: c.get('privateKey'),
+        keyId: c.get('keyId'),
+      });
+
+      const idJagAccessTokenMetadata: IdJagAccessTokenInfo = {
+        // draft §4.4.1: the ID-JAG's sub is used as the local subject directly
+        // (subject resolution by identical sub; JIT provisioning is out of scope).
+        sub: idJagGrant.subject,
+        clientId: idJagGrant.clientId,
+        scope: idJagGrant.scope,
+        expiresAt: idJagIssuedAt + idJagGrant.expiresIn,
+        // Each redemption is its own grant: revoking one issued token must not
+        // affect tokens from other redemptions of the same (re-presentable)
+        // ID-JAG, so the payload's own jti doubles as the grant id.
+        grantId: idJagAccessTokenPayload.jti,
+        iat: idJagIssuedAt,
+        nbf: idJagIssuedAt,
+        audience: idJagAudience,
+        issuer: idJagRedemptionConfig.issuer,
+        jti: idJagAccessTokenPayload.jti,
+        // The actor record is persisted too, so opaque-token introspection and
+        // store-based tooling can surface it just like the JWT claim.
+        ...(idJagGrant.actor === undefined ? {} : { act: idJagGrant.actor }),
+      };
+      await accessTokenStore.set(idJagAccessToken, idJagAccessTokenMetadata);
+
+      // RFC 6749 §5.1: token responses MUST NOT be cached.
+      c.header('Cache-Control', 'no-store');
+      c.header('Pragma', 'no-cache');
+      return c.json({
+        access_token: idJagAccessToken,
+        token_type: 'Bearer' as const,
+        expires_in: idJagGrant.expiresIn,
+        scope: idJagGrant.scope.join(' '),
+      });
+    }
 
     // --- Token request validation pipeline --------------------------------
     // Each step below is an independent core function, called in the same order
@@ -591,6 +919,20 @@ tokenApp.post('/', async (c) => {
     c.header('Pragma', 'no-cache');
     return c.json(tokenResponse);
   } catch (error) {
+    if (error instanceof IdJagError) {
+      // ID-JAG errors use the RFC 6749 §5.2 shape and are always 400 — a 401
+      // can only come from client authentication, which runs before both
+      // branches and throws core's TokenError. Issuance failures map to
+      // invalid_request / invalid_target / invalid_scope / unauthorized_client
+      // (RFC 8693 §2.2.2); assertion failures on redemption map to
+      // invalid_grant (RFC 7521 §4.1).
+      c.header('Cache-Control', 'no-store');
+      c.header('Pragma', 'no-cache');
+      return c.json(
+        { error: error.code, error_description: error.errorDescription },
+        error.statusCode,
+      );
+    }
     if (error instanceof TokenError) {
       const status = error.statusCode as 400 | 401;
       // RFC 6750 Section 3 / OAuth 2.1 Section 5.2: 401 responses include WWW-Authenticate

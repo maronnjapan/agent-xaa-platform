@@ -78,3 +78,24 @@ export async function toPublicJwk(key: CryptoKey): Promise<PublicJwkEs256> {
   assertPublicJwk(jwk);
   return { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y };
 }
+
+/**
+ * Imports an RSA public JWK for RS256 verification. Only the Resource AS signing
+ * keys and Human IdP's SSO key take this shape; the ES256 import above stays the
+ * default everywhere else.
+ */
+export async function importRsaPublicJwk(jwk: unknown): Promise<CryptoKey> {
+  if (!jwk || typeof jwk !== 'object') throw new XaaCryptoError('invalid_jwk');
+  const value = jwk as Record<string, unknown>;
+  if (value.kty !== 'RSA' || typeof value.n !== 'string' || typeof value.e !== 'string' || 'd' in value) {
+    throw new XaaCryptoError('invalid_jwk');
+  }
+  try {
+    return await webcrypto.subtle.importKey(
+      'jwk', { kty: 'RSA', n: value.n, e: value.e, alg: 'RS256', ext: true },
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, true, ['verify'],
+    );
+  } catch {
+    throw new XaaCryptoError('invalid_jwk');
+  }
+}

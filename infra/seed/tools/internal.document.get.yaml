@@ -7,5 +7,5 @@ token_provider: null
 api: { base_url: "${resource:docs}", method: GET, path: "/documents/{id}" }
 parameters: { id: { type: string, required: true } }
 constraints: {}
-response_schema: { type: object }
+response_schema: { type: object, allowlist: [document_id, type, title, occurred_at, body] }
 risk_level: low

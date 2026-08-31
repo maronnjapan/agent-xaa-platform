@@ -252,6 +252,21 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/resource-guard':
+        specifier: workspace:*
+        version: link:../../packages/xaa-resource-guard
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -268,6 +283,12 @@ importers:
 
   apps/resource-docs-as:
     dependencies:
+      '@google-cloud/kms':
+        specifier: 6.0.0
+        version: 6.0.0
+      '@google-cloud/storage':
+        specifier: 7.18.0
+        version: 7.18.0
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
@@ -277,6 +298,21 @@ importers:
       '@maronn-openid-connect/experimental':
         specifier: 0.0.6
         version: 0.0.6(@maronn-openid-connect/core@0.2.0)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/resource-guard':
+        specifier: workspace:*
+        version: link:../../packages/xaa-resource-guard
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -296,6 +332,21 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/resource-guard':
+        specifier: workspace:*
+        version: link:../../packages/xaa-resource-guard
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -312,6 +363,12 @@ importers:
 
   apps/resource-finance-as:
     dependencies:
+      '@google-cloud/kms':
+        specifier: 6.0.0
+        version: 6.0.0
+      '@google-cloud/storage':
+        specifier: 7.18.0
+        version: 7.18.0
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
@@ -321,6 +378,21 @@ importers:
       '@maronn-openid-connect/experimental':
         specifier: 0.0.6
         version: 0.0.6(@maronn-openid-connect/core@0.2.0)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/resource-guard':
+        specifier: workspace:*
+        version: link:../../packages/xaa-resource-guard
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -440,6 +512,24 @@ importers:
       '@xaa/human-idp':
         specifier: workspace:*
         version: link:../apps/human-idp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../packages/xaa-logging
+      '@xaa/resource-docs-api':
+        specifier: workspace:*
+        version: link:../apps/resource-docs-api
+      '@xaa/resource-docs-as':
+        specifier: workspace:*
+        version: link:../apps/resource-docs-as
+      '@xaa/resource-finance-api':
+        specifier: workspace:*
+        version: link:../apps/resource-finance-api
+      '@xaa/resource-finance-as':
+        specifier: workspace:*
+        version: link:../apps/resource-finance-as
+      '@xaa/resource-guard':
+        specifier: workspace:*
+        version: link:../packages/xaa-resource-guard
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -502,6 +592,9 @@ importers:
       json-schema-to-ts:
         specifier: 3.1.1
         version: 3.1.1
+      yaml:
+        specifier: 2.8.1
+        version: 2.8.1
     devDependencies:
       '@types/node':
         specifier: 22.18.1
@@ -511,7 +604,7 @@ importers:
         version: 5.9.2
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(vite@8.2.2(@types/node@22.18.1)(yaml@2.9.0))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(vite@8.2.2(@types/node@22.18.1)(yaml@2.8.1))
 
   packages/xaa-control-plane-auth:
     dependencies:
@@ -581,12 +674,21 @@ importers:
 
   packages/xaa-resource-guard:
     dependencies:
+      '@maronn-openid-connect/core':
+        specifier: 0.2.0
+        version: 0.2.0
+      '@maronn-openid-connect/experimental':
+        specifier: 0.0.6
+        version: 0.0.6(@maronn-openid-connect/core@0.2.0)
       '@xaa/contracts':
         specifier: workspace:*
         version: link:../xaa-contracts
       '@xaa/crypto':
         specifier: workspace:*
         version: link:../xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../gcp
       '@xaa/logging':
         specifier: workspace:*
         version: link:../xaa-logging
@@ -2111,6 +2213,11 @@ packages:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
     engines: {node: '>=10'}
 
+  yaml@2.8.1:
+    resolution: {integrity: sha512-lcYcMxX2PO9XMGvAJkJ3OsNMw+/7FKes7/hgerGUYWIoWu5j/+YQqcZr5JnPZWzOsEBgMbSbiSTn/dv/69Mkpw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yaml@2.9.0:
     resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
     engines: {node: '>= 14.6'}
@@ -2552,6 +2659,14 @@ snapshots:
       '@vitest/utils': 4.1.11
       chai: 6.2.2
       tinyrainbow: 3.1.1
+
+  '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@22.18.1)(yaml@2.8.1))':
+    dependencies:
+      '@vitest/spy': 4.1.11
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 8.2.2(@types/node@22.18.1)(yaml@2.8.1)
 
   '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@22.18.1)(yaml@2.9.0))':
     dependencies:
@@ -3566,6 +3681,18 @@ snapshots:
 
   uuid@9.0.1: {}
 
+  vite@8.2.2(@types/node@22.18.1)(yaml@2.8.1):
+    dependencies:
+      lightningcss: 1.33.0
+      picomatch: 4.0.7
+      postcss: 8.5.26
+      rolldown: 1.2.6
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      '@types/node': 22.18.1
+      fsevents: 2.3.3
+      yaml: 2.8.1
+
   vite@8.2.2(@types/node@22.18.1)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
@@ -3577,6 +3704,34 @@ snapshots:
       '@types/node': 22.18.1
       fsevents: 2.3.3
       yaml: 2.9.0
+
+  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(vite@8.2.2(@types/node@22.18.1)(yaml@2.8.1)):
+    dependencies:
+      '@vitest/expect': 4.1.11
+      '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@22.18.1)(yaml@2.8.1))
+      '@vitest/pretty-format': 4.1.11
+      '@vitest/runner': 4.1.11
+      '@vitest/snapshot': 4.1.11
+      '@vitest/spy': 4.1.11
+      '@vitest/utils': 4.1.11
+      es-module-lexer: 2.3.2
+      expect-type: 1.4.0
+      magic-string: 0.30.21
+      obug: 2.1.4
+      pathe: 2.0.3
+      picomatch: 4.0.7
+      std-env: 4.2.0
+      tinybench: 2.9.0
+      tinyexec: 1.3.0
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.1
+      vite: 8.2.2(@types/node@22.18.1)(yaml@2.8.1)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
+      '@types/node': 22.18.1
+    transitivePeerDependencies:
+      - msw
 
   vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(vite@8.2.2(@types/node@22.18.1)(yaml@2.9.0)):
     dependencies:
@@ -3643,6 +3798,8 @@ snapshots:
   xml-naming@0.3.0: {}
 
   y18n@5.0.8: {}
+
+  yaml@2.8.1: {}
 
   yaml@2.9.0: {}
 

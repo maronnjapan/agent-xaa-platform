@@ -39,6 +39,11 @@ export interface AgentOpHarness {
   now(): number;
 }
 
+export interface IssuedIdJag {
+  idJag: string;
+  keyPair: Es256KeyPair;
+}
+
 export interface StartAgentOpOptions {
   /** Human IdP's SSO public JWK, so subject tokens verify against the shared set. */
   idpPublicJwk: JsonWebKey;

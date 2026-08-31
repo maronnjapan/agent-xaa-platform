@@ -7,5 +7,5 @@ token_provider: null
 api: { base_url: "${resource:docs}", method: GET, path: /documents }
 parameters: {}
 constraints: {}
-response_schema: { type: array }
+response_schema: { type: array, allowlist: [document_id, type, title, occurred_at] }
 risk_level: low

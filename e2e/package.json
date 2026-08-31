@@ -13,6 +13,12 @@
     "@xaa/crypto": "workspace:*",
     "@xaa/gcp": "workspace:*",
     "@xaa/human-idp": "workspace:*",
+    "@xaa/logging": "workspace:*",
+    "@xaa/resource-docs-api": "workspace:*",
+    "@xaa/resource-docs-as": "workspace:*",
+    "@xaa/resource-finance-api": "workspace:*",
+    "@xaa/resource-finance-as": "workspace:*",
+    "@xaa/resource-guard": "workspace:*",
     "hono": "4.13.5"
   },
   "devDependencies": {

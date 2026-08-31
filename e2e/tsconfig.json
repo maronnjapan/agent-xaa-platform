@@ -18,6 +18,18 @@
       "path": "../apps/agent-op"
     },
     {
+      "path": "../apps/resource-docs-as"
+    },
+    {
+      "path": "../apps/resource-finance-as"
+    },
+    {
+      "path": "../apps/resource-docs-api"
+    },
+    {
+      "path": "../apps/resource-finance-api"
+    },
+    {
       "path": "../packages/xaa-crypto"
     },
     {
@@ -25,6 +37,12 @@
     },
     {
       "path": "../packages/gcp"
+    },
+    {
+      "path": "../packages/xaa-resource-guard"
+    },
+    {
+      "path": "../packages/xaa-logging"
     }
   ]
 }

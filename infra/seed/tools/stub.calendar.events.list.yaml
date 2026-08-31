@@ -7,5 +7,5 @@ token_provider: ${bridge:internal}
 api: { base_url: "${issuer:stub_saas}", method: GET, path: /calendar/events }
 parameters: {}
 constraints: {}
-response_schema: { type: array }
+response_schema: { type: array, allowlist: [event_id, summary, start, end] }
 risk_level: medium

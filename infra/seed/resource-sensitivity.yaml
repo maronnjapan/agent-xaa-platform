@@ -1,0 +1,7 @@
+# T-RES-18. The Risk Policy reads this to decide that a financial operation must run
+# under FULL_ISOLATION. The rule itself lives in the Authorization domain; this file
+# only states how sensitive each resource is. The documents resource carries no
+# uplift, so it is deliberately absent.
+resources:
+  - resource_id: internal-finance-api
+    sensitivity: high

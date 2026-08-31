@@ -7,5 +7,5 @@ token_provider: null
 api: { base_url: "${resource:docs}", method: POST, path: /documents }
 parameters: { title: { type: string }, body: { type: string } }
 constraints: {}
-response_schema: { type: object }
+response_schema: { type: object, allowlist: [document_id, type, title] }
 risk_level: medium

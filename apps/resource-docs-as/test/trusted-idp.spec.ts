@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest';
+import { createTrustedIdpResolver, filterIdJagKeys } from '../src/config/trusted-idp.js';
+import { loadResourceAsEnv } from '../src/config/env.js';
+import { asEnv } from './helpers.js';
+
+const jwks = {
+  keys: [
+    { kty: 'EC', kid: 'idp-abcdefgh' },
+    { kty: 'EC', kid: 'op-shared-1' },
+    { kty: 'EC', kid: 'idjag-abcdefghijkl-1' },
+    { kty: 'RSA', kid: 'docs-as-12345678' },
+  ],
+};
+
+describe('trusted identity provider', () => {
+  it('fetches the JWK Set from the configured URI', async () => {
+    const seen: string[] = [];
+    const resolver = createTrustedIdpResolver({
+      issuer: asEnv.trustedIdpIssuer, jwksUri: asEnv.trustedIdpJwksUri,
+      fetchImpl: (async (input: string) => { seen.push(String(input)); return Response.json(jwks); }) as unknown as typeof fetch,
+    });
+    await resolver();
+    expect(seen).toEqual([asEnv.trustedIdpJwksUri]);
+  });
+
+  it('keeps only the ID-JAG signing prefixes', () => {
+    expect(filterIdJagKeys(jwks as never).keys.map((key) => key.kid)).toEqual(['op-shared-1', 'idjag-abcdefghijkl-1']);
+  });
+
+  it('caches for 300 seconds so two verifications cost one fetch', async () => {
+    let calls = 0;
+    let clock = 1_000_000;
+    const resolver = createTrustedIdpResolver({
+      issuer: asEnv.trustedIdpIssuer, jwksUri: asEnv.trustedIdpJwksUri,
+      fetchImpl: (async () => { calls += 1; return Response.json(jwks); }) as unknown as typeof fetch,
+      now: () => clock,
+    });
+    await resolver();
+    await resolver();
+    expect(calls).toBe(1);
+    clock += 300_001;
+    await resolver();
+    expect(calls).toBe(2);
+  });
+
+  it('refuses to start without the trusted issuer configured', () => {
+    const complete: NodeJS.ProcessEnv = {
+      ISSUER: asEnv.issuer, TRUSTED_IDP_ISSUER: asEnv.trustedIdpIssuer, TRUSTED_IDP_JWKS_URI: asEnv.trustedIdpJwksUri,
+      REGISTERED_SCOPES: 'docs.read docs.write', SIGNING_KEY_BUCKET: 'b', SIGNING_KEY_KMS_KEY: 'k',
+      JWKS_BUCKET: 'j', JWKS_KEY_PREFIX: 'docs-as', RESOURCE: asEnv.resourceUri,
+    };
+    expect(() => loadResourceAsEnv(complete)).not.toThrow();
+    expect(() => loadResourceAsEnv({ ...complete, TRUSTED_IDP_ISSUER: undefined })).toThrow();
+    expect(() => loadResourceAsEnv({ ...complete, TRUSTED_IDP_JWKS_URI: undefined })).toThrow();
+  });
+
+  it('refuses to start when the registered scopes are widened', () => {
+    const complete: NodeJS.ProcessEnv = {
+      ISSUER: asEnv.issuer, TRUSTED_IDP_ISSUER: asEnv.trustedIdpIssuer, TRUSTED_IDP_JWKS_URI: asEnv.trustedIdpJwksUri,
+      REGISTERED_SCOPES: 'docs.read docs.admin', SIGNING_KEY_BUCKET: 'b', SIGNING_KEY_KMS_KEY: 'k',
+      JWKS_BUCKET: 'j', JWKS_KEY_PREFIX: 'docs-as', RESOURCE: asEnv.resourceUri,
+    };
+    expect(() => loadResourceAsEnv(complete)).toThrow('invalid_registered_scope');
+  });
+});

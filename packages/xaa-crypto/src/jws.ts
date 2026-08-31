@@ -79,3 +79,37 @@ export async function verifyCompactJws(token: string, options: {
   const payload = decodePart(parts[1]!, 'payload');
   return { header: rawHeader as unknown as JwsHeader, payload };
 }
+
+/**
+ * RS256 verification, kept separate from the ES256 path on purpose.
+ *
+ * The Resource AS signs its Access Tokens with RSA-2048 because core's discovery
+ * builder requires an RS256 key (00b). Nothing else in the platform accepts RS256,
+ * so the two algorithms never share a verification function and an RS256 token can
+ * never be presented where an ES256 one is expected.
+ */
+export async function verifyCompactJwsRs256(token: string, options: {
+  publicKey: CryptoKey;
+  allowedTyp: readonly string[];
+}): Promise<{ header: JwsHeader; payload: Record<string, unknown> }> {
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts.some((part) => part === '')) throw new XaaCryptoError('invalid_signature');
+  const rawHeader = decodePart(parts[0]!, 'header');
+  if (Object.keys(rawHeader).some((key) => !HEADER_KEYS.has(key))) throw new XaaCryptoError('invalid_jws_header');
+  if (rawHeader.alg !== 'RS256' || typeof rawHeader.typ !== 'string') throw new XaaCryptoError('invalid_jws_header');
+  if (rawHeader.jwk !== undefined) throw new XaaCryptoError('invalid_jws_header');
+  let valid: boolean;
+  try {
+    valid = await webcrypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      options.publicKey,
+      decodeBase64Url(parts[2]!),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+  } catch {
+    valid = false;
+  }
+  if (!valid) throw new XaaCryptoError('invalid_signature');
+  if (!options.allowedTyp.includes(rawHeader.typ)) throw new XaaCryptoError('invalid_jws_header');
+  return { header: rawHeader as unknown as JwsHeader, payload: decodePart(parts[1]!, 'payload') };
+}

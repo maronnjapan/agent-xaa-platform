@@ -3,6 +3,22 @@ export const DENY_FIELD_NAMES = [
   'private_key', 'client_secret', 'code', 'authorization_code', 'client_assertion', 'assertion',
 ] as const;
 
+/**
+ * Identifiers, not secrets. They are high-entropy by design and the detection
+ * queries join on them (T-RES-10, T-OP-32), so the entropy heuristic must not eat
+ * them. Knowing a jti or a thumbprint grants nothing on its own.
+ */
+export const IDENTIFIER_FIELD_NAMES = [
+  'jti', 'idjag_jti', 'actor_token_jti', 'kid', 'idjag_kid', 'received_kid',
+  'jkt', 'cnf_jkt', 'issued_jkt', 'act_sub', 'idjag_act_sub', 'actor_token_sub',
+  'agent_id', 'op_agent_id', 'human_subject', 'subject_token_sub', 'idjag_sub',
+  'trace_id', 'request_id', 'span_id', 'grant_id', 'document_id', 'payment_id',
+  'idp_connection_id', 'connection_id', 'binding_id', 'transaction_id', 'decision_id',
+  'issued_jti', 'task_id', 'execution_id', 'work_definition_hash', 'fingerprint',
+] as const;
+
+const IDENTIFIERS = new Set<string>(IDENTIFIER_FIELD_NAMES);
+
 const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 
 function shannonEntropy(value: string): number {
@@ -28,9 +44,16 @@ export function redact(value: unknown, depth = 0): unknown {
   if (value && typeof value === 'object') {
     const output: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
-      output[key] = DENY_FIELD_NAMES.includes(key.toLowerCase() as (typeof DENY_FIELD_NAMES)[number])
-        ? '[REDACTED]'
-        : redact(item, depth + 1);
+      const name = key.toLowerCase();
+      if (DENY_FIELD_NAMES.includes(name as (typeof DENY_FIELD_NAMES)[number])) {
+        output[key] = '[REDACTED]';
+      } else if (IDENTIFIERS.has(name) && typeof item === 'string') {
+        // Still refuse a compact JWS here: an identifier field holding a whole
+        // token is a bug, and passing it through would defeat RULE-38.
+        output[key] = JWT_SHAPE.test(item) ? '[REDACTED]' : item;
+      } else {
+        output[key] = redact(item, depth + 1);
+      }
     }
     return output;
   }
