@@ -1,0 +1,40 @@
+[
+  {
+    "event_id": "signing-key-misuse-00",
+    "trace_id": "signing-key-misuse-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-signing-key-misuse",
+    "occurred_at": "2026-01-01T09:00:00Z",
+    "source": "security-detection",
+    "phase": "security",
+    "outcome": "blocked",
+    "title": "想定外の鍵で署名された ID-JAG を遮断しました",
+    "message": "Agent OP の鍵ではない鍵で署名された ID-JAG を Resource AS が拒否しました。",
+    "detail": {
+      "event_type": "SIGNING_KEY_MISUSE",
+      "violation_code": "invalid_signature"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  },
+  {
+    "event_id": "signing-key-misuse-01",
+    "trace_id": "signing-key-misuse-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-signing-key-misuse",
+    "occurred_at": "2026-01-01T09:00:05Z",
+    "source": "security-detection",
+    "phase": "security",
+    "outcome": "blocked",
+    "title": "検知結果を記録しました",
+    "message": "signing_key_misuse の検知が1件記録されました。",
+    "detail": {
+      "event_type": "FINDING_RECORDED",
+      "rule": "signing_key_misuse"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  }
+]

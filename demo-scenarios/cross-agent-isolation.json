@@ -1,0 +1,41 @@
+[
+  {
+    "event_id": "cross-agent-isolation-00",
+    "trace_id": "cross-agent-isolation-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-cross-agent-isolation",
+    "occurred_at": "2026-01-01T09:00:00Z",
+    "source": "agent-runtime",
+    "phase": "tool_call",
+    "outcome": "blocked",
+    "title": "他の Agent のデータへの到達を遮断しました",
+    "message": "別の Agent に発行された Access Token では、この Agent のデータへ到達できません。",
+    "detail": {
+      "event_type": "TOOL_BLOCKED",
+      "violation_code": "human_subject_mismatch",
+      "target": "resource-api"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  },
+  {
+    "event_id": "cross-agent-isolation-01",
+    "trace_id": "cross-agent-isolation-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-cross-agent-isolation",
+    "occurred_at": "2026-01-01T09:00:05Z",
+    "source": "security-detection",
+    "phase": "security",
+    "outcome": "blocked",
+    "title": "検知結果を記録しました",
+    "message": "cross_agent_access の検知が1件記録されました。",
+    "detail": {
+      "event_type": "FINDING_RECORDED",
+      "rule": "cross_agent_access"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  }
+]

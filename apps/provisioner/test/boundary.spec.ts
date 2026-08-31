@@ -64,7 +64,10 @@ describe('the provisioner keeps inside its boundary', () => {
 
   it('creates GCP resources only from the dedicated module', async () => {
     const offenders = (await sources())
-      .filter((file) => !file.path.endsWith('dedicated.ts') && !file.path.endsWith('runtime.ts'))
+      // dedicated.ts is the one caller; runtime.ts builds the real client; the test
+      // harness implements the same interface with recorders and calls nothing.
+      .filter((file) => !file.path.endsWith('dedicated.ts') && !file.path.endsWith('runtime.ts')
+        && !file.path.includes('/testing/'))
       .filter((file) => /\b(createServiceAccount|createCryptoKey|createService|createJob)\s*\(/.test(file.text));
     expect(offenders.map((file) => file.path)).toEqual([]);
   });

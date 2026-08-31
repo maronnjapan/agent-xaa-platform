@@ -1,0 +1,59 @@
+[
+  {
+    "event_id": "dpop-replay-00",
+    "trace_id": "dpop-replay-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-dpop-replay",
+    "occurred_at": "2026-01-01T09:00:00Z",
+    "source": "agent-runtime",
+    "phase": "tool_call",
+    "outcome": "success",
+    "title": "最初の要求は受理されました",
+    "message": "DPoP Proof が検証され、Access Token が発行されました。",
+    "detail": {
+      "event_type": "TOOL_SUCCEEDED",
+      "target": "resource-as"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  },
+  {
+    "event_id": "dpop-replay-01",
+    "trace_id": "dpop-replay-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-dpop-replay",
+    "occurred_at": "2026-01-01T09:00:05Z",
+    "source": "security-detection",
+    "phase": "security",
+    "outcome": "blocked",
+    "title": "同じ Proof の再送を遮断しました",
+    "message": "同一の jti を持つ DPoP Proof が再送されたため拒否しました。",
+    "detail": {
+      "event_type": "DPOP_REPLAY",
+      "violation_code": "replayed_dpop_proof"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  },
+  {
+    "event_id": "dpop-replay-02",
+    "trace_id": "dpop-replay-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-dpop-replay",
+    "occurred_at": "2026-01-01T09:00:10Z",
+    "source": "security-detection",
+    "phase": "security",
+    "outcome": "blocked",
+    "title": "検知結果を記録しました",
+    "message": "dpop_replay の検知が1件記録されました。",
+    "detail": {
+      "event_type": "FINDING_RECORDED",
+      "rule": "dpop_replay"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  }
+]

@@ -42,19 +42,21 @@
   },
   "automation-app": {
     "read": [
-      "agents/**",
-      "users/*/activity/**",
       "sessions/**",
       "work_definitions/**",
       "agent_definitions/**",
+      "agents/*/meta",
+      "agents/*/state",
+      "agent_instructions/**",
+      "user_activity/**",
       "authorization_decisions/**"
     ],
     "write": [
-      "agents/*/instructions/**",
-      "users/*/activity/**",
       "sessions/**",
       "work_definitions/**",
-      "agent_definitions/**"
+      "agent_definitions/**",
+      "agent_instructions/**",
+      "user_activity/**"
     ]
   },
   "agent-op": {

@@ -1,0 +1,257 @@
+import { describe, expect, it } from 'vitest';
+import { LifetimeOutOfRange, validateLifetimeHours } from '../src/work-definition/lifetime.js';
+import { WORK_DEFINITION_FIELDS, confirm } from '../src/work-definition/model.js';
+import { buildBusinessWorkRequest, WorkDefinitionNotConfirmed } from '../src/work-definition/submit.js';
+import { BUSINESS_WORK_REQUEST_KEYS } from '../src/schemas/index.js';
+import { capabilitiesHash, assertStillApproved, CapabilitiesChanged, ApprovalRequired } from '../src/agent-definition/approval.js';
+import { SUGGESTION_FIELDS, suggestAutomations } from '../src/automation/suggestions.js';
+import { LifetimeInput } from '../src/ui/components/lifetime-input.js';
+import { startAutomationApp } from './helpers.js';
+
+const definition = {
+  work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED' as const,
+  purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
+  operations: ['作業記録を読む', '日報を作る'], user_confirmations: ['内容を確認する'], safety_notes: ['社外に送らない'],
+  requested_lifetime_hours: 2, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+};
+
+describe('the requested lifetime', () => {
+  it('accepts 24 and rejects 25', () => {
+    expect(validateLifetimeHours(24)).toBe(24);
+    expect(() => validateLifetimeHours(25)).toThrow(LifetimeOutOfRange);
+  });
+
+  it('rejects 1.5, "3" and 0', () => {
+    for (const value of [1.5, '3', 0, -1, null, undefined, Number.NaN]) {
+      expect(() => validateLifetimeHours(value)).toThrow(LifetimeOutOfRange);
+    }
+  });
+
+  it('answers 400 with lifetime_out_of_range', async () => {
+    const harness = await startAutomationApp();
+    const response = await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: 'x', requested_lifetime_hours: 25 }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'lifetime_out_of_range' });
+  });
+
+  it('renders the configured default with the fixed bounds', async () => {
+    const html = String(await LifetimeInput({ defaultHours: 2 }));
+    expect(html).toContain('value="2"');
+    expect(html).toContain('min="1"');
+    expect(html).toContain('max="24"');
+  });
+});
+
+describe('the work definition', () => {
+  it('has exactly eleven fields', async () => {
+    const harness = await startAutomationApp();
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: 'x', operations: ['a', 'b'], requested_lifetime_hours: 3 }),
+    })).json() as Record<string, unknown>;
+    expect(Object.keys(created).sort()).toEqual([...WORK_DEFINITION_FIELDS].sort());
+  });
+
+  it('stays DRAFT despite an LLM confirmation phrase', async () => {
+    const harness = await startAutomationApp();
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: '確定しました', description: 'この内容で確定します' }),
+    })).json() as { work_definition_id: string; status: string };
+    expect(created.status).toBe('DRAFT');
+
+    const afterMessage = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '確定でお願いします' }),
+    })).json() as { status: string };
+    expect(afterMessage.status).toBe('DRAFT');
+  });
+
+  it('is confirmed only by the confirm route', async () => {
+    const harness = await startAutomationApp();
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
+    })).json() as { work_definition_id: string };
+    const confirmed = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, {
+      method: 'POST',
+    })).json() as { status: string };
+    expect(confirmed.status).toBe('CONFIRMED');
+  });
+
+  it('keeps the order of operations', async () => {
+    const harness = await startAutomationApp();
+    const operations = ['三番目', '一番目', '二番目'];
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x', operations }),
+    })).json() as { work_definition_id: string };
+    const stored = await harness.documents.get<{ operations: string[] }>('work_definitions', created.work_definition_id);
+    expect(stored!.operations).toEqual(operations);
+  });
+
+  it('refuses to submit while still a draft', async () => {
+    const harness = await startAutomationApp();
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
+    })).json() as { work_definition_id: string };
+    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'work_definition_not_confirmed' });
+    expect(harness.upstream).toHaveLength(0);
+  });
+});
+
+describe('the business work request', () => {
+  it('body has exactly 5 keys', () => {
+    const body = buildBusinessWorkRequest(definition);
+    expect(Object.keys(body).sort()).toEqual([...BUSINESS_WORK_REQUEST_KEYS].sort());
+  });
+
+  it('names no capability, scope, audience or tool', () => {
+    const serialized = JSON.stringify(buildBusinessWorkRequest(definition));
+    for (const word of ['capability', 'scope', 'audience', 'tool_id', 'isolation']) {
+      expect(serialized).not.toContain(word);
+    }
+  });
+
+  it('refuses a draft', () => {
+    expect(() => buildBusinessWorkRequest({ ...definition, status: 'DRAFT' })).toThrow(WorkDefinitionNotConfirmed);
+  });
+
+  it('reaches the Authorization Platform with five keys and a proof', async () => {
+    const harness = await startAutomationApp();
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: '日報を作る' }),
+    })).json() as { work_definition_id: string };
+    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+
+    const call = harness.upstream.at(-1)!;
+    expect(call.url).toBe('https://authorization.test/api/work-requests');
+    expect(Object.keys(JSON.parse(call.init.body as string) as object)).toHaveLength(5);
+    expect((call.init.headers as Record<string, string>).DPoP).toBeTruthy();
+  });
+
+  it('does not send when the session token is for a different audience', async () => {
+    const harness = await startAutomationApp({ scope: 'nothing:useful' });
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
+    })).json() as { work_definition_id: string };
+    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+    expect(response.status).toBe(500);
+    expect(harness.upstream).toHaveLength(0);
+  });
+});
+
+describe('approval', () => {
+  it('is order-independent', async () => {
+    expect(await capabilitiesHash(['b', 'a'])).toBe(await capabilitiesHash(['a', 'b']));
+  });
+
+  it('notices a capability that appeared after approval', async () => {
+    const approved = {
+      agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
+      presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+      isolation_level: 'standard', approved_by: 'testuser', approved_at: '2026-01-01T00:00:00.000Z',
+      created_at: '2026-01-01T00:00:00.000Z',
+    };
+    await expect(assertStillApproved(approved, ['a'])).resolves.toBeUndefined();
+    await expect(assertStillApproved(approved, ['a', 'b'])).rejects.toThrow(CapabilitiesChanged);
+    await expect(assertStillApproved({ ...approved, approved_at: null }, ['a'])).rejects.toThrow(ApprovalRequired);
+  });
+
+  it('provision without approval returns 409', async () => {
+    const harness = await startAutomationApp();
+    await harness.documents.set('agent_definitions', 'ad_1', {
+      agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
+      presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+      isolation_level: 'standard', approved_by: null, approved_at: null, created_at: '2026-01-01T00:00:00.000Z',
+    });
+    const response = await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'approval_required' });
+    expect(harness.upstream).toHaveLength(0);
+  });
+
+  it('returns capabilities_changed when the decision moved underneath', async () => {
+    const harness = await startAutomationApp();
+    await harness.documents.set('agent_definitions', 'ad_1', {
+      agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
+      presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+      isolation_level: 'standard', approved_by: 'testuser', approved_at: '2026-01-01T00:00:00.000Z',
+      created_at: '2026-01-01T00:00:00.000Z',
+    });
+    await harness.authorizationSeed.set('authorization_decisions', 'dec_1', { effective_capabilities: ['a', 'b'] });
+    const response = await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'capabilities_changed' });
+    expect(harness.upstream).toHaveLength(0);
+  });
+
+  it('refuses to approve twice', async () => {
+    const harness = await startAutomationApp();
+    await harness.documents.set('agent_definitions', 'ad_1', {
+      agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
+      presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+      isolation_level: 'standard', approved_by: null, approved_at: null, created_at: '2026-01-01T00:00:00.000Z',
+    });
+    expect((await harness.fetch('/api/agent-definitions/ad_1/approve', { method: 'POST' })).status).toBe(200);
+    expect((await harness.fetch('/api/agent-definitions/ad_1/approve', { method: 'POST' })).status).toBe(409);
+  });
+
+  it('sends the provisioning request once everything still matches', async () => {
+    const harness = await startAutomationApp();
+    await harness.documents.set('agent_definitions', 'ad_1', {
+      agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
+      presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+      isolation_level: 'standard', approved_by: 'testuser', approved_at: '2026-01-01T00:00:00.000Z',
+      created_at: '2026-01-01T00:00:00.000Z',
+    });
+    await harness.authorizationSeed.set('authorization_decisions', 'dec_1', { effective_capabilities: ['a'] });
+    expect((await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' })).status).toBe(200);
+    expect(harness.upstream.at(-1)!.url).toBe('https://provisioner.test/api/provisioning');
+  });
+});
+
+describe('automation suggestions', () => {
+  it('schema violation yields empty list', async () => {
+    const harness = await startAutomationApp({ generate: async () => ({ suggestions: [{ purpose: 'incomplete' }] }) });
+    const response = await harness.fetch('/api/automation/suggestions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: 'a', to: 'b' }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ suggestions: [] });
+  });
+
+  it('answers 200 with an empty list when the model throws', async () => {
+    const result = await suggestAutomations({
+      signals: [], promptTemplate: '{{signals}}', generate: async () => { throw new Error('vertex down'); },
+    });
+    expect(result).toEqual({ suggestions: [] });
+  });
+
+  it('keeps the candidates that have all six fields', async () => {
+    const good = {
+      candidate_id: 'c1', purpose: '日報作成', description: '毎朝', operations: ['読む'],
+      user_confirmations: ['確認'], safety_notes: ['注意'],
+    };
+    const result = await suggestAutomations({
+      signals: [], promptTemplate: '{{signals}}',
+      generate: async () => ({ suggestions: [good, { purpose: 'broken' }] }),
+    });
+    expect(result.suggestions).toHaveLength(1);
+    expect(Object.keys(result.suggestions[0]!).sort()).toEqual([...SUGGESTION_FIELDS].sort());
+  });
+});
+
+describe('the confirmation transition', () => {
+  it('is a pure function of the definition and the clock', () => {
+    const confirmed = confirm({ ...definition, status: 'DRAFT' }, '2026-02-01T00:00:00.000Z');
+    expect(confirmed.status).toBe('CONFIRMED');
+    expect(confirmed.updated_at).toBe('2026-02-01T00:00:00.000Z');
+    expect(definition.status).toBe('CONFIRMED');
+  });
+});

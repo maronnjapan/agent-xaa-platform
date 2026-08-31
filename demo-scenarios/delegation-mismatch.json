@@ -1,0 +1,59 @@
+[
+  {
+    "event_id": "delegation-mismatch-00",
+    "trace_id": "delegation-mismatch-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-delegation-mismatch",
+    "occurred_at": "2026-01-01T09:00:00Z",
+    "source": "agent-runtime",
+    "phase": "tool_call",
+    "outcome": "info",
+    "title": "Agent が委譲元の資格で書類を読みました",
+    "message": "Agent が利用者本人として書類の一覧を取得しました。",
+    "detail": {
+      "event_type": "TOOL_SUCCEEDED",
+      "target": "resource-api"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  },
+  {
+    "event_id": "delegation-mismatch-01",
+    "trace_id": "delegation-mismatch-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-delegation-mismatch",
+    "occurred_at": "2026-01-01T09:00:05Z",
+    "source": "security-detection",
+    "phase": "security",
+    "outcome": "blocked",
+    "title": "委譲元と一致しない要求を遮断しました",
+    "message": "ID-JAG の sub が委譲元の利用者と一致しないため、Resource AS が交換を拒否しました。",
+    "detail": {
+      "event_type": "DELEGATION_MISMATCH",
+      "violation_code": "delegation_mismatch"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  },
+  {
+    "event_id": "delegation-mismatch-02",
+    "trace_id": "delegation-mismatch-trace",
+    "human_subject": "PLACEHOLDER",
+    "agent_id": "agent-demo0000000000000000000",
+    "task_id": "demo-delegation-mismatch",
+    "occurred_at": "2026-01-01T09:00:10Z",
+    "source": "security-detection",
+    "phase": "security",
+    "outcome": "blocked",
+    "title": "検知結果を記録しました",
+    "message": "delegation_mismatch の検知が1件記録されました。",
+    "detail": {
+      "event_type": "FINDING_RECORDED",
+      "rule": "delegation_mismatch"
+    },
+    "related_finding_id": null,
+    "is_simulated": true
+  }
+]

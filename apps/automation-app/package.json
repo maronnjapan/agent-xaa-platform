@@ -1,1 +1,47 @@
-{"name":"@xaa/automation-app","version":"0.0.0","private":true,"type":"module","main":"dist/server.js","scripts":{"build":"tsc -p tsconfig.json","typecheck":"tsc -p tsconfig.json --noEmit","test":"vitest --config ../../vitest.package.config.ts run"},"dependencies":{"@hono/node-server":"2.1.1","hono":"4.13.5"},"devDependencies":{"@types/node":"22.18.1","typescript":"5.9.2","vitest":"4.1.11"}}
+{
+  "name": "@xaa/automation-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/src/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/bundle-client.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@xaa/contracts": "workspace:*",
+    "@xaa/crypto": "workspace:*",
+    "@xaa/gcp": "workspace:*",
+    "@xaa/logging": "workspace:*",
+    "@xaa/vertex": "workspace:*",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "esbuild": "0.25.10",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/server.d.ts",
+      "import": "./dist/src/server.js"
+    },
+    "./app": {
+      "types": "./dist/src/app.d.ts",
+      "import": "./dist/src/app.js"
+    },
+    "./src/*": {
+      "types": "./dist/src/*.d.ts",
+      "import": "./dist/src/*.js"
+    },
+    "./client/src/*": {
+      "types": "./dist/client/src/*.d.ts",
+      "import": "./dist/client/src/*.js"
+    }
+  }
+}
