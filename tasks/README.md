@@ -4,6 +4,10 @@
 docs 01 から 11 までの記述から実装可能な要件を421件抽出し、374件のタスクへ分解した。
 要件はすべてどれかのタスクに紐づいており、取りこぼしは無い。
 
+**13領域すべての実装が完了している。** 各領域のタスクファイルは
+[done/](./done/) へ移してある。要件とタスクの対応は
+[docs/requirements.md](../docs/requirements.md) が正本で、CI が実在を検査する。
+
 ## 先に読むもの
 
 | ファイル | 内容 |
@@ -101,21 +105,23 @@ CI の `docs:deviations` と `docs:traceability` と `docs:refs` が緑になる
 
 ## 領域別のファイル
 
+すべて完了済みで、`done/` にある。
+
 | ファイル | 領域 | タスク数 | 主なフェーズ |
 |---|---|---|---|
-| [01-infra.md](./01-infra.md) | GCP 基盤（Terraform） | 47 | P0、P3 |
-| [02-packages.md](./02-packages.md) | 共有パッケージとテスト基盤 | 30 | P0 |
-| [03-human-idp.md](./03-human-idp.md) | Human IdP | 19 | P1 |
-| [04-agent-op.md](./04-agent-op.md) | Agent OP（ID-JAG 発行） | 33 | P1 |
-| [05-resource-servers.md](./05-resource-servers.md) | リソースサーバー2種 | 23 | P1、P3 |
-| [06-provisioner.md](./06-provisioner.md) | Agent Provisioner と Tool Catalog | 32 | P2 |
-| [07-authorization.md](./07-authorization.md) | Authorization Platform | 32 | P4 |
-| [08-agent-runtime.md](./08-agent-runtime.md) | Agent Runtime と Tool Executor | 30 | P2 |
-| [09-lifecycle.md](./09-lifecycle.md) | Lifecycle Manager | 17 | P3 |
-| [10-automation-app.md](./10-automation-app.md) | Automation App とタイムライン | 37 | P5 |
-| [11-security.md](./11-security.md) | セキュリティ監視 | 37 | P6 |
-| [12-oauth-bridge.md](./12-oauth-bridge.md) | OAuth Bridge | 20 | P6（任意） |
-| [13-docs-alignment.md](./13-docs-alignment.md) | 文書整合と逸脱管理 | 17 | P0、P6 |
+| [01-infra.md](./done/01-infra.md) | GCP 基盤（Terraform） | 47 | P0、P3 |
+| [02-packages.md](./done/02-packages.md) | 共有パッケージとテスト基盤 | 30 | P0 |
+| [03-human-idp.md](./done/03-human-idp.md) | Human IdP | 19 | P1 |
+| [04-agent-op.md](./done/04-agent-op.md) | Agent OP（ID-JAG 発行） | 33 | P1 |
+| [05-resource-servers.md](./done/05-resource-servers.md) | リソースサーバー2種 | 23 | P1、P3 |
+| [06-provisioner.md](./done/06-provisioner.md) | Agent Provisioner と Tool Catalog | 32 | P2 |
+| [07-authorization.md](./done/07-authorization.md) | Authorization Platform | 32 | P4 |
+| [08-agent-runtime.md](./done/08-agent-runtime.md) | Agent Runtime と Tool Executor | 30 | P2 |
+| [09-lifecycle.md](./done/09-lifecycle.md) | Lifecycle Manager | 17 | P3 |
+| [10-automation-app.md](./done/10-automation-app.md) | Automation App とタイムライン | 37 | P5 |
+| [11-security.md](./done/11-security.md) | セキュリティ監視 | 37 | P6 |
+| [12-oauth-bridge.md](./done/12-oauth-bridge.md) | OAuth Bridge | 20 | P6（任意） |
+| [13-docs-alignment.md](./done/13-docs-alignment.md) | 文書整合と逸脱管理 | 17 | P0、P6 |
 
 ## タスクの読み方
 
@@ -134,4 +140,5 @@ CI の `docs:deviations` と `docs:traceability` と `docs:refs` が緑になる
 ## 要件 ID について
 
 `REQ-01-001` の形の ID は docs から要件を抽出したときに採番したもので、docs の本文には存在しない。
-T-DOCS-01 が `docs/requirements.md` を起票して全 ID を実体化するまで、対応表は本タスク群の記述が唯一の出どころになる。
+全 ID の索引は [docs/requirements.md](../docs/requirements.md) にあり、`pnpm check:requirements` が
+「planned の行が実在するタスク見出しを指しているか」を検査する。

@@ -28,6 +28,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 | `project_id` | string | なし | すべての state が共有する一つの GCP プロジェクトを指定する |
 | `region` | string | `asia-northeast1` | リージョナルリソースの配置先を指定する |
 | `saas_connector_mode` | string | `stub` | Bridge の接続先を Stub または Google に切り替える |
+| `security_events_delivery` | string | `pull` | Security Detection への配送方法。INTERNAL_ONLY のため既定は pull で、push は spike が到達を示した場合のみ |
 | `vertex_location` | string | `us-central1` | Vertex AI API のロケーションを指定する |
 | `vertex_model` | string | `gemini-2.5-flash` | 推論するモデル名をアプリへ注入する |
 
