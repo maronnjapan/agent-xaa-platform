@@ -1,0 +1,19 @@
+# The verification profile: the shortest useful lifetimes, with the sweep frequent
+# enough that an expiry is visible within a demonstration rather than a working day.
+#
+# Nothing here shortens an agent's life by itself. A three-minute agent is created by
+# asking for one in the Work Definition; these values only decide how soon the sweep
+# notices and how far ahead the warning window reaches.
+project_id                 = "xaa-verify"
+region                     = "asia-northeast1"
+image_tag                  = "verify"
+agent_max_lifetime_seconds = 3600
+sweep_cron                 = "*/5 * * * *"
+expiring_window_seconds    = 60
+max_full_isolation_agents  = 5
+enable_google_bridge       = false
+saas_connector_mode        = "stub"
+issuer_profile             = "direct"
+vertex_model               = "gemini-2.5-flash"
+vertex_location            = "us-central1"
+finance_absolute_max_amount = 1000000

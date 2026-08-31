@@ -274,9 +274,39 @@ importers:
 
   apps/lifecycle-manager:
     dependencies:
+      '@google-cloud/kms':
+        specifier: 6.0.0
+        version: 6.0.0
+      '@google-cloud/pubsub':
+        specifier: 6.0.1
+        version: 6.0.1
+      '@google-cloud/run':
+        specifier: 4.0.0
+        version: 4.0.0
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/control-plane-auth':
+        specifier: workspace:*
+        version: link:../../packages/xaa-control-plane-auth
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: 3.0.1
+        version: 3.0.1(ajv@8.20.0)
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -611,6 +641,9 @@ importers:
       '@xaa/human-idp':
         specifier: workspace:*
         version: link:../apps/human-idp
+      '@xaa/lifecycle-manager':
+        specifier: workspace:*
+        version: link:../apps/lifecycle-manager
       '@xaa/logging':
         specifier: workspace:*
         version: link:../packages/xaa-logging

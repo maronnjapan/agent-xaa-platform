@@ -84,16 +84,25 @@
   },
   "lifecycle-manager": {
     "read": [
+      "agent_bindings/**",
+      "agent_instructions/**",
       "agents/**",
       "dedicated_resources/**",
+      "dpop_jti/**",
       "idp_connections/**",
-      "agent_bindings/**"
+      "provisioning_transactions/**"
     ],
     "write": [
-      "agents/*/meta",
-      "dedicated_resources/**",
       "agent_bindings/**",
-      "idp_connections/**"
+      "agent_instructions/**",
+      "agents/*/instructions",
+      "agents/*/manifest",
+      "agents/*/meta",
+      "agents/*/state",
+      "dedicated_resources/**",
+      "dpop_jti/**",
+      "idp_connections/**",
+      "provisioning_transactions/**"
     ]
   },
   "google-bridge": {

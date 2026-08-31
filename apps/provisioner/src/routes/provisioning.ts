@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { PLATFORM_CLIENT_ID, type IsolationLevel } from '@xaa/contracts';
+import { dedicatedNames, PLATFORM_CLIENT_ID, type IsolationLevel } from '@xaa/contracts';
 import type { ControlPlaneVariables } from '@xaa/control-plane-auth';
 import type { Logger } from '@xaa/logging';
 import { buildToolManifest } from '../catalog/build-manifest.js';
@@ -11,7 +11,7 @@ import { computeExpiresAt } from '../agent/expiry.js';
 import { createAgentRegistration, setProvisioningStatus, deleteAgentRegistration } from '../agent/registration.js';
 import { reserveFullIsolationSlot } from '../capacity.js';
 import { createDedicatedLedger } from '../dedicated-ledger.js';
-import { dedicatedNames } from '../dedicated-names.js';
+
 import { startAgentExecution, ExecutionAlreadyRunning } from '../job/execute.js';
 import { validateAgentDefinition, DefinitionRejected } from './agent-definition.js';
 import { buildConsentResponse } from './consent-response.js';

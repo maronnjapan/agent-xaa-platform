@@ -1,5 +1,5 @@
 import { DEDICATED_AGENT_SA_ROLES, DEDICATED_OP_SA_ROLES } from '@xaa/contracts';
-import { assertRuntimeName, dedicatedNames, runtimeDescription, runtimeLabels } from './dedicated-names.js';
+import { assertRuntimeName, dedicatedNames, runtimeDescription, runtimeLabels } from '@xaa/contracts';
 import type { createDedicatedLedger } from './dedicated-ledger.js';
 
 /**

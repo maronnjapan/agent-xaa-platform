@@ -16,6 +16,7 @@
     "@xaa/crypto": "workspace:*",
     "@xaa/gcp": "workspace:*",
     "@xaa/human-idp": "workspace:*",
+    "@xaa/lifecycle-manager": "workspace:*",
     "@xaa/logging": "workspace:*",
     "@xaa/provisioner": "workspace:*",
     "@xaa/resource-docs-api": "workspace:*",

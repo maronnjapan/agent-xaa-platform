@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { assertRuntimeName, dedicatedNames, ForbiddenRuntimeName, RUNTIME_NAME_PREFIXES, shortId } from '../src/dedicated-names.js';
+import { assertRuntimeName, dedicatedNames, ForbiddenRuntimeName, RUNTIME_NAME_PREFIXES, shortId } from '@xaa/contracts';
 import { DEDICATED_AGENT_SA_ROLES, DEDICATED_OP_SA_ROLES } from '@xaa/contracts';
 
 const AGENT_ID = 'agent-abcdefghijklmnopqrstuvwxyz';
