@@ -1,8 +1,7 @@
 connector_id: internal-docs-api
 resource_type: native_xaa
-authorization:
-  audience: ${issuer:docs}
-  resource: ${resource:docs}
+authorization_audience: ${issuer:docs}
+authorization_resource: ${resource:docs}
 status: ACTIVE
 risk_level: medium
 tools:

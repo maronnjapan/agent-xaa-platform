@@ -1,8 +1,7 @@
 connector_id: internal-finance-api
 resource_type: native_xaa
-authorization:
-  audience: ${issuer:finance}
-  resource: ${resource:finance}
+authorization_audience: ${issuer:finance}
+authorization_resource: ${resource:finance}
 status: ACTIVE
 risk_level: high
 tools:

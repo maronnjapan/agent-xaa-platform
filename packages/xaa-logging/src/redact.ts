@@ -19,7 +19,13 @@ export const IDENTIFIER_FIELD_NAMES = [
 
 const IDENTIFIERS = new Set<string>(IDENTIFIER_FIELD_NAMES);
 
-const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
+/**
+ * A compact JWS, not merely a dotted string: the header segment of a real one always
+ * begins `eyJ`, because it is base64url of a JSON object. Matching on dots alone
+ * redacted ordinary identifiers such as `internal.document.get`, which the detection
+ * queries need to read.
+ */
+const JWT_SHAPE = /^eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 
 function shannonEntropy(value: string): number {
   const counts = new Map<string, number>();

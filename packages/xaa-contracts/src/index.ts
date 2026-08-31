@@ -6,6 +6,8 @@ export * from './audience.js';
 export * from './characteristics.js';
 export * from './policy-types.js';
 export * from './reason-codes.js';
+export * from './catalog-types.js';
+export * from './runtime-env.js';
 export * from './collections.js';
 export * from './dedicated-iam.js';
 export * from './grant-types.js';

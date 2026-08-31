@@ -23,18 +23,21 @@
   },
   "provisioner": {
     "read": [
+      "agent_definitions/**",
+      "agents/**",
+      "authorization_decisions/**",
       "catalog_connectors/**",
       "catalog_tools/**",
-      "agents/**",
-      "provisioning_transactions/**",
       "dedicated_resources/**",
-      "agent_definitions/**",
-      "human_permissions/**"
+      "human_permissions/**",
+      "provisioning_codes/**",
+      "provisioning_transactions/**"
     ],
     "write": [
       "agents/**",
-      "provisioning_transactions/**",
-      "dedicated_resources/**"
+      "dedicated_resources/**",
+      "provisioning_codes/**",
+      "provisioning_transactions/**"
     ]
   },
   "automation-app": {
@@ -167,6 +170,7 @@
   },
   "seed": {
     "read": [
+      "authorization_decisions/**",
       "capability_taxonomy/**",
       "catalog_connectors/**",
       "catalog_tools/**",
@@ -177,6 +181,7 @@
       "work_definitions/**"
     ],
     "write": [
+      "authorization_decisions/**",
       "capability_taxonomy/**",
       "catalog_connectors/**",
       "catalog_tools/**",

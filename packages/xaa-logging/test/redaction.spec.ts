@@ -15,3 +15,20 @@ describe('redaction', () => {
     expect(JSON.stringify(redact(value))).toContain('[TRUNCATED]');
   });
 });
+
+describe('redaction keeps identifiers readable', () => {
+  it('leaves a dotted tool id alone', () => {
+    expect(redact({ provisioned_tools: ['internal.document.get', 'stub.calendar.events.list'] }))
+      .toEqual({ provisioned_tools: ['internal.document.get', 'stub.calendar.events.list'] });
+  });
+
+  it('still redacts a real compact JWS', () => {
+    const token = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2ln';
+    expect(redact({ note: token })).toEqual({ note: '[REDACTED]' });
+  });
+
+  it('leaves a jti and a thumbprint readable', () => {
+    const record = { jti: 'VXJWbjj8qPNvjqw5WeZFKlSWzP2MDxvGtCLr36by-j8', cnf_jkt: 'v9uxeE3Bl-McvkIMOWo19cAn-bwSRjST9kSncra8zfY' };
+    expect(redact(record)).toEqual(record);
+  });
+});

@@ -1,7 +1,10 @@
+# The one bridged connector. Its audience is the Bridge, not the SaaS: an agent
+# presents an ID-JAG to the Bridge, which holds the external OAuth connection.
 connector_id: stub-saas-calendar
 resource_type: oauth_bridge
-bridge:
-  audience: ${bridge:internal}
+authorization_audience: ${bridge:internal}
+authorization_resource: ${resource:stub}
+bridge_audience: ${bridge:internal}
 status: ACTIVE
 risk_level: medium
 tools:
