@@ -37,6 +37,22 @@ export default tseslint.config(
       }],
     },
   },
+  // RULE-39: whatever reaches the model is a summary this app built, never a log. The
+  // client cannot import the normaliser, and the normaliser cannot import the client.
+  {
+    files: ['apps/security-detection/src/ai/vertex-client.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: ['../normalize/*', '../normalize', '../pipeline/types', '@xaa/logging'],
+      }],
+    },
+  },
+  {
+    files: ['apps/security-detection/src/normalize/**/*.ts', 'apps/security-detection/src/pipeline/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: ['../ai/*', '../../ai/*'] }],
+    },
+  },
   // RULE-54: the timeline shows what happened; it does not decide anything. Importing a
   // policy engine, a risk scorer or a detection module into the display code is how a
   // screen starts forming its own opinion about an event it was only meant to render.

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "occurred_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Event time, and the partition key."
+  },
+  {
+    "name": "class_uid",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "One per log source (docs 09 \u00a72)."
+  },
+  {
+    "name": "activity_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "severity_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "agent_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "human_subject",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "trace_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "log_source",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "operation",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "resource",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "attributes",
+    "type": "JSON",
+    "mode": "NULLABLE",
+    "description": "Source-specific fields, kept whole."
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "protocol_violation": { "per_event": 10, "cap": 40 },
+  "authorization_violation": { "per_event": 15, "cap": 45 },
+  "authorization_ai_anomaly": { "per_event": 10, "cap": 30 },
+  "behavior_deviation": { "per_event": 8, "cap": 32 },
+  "request_rate": { "per_event": 5, "cap": 25 },
+  "resource_sensitivity": { "per_event": 20, "cap": 40 },
+  "cross_agent_activity": { "per_event": 30, "cap": 60 },
+  "dpop_failure": { "per_event": 15, "cap": 45 },
+  "delegation_mismatch": { "per_event": 100, "cap": 100 },
+  "signing_key_misuse": { "per_event": 100, "cap": 100 },
+  "privilege_escalation_attempt": { "per_event": 25, "cap": 50 },
+  "agent_expiration_violation": { "per_event": 20, "cap": 40 },
+  "isolation_boundary_violation": { "per_event": 35, "cap": 70 }
+}

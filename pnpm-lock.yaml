@@ -559,9 +559,36 @@ importers:
 
   apps/security-detection:
     dependencies:
+      '@google-cloud/bigquery':
+        specifier: 8.1.1
+        version: 8.1.1
+      '@google-cloud/pubsub':
+        specifier: 6.0.1
+        version: 6.0.1
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/vertex':
+        specifier: workspace:*
+        version: link:../../packages/xaa-vertex
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: 3.0.1
+        version: 3.0.1(ajv@8.20.0)
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -701,6 +728,9 @@ importers:
       '@xaa/resource-guard':
         specifier: workspace:*
         version: link:../packages/xaa-resource-guard
+      '@xaa/security-detection':
+        specifier: workspace:*
+        version: link:../apps/security-detection
       '@xaa/stub-saas-api':
         specifier: workspace:*
         version: link:../apps/stub-saas-api
@@ -1106,6 +1136,14 @@ packages:
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
+  '@google-cloud/bigquery@8.1.1':
+    resolution: {integrity: sha512-2GHlohfA/VJffTvibMazMsZi6jPRx8MmaMberyDTL8rnhVs/frKSXVVRtLU83uSAy2j/5SD4mOs4jMQgJPON2g==}
+    engines: {node: '>=18'}
+
+  '@google-cloud/common@6.1.0':
+    resolution: {integrity: sha512-Ohjxjvusr65+SiEVBrilpyn1ir9CM8ZqWjcf7bA8ph1GCunxI6bbwtcl7iGl67A7Lr4Nz7WpNzITNETwggc7pw==}
+    engines: {node: '>=18'}
+
   '@google-cloud/firestore-api@0.2.0':
     resolution: {integrity: sha512-wfHJPZmLqzpy6FN6U+7HkkP/AKhGsbHSpEy/qL2TyI3/pKRAvpamQxZ2qvps5hMRgAjfuHCim+oeJj9RveCaqg==}
     engines: {node: '>=18'}
@@ -1122,9 +1160,17 @@ packages:
     resolution: {integrity: sha512-DJS3s0OVH4zFDB1PzjxAsHqJT6sKVbRwwML0ZBP9PbU7Yebtu/7SWMRzvO2J3nUi9pRNITCfu4LJeooM2w4pjg==}
     engines: {node: '>=14.0.0'}
 
+  '@google-cloud/paginator@6.1.0':
+    resolution: {integrity: sha512-9bxQ/QNhcq5c6ra75khWjA5Q9UHWp0vQnhwesmqPpLLF5PxmxCIsadIA5ssLxKted4/iZ2RlRPkW/E8p68W8cg==}
+    engines: {node: '>=18'}
+
   '@google-cloud/paginator@7.0.1':
     resolution: {integrity: sha512-k32cWlHAF8yTgg8rciLI8mPMI6UzuJdKp53YRxISRwMFxUl2FYplvs+Mr2UHxKn0W7rXsqZnUZy73AOJFDP8iA==}
     engines: {node: '>=22'}
+
+  '@google-cloud/precise-date@5.2.0':
+    resolution: {integrity: sha512-ckZ1elVT/JXbO4kxltiT8tumYnTXGIY7OFrDMAJyVWAte/rUYiCuH1YbaKLQrZpYDp522xgTfPqqW/VxfXFdgA==}
+    engines: {node: '>=18'}
 
   '@google-cloud/precise-date@6.0.1':
     resolution: {integrity: sha512-FmPFgn9x11vtE26VyqmoL+aunGyi5PACJxaQ0rbCUNJ1DrsDc6RlsILOjnHgj7HrsbEQBCJLNZGmDSU1hWW7ig==}
@@ -1141,6 +1187,10 @@ packages:
   '@google-cloud/promisify@4.0.0':
     resolution: {integrity: sha512-Orxzlfb9c67A15cq2JQEyVc7wEsmFBmHjZWZYQMUyJ1qivXyMwdyNOs9odi79hze+2zqdTtu1E19IM/FtqZ10g==}
     engines: {node: '>=14'}
+
+  '@google-cloud/promisify@5.1.0':
+    resolution: {integrity: sha512-/j9zzWDxsgKg0hMuFBmLGI8ES9xj4DjXvQnDCKl0w5ed7WE3CGsgHmUoC35rvfBXshSW+5StQGnCUD+RBqITKA==}
+    engines: {node: '>=18'}
 
   '@google-cloud/promisify@6.0.1':
     resolution: {integrity: sha512-lpN2AtoQ/iimp7jjm5zJFWbpW7OJc5qWmQdt59CI4ENeoIRIx+yf2ShSR2kanQfjFOshA74eSbimXXuRaSCUVg==}
@@ -1556,6 +1606,10 @@ packages:
     resolution: {integrity: sha512-3duEwti880xqi4eAMN8AyR4a0ByT90zoYdLlevfrvU43vb0YZwZVfxOgxWrLXXXpyugL0hNZc9G6BiB5B3nUug==}
     engines: {node: '>=8'}
 
+  arrify@3.0.0:
+    resolution: {integrity: sha512-tLkvA81vQG/XqE2mjDkGQHoOINtMHtysSnemrmoGe6PydDPMRbVugqyk4A6V/WDWEfm3l+0d8anA9r8cv/5Jaw==}
+    engines: {node: '>=12'}
+
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
@@ -1575,6 +1629,9 @@ packages:
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
+
+  big.js@6.2.2:
+    resolution: {integrity: sha512-y/ie+Faknx7sZA5MfGA2xKlu0GDv8RWrXGsmlteyJQ2lvoKv9GBK/fpRMc2qlSoBAgNxrixICFCBefIq8WCQpQ==}
 
   bignumber.js@9.3.1:
     resolution: {integrity: sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ==}
@@ -1843,6 +1900,10 @@ packages:
     resolution: {integrity: sha512-a4tiq7E0/5fTjxPAaH4jpjkSv/uCaU2p5KC6HVGrvl0cDjA8iBZv4vv1gyzlmK0ZUKqwpOyQMKzZQe3lTit77A==}
     engines: {node: '>=14'}
 
+  gcp-metadata@8.1.2:
+    resolution: {integrity: sha512-zV/5HKTfCeKWnxG0Dmrw51hEWFGfcF2xiXqcA3+J90WDuP0SvoiSO5ORvcBsifmx/FoIjgQN3oNOGaQ5PhLFkg==}
+    engines: {node: '>=18'}
+
   gcp-metadata@8.1.4:
     resolution: {integrity: sha512-iJ9KMsiu+xKtNRX0PmGLSaIU3bUBAyzWTyqKemKPzNPsmmsBCQYmlNg+brEbES7IHSXtdVwzBPzx1vz3FAaipw==}
     engines: {node: '>=18'}
@@ -1874,6 +1935,10 @@ packages:
 
   google-auth-library@10.5.0:
     resolution: {integrity: sha512-7ABviyMOlX5hIVD60YOfHw4/CxOfBhyduaYB+wbFWCWoni4N7SLcV46hrVRktuBbZjFC9ONyqamZITN7q3n32w==}
+    engines: {node: '>=18'}
+
+  google-auth-library@10.9.1:
+    resolution: {integrity: sha512-i1ydyHrqcIxXkWh/uBmVkzCvIuq5yiK2ATndIe5XxKholrG/MTYP9xGYka4sQhrbIAgGjL2B6NOE7rFaiF3fXw==}
     engines: {node: '>=18'}
 
   google-auth-library@11.0.2:
@@ -2700,6 +2765,35 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
+  '@google-cloud/bigquery@8.1.1':
+    dependencies:
+      '@google-cloud/common': 6.1.0
+      '@google-cloud/paginator': 6.1.0
+      '@google-cloud/precise-date': 5.2.0
+      '@google-cloud/promisify': 5.1.0
+      arrify: 3.0.0
+      big.js: 6.2.2
+      duplexify: 4.1.3
+      extend: 3.0.2
+      stream-events: 1.0.5
+      teeny-request: 10.1.4
+    transitivePeerDependencies:
+      - supports-color
+
+  '@google-cloud/common@6.1.0':
+    dependencies:
+      '@google-cloud/projectify': 4.0.0
+      '@google-cloud/promisify': 4.0.0
+      arrify: 2.0.1
+      duplexify: 4.1.3
+      extend: 3.0.2
+      google-auth-library: 10.9.1
+      html-entities: 2.6.0
+      retry-request: 8.0.4
+      teeny-request: 10.1.4
+    transitivePeerDependencies:
+      - supports-color
+
   '@google-cloud/firestore-api@0.2.0':
     dependencies:
       google-gax: 5.0.8
@@ -2728,9 +2822,15 @@ snapshots:
       arrify: 2.0.1
       extend: 3.0.2
 
+  '@google-cloud/paginator@6.1.0':
+    dependencies:
+      extend: 3.0.2
+
   '@google-cloud/paginator@7.0.1':
     dependencies:
       extend: 3.0.2
+
+  '@google-cloud/precise-date@5.2.0': {}
 
   '@google-cloud/precise-date@6.0.1': {}
 
@@ -2739,6 +2839,8 @@ snapshots:
   '@google-cloud/projectify@6.0.1': {}
 
   '@google-cloud/promisify@4.0.0': {}
+
+  '@google-cloud/promisify@5.1.0': {}
 
   '@google-cloud/promisify@6.0.1': {}
 
@@ -3197,6 +3299,8 @@ snapshots:
 
   arrify@2.0.1: {}
 
+  arrify@3.0.0: {}
+
   assertion-error@2.0.1: {}
 
   async-retry@1.3.3:
@@ -3210,6 +3314,8 @@ snapshots:
   balanced-match@4.0.4: {}
 
   base64-js@1.5.1: {}
+
+  big.js@6.2.2: {}
 
   bignumber.js@9.3.1: {}
 
@@ -3530,6 +3636,14 @@ snapshots:
       - encoding
       - supports-color
 
+  gcp-metadata@8.1.2:
+    dependencies:
+      gaxios: 7.3.1
+      google-logging-utils: 1.1.3
+      json-bigint: 1.0.0
+    transitivePeerDependencies:
+      - supports-color
+
   gcp-metadata@8.1.4:
     dependencies:
       gaxios: 7.1.3
@@ -3587,6 +3701,17 @@ snapshots:
       gcp-metadata: 8.1.4
       google-logging-utils: 1.1.3
       gtoken: 8.0.0
+      jws: 4.0.1
+    transitivePeerDependencies:
+      - supports-color
+
+  google-auth-library@10.9.1:
+    dependencies:
+      base64-js: 1.5.1
+      ecdsa-sig-formatter: 1.0.11
+      gaxios: 7.3.1
+      gcp-metadata: 8.1.2
+      google-logging-utils: 1.1.3
       jws: 4.0.1
     transitivePeerDependencies:
       - supports-color

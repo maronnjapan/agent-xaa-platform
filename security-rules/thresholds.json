@@ -1,0 +1,32 @@
+{
+  "token": {
+    "medium_multiplier": 5,
+    "high_multiplier": 20,
+    "metrics": ["token_request", "id_jag_issued", "google_refresh_failure", "subject_token_refetch", "auth_failure"]
+  },
+  "authorization": {
+    "medium_multiplier": 1,
+    "high_multiplier": 3,
+    "codes": ["unknown_audience", "unknown_resource", "scope_out_of_range", "status_error"]
+  },
+  "tool": {
+    "medium_multiplier": 1,
+    "high_multiplier": 3,
+    "codes": ["unauthorized_tool", "constraint_violation", "unexpected_tool"]
+  },
+  "lifetime": {
+    "medium_multiplier": 1,
+    "high_multiplier": 2,
+    "codes": ["expired_agent", "access_after_expiry", "expired_idp_connection"]
+  },
+  "isolation": {
+    "medium_multiplier": 1,
+    "high_multiplier": 1,
+    "codes": ["foreign_dedicated_op_access", "cross_agent_access", "human_subject_mismatch"]
+  },
+  "authorization_ai": {
+    "medium_multiplier": 1,
+    "high_multiplier": 3,
+    "codes": ["ai_capability_out_of_taxonomy", "ai_confidence_low", "ai_output_rejected"]
+  }
+}

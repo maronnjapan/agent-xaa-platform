@@ -1,0 +1,86 @@
+[
+  {
+    "name": "occurred_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": ""
+  },
+  {
+    "name": "finding_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Derived from the window and subject, so a rerun overwrites."
+  },
+  {
+    "name": "finding_type",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": ""
+  },
+  {
+    "name": "agent_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "human_subject",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "window_start",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "window_end",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "related_events",
+    "type": "STRING",
+    "mode": "REPEATED",
+    "description": ""
+  },
+  {
+    "name": "contributing_codes",
+    "type": "STRING",
+    "mode": "REPEATED",
+    "description": ""
+  },
+  {
+    "name": "risk_score",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "risk_level",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "review_status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "recommended_response",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": ""
+  },
+  {
+    "name": "confidence",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": ""
+  }
+]

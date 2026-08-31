@@ -35,6 +35,7 @@
     ],
     "write": [
       "agents/**",
+      "agents/*/baseline",
       "dedicated_resources/**",
       "provisioning_codes/**",
       "provisioning_transactions/**"
@@ -243,6 +244,16 @@
       "oidc_stub_saas_op/**",
       "dpop_jti/**",
       "assertion_jti/**"
+    ]
+  },
+  "security-detection": {
+    "read": [
+      "agents/*/baseline",
+      "agents/*/meta",
+      "security_findings/**"
+    ],
+    "write": [
+      "security_findings/**"
     ]
   }
 }

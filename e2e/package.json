@@ -25,6 +25,7 @@
     "@xaa/resource-finance-api": "workspace:*",
     "@xaa/resource-finance-as": "workspace:*",
     "@xaa/resource-guard": "workspace:*",
+    "@xaa/security-detection": "workspace:*",
     "@xaa/stub-saas-api": "workspace:*",
     "@xaa/stub-saas-op": "workspace:*",
     "hono": "4.13.5"
