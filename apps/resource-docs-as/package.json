@@ -1,0 +1,23 @@
+{
+  "name": "@xaa/resource-docs-as",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@maronn-openid-connect/core": "0.2.0",
+    "@maronn-openid-connect/experimental": "0.0.6",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  }
+}

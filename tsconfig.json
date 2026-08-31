@@ -1,0 +1,83 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/xaa-crypto"
+    },
+    {
+      "path": "packages/xaa-contracts"
+    },
+    {
+      "path": "packages/gcp"
+    },
+    {
+      "path": "packages/xaa-logging"
+    },
+    {
+      "path": "packages/xaa-resource-guard"
+    },
+    {
+      "path": "packages/xaa-control-plane-auth"
+    },
+    {
+      "path": "packages/xaa-vertex"
+    },
+    {
+      "path": "packages/xaa-docs-check"
+    },
+    {
+      "path": "apps/seed"
+    },
+    {
+      "path": "apps/jwks-publish"
+    },
+    {
+      "path": "apps/human-idp"
+    },
+    {
+      "path": "apps/automation-app"
+    },
+    {
+      "path": "apps/authorization"
+    },
+    {
+      "path": "apps/provisioner"
+    },
+    {
+      "path": "apps/lifecycle-manager"
+    },
+    {
+      "path": "apps/agent-op"
+    },
+    {
+      "path": "apps/security-detection"
+    },
+    {
+      "path": "apps/resource-docs-as"
+    },
+    {
+      "path": "apps/resource-docs-api"
+    },
+    {
+      "path": "apps/resource-finance-as"
+    },
+    {
+      "path": "apps/resource-finance-api"
+    },
+    {
+      "path": "apps/agent-runtime"
+    },
+    {
+      "path": "apps/google-bridge"
+    },
+    {
+      "path": "apps/stub-saas-op"
+    },
+    {
+      "path": "apps/stub-saas-api"
+    },
+    {
+      "path": "e2e"
+    }
+  ]
+}

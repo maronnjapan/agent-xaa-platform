@@ -1,0 +1,34 @@
+{
+  "$id": "tool",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tool_id", "connector_id", "description", "required_capability", "authorization", "token_provider", "api", "parameters", "constraints", "response_schema", "risk_level"],
+  "properties": {
+    "tool_id": { "type": "string" }, "connector_id": { "type": "string" }, "description": { "type": "string" },
+    "required_capability": { "type": "string" },
+    "authorization": {
+      "type": "object", "additionalProperties": false, "required": ["type", "audience", "resource", "scope"],
+      "properties": { "type": { "enum": ["native_xaa", "xaa_bridge"] }, "audience": { "type": "string", "format": "uri" }, "resource": { "type": "string", "format": "uri" }, "scope": { "type": "string" } }
+    },
+    "token_provider": { "type": ["string", "null"] },
+    "api": {
+      "type": "object", "additionalProperties": false, "required": ["base_url", "method", "path"],
+      "properties": { "base_url": { "type": "string", "format": "uri" }, "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] }, "path": { "type": "string", "pattern": "^/" } }
+    },
+    "parameters": { "type": "object" }, "constraints": { "type": "object" }, "response_schema": { "type": "object" },
+    "risk_level": { "enum": ["low", "medium", "high", "critical"] }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "authorization": {
+            "type": "object",
+            "properties": { "type": { "const": "xaa_bridge" } }
+          }
+        }
+      },
+      "then": { "properties": { "token_provider": { "type": "string", "format": "uri" } } }
+    }
+  ]
+}

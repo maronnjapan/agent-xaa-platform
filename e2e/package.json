@@ -1,0 +1,23 @@
+{
+  "name": "@xaa/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest --config ../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@maronn-openid-connect/core": "0.2.0",
+    "@xaa/agent-op": "workspace:*",
+    "@xaa/contracts": "workspace:*",
+    "@xaa/crypto": "workspace:*",
+    "@xaa/gcp": "workspace:*",
+    "@xaa/human-idp": "workspace:*",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  }
+}

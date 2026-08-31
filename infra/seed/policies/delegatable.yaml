@@ -1,0 +1,8 @@
+- capability_id: calendar.event.read
+- capability_id: calendar.event.write
+- capability_id: mail.message.read
+- capability_id: mail.message.send
+- capability_id: document.read
+- capability_id: document.write
+- capability_id: finance.payment.read
+- capability_id: finance.payment.approve

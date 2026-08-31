@@ -1,0 +1,11 @@
+tool_id: stub.calendar.events.list
+connector_id: stub-saas-calendar
+description: List stub calendar events
+required_capability: calendar.event.read
+authorization: { type: xaa_bridge, audience: "${issuer:stub_saas}", resource: "${issuer:stub_saas}/calendar", scope: calendar.read }
+token_provider: ${bridge:internal}
+api: { base_url: "${issuer:stub_saas}", method: GET, path: /calendar/events }
+parameters: {}
+constraints: {}
+response_schema: { type: array }
+risk_level: medium

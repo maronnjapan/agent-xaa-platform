@@ -1,0 +1,48 @@
+- capability_id: calendar.event.read
+  resource: calendar
+  object: event
+  action: read
+  description: Read calendar events
+  default_characteristics: { capability_risk: low, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: false }
+- capability_id: calendar.event.write
+  resource: calendar
+  object: event
+  action: write
+  description: Write calendar events
+  default_characteristics: { capability_risk: medium, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: true, financial_operation: false }
+- capability_id: mail.message.read
+  resource: mail
+  object: message
+  action: read
+  description: Read mail
+  default_characteristics: { capability_risk: medium, resource_sensitivity: high, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: false }
+- capability_id: mail.message.send
+  resource: mail
+  object: message
+  action: send
+  description: Send mail
+  default_characteristics: { capability_risk: high, resource_sensitivity: high, admin_permission: false, personal_data_access: true, write_permission: true, financial_operation: false }
+- capability_id: document.read
+  resource: document
+  object: document
+  action: read
+  description: Read documents
+  default_characteristics: { capability_risk: low, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: false }
+- capability_id: document.write
+  resource: document
+  object: document
+  action: write
+  description: Write documents
+  default_characteristics: { capability_risk: medium, resource_sensitivity: medium, admin_permission: false, personal_data_access: true, write_permission: true, financial_operation: false }
+- capability_id: finance.payment.read
+  resource: finance
+  object: payment
+  action: read
+  description: Read payments
+  default_characteristics: { capability_risk: high, resource_sensitivity: high, admin_permission: false, personal_data_access: true, write_permission: false, financial_operation: true }
+- capability_id: finance.payment.approve
+  resource: finance
+  object: payment
+  action: approve
+  description: Approve payments
+  default_characteristics: { capability_risk: critical, resource_sensitivity: high, admin_permission: true, personal_data_access: true, write_permission: true, financial_operation: true }

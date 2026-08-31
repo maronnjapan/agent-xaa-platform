@@ -1,0 +1,11 @@
+tool_id: internal.finance.payment.approve
+connector_id: internal-finance-api
+description: Approve a payment
+required_capability: finance.payment.approve
+authorization: { type: native_xaa, audience: "${issuer:finance}", resource: "${resource:finance}", scope: finance.tx.write }
+token_provider: null
+api: { base_url: "${resource:finance}", method: POST, path: "/payments/{id}/approve" }
+parameters: { id: { type: string, required: true }, amount: { type: number, required: true } }
+constraints: { max_amount: 1000000 }
+response_schema: { type: object }
+risk_level: critical

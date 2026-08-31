@@ -1,0 +1,12 @@
+connector_id: internal-docs-api
+resource_type: native_xaa
+authorization:
+  audience: ${issuer:docs}
+  resource: ${resource:docs}
+status: ACTIVE
+risk_level: medium
+tools:
+  - internal.document.list
+  - internal.document.get
+  - internal.document.create
+  - internal.document.update

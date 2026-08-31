@@ -1,0 +1,31 @@
+{
+  "name": "agent-xaa-platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.17.0",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "tsc -b",
+    "lint": "eslint . && node scripts/check-deps.mjs",
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:unit": "vitest --project unit run",
+    "test:integration": "vitest --project integration run --passWithNoTests",
+    "check:deps": "node scripts/check-deps.mjs",
+    "test:e2e": "vitest --project e2e run"
+  },
+  "dependencies": {
+    "@maronn-openid-connect/cli": "0.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.18.1",
+    "eslint": "10.9.1",
+    "typescript": "5.9.2",
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.11"
+  }
+}

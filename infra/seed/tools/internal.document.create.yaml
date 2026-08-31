@@ -1,0 +1,11 @@
+tool_id: internal.document.create
+connector_id: internal-docs-api
+description: Create a document
+required_capability: document.write
+authorization: { type: native_xaa, audience: "${issuer:docs}", resource: "${resource:docs}", scope: docs.write }
+token_provider: null
+api: { base_url: "${resource:docs}", method: POST, path: /documents }
+parameters: { title: { type: string }, body: { type: string } }
+constraints: {}
+response_schema: { type: object }
+risk_level: medium

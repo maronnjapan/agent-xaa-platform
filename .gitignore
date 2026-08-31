@@ -1,0 +1,12 @@
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+*.tfvars
+!infra/tfvars/*.tfvars
+!infra/tfvars/*.tfvars.example
+*.tfplan
+.mise.toml
+node_modules/
+dist/
+*.tsbuildinfo
+.local/

@@ -1,0 +1,10 @@
+{
+  "name": "jwks-publish",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest --config ../../vitest.package.config.ts run" },
+  "dependencies": { "@google-cloud/storage": "8.0.1" },
+  "devDependencies": { "@types/node": "22.18.1", "typescript": "5.9.2", "vitest": "4.1.11" }
+}

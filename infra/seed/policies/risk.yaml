@@ -1,0 +1,4 @@
+- policy_id: finance-approval
+  capability_id: finance.payment.approve
+  requires_approval: true
+  isolation_level: full_isolation

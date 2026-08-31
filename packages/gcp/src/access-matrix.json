@@ -1,0 +1,215 @@
+{
+  "authorization": {
+    "read": [
+      "human_permissions/**",
+      "delegatable_permissions/**",
+      "organization_policies/**",
+      "risk_policies/**",
+      "capability_taxonomy/**",
+      "authorization_decisions/**",
+      "policy_decisions/**",
+      "ai_proposals/**"
+    ],
+    "write": [
+      "human_permissions/**",
+      "delegatable_permissions/**",
+      "organization_policies/**",
+      "risk_policies/**",
+      "authorization_decisions/**",
+      "policy_decisions/**",
+      "ai_proposals/**"
+    ]
+  },
+  "provisioner": {
+    "read": [
+      "catalog_connectors/**",
+      "catalog_tools/**",
+      "agents/**",
+      "provisioning_transactions/**",
+      "dedicated_resources/**",
+      "agent_definitions/**",
+      "human_permissions/**"
+    ],
+    "write": [
+      "agents/**",
+      "provisioning_transactions/**",
+      "dedicated_resources/**"
+    ]
+  },
+  "automation-app": {
+    "read": [
+      "agents/**",
+      "users/*/activity/**",
+      "sessions/**",
+      "work_definitions/**",
+      "agent_definitions/**",
+      "authorization_decisions/**"
+    ],
+    "write": [
+      "agents/*/instructions/**",
+      "users/*/activity/**",
+      "sessions/**",
+      "work_definitions/**",
+      "agent_definitions/**"
+    ]
+  },
+  "agent-op": {
+    "read": [
+      "idp_connections/**",
+      "agents/*/meta",
+      "dpop_jti/**",
+      "assertion_jti/**",
+      "idjag_issuance/**",
+      "idp_connection_rotations/**",
+      "bridge_consent_states/**",
+      "bridge_consent_codes/**",
+      "provisioning_transactions/**"
+    ],
+    "write": [
+      "idp_connections/**",
+      "dpop_jti/**",
+      "assertion_jti/**",
+      "idjag_issuance/**",
+      "idp_connection_rotations/**",
+      "bridge_consent_states/**",
+      "bridge_consent_codes/**",
+      "provisioning_transactions/**"
+    ]
+  },
+  "lifecycle-manager": {
+    "read": [
+      "agents/**",
+      "dedicated_resources/**",
+      "idp_connections/**",
+      "agent_bindings/**"
+    ],
+    "write": [
+      "agents/*/meta",
+      "dedicated_resources/**",
+      "agent_bindings/**",
+      "idp_connections/**"
+    ]
+  },
+  "google-bridge": {
+    "read": [
+      "agent_bindings/**",
+      "bridge_connections/**",
+      "bridge_consent_states/**",
+      "bridge_consent_codes/**",
+      "dpop_jti/**"
+    ],
+    "write": [
+      "agent_bindings/**",
+      "bridge_connections/**",
+      "bridge_consent_states/**",
+      "bridge_consent_codes/**",
+      "dpop_jti/**"
+    ]
+  },
+  "agent-runtime": {
+    "read": [
+      "agents/*/meta",
+      "agents/*/state",
+      "agents/*/instructions",
+      "agents/*/manifest",
+      "catalog_tools/**",
+      "documents/**",
+      "payments/**"
+    ],
+    "write": [
+      "agents/*/state",
+      "documents/**",
+      "payments/**"
+    ]
+  },
+  "human-idp": {
+    "read": [
+      "consents/**",
+      "idp_transactions/**",
+      "idp_tokens/**",
+      "idp_sessions/**",
+      "idp_users/**",
+      "dpop_jti/**"
+    ],
+    "write": [
+      "consents/**",
+      "idp_transactions/**",
+      "idp_tokens/**",
+      "idp_sessions/**",
+      "idp_users/**",
+      "dpop_jti/**"
+    ]
+  },
+  "resource-docs-api": {
+    "read": [
+      "documents/**"
+    ],
+    "write": [
+      "documents/**"
+    ]
+  },
+  "resource-finance-api": {
+    "read": [
+      "payments/**"
+    ],
+    "write": [
+      "payments/**"
+    ]
+  },
+  "seed": {
+    "read": [
+      "catalog_connectors/**",
+      "catalog_tools/**",
+      "capability_taxonomy/**",
+      "human_permissions/**",
+      "delegatable_permissions/**",
+      "organization_policies/**",
+      "risk_policies/**"
+    ],
+    "write": [
+      "catalog_connectors/**",
+      "catalog_tools/**",
+      "capability_taxonomy/**",
+      "human_permissions/**",
+      "delegatable_permissions/**",
+      "organization_policies/**",
+      "risk_policies/**"
+    ]
+  },
+  "resource-docs-as": {
+    "read": [
+      "oidc_resource_docs_as/**",
+      "dpop_jti/**",
+      "assertion_jti/**"
+    ],
+    "write": [
+      "oidc_resource_docs_as/**",
+      "dpop_jti/**",
+      "assertion_jti/**"
+    ]
+  },
+  "resource-finance-as": {
+    "read": [
+      "oidc_resource_finance_as/**",
+      "dpop_jti/**",
+      "assertion_jti/**"
+    ],
+    "write": [
+      "oidc_resource_finance_as/**",
+      "dpop_jti/**",
+      "assertion_jti/**"
+    ]
+  },
+  "stub-saas-op": {
+    "read": [
+      "oidc_stub_saas_op/**",
+      "dpop_jti/**",
+      "assertion_jti/**"
+    ],
+    "write": [
+      "oidc_stub_saas_op/**",
+      "dpop_jti/**",
+      "assertion_jti/**"
+    ]
+  }
+}

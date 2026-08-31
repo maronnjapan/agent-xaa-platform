@@ -1,0 +1,8 @@
+connector_id: stub-saas-calendar
+resource_type: oauth_bridge
+bridge:
+  audience: ${bridge:internal}
+status: ACTIVE
+risk_level: medium
+tools:
+  - stub.calendar.events.list

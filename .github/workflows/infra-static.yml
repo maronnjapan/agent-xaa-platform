@@ -1,0 +1,12 @@
+name: infra-static
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  infra-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run credential-free infrastructure checks
+        run: bash infra/tests/static-all.sh

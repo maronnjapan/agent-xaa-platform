@@ -1,0 +1,11 @@
+tool_id: internal.finance.payment.list
+connector_id: internal-finance-api
+description: List payments
+required_capability: finance.payment.read
+authorization: { type: native_xaa, audience: "${issuer:finance}", resource: "${resource:finance}", scope: finance.tx.read }
+token_provider: null
+api: { base_url: "${resource:finance}", method: GET, path: /payments }
+parameters: {}
+constraints: {}
+response_schema: { type: array }
+risk_level: high

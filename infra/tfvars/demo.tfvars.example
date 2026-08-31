@@ -1,0 +1,13 @@
+project_id                  = "replace-with-existing-project-id"
+region                      = "asia-northeast1"
+image_tag                   = "replace-with-image-tag"
+agent_max_lifetime_seconds  = 86400
+max_full_isolation_agents   = 5
+issuer_profile              = "direct"
+issuer_domain               = "issuer.example.invalid"
+enable_google_bridge        = false
+saas_connector_mode         = "stub"
+vertex_model                = "gemini-2.5-flash"
+vertex_location             = "us-central1"
+finance_absolute_max_amount = 1000000
+lifecycle_tick_cron         = "*/5 * * * *"

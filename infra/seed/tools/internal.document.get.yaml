@@ -1,0 +1,11 @@
+tool_id: internal.document.get
+connector_id: internal-docs-api
+description: Get a document
+required_capability: document.read
+authorization: { type: native_xaa, audience: "${issuer:docs}", resource: "${resource:docs}", scope: docs.read }
+token_provider: null
+api: { base_url: "${resource:docs}", method: GET, path: "/documents/{id}" }
+parameters: { id: { type: string, required: true } }
+constraints: {}
+response_schema: { type: object }
+risk_level: low

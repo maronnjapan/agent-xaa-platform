@@ -1,0 +1,14 @@
+{
+  "$id": "xaa-log-entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["severity", "app", "log_source", "event", "request_id", "trace_id", "agent_id", "human_subject", "timestamp", "fields"],
+  "properties": {
+    "severity": { "enum": ["DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "CRITICAL"] },
+    "app": { "type": "string" }, "log_source": { "type": "string" }, "event": { "type": "string" },
+    "request_id": { "type": "string" }, "trace_id": { "type": "string" },
+    "agent_id": { "type": ["string", "null"] }, "human_subject": { "type": ["string", "null"] },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "fields": { "type": "object", "additionalProperties": true }
+  }
+}

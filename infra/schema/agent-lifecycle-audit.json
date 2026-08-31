@@ -1,0 +1,21 @@
+[
+  { "name": "agent_id", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "human_subject", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED" },
+  { "name": "expires_at", "type": "TIMESTAMP", "mode": "REQUIRED" },
+  { "name": "destroyed_at", "type": "TIMESTAMP", "mode": "REQUIRED" },
+  { "name": "isolation_level", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "effective_capabilities", "type": "STRING", "mode": "REPEATED" },
+  { "name": "allowed_tools", "type": "STRING", "mode": "REPEATED" },
+  {
+    "name": "cleanup_step_results",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      { "name": "step", "type": "INTEGER", "mode": "REQUIRED" },
+      { "name": "outcome", "type": "STRING", "mode": "REQUIRED" },
+      { "name": "reason_code", "type": "STRING", "mode": "NULLABLE" }
+    ]
+  },
+  { "name": "termination_reason", "type": "STRING", "mode": "REQUIRED" }
+]

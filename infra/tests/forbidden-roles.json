@@ -1,0 +1,20 @@
+{
+  "roles": [
+    "roles/owner",
+    "roles/editor",
+    "roles/bigquery.dataOwner",
+    "roles/bigquery.admin",
+    "roles/logging.admin",
+    "roles/logging.configWriter",
+    "roles/run.admin",
+    "roles/iam.serviceAccountAdmin",
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/cloudkms.admin"
+  ],
+  "exceptions": [
+    { "member": "sa-provisioner", "role": "roles/cloudkms.admin", "resource": "keyRings/idjag-signing", "reason": "Creates per-Agent signing keys without signing permission." },
+    { "member": "sa-provisioner", "role": "roles/cloudkms.admin", "resource": "keyRings/idp-connection-encryption", "reason": "Creates per-Agent connection-encryption keys." },
+    { "member": "sa-lifecycle", "role": "roles/cloudkms.admin", "resource": "keyRings/idjag-signing", "reason": "Destroys per-Agent signing-key versions during cleanup." },
+    { "member": "sa-lifecycle", "role": "roles/cloudkms.admin", "resource": "keyRings/idp-connection-encryption", "reason": "Destroys per-Agent connection-key versions during cleanup." }
+  ]
+}

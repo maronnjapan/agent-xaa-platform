@@ -1,0 +1,71 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps: &node_steps
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: node scripts/check-identifier-aliases.mjs
+      - run: node scripts/check-create-app.mjs
+      - run: node scripts/check-verifier-usage.mjs
+  check-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/check-deps.mjs
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:unit
+  integration:
+    needs: unit
+    runs-on: ubuntu-latest
+    env: { SIGNER_MODE: local, VERTEX_MODE: fake, PUBSUB_MODE: inproc, STORE_MODE: emulator, NODE_ENV: test }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud components install cloud-firestore-emulator --quiet
+      - run: gcloud emulators firestore start --host-port=127.0.0.1:8080 >/tmp/firestore.log 2>&1 &
+      - run: pnpm install --frozen-lockfile && pnpm test:integration
+  check-oidc-patches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-oidc-patches.mjs
+  infra-static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash infra/tests/run-static-checks.sh

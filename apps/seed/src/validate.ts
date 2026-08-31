@@ -1,0 +1,50 @@
+import connectorSchema from '@xaa/contracts/schema/connector.json' with { type: 'json' };
+import toolSchema from '@xaa/contracts/schema/tool.json' with { type: 'json' };
+import { assertValidCapabilityId, CAPABILITIES, compile, TOOL_IDS } from '@xaa/contracts';
+
+const assertConnectorSchema: (value: unknown) => asserts value is ConnectorSeed = compile(connectorSchema);
+const assertToolSchema: (value: unknown) => asserts value is ToolSeed = compile(toolSchema);
+
+export interface ConnectorSeed {
+  connector_id: string;
+  resource_type: 'native_xaa' | 'oauth_bridge';
+  tools: string[];
+  authorization?: { audience: string; resource: string };
+  bridge?: { audience: string };
+  [key: string]: unknown;
+}
+
+export interface ToolSeed {
+  tool_id: string;
+  connector_id: string;
+  required_capability: string;
+  authorization: { type: 'native_xaa' | 'xaa_bridge'; audience: string; resource: string; scope: string };
+  token_provider: string | null;
+  api: { base_url: string; method: string; path: string };
+  parameters: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export function validateSeed(connectors: ConnectorSeed[], tools: ToolSeed[]): void {
+  const errors: string[] = [];
+  const connectorIds = new Set(connectors.map((entry) => entry.connector_id));
+  const toolIds = new Set(tools.map((entry) => entry.tool_id));
+  for (const connector of connectors) {
+    try { assertConnectorSchema(connector); } catch { errors.push(`${connector.connector_id ?? '<unknown>'} / connector schema`); }
+    if (!['native_xaa', 'oauth_bridge'].includes(connector.resource_type)) errors.push(`${connector.connector_id} / resource_type`);
+    if (connector.resource_type === 'native_xaa' && (!connector.authorization?.audience || !connector.authorization.resource)) errors.push(`${connector.connector_id} / authorization.resource`);
+    if (connector.resource_type === 'oauth_bridge' && !connector.bridge?.audience) errors.push(`${connector.connector_id} / bridge.audience`);
+    for (const toolId of connector.tools) if (!toolIds.has(toolId)) errors.push(`${connector.connector_id} / unknown tool ${toolId}`);
+  }
+  for (const tool of tools) {
+    try { assertToolSchema(tool); } catch { errors.push(`${tool.tool_id ?? '<unknown>'} / tool schema`); }
+    if (!TOOL_IDS.includes(tool.tool_id as (typeof TOOL_IDS)[number])) errors.push(`${tool.tool_id} / unknown tool_id`);
+    try { assertValidCapabilityId(tool.required_capability); } catch { errors.push(`${tool.tool_id} / invalid capability ${tool.required_capability}`); }
+    if (!CAPABILITIES.includes(tool.required_capability as (typeof CAPABILITIES)[number])) errors.push(`${tool.tool_id} / unknown capability ${tool.required_capability}`);
+    if (!connectorIds.has(tool.connector_id)) errors.push(`${tool.tool_id} / unknown connector ${tool.connector_id}`);
+    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(tool.api.method)) errors.push(`${tool.tool_id} / api.method`);
+    for (const placeholder of tool.api.path.matchAll(/\{([^}]+)\}/g)) if (!(placeholder[1]! in tool.parameters)) errors.push(`${tool.tool_id} / missing parameter ${placeholder[1]}`);
+    if (tool.authorization.type === 'xaa_bridge' && !tool.token_provider) errors.push(`${tool.tool_id} / token_provider`);
+  }
+  if (errors.length) throw new Error(errors.join('\n'));
+}

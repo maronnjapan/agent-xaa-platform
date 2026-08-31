@@ -1,0 +1,31 @@
+{
+  "runtime": [
+    "hono",
+    "@hono/node-server",
+    "ajv",
+    "ajv-formats",
+    "json-schema-to-ts",
+    "yaml",
+    "@google-cloud/firestore",
+    "@google-cloud/kms",
+    "@google-cloud/pubsub",
+    "@google-cloud/secret-manager",
+    "@google-cloud/storage",
+    "@google-cloud/bigquery",
+    "@google-cloud/run",
+    "@google-cloud/vertexai",
+    "@maronn-openid-connect/core",
+    "@maronn-openid-connect/experimental",
+    "@maronn-openid-connect/cli"
+  ],
+  "dev": [
+    "@eslint/js",
+    "@types/node",
+    "eslint",
+    "typescript",
+    "typescript-eslint",
+    "vitest",
+    "playwright",
+    "esbuild"
+  ]
+}

@@ -1,0 +1,11 @@
+tool_id: internal.document.update
+connector_id: internal-docs-api
+description: Update a document
+required_capability: document.write
+authorization: { type: native_xaa, audience: "${issuer:docs}", resource: "${resource:docs}", scope: docs.write }
+token_provider: null
+api: { base_url: "${resource:docs}", method: PATCH, path: "/documents/{id}" }
+parameters: { id: { type: string, required: true }, body: { type: string } }
+constraints: {}
+response_schema: { type: object }
+risk_level: medium

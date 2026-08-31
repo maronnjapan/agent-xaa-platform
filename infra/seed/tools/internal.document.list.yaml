@@ -1,0 +1,11 @@
+tool_id: internal.document.list
+connector_id: internal-docs-api
+description: List documents
+required_capability: document.read
+authorization: { type: native_xaa, audience: "${issuer:docs}", resource: "${resource:docs}", scope: docs.read }
+token_provider: null
+api: { base_url: "${resource:docs}", method: GET, path: /documents }
+parameters: {}
+constraints: {}
+response_schema: { type: array }
+risk_level: low

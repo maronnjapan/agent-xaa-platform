@@ -1,0 +1,31 @@
+{
+  "$id": "connector",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["connector_id", "resource_type", "status", "risk_level", "tools"],
+  "properties": {
+    "connector_id": { "enum": ["internal-docs-api", "internal-finance-api", "stub-saas-calendar"] },
+    "resource_type": { "enum": ["native_xaa", "oauth_bridge"] },
+    "authorization": {
+      "type": "object", "additionalProperties": false, "required": ["audience", "resource"],
+      "properties": { "audience": { "type": "string", "format": "uri" }, "resource": { "type": "string", "format": "uri" } }
+    },
+    "bridge": {
+      "type": "object", "additionalProperties": false, "required": ["audience"],
+      "properties": { "audience": { "type": "string", "format": "uri" } }
+    },
+    "status": { "enum": ["ACTIVE", "DISABLED"] },
+    "risk_level": { "enum": ["low", "medium", "high", "critical"] },
+    "tools": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "resource_type": { "const": "native_xaa" } } },
+      "then": { "required": ["authorization"], "properties": { "authorization": true } }
+    },
+    {
+      "if": { "properties": { "resource_type": { "const": "oauth_bridge" } } },
+      "then": { "required": ["bridge"], "properties": { "bridge": true } }
+    }
+  ]
+}

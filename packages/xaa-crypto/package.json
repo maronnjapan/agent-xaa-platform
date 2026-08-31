@@ -1,0 +1,36 @@
+{
+  "name": "@xaa/crypto",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./kms": {
+      "types": "./dist/kms-signer.d.ts",
+      "import": "./dist/kms-signer.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/private-jwk.d.ts",
+      "import": "./dist/testing/private-jwk.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@google-cloud/kms": "6.0.0",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  }
+}

@@ -1,0 +1,11 @@
+connector_id: internal-finance-api
+resource_type: native_xaa
+authorization:
+  audience: ${issuer:finance}
+  resource: ${resource:finance}
+status: ACTIVE
+risk_level: high
+tools:
+  - internal.finance.payment.list
+  - internal.finance.payment.get
+  - internal.finance.payment.approve

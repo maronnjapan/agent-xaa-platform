@@ -1,0 +1,33 @@
+{
+  "name": "@xaa/gcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/firestore-double.d.ts",
+      "import": "./dist/testing/firestore-double.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "9.0.0",
+    "@xaa/contracts": "workspace:*",
+    "@xaa/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  }
+}

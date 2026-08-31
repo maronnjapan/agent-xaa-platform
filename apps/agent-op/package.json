@@ -1,0 +1,44 @@
+{
+  "name": "@xaa/agent-op",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@google-cloud/kms": "6.0.0",
+    "@google-cloud/pubsub": "6.0.1",
+    "@google-cloud/storage": "7.18.0",
+    "@hono/node-server": "2.1.1",
+    "@maronn-openid-connect/core": "0.2.0",
+    "@maronn-openid-connect/experimental": "0.0.6",
+    "@xaa/contracts": "workspace:*",
+    "@xaa/crypto": "workspace:*",
+    "@xaa/gcp": "workspace:*",
+    "@xaa/logging": "workspace:*",
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    },
+    "./src/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  }
+}

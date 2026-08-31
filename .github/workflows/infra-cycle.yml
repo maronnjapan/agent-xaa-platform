@@ -1,0 +1,30 @@
+name: infra-cycle
+on:
+  workflow_dispatch:
+jobs:
+  apply-destroy-apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: asia-northeast1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Shared apply
+        run: make shared-apply TF=terraform
+      - name: Demo apply and verify
+        run: make demo-apply TF=terraform DEMO_TFVARS=infra/tfvars/verify.tfvars
+      - name: Demo destroy and residue check
+        run: make demo-destroy TF=terraform DEMO_TFVARS=infra/tfvars/verify.tfvars && bash infra/tests/destroy-residue.sh
+      - name: Re-apply demo
+        run: make demo-apply TF=terraform DEMO_TFVARS=infra/tfvars/verify.tfvars

@@ -1,0 +1,30 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "composite": true,
+    "noEmit": false
+  },
+  "include": [
+    "test/**/*.ts",
+    "harness/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../apps/human-idp"
+    },
+    {
+      "path": "../apps/agent-op"
+    },
+    {
+      "path": "../packages/xaa-crypto"
+    },
+    {
+      "path": "../packages/xaa-contracts"
+    },
+    {
+      "path": "../packages/gcp"
+    }
+  ]
+}

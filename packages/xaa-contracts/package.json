@@ -1,0 +1,40 @@
+{
+  "name": "@xaa/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    },
+    "./schema/connector.json": "./schema/connector.schema.json",
+    "./schema/tool.json": "./schema/tool.schema.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@maronn-openid-connect/core": "0.2.0",
+    "@maronn-openid-connect/experimental": "0.0.6",
+    "@xaa/crypto": "workspace:*",
+    "@xaa/logging": "workspace:*",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "hono": "4.13.5",
+    "json-schema-to-ts": "3.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  }
+}
