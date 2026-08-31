@@ -1,0 +1,12 @@
+# 採用しなかった別名。コードにも文書にも現れてはならない。
+# docs/glossary.md の節3が正本で、この一覧はその機械可読な写しである。
+document.content.read
+document.content.write
+documents.read
+docs.document.read
+docs.document.write
+transactions.read
+transfers.write
+finance.transaction.read
+internal.customer.
+google.calendar.events.list

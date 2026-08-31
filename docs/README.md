@@ -31,6 +31,21 @@ Human IdPにAgentの文脈を持ち込まないよう、issuerを1つに保っ�
 | 10 | [設計ルール](./10-design-rules.md) | 各文書で決めた原則の一覧 |
 | 11 | [アクティビティタイムライン](./11-activity-timeline.md) | 人間向けの可視化画面。Activity Event、配信経路、画面表示、侵害を見せるデモの作り方 |
 
+## 台帳
+
+設計文書とは別に、実装との対応を追うための表を4つ置いている。
+いずれも CI の `docs` ジョブが検査するため、参照先が消えたり名前が変わったりすると落ちる。
+
+| ファイル | 内容 | 検査 |
+|---|---|---|
+| [requirements.md](./requirements.md) | 要件 ID とそれを扱うタスクの対応（421件） | `pnpm check:requirements` |
+| [deviations.md](./deviations.md) | ドラフト仕様から外れた15件と、その代替実装とテスト | `pnpm check:deviations` / `:strict` |
+| [rule-traceability.md](./rule-traceability.md) | 設計ルール60件それぞれを守っているファイルとテスト | `tests/docs/docs-registry.spec.ts` |
+| [glossary.md](./glossary.md) | 用語26件と実装識別子の対応、確定した命名、使わない別名 | `pnpm check:glossary` / `:strict` |
+
+[10-design-rules.md](./10-design-rules.md) は [rules.json](./rules.json) からの生成物である。
+ルールを直すときは JSON を編集して `pnpm gen:design-rules` を実行する。Markdown を直接編集しない。
+
 ## 実装タスク
 
 本ディレクトリの設計を実装するためのタスクは [tasks/](../tasks/README.md) にある。

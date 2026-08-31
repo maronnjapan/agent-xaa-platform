@@ -73,7 +73,7 @@ sequenceDiagram
     participant GO as Google OAuth AS
     participant CAL as Google Calendar API
 
-    AI->>TOOL: google.calendar.events.list
+    AI->>TOOL: stub.calendar.events.list
     TOOL->>TOOL: Load Tool Manifest / Check Allowed Tools
     TOOL->>OP: ID-JAG Request (aud=google-bridge, resource=google-calendar, scope=calendar.read)
     OP->>OP: Validate Agent Registration + Lifetime

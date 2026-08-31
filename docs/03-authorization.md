@@ -140,7 +140,7 @@ finance.payment.read     finance.payment.approve
 | 区別 | 意味 | 例 |
 |---|---|---|
 | Capability | 何を許可されているか | `calendar.event.read` |
-| Tool | 具体的にどの操作を実行するか | `google.calendar.events.list`, `google.calendar.events.get`, `google.calendar.freebusy.query` |
+| Tool | 具体的にどの操作を実行するか | `stub.calendar.events.list`, `google.calendar.events.get`, `google.calendar.freebusy.query` |
 
 Capability ≠ API Endpoint であり、Authorization PlatformはGoogle Calendar APIのURLなどを原則知らない。
 CapabilityからToolへの対応付けは [04. Tool / Connector Catalog](./04-tool-catalog.md) が担う。

@@ -274,7 +274,7 @@ Google BridgeのConnection / Agent Binding 2層モデル（[06. §3](./06-oauth-
 | 寿命 | ユーザーが取り消すまで | Agentの `expires_at` まで（最大24時間） |
 | 理由 | 外部SaaSであり、再Consentのコストが高い | 自社IdPであり、短寿命の付与を毎回作れる |
 
-Connectionレコード（Cloud SQL `idp_connection`）：
+Connectionレコード（Firestore `idp_connections`）：
 
 ```text
 idp_connection_id
@@ -572,7 +572,7 @@ sequenceDiagram
     participant API as Resource API
 
     Note over TOOL: Execution起動時にDPoP鍵をメモリ生成
-    AI->>TOOL: internal.customer.list
+    AI->>TOOL: internal.document.list
     TOOL->>TOOL: Load Tool Manifest / Check Allowed Tools
     TOOL->>OP: Token Exchange（audience / resource / scope<br/>+ subject_token + actor_token + DPoP Proof）
     OP->>OP: §6.3 の検証
@@ -606,16 +606,21 @@ Googleなど、ID-JAGを理解しない外部SaaSの場合のフローは [06. �
 
 ### 9. Tokenの種類と保持ルール
 
-| Token | 発行者 | 用途 | 備考 |
-|---|---|---|---|
-| Human ID Token（ログイン用） | Human IdP | Automation Appへのログイン | `aud=automation-app` |
-| Human Access Token | Human IdP | Control Plane API | DPoP-bound |
-| Human ID Token（XAA用） | Human IdP | Token Exchangeの `subject_token` | `aud=agent-platform`。短期 |
-| Human Refresh Token（XAA用） | Human IdP | 上のID Tokenの再取得 | Agentごと。Agent OPだけが保持 |
-| Agent Assertion | Agent自身（KMS署名） | Token Exchangeの `actor_token` | 本システム独自のプロファイル |
-| ID-JAG | Agent OP（共有issuerとして） | Cross App Accessの認可グラント | `sub` は人間、`act` はAgent |
-| Native Resource Access Token | Native Resource AS | Resource API呼び出し | DPoP-bound |
-| SaaS Access Token | 外部OAuth AS（Google等） | SaaS API呼び出し | Bridge経由でAgentへ払い出す |
+共有issuerと共有JWKSの下では、ID TokenもAccess TokenもID-JAGも同じ `iss` と同じ鍵集合の下に並ぶ。
+種別を分けるのは `typ` だけであり、取り違えはそのまま検証の穴になる。
+そのため8種を1つの定数表（`packages/xaa-contracts/src/token-catalog.ts` の `TOKEN_CATALOG`）と
+1対1で対応させ、表に無い種別を作れないようにしている。
+
+| Token | 発行者 | 用途 | `typ` | `aud` | DPoP | 定数キー | 備考 |
+|---|---|---|---|---|---|---|---|
+| Human ID Token（ログイン用） | Human IdP | Automation Appへのログイン | `JWT` | `automation-app` | なし | `human_id_token_login` | - |
+| Human Access Token | Human IdP | Control Plane API | `at+jwt` | 呼び先のアプリ名 | 必須 | `human_access_token` | - |
+| Human ID Token（XAA用） | Human IdP | Token Exchangeの `subject_token` | `JWT` | `agent-platform` | なし | `human_id_token_xaa` | 短期 |
+| Human Refresh Token（XAA用） | Human IdP | 上のID Tokenの再取得 | `-` | - | なし | `human_refresh_token_xaa` | Agentごと。Agent OPだけが保持 |
+| Agent Assertion | Agent自身 | Token Exchangeの `actor_token` | `agent-assertion+jwt` | Agent OPの `/xaa/token` | なし | `agent_assertion` | 本システム独自のプロファイル |
+| ID-JAG | Agent OP（共有issuerとして） | Cross App Accessの認可グラント | `oauth-id-jag+jwt` | Resource ASのissuer | 必須 | `id_jag` | `sub` は人間、`act` はAgent |
+| Native Resource Access Token | Native Resource AS | Resource API呼び出し | `at+jwt` | Resource ASのissuer | 必須 | `native_resource_access_token` | - |
+| SaaS Access Token | 外部OAuth AS | SaaS API呼び出し | `-` | 外部SaaSの定めるもの | なし | `saas_access_token` | Bridge経由でAgentへ払い出す。外向きにDPoPを要求しない |
 
 AgentがRuntimeで保持してよいもの：XAA用のHuman ID Token、ID-JAG、Resource Access Token、Google Access Token等の短期Token、ExecutionのDPoP鍵、Task Execution Context。
 Access Tokenは原則としてメモリのみ、永続化なし、短期とする。

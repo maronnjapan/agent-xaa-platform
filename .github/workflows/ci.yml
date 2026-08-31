@@ -55,6 +55,62 @@ jobs:
       - run: gcloud components install cloud-firestore-emulator --quiet
       - run: gcloud emulators firestore start --host-port=127.0.0.1:8080 >/tmp/firestore.log 2>&1 &
       - run: pnpm install --frozen-lockfile && pnpm test:integration
+  e2e:
+    needs: unit
+    runs-on: ubuntu-latest
+    env: { SIGNER_MODE: local, VERTEX_MODE: fake, PUBSUB_MODE: inproc, STORE_MODE: emulator, NODE_ENV: test }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:e2e
+  # The registers that describe the repository: which requirement each task answers,
+  # which rules the platform deliberately does not keep, and what the terms mean. They
+  # are checked on every change because a stale register is read as if it were current.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:requirements
+      - run: pnpm check:deviations
+      - run: pnpm check:glossary
+      - run: pnpm check:docs-links
+      # The generated rules table must already match its source.
+      - run: pnpm gen:design-rules && git diff --exit-code docs/10-design-rules.md
+  # The strict variants open every path and grep every test name, so they need the
+  # implementation to be complete. Required now that it is.
+  docs-strict:
+    needs: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:deviations:strict
+      - run: pnpm check:glossary:strict
+  boundary-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-runtime-credentials.mjs
+      - run: node scripts/check-no-dynamic-resolve.mjs
+      - run: bash scripts/check-status-write-path.sh
+      - run: bash scripts/check-bridge-raw-fetch.sh
+      - run: bash scripts/check-bridge-no-refresh-token.sh
+      - run: bash scripts/check-security-outbound.sh
+      - run: for check in scripts/checks/*.sh; do bash "$check"; done
   check-oidc-patches:
     runs-on: ubuntu-latest
     steps:

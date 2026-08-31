@@ -7,7 +7,7 @@ Authorization Platformが決めるのは `calendar.event.read` までであり�
 
 | 保持する情報 | 例 |
 |---|---|
-| Capability → Tool の対応 | `calendar.event.read` → `google.calendar.events.list` |
+| Capability → Tool の対応 | `calendar.event.read` → `stub.calendar.events.list` |
 | Tool の認証方式 | `native_xaa` / `xaa_bridge` |
 | XAA の audience / resource / scope | `google-bridge` / `google-calendar` / `calendar.read` |
 | Token取得先 | Google Bridge、社内Resource AS |
@@ -16,7 +16,7 @@ Authorization Platformが決めるのは `calendar.event.read` までであり�
 
 位置づけ：
 
-- アプリではなく定義データである。Cloud SQLの `tool_catalog` に保持し、プラットフォーム管理者が管理する。AIは編集しない。
+- アプリではなく定義データである。Firestoreの `catalog_tools` と `catalog_connectors` に保持し、プラットフォーム管理者が管理する。AIは編集しない。
 - 読むのはAgent Provisioner（Provisioning時にAgentが使えるToolとXAA設定を確定する）と、Tool Executor（Provisionerから渡されたTool Manifestに従って実行する）である。
 - Agent OPやAuthorization Platformはこの情報を持たない。
 
@@ -36,14 +36,14 @@ Bridgeは互換レイヤーとしてのみ使う（[06. OAuth Bridge](./06-oauth
 
 ```yaml
 # Native XAA
-connector_id: internal-customer-api
+connector_id: internal-docs-api
 resource_type: native_xaa
 authorization:
   audience: https://auth.customer.example.com
   resource: https://api.customer.example.com
 tools:
-  - internal.customer.list
-  - internal.customer.get
+  - internal.document.list
+  - internal.document.get
 ```
 
 ```yaml
@@ -53,7 +53,7 @@ resource_type: oauth_bridge
 bridge:
   audience: https://google-bridge.example.com
 tools:
-  - google.calendar.events.list
+  - stub.calendar.events.list
   - google.gmail.message.read
   - google.gmail.message.send
 ```
@@ -62,7 +62,7 @@ tools:
 
 ```yaml
 # OAuth Bridge経由（Google Calendar）
-tool_id: google.calendar.events.list
+tool_id: stub.calendar.events.list
 description: Google Calendarから予定を取得する
 required_capability: calendar.event.read
 authorization:
@@ -85,7 +85,7 @@ risk_level: low
 
 ```yaml
 # Native XAA（社内顧客API）
-tool_id: internal.customer.list
+tool_id: internal.document.list
 description: 顧客情報一覧を取得する
 required_capability: customer.read
 authorization:
@@ -106,7 +106,7 @@ Agent Provisionerは、Effective CapabilityからCatalogを引いて、そのAge
 
 ```text
 Effective Capability          Allowed Tools
-  calendar.event.read    →      google.calendar.events.list
+  calendar.event.read    →      stub.calendar.events.list
                                 google.calendar.events.get
   mail.message.send      →      google.gmail.message.send
 ```
@@ -144,7 +144,7 @@ Tool Executorの処理：
 
 ```mermaid
 flowchart LR
-    INTENT["Agent Intent<br/>今日の予定を確認"] --> TOOL["Tool Selection<br/>google.calendar.events.list"]
+    INTENT["Agent Intent<br/>今日の予定を確認"] --> TOOL["Tool Selection<br/>stub.calendar.events.list"]
     TOOL --> CAP["Required Capability<br/>calendar.event.read"]
     CAP --> AUTH["Auth Mapping<br/>（Tool Manifest）"]
     AUTH --> OP["Agent OP"]

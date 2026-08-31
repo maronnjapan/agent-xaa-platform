@@ -143,7 +143,7 @@ AI Agentは業務用途が限定されるため、人間よりBaselineを作り�
 | Baselineの根拠 | 例（Agent A） |
 |---|---|
 | Effective Capability | `calendar.event.read`、`mail.message.send` |
-| Expected Tools | `google.calendar.events.list`、`google.gmail.message.send` |
+| Expected Tools | `stub.calendar.events.list`、`google.gmail.message.send` |
 | Expected Resources | Google Calendar、Gmail |
 | Expected Rate | ID-JAG 2〜20回、API Request 10〜100回 |
 | Lifetime | 24時間以内 |

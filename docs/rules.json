@@ -1,0 +1,819 @@
+{
+  "version": 1,
+  "preamble": "各文書で決めた原則を、参照しやすいように一覧にする。\nルールの根拠と詳細は「出典」の節にあり、本書はそれを繰り返さない。",
+  "categories": [
+    {
+      "id": "identity",
+      "title": "Identity"
+    },
+    {
+      "id": "authorization",
+      "title": "権限決定"
+    },
+    {
+      "id": "capability-tool",
+      "title": "CapabilityとTool"
+    },
+    {
+      "id": "xaa-bridge",
+      "title": "Cross App AccessとBridge"
+    },
+    {
+      "id": "lifecycle",
+      "title": "Lifecycle"
+    },
+    {
+      "id": "isolation",
+      "title": "Isolation"
+    },
+    {
+      "id": "gcp",
+      "title": "GCP"
+    },
+    {
+      "id": "monitoring",
+      "title": "監視"
+    },
+    {
+      "id": "activity-timeline",
+      "title": "アクティビティタイムライン"
+    }
+  ],
+  "rules": [
+    {
+      "id": "RULE-01",
+      "category": "identity",
+      "text": "Human IdentityとAgent Identityを分離する。AgentはHuman Userの代理として動作する独立したIdentityである",
+      "sources": [
+        {
+          "label": "01. §2",
+          "doc": "01-overview.md",
+          "anchor": "#2-基本思想"
+        }
+      ]
+    },
+    {
+      "id": "RULE-02",
+      "category": "identity",
+      "text": "Agent RuntimeはHuman Sessionと独立して存在する。ユーザーの対話セッションが終わってもAgentは生存期間内で実行を続ける",
+      "sources": [
+        {
+          "label": "01. §2",
+          "doc": "01-overview.md",
+          "anchor": "#2-基本思想"
+        }
+      ]
+    },
+    {
+      "id": "RULE-03",
+      "category": "identity",
+      "text": "Agent Registration（client credential、XAA config、Human IdP Connection、expires_at）はIsolation Levelに関わらずAgentごとに作る",
+      "sources": [
+        {
+          "label": "05. §4",
+          "doc": "05-identity.md",
+          "anchor": "#4-agent-registrationstandardでもagentごとに作る"
+        }
+      ]
+    },
+    {
+      "id": "RULE-04",
+      "category": "identity",
+      "text": "1 Agent = 1 Cloud Run Job Execution とする。複数のAgentを1つのプロセスで動かさない",
+      "sources": [
+        {
+          "label": "07. §4.1",
+          "doc": "07-lifecycle.md",
+          "anchor": "#41-実行形態"
+        }
+      ]
+    },
+    {
+      "id": "RULE-05",
+      "category": "identity",
+      "text": "GCP Service AccountはアプリがGCP IAMに対して名乗る身元であり、Agentの身元ではない。Agentの身元はID-JAGである",
+      "sources": [
+        {
+          "label": "08. §4",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#4-gcp-service-accountとは"
+        }
+      ]
+    },
+    {
+      "id": "RULE-06",
+      "category": "identity",
+      "text": "Human Control PlaneのAccess TokenはDPoP-boundとする。Agent RuntimeからAgent OPへのToken ExchangeとNative Resource ASへの提示でもDPoPを必須とし、ID-JAGを `cnf.jkt` で束縛する。外部SaaSへの接続だけは相手の仕様に従う",
+      "sources": [
+        {
+          "label": "05. §2",
+          "doc": "05-identity.md",
+          "anchor": "#2-dpop"
+        }
+      ]
+    },
+    {
+      "id": "RULE-43",
+      "category": "identity",
+      "text": "Control Plane APIの `human_subject` はAccess Tokenの `sub` を正とする。リクエストボディの値をそのまま信頼しない",
+      "sources": [
+        {
+          "label": "05. §1.1",
+          "doc": "05-identity.md",
+          "anchor": "#11-human_subjectの出どころ"
+        }
+      ]
+    },
+    {
+      "id": "RULE-44",
+      "category": "identity",
+      "text": "DPoP検証では、Access Tokenの `cnf.jkt` とDPoP Proofの鍵の一致を必ず確認する。Proofが添付されていることの確認だけで済ませない",
+      "sources": [
+        {
+          "label": "05. §2.1",
+          "doc": "05-identity.md",
+          "anchor": "#21-受け取り側の検証手順"
+        }
+      ]
+    },
+    {
+      "id": "RULE-07",
+      "category": "authorization",
+      "text": "Automation Design AIはWork Definitionを定義する。権限、アクセス可能なResource、Capabilityの情報をAutomation App側に持たせない",
+      "sources": [
+        {
+          "label": "02. §2",
+          "doc": "02-automation-design.md",
+          "anchor": "#2-automation-design-aiが決めること決めないこと"
+        }
+      ]
+    },
+    {
+      "id": "RULE-08",
+      "category": "authorization",
+      "text": "ユーザーとの対話と承認なしに、Automation Design AIがWork Definitionを最終確定したりAgentを生成したりしない",
+      "sources": [
+        {
+          "label": "02. §1",
+          "doc": "02-automation-design.md",
+          "anchor": "#1-基本方針"
+        }
+      ]
+    },
+    {
+      "id": "RULE-09",
+      "category": "authorization",
+      "text": "Authorization AI AgentはWork DefinitionからAbstract Capabilityを推論する。出力はCapability Taxonomy内に制限し、API Endpoint、HTTP Method、OAuth Scope、Bridge URLを生成しない",
+      "sources": [
+        {
+          "label": "03. §4",
+          "doc": "03-authorization.md",
+          "anchor": "#4-authorization-ai-agent"
+        }
+      ]
+    },
+    {
+      "id": "RULE-10",
+      "category": "authorization",
+      "text": "Authorization AI Agentの出力は提案であり、最終的なAuthorization DecisionはPolicy Engineが行う",
+      "sources": [
+        {
+          "label": "03. §1",
+          "doc": "03-authorization.md",
+          "anchor": "#1-位置づけ"
+        }
+      ]
+    },
+    {
+      "id": "RULE-11",
+      "category": "authorization",
+      "text": "Effective Agent Permission = Proposed Capability ∩ Human Permission ∩ Delegatable Permission ∩ Organization Policy ∩ Risk Policy とし、常にHuman Permissionを超えない",
+      "sources": [
+        {
+          "label": "03. §2",
+          "doc": "03-authorization.md",
+          "anchor": "#2-権限の種類"
+        }
+      ]
+    },
+    {
+      "id": "RULE-12",
+      "category": "authorization",
+      "text": "最低Isolation LevelはPolicy EngineがRisk Policyで決定する。Authorization AI Agentは補助情報を提案してよい",
+      "sources": [
+        {
+          "label": "03. §7",
+          "doc": "03-authorization.md",
+          "anchor": "#7-security-profile"
+        }
+      ]
+    },
+    {
+      "id": "RULE-13",
+      "category": "authorization",
+      "text": "既存Agentの権限昇格は行わない。より広い権限が必要なら、ユーザーが新しいAgentを一から作成する",
+      "sources": [
+        {
+          "label": "02. §5",
+          "doc": "02-automation-design.md",
+          "anchor": "#5-実行中agentの操作"
+        },
+        {
+          "label": "07. §7.1",
+          "doc": "07-lifecycle.md",
+          "anchor": "#71-agent自身の作業内容権限を変えたい場合"
+        }
+      ]
+    },
+    {
+      "id": "RULE-14",
+      "category": "authorization",
+      "text": "Human Permissionが縮小したら既存Agentを再評価し、Re-Provisioningする。拡大は既存Agentへ反映しない",
+      "sources": [
+        {
+          "label": "07. §7.2",
+          "doc": "07-lifecycle.md",
+          "anchor": "#72-human-userの権限が変更された場合re-provisioning"
+        }
+      ]
+    },
+    {
+      "id": "RULE-15",
+      "category": "capability-tool",
+      "text": "CapabilityとToolを分離する。Capability ≠ API Endpoint",
+      "sources": [
+        {
+          "label": "03. §5",
+          "doc": "03-authorization.md",
+          "anchor": "#5-抽象capability"
+        }
+      ]
+    },
+    {
+      "id": "RULE-16",
+      "category": "capability-tool",
+      "text": "Toolの認証方式、接続先、API Endpointは Tool / Connector Catalog で管理する。Agent OPとAuthorization Platformはこの情報を持たない",
+      "sources": [
+        {
+          "label": "04. §1",
+          "doc": "04-tool-catalog.md",
+          "anchor": "#1-tool--connector-catalogとは"
+        }
+      ]
+    },
+    {
+      "id": "RULE-17",
+      "category": "capability-tool",
+      "text": "AgentはProvisioning済みのToolだけを選択する。任意のURL、Method、scope、audienceを生成させない",
+      "sources": [
+        {
+          "label": "04. §7",
+          "doc": "04-tool-catalog.md",
+          "anchor": "#7-agentに任意httpを許さない"
+        }
+      ]
+    },
+    {
+      "id": "RULE-18",
+      "category": "capability-tool",
+      "text": "AI（LLM）はToolを選び、認証とAPI実行はDeterministic Tool Executorが行う",
+      "sources": [
+        {
+          "label": "04. §6",
+          "doc": "04-tool-catalog.md",
+          "anchor": "#6-tool-executor"
+        }
+      ]
+    },
+    {
+      "id": "RULE-19",
+      "category": "xaa-bridge",
+      "text": "XAA設定（audience、resource、scope）はProvisioning時に確定してAgent OPへ静的に注入する。Agent生成後にRegistryへ問い合わせて動的に決めない",
+      "sources": [
+        {
+          "label": "05. §3",
+          "doc": "05-identity.md",
+          "anchor": "#3-agent-op"
+        },
+        {
+          "label": "07. §3.1",
+          "doc": "07-lifecycle.md",
+          "anchor": "#31-provisioning時にすべて確定する"
+        }
+      ]
+    },
+    {
+      "id": "RULE-20",
+      "category": "xaa-bridge",
+      "text": "Agent OPは判断しない。仕事はAgent認証、`subject_token` と `actor_token` の検証、静的XAA設定との照合、ID-JAG発行とKMS署名、期限確認、`subject_token` の払い出しのみ",
+      "sources": [
+        {
+          "label": "05. §3.4",
+          "doc": "05-identity.md",
+          "anchor": "#34-agent-opが持つもの持たないもの"
+        }
+      ]
+    },
+    {
+      "id": "RULE-21",
+      "category": "xaa-bridge",
+      "text": "Native XAA ResourceではBridgeを使わない。BridgeはID-JAGを理解しない外部OAuth SaaS向けの互換レイヤーとしてのみ使う",
+      "sources": [
+        {
+          "label": "06. §1",
+          "doc": "06-oauth-bridge.md",
+          "anchor": "#1-位置づけ"
+        }
+      ]
+    },
+    {
+      "id": "RULE-22",
+      "category": "xaa-bridge",
+      "text": "Refresh TokenとClient SecretをAgent Runtimeへ渡さない。Runtimeへ渡してよいのは、XAA用のID Token、短期Access Token、当該Execution限りのCredentialだけとする",
+      "sources": [
+        {
+          "label": "05. §9",
+          "doc": "05-identity.md",
+          "anchor": "#9-tokenの種類と保持ルール"
+        },
+        {
+          "label": "06. §3",
+          "doc": "06-oauth-bridge.md",
+          "anchor": "#3-credential保持方針"
+        }
+      ]
+    },
+    {
+      "id": "RULE-23",
+      "category": "xaa-bridge",
+      "text": "OAuth Redirectで `access_token` や `refresh_token` を渡さない。返すのは `transaction_id` とone-time codeのみ",
+      "sources": [
+        {
+          "label": "06. §5",
+          "doc": "06-oauth-bridge.md",
+          "anchor": "#5-google-consent"
+        }
+      ]
+    },
+    {
+      "id": "RULE-24",
+      "category": "xaa-bridge",
+      "text": "Bridge ConnectionはHuman Userごと、Agent BindingはAgentごとに持つ。BindingはAgent破棄時に必ず削除する",
+      "sources": [
+        {
+          "label": "06. §3",
+          "doc": "06-oauth-bridge.md",
+          "anchor": "#3-credential保持方針"
+        }
+      ]
+    },
+    {
+      "id": "RULE-45",
+      "category": "xaa-bridge",
+      "text": "Cross App Accessは `draft-ietf-oauth-identity-assertion-authz-grant` に準拠する。逸脱する箇所は、逸脱していることと相互運用を期待しない範囲を文書に明示する",
+      "sources": [
+        {
+          "label": "05. §3.1",
+          "doc": "05-identity.md",
+          "anchor": "#31-cross-app-accessにおける役割の対応"
+        }
+      ]
+    },
+    {
+      "id": "RULE-46",
+      "category": "xaa-bridge",
+      "text": "ID-JAGの `sub` は委譲元の人間、`act` は代理として動くAgentとする。Agentを `sub` に置かず、`client_id` でAgent個体を表さない",
+      "sources": [
+        {
+          "label": "05. §6.4",
+          "doc": "05-identity.md",
+          "anchor": "#64-id-jag"
+        }
+      ]
+    },
+    {
+      "id": "RULE-47",
+      "category": "xaa-bridge",
+      "text": "Human IdPにAgentの文脈を持ち込まない。issuerは1つに保ち、人間の文脈とAgentの文脈はパスでデプロイを分ける",
+      "sources": [
+        {
+          "label": "05. §3.2",
+          "doc": "05-identity.md",
+          "anchor": "#32-issuerを分けずデプロイだけ分ける理由"
+        }
+      ]
+    },
+    {
+      "id": "RULE-48",
+      "category": "xaa-bridge",
+      "text": "Agent OPのID-JAG署名鍵はHuman IdPのSSO署名鍵と別鍵とし、`typ` が `oauth-id-jag+jwt` のJWT以外を署名しない",
+      "sources": [
+        {
+          "label": "05. §3.3",
+          "doc": "05-identity.md",
+          "anchor": "#33-agent-op署名鍵の制約"
+        }
+      ]
+    },
+    {
+      "id": "RULE-49",
+      "category": "xaa-bridge",
+      "text": "Token Exchangeでは、`actor_token` が指すAgent Registrationの `human_subject` と `subject_token` の `sub` の一致を必ず確認する。有効な `subject_token` に無関係な `actor_token` を組み合わせられないようにする",
+      "sources": [
+        {
+          "label": "05. §6.3",
+          "doc": "05-identity.md",
+          "anchor": "#63-agent-opの検証手順"
+        }
+      ]
+    },
+    {
+      "id": "RULE-50",
+      "category": "xaa-bridge",
+      "text": "Agentごとのクライアント登録を作らない。`client_id` は `agent-platform` 1つとし、Agent個体は `cnf.jkt` と `act` と監査ログで識別する",
+      "sources": [
+        {
+          "label": "05. §6.5",
+          "doc": "05-identity.md",
+          "anchor": "#65-agentごとのクライアント登録を作らない理由"
+        }
+      ]
+    },
+    {
+      "id": "RULE-51",
+      "category": "xaa-bridge",
+      "text": "Human IdP ConnectionのRefresh TokenはAgent OPだけが保持する。Agentごとに作り、`expires_at` を超えず、Cleanupで必ずRevokeする",
+      "sources": [
+        {
+          "label": "05. §4.1",
+          "doc": "05-identity.md",
+          "anchor": "#41-human-idp-connection"
+        }
+      ]
+    },
+    {
+      "id": "RULE-52",
+      "category": "xaa-bridge",
+      "text": "各Resource ASにおける `agent-platform` の登録scopeは、そのResource ASで必要な最小に保つ。ID-JAG署名鍵が漏れた場合の上限がこの値になる",
+      "sources": [
+        {
+          "label": "05. §3.3",
+          "doc": "05-identity.md",
+          "anchor": "#33-agent-op署名鍵の制約"
+        }
+      ]
+    },
+    {
+      "id": "RULE-25",
+      "category": "lifecycle",
+      "text": "Agentの最大生存期間は24時間とする",
+      "sources": [
+        {
+          "label": "07. §1",
+          "doc": "07-lifecycle.md",
+          "anchor": "#1-agent-lifetime"
+        }
+      ]
+    },
+    {
+      "id": "RULE-26",
+      "category": "lifecycle",
+      "text": "LifetimeはCloud Run timeoutだけに依存せず、Identity、Authorization、Connectionの各層でも強制する",
+      "sources": [
+        {
+          "label": "07. §4.2",
+          "doc": "07-lifecycle.md",
+          "anchor": "#42-lifetimeの多層強制"
+        }
+      ]
+    },
+    {
+      "id": "RULE-27",
+      "category": "lifecycle",
+      "text": "期限到達、ユーザーによる停止、異常検知のいずれでもAgent Identity Domain全体をCleanupする。Agent OPの削除だけで終わらせない",
+      "sources": [
+        {
+          "label": "07. §6",
+          "doc": "07-lifecycle.md",
+          "anchor": "#6-expiration--緊急停止"
+        }
+      ]
+    },
+    {
+      "id": "RULE-28",
+      "category": "lifecycle",
+      "text": "Human Identityが無効化されたら、そのユーザーの全Agentを即時Revokeする",
+      "sources": [
+        {
+          "label": "07. §7.3",
+          "doc": "07-lifecycle.md",
+          "anchor": "#73-human-userの退職無効化"
+        }
+      ]
+    },
+    {
+      "id": "RULE-29",
+      "category": "lifecycle",
+      "text": "Agent OPとRuntimeはDisposableとし、更新より作り直しを優先する",
+      "sources": [
+        {
+          "label": "07. §5",
+          "doc": "07-lifecycle.md",
+          "anchor": "#5-disposable設計"
+        }
+      ]
+    },
+    {
+      "id": "RULE-30",
+      "category": "isolation",
+      "text": "Isolation LevelはSTANDARDとFULL_ISOLATIONの2段階とする",
+      "sources": [
+        {
+          "label": "05. §5",
+          "doc": "05-identity.md",
+          "anchor": "#5-isolation-model"
+        }
+      ]
+    },
+    {
+      "id": "RULE-31",
+      "category": "isolation",
+      "text": "STANDARDはShared OPのプロセスを共有してよい。ただしRegistration、Signing Key、XAA ConfigはAgent単位で分離する",
+      "sources": [
+        {
+          "label": "05. §4",
+          "doc": "05-identity.md",
+          "anchor": "#4-agent-registrationstandardでもagentごとに作る"
+        }
+      ]
+    },
+    {
+      "id": "RULE-32",
+      "category": "isolation",
+      "text": "FULL_ISOLATIONはDedicated OP、専用Service Account、専用KMS Key、専用Job定義、専用IAM Bindingを持つ",
+      "sources": [
+        {
+          "label": "05. §5",
+          "doc": "05-identity.md",
+          "anchor": "#5-isolation-model"
+        }
+      ]
+    },
+    {
+      "id": "RULE-33",
+      "category": "isolation",
+      "text": "Dedicated OPのService Accountは、そのAgentの鍵にだけ署名できる",
+      "sources": [
+        {
+          "label": "08. §4.2",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#42-dedicated-opにservice-accountを分ける理由"
+        }
+      ]
+    },
+    {
+      "id": "RULE-34",
+      "category": "gcp",
+      "text": "実行系は `agent-platform-prod` に集約し、監査ログの保存だけを `agent-security-prod` へ分離する",
+      "sources": [
+        {
+          "label": "08. §1",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#1-gcp-projectの構成"
+        }
+      ]
+    },
+    {
+      "id": "RULE-35",
+      "category": "gcp",
+      "text": "責務分離はService Account、IAM、KMS Key、Secret、DB Userで行う。アプリごとに専用のService Accountを作り、デフォルトService Accountを使わない",
+      "sources": [
+        {
+          "label": "08. §4",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#4-gcp-service-accountとは"
+        },
+        {
+          "label": "08. §5",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#5-service-account一覧"
+        }
+      ]
+    },
+    {
+      "id": "RULE-36",
+      "category": "gcp",
+      "text": "Cloud Run IAMはXAAの代替ではない。IAMは「どのアプリが呼べるか」、ID-JAGは「どのAgentとして何にアクセスできるか」を決める",
+      "sources": [
+        {
+          "label": "08. §8",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#8-ネットワークと公開範囲"
+        }
+      ]
+    },
+    {
+      "id": "RULE-37",
+      "category": "gcp",
+      "text": "Internetへ公開するのは、Automation App、Google BridgeとAgent OPのOAuth Callback、issuerのメタデータとJWKSだけとする",
+      "sources": [
+        {
+          "label": "08. §8",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#8-ネットワークと公開範囲"
+        }
+      ]
+    },
+    {
+      "id": "RULE-53",
+      "category": "gcp",
+      "text": "共有JWKSはアプリではなくCloud Storageから配信し、各アプリには自分の鍵の書き込みだけを許す",
+      "sources": [
+        {
+          "label": "08. §2.1",
+          "doc": "08-gcp-infrastructure.md",
+          "anchor": "#21-human-idpとagent-opの配置"
+        }
+      ]
+    },
+    {
+      "id": "RULE-38",
+      "category": "monitoring",
+      "text": "Raw Token、Secret、Private Keyをログへ保存しない",
+      "sources": [
+        {
+          "label": "09. §3",
+          "doc": "09-security-monitoring.md",
+          "anchor": "#3-ログへ残さないもの"
+        }
+      ]
+    },
+    {
+      "id": "RULE-39",
+      "category": "monitoring",
+      "text": "Raw Logをそのまま全部AIへ投入しない。Protocol Validation → Rule → Correlation → Risk Score → AI の順で処理する",
+      "sources": [
+        {
+          "label": "09. §1",
+          "doc": "09-security-monitoring.md",
+          "anchor": "#1-基本方針"
+        }
+      ]
+    },
+    {
+      "id": "RULE-40",
+      "category": "monitoring",
+      "text": "AgentごとのBaselineをAgent Definitionから構築する",
+      "sources": [
+        {
+          "label": "09. §5.4",
+          "doc": "09-security-monitoring.md",
+          "anchor": "#54-agent-baseline"
+        }
+      ]
+    },
+    {
+      "id": "RULE-41",
+      "category": "monitoring",
+      "text": "異常なAgentをAgent Identity Domain単位でQuarantine / Revoke / Destroyできるようにする",
+      "sources": [
+        {
+          "label": "09. §6",
+          "doc": "09-security-monitoring.md",
+          "anchor": "#6-response"
+        }
+      ]
+    },
+    {
+      "id": "RULE-42",
+      "category": "monitoring",
+      "text": "Platform側のService AccountにSecurity Logの削除権限を与えない",
+      "sources": [
+        {
+          "label": "09. §4",
+          "doc": "09-security-monitoring.md",
+          "anchor": "#4-正規化と保存"
+        }
+      ]
+    },
+    {
+      "id": "RULE-54",
+      "category": "activity-timeline",
+      "text": "Activity Monitoring UIは人間向けの可視化だけを行い、認可判断や検知判断は行わない。表示するのはPolicy Engine、Tool Executor、Security Detectionがすでに下した決定である",
+      "sources": [
+        {
+          "label": "11. §2",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#2-基本方針"
+        }
+      ]
+    },
+    {
+      "id": "RULE-55",
+      "category": "activity-timeline",
+      "text": "Activity Eventは、Security Detectionが収集する詳細ログ（09）とは別系統のPub/Subトピックとする。発行元のアプリが人間向けの説明文をイベント生成時に埋め込む",
+      "sources": [
+        {
+          "label": "11. §3",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#3-activity-event"
+        },
+        {
+          "label": "11. §4",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#4-配信経路"
+        }
+      ]
+    },
+    {
+      "id": "RULE-56",
+      "category": "activity-timeline",
+      "text": "Activity Feedの参照範囲はAccess Tokenの`sub`と一致する`human_subject`のイベントに限る。他ユーザーのログイン操作やAgentは表示しない",
+      "sources": [
+        {
+          "label": "11. §2",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#2-基本方針"
+        },
+        {
+          "label": "11. §7",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#7-アクセス制御"
+        }
+      ]
+    },
+    {
+      "id": "RULE-57",
+      "category": "activity-timeline",
+      "text": "ブラウザはFirestoreへ直接アクセスしない。Activity EventはAutomation Appの認証済みセッションを介してのみ配信する",
+      "sources": [
+        {
+          "label": "11. §4",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#4-配信経路"
+        },
+        {
+          "label": "11. §7",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#7-アクセス制御"
+        }
+      ]
+    },
+    {
+      "id": "RULE-58",
+      "category": "activity-timeline",
+      "text": "デモ用に台本化したActivity Eventには`is_simulated`を付与し、実イベントと視覚的に区別する。台本の再生は操作者自身のセッション範囲に閉じる",
+      "sources": [
+        {
+          "label": "11. §6.2",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#62-台本で補う"
+        },
+        {
+          "label": "11. §7",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#7-アクセス制御"
+        }
+      ]
+    },
+    {
+      "id": "RULE-59",
+      "category": "activity-timeline",
+      "text": "Activity Timelineは実行中のイベントを逐次配信しない。ログイン〜Provisioning、Taskごとの処理、Agent終了はそれぞれの終端イベントが記録されてから、一連の流れをまとめて再生する",
+      "sources": [
+        {
+          "label": "11. §2",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#2-基本方針"
+        },
+        {
+          "label": "11. §3.3",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#33-task境界"
+        },
+        {
+          "label": "11. §4",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#4-配信経路"
+        }
+      ]
+    },
+    {
+      "id": "RULE-60",
+      "category": "activity-timeline",
+      "text": "Activity Eventの記録は、通常利用かデモかを区別せず常時行う。デモのために記録を開始する操作は無い。操作者が明示的に行うのは、実演が難しいケースを補う台本イベントの追加だけである",
+      "sources": [
+        {
+          "label": "11. §2",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#2-基本方針"
+        },
+        {
+          "label": "11. §6.2",
+          "doc": "11-activity-timeline.md",
+          "anchor": "#62-台本で補う"
+        }
+      ]
+    }
+  ]
+}

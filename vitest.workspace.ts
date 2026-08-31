@@ -4,7 +4,9 @@ export default [
   defineProject({
     test: {
       name: 'unit',
-      include: ['packages/*/test/**/*.spec.ts', 'apps/*/test/**/*.spec.ts'],
+      // tests/docs checks the registers that describe the repository itself: the
+      // requirement index, the deviation table, the rules and their traceability.
+      include: ['packages/*/test/**/*.spec.ts', 'apps/*/test/**/*.spec.ts', 'tests/docs/**/*.spec.ts'],
       exclude: ['apps/*/test/integration/**/*.spec.ts'],
     },
   }),

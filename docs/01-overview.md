@@ -58,7 +58,7 @@ GCP上の配置は [08](./08-gcp-infrastructure.md)、各文書で決めた原�
 | **Security Detection** | Protocol Validation、Rule Detection、Correlation、Risk Scoring、Security AI呼び出し、Response |
 
 - Automation Design AI、Authorization AI Agent、Policy Engine、Tool Executorは独立したアプリではなく、上記アプリ内部の機能である。
-- Tool / Connector Catalogはアプリではなく、Cloud SQL上の定義データ（`tool_catalog`）と、それを読むProvisioner内のロジックである。
+- Tool / Connector Catalogはアプリではなく、Firestoreの定義データ（`catalog_tools` と `catalog_connectors`）と、それを読むProvisioner内のロジックである。
 - LLM推論そのものはVertex AI（GCPマネージドサービス）で行い、各アプリからAPI呼び出しする。
 
 アプリと機能の対応図、およびアプリ間の呼び出し関係は [08. §2](./08-gcp-infrastructure.md#2-デプロイ単位と内部機能) と [08. §3](./08-gcp-infrastructure.md#3-アプリ間の呼び出し関係) を参照。
@@ -102,7 +102,7 @@ Google Bridgeのような、AI Agentを含まないアプリにも必要にな�
 | Work Definition | ユーザーとAutomation Design AIの対話で確定した「Agentが行う作業内容」 |
 | Capability | `calendar.event.read` のような、Vendor非依存の抽象権限。API Endpointではない |
 | Capability Taxonomy | 本システムで定義済みのCapabilityの一覧。Authorization AIの出力はこの範囲に制限される |
-| Tool | `google.calendar.events.list` のような、具体的な操作単位。1つのCapabilityから複数のToolが使える |
+| Tool | `stub.calendar.events.list` のような、具体的な操作単位。1つのCapabilityから複数のToolが使える |
 | Connector | 接続先Resourceごとの認証と接続の定義（Google Workspace、社内顧客APIなど） |
 | Tool / Connector Catalog | CapabilityとToolの対応、および各Toolの認証方式、接続先、APIの呼び出し方法を保持する定義データ。「権限」を「実行手段」に翻訳する辞書 |
 | Cross App Access（XAA） | IdPが発行したIdentity Assertion（ID-JAG）をResource側のAuthorization Serverへ提示してAccess Tokenを得る方式。`draft-ietf-oauth-identity-assertion-authz-grant` が定める |
@@ -117,6 +117,8 @@ Google Bridgeのような、AI Agentを含まないアプリにも必要にな�
 | Security Profile | Agentのリスク評価結果。Isolation Levelを含む |
 | Isolation Level | `STANDARD` または `FULL_ISOLATION`。Agent IdentityとRuntimeをどこまで物理分離するか |
 | Agent Identity Domain | 1 Agentに属するIdentity、Key、Config、Connection、Runtimeの集合。破棄はこの単位で行う |
+
+用語と実装識別子の対応は[用語辞書](./glossary.md)にある。
 
 ## 4. 全体像
 
