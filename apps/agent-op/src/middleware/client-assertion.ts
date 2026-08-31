@@ -12,7 +12,7 @@ export const CLIENT_AUTH_FAILED = 'Client authentication failed';
 const MAX_ASSERTION_LIFETIME_SECONDS = 300;
 
 export interface ClientAssertionOptions {
-  issuer: string;
+  endpointBaseUrl: string;
   registrations: AgentRegistrationRepository;
   jtiStore: JtiStore;
   now?: () => number;
@@ -56,8 +56,14 @@ export function clientAssertionMiddleware(options: ClientAssertionOptions): Midd
 
       // Exactly the endpoint actually reached; an assertion minted for /xaa/token
       // must not be replayable at /xaa/subject-token.
+      //
+      // The audience is the endpoint URL, built from PUBLIC_BASE_URL the same way the
+      // DPoP `htu` is (00b). It cannot be built from ISSUER: the Human IdP and the
+      // Agent OP share one issuer string, so an issuer-based audience would name the
+      // IdP rather than this OP, and the two are different hosts in the direct
+      // profile (DEV-15) — which is why the Runtime builds it from AGENT_OP_BASE_URL.
       const path = new URL(context.req.url).pathname;
-      if (aud !== `${options.issuer}${path}`) throw new ClientAuthError();
+      if (aud !== `${options.endpointBaseUrl}${path}`) throw new ClientAuthError();
 
       const now = Math.floor((options.now?.() ?? Date.now()) / 1000);
       if (typeof exp !== 'number' || typeof iat !== 'number' || exp <= now || exp - iat > MAX_ASSERTION_LIFETIME_SECONDS) throw new ClientAuthError();

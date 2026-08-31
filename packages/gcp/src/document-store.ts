@@ -27,6 +27,8 @@ export interface DocumentStore {
 
 export interface DocumentTransaction {
   get<T = Record<string, unknown>>(collection: string, id: string): Promise<T | undefined>;
+  /** A transactional query: the rows it returns are part of the transaction's snapshot. */
+  queryEqual<T = Record<string, unknown>>(collection: string, filters: Array<[string, unknown]>): Promise<Array<{ id: string; data: T }>>;
   count(collection: string, filters: Array<[string, unknown]>): Promise<number>;
   set(collection: string, id: string, data: Record<string, unknown>): void;
   update(collection: string, id: string, patch: Record<string, unknown>): void;
@@ -94,6 +96,12 @@ export function createFirestoreDocumentStore(firestore: Firestore, app: string):
         async get(collection, id) {
           const snapshot = await tx.get(guard('read', collection, id));
           return snapshot.exists ? (snapshot.data() as never) : undefined;
+        },
+        async queryEqual(collection, filters) {
+          let query = guardCollection('read', collection) as FirebaseFirestore.Query;
+          for (const [field, value] of filters) query = query.where(field, '==', value);
+          const snapshot = await tx.get(query);
+          return snapshot.docs.map((document) => ({ id: document.id, data: document.data() as never }));
         },
         async count(collection, filters) {
           let query = guardCollection('read', collection) as FirebaseFirestore.Query;

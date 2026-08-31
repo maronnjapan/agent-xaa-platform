@@ -45,7 +45,7 @@ function createApp(deps: AgentOpAppDeps): Hono {
 
 function clientAssertion(deps: AgentOpDeps, store: ReturnType<typeof createAgentOpStore>) {
   return clientAssertionMiddleware({
-    issuer: deps.config.issuer, registrations: store.registrations,
+    endpointBaseUrl: deps.config.publicBaseUrl, registrations: store.registrations,
     jtiStore: deps.jtiStore, ...(deps.now ? { now: deps.now } : {}),
   });
 }

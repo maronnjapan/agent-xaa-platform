@@ -20,6 +20,11 @@ export function createFirestoreDouble(): Firestore {
 
   interface Filter { field: string; operator: string; value: unknown }
 
+  // Bumped on every write so a transaction can tell whether what it read still holds.
+  const versions = new Map<string, number>();
+  const versionOf = (name: string, id: string) => versions.get(`${name}/${id}`) ?? 0;
+  const bump = (name: string, id: string) => versions.set(`${name}/${id}`, versionOf(name, id) + 1);
+
   const rows = (name: string, filters: Filter[], limit?: number) => {
     const compare = (actual: unknown, operator: string, value: unknown): boolean => {
       if (operator === '==') return actual === value;
@@ -29,7 +34,7 @@ export function createFirestoreDouble(): Firestore {
     };
     const matched = [...documentsOf(name)]
       .filter(([, data]) => filters.every((filter) => compare(data[filter.field], filter.operator, filter.value)))
-      .map(([id, data]) => ({ id, data: () => data, ref: docRef(name, id) }));
+      .map(([id, data]) => ({ id, __collection: name, data: () => data, ref: docRef(name, id) }));
     return limit === undefined ? matched : matched.slice(0, limit);
   };
 
@@ -38,19 +43,21 @@ export function createFirestoreDouble(): Firestore {
     __collection: name,
     async get() {
       const data = documentsOf(name).get(id);
-      return { exists: data !== undefined, id, data: () => data };
+      return { exists: data !== undefined, id, __collection: name, data: () => data };
     },
-    async set(value: Record<string, unknown>) { documentsOf(name).set(id, value); },
+    async set(value: Record<string, unknown>) { documentsOf(name).set(id, value); bump(name, id); },
     async create(value: Record<string, unknown>) {
       if (documentsOf(name).has(id)) throw Object.assign(new Error('ALREADY_EXISTS'), { code: 6 });
       documentsOf(name).set(id, value);
+      bump(name, id);
     },
     async update(patch: Record<string, unknown>) {
       const current = documentsOf(name).get(id);
       if (!current) throw Object.assign(new Error('NOT_FOUND'), { code: 5 });
       documentsOf(name).set(id, { ...current, ...patch });
+      bump(name, id);
     },
-    async delete() { documentsOf(name).delete(id); },
+    async delete() { documentsOf(name).delete(id); bump(name, id); },
   });
 
   const query = (name: string, filters: Filter[] = [], limit?: number): unknown => ({
@@ -81,24 +88,55 @@ export function createFirestoreDouble(): Firestore {
         async commit() { for (const operation of operations) await operation(); },
       };
     },
-    // Sequential rather than optimistic: the double is single-threaded, so a body
-    // that reads then writes already sees a consistent snapshot.
+    /**
+     * Optimistic concurrency, the way Firestore does it: a transaction records what it
+     * read, and commits only if none of it changed meanwhile — otherwise the body runs
+     * again on fresh data.
+     *
+     * The double could get away with running transactions one after another, since it
+     * is single-threaded. It does not, because the specs that matter here are about two
+     * readers racing for the same row (T-RUN-22's "an instruction is applied once"), and
+     * a double that cannot lose that race would pass a test the real database fails.
+     */
     async runTransaction<T>(body: (tx: unknown) => Promise<T>): Promise<T> {
-      const writes: Array<() => Promise<void>> = [];
-      const result = await body({
-        async get(target: { get(): Promise<unknown> }) { return target.get(); },
-        set(ref: { __collection: string; id: string }, value: Record<string, unknown>) {
-          writes.push(async () => { await docRef(ref.__collection, ref.id).set(value); });
-        },
-        update(ref: { __collection: string; id: string }, patch: Record<string, unknown>) {
-          writes.push(async () => { await docRef(ref.__collection, ref.id).update(patch); });
-        },
-        delete(ref: { __collection: string; id: string }) {
-          writes.push(async () => { await docRef(ref.__collection, ref.id).delete(); });
-        },
-      });
-      for (const write of writes) await write();
-      return result;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        // Synchronous, so the check below and these writes cannot be interleaved with
+        // another transaction's — which is what makes the commit atomic here, as it is
+        // on the server.
+        const writes: Array<() => void> = [];
+        const readVersions = new Map<string, number>();
+        const observe = (name: string, id: string) => readVersions.set(`${name}/${id}`, versionOf(name, id));
+        const result = await body({
+          async get(target: { get(): Promise<unknown>; __collection?: string; id?: string }) {
+            const snapshot = await target.get() as { docs?: Array<{ id: string; __collection?: string }> };
+            if (target.__collection !== undefined && target.id !== undefined) observe(target.__collection, target.id);
+            for (const document of snapshot.docs ?? []) observe(document.__collection ?? '', document.id);
+            return snapshot;
+          },
+          set(ref: { __collection: string; id: string }, value: Record<string, unknown>) {
+            writes.push(() => { documentsOf(ref.__collection).set(ref.id, value); bump(ref.__collection, ref.id); });
+          },
+          update(ref: { __collection: string; id: string }, patch: Record<string, unknown>) {
+            writes.push(() => {
+              const current = documentsOf(ref.__collection).get(ref.id);
+              if (!current) throw Object.assign(new Error('NOT_FOUND'), { code: 5 });
+              documentsOf(ref.__collection).set(ref.id, { ...current, ...patch });
+              bump(ref.__collection, ref.id);
+            });
+          },
+          delete(ref: { __collection: string; id: string }) {
+            writes.push(() => { documentsOf(ref.__collection).delete(ref.id); bump(ref.__collection, ref.id); });
+          },
+        });
+        const stale = [...readVersions].some(([key, version]) => {
+          const [name, id] = [key.slice(0, key.indexOf('/')), key.slice(key.indexOf('/') + 1)];
+          return versionOf(name, id) !== version;
+        });
+        if (stale) continue;
+        for (const write of writes) write();
+        return result;
+      }
+      throw Object.assign(new Error('ABORTED: too much contention'), { code: 10 });
     },
   };
   return firestore as unknown as Firestore;

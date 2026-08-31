@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, webcrypto } from 'node:crypto';
 import { XaaCryptoError } from './errors.js';
 import { createLocalEs256Signer } from './local-signer.js';
 import { signCompactJws, verifyCompactJws } from './jws.js';
-import { importPublicJwk, type Es256KeyPair, type PublicJwkEs256 } from './keys.js';
+import { importPublicJwk, toPublicJwk, type Es256KeyPair, type PublicJwkEs256 } from './keys.js';
 import { DPOP_JTI_TTL_SECONDS, type JtiStore } from './jti-store.js';
 import { sha256Base64Url } from './sha256.js';
 import { jwkThumbprint } from './thumbprint.js';
@@ -15,6 +15,23 @@ export function normalizeHtu(value: string): string {
   url.search = '';
   if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) url.port = '';
   return url.toString();
+}
+
+/**
+ * A DPoP key that exists for one process and cannot be copied out of it.
+ *
+ * DEC-ID-12: an agent's proof-of-possession key is generated at execution start and
+ * never registered anywhere in advance. `extractable: false` applies to the private
+ * key only (the public one must be exportable to become a JWK), so the private half
+ * can sign and nothing else — not even a bug that reaches for `exportKey`.
+ */
+export async function generateDpopKeyPair(): Promise<Es256KeyPair> {
+  const pair = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
+  return {
+    privateKey: pair.privateKey,
+    publicKey: pair.publicKey,
+    publicJwk: await toPublicJwk(pair.publicKey),
+  };
 }
 
 export async function createDpopProof(input: {

@@ -1,0 +1,61 @@
+import { createDpopProof, decodeJwsUnverified } from '@xaa/crypto';
+import { AGENT_CLIENT_AUTH_ASSERTION_TYPE } from '@xaa/contracts';
+import type { ExecutionContext } from '../context/execution-context.js';
+import type { RuntimeHttpClient } from '../http/http-client.js';
+import { buildClientAssertion } from './client-assertion.js';
+
+export class UnexpectedSubjectResponse extends Error {
+  readonly code = 'unexpected_subject_response';
+}
+
+export const SUBJECT_TOKEN_PATH = '/xaa/subject-token';
+/** Re-fetch before the last minute of life, so an exchange never starts on a stale token. */
+export const SUBJECT_TOKEN_MARGIN_MS = 60_000;
+
+/**
+ * The human's ID Token, fetched from the Agent OP rather than handed in at startup.
+ *
+ * DEC-ID-19 is what lets an agent outlive the browser session that created it: the OP
+ * holds the IdP connection and mints a fresh subject token on request, so the Runtime
+ * never needs — and never receives — a refresh token or a session cookie. There is no
+ * SUBJECT_TOKEN env var for the same reason.
+ *
+ * A response carrying `refresh_token` or `access_token` is treated as a failure rather
+ * than as extra fields to ignore. It would mean the OP is handing over more than the
+ * delegation requires, and the Runtime should not be the component that quietly accepts it.
+ */
+export async function fetchSubjectToken(
+  context: ExecutionContext,
+  http: RuntimeHttpClient,
+  now: number = Date.now(),
+): Promise<string> {
+  const cached = context.tokens.get('subject', now);
+  if (cached) return cached;
+
+  const url = `${context.agentOpBaseUrl}${SUBJECT_TOKEN_PATH}`;
+  const body = new URLSearchParams({
+    client_assertion: await buildClientAssertion(context, SUBJECT_TOKEN_PATH, now),
+    client_assertion_type: AGENT_CLIENT_AUTH_ASSERTION_TYPE,
+  });
+  const response = await http.send(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      // No `ath`: there is no Access Token to bind this proof to yet.
+      DPoP: await createDpopProof({ method: 'POST', url, keyPair: context.dpop, now: () => now }),
+    },
+    body: body.toString(),
+  });
+  if (!response.ok) throw new UnexpectedSubjectResponse(`subject token request failed: ${response.status}`);
+  const payload = await response.json() as Record<string, unknown>;
+  if ('refresh_token' in payload || 'access_token' in payload) {
+    throw new UnexpectedSubjectResponse('subject token response carried more than an id_token');
+  }
+  const idToken = payload.id_token;
+  if (typeof idToken !== 'string') throw new UnexpectedSubjectResponse('subject token response has no id_token');
+
+  const claims = decodeJwsUnverified(idToken).payload;
+  const expiresAt = typeof claims.exp === 'number' ? claims.exp * 1000 : now + SUBJECT_TOKEN_MARGIN_MS;
+  context.tokens.set('subject', idToken, expiresAt - SUBJECT_TOKEN_MARGIN_MS + 30_000);
+  return idToken;
+}

@@ -16,9 +16,11 @@ export interface ActorTokenClaims {
   jti: string;
 }
 
+/** Idempotent: an input that already carries the prefix comes back unchanged. */
 export function toAgentUrn(agentId: string): string {
-  assertAgentId(agentId);
-  return `${AGENT_URN_PREFIX}${agentId}`;
+  const bare = agentId.startsWith(AGENT_URN_PREFIX) ? agentId.slice(AGENT_URN_PREFIX.length) : agentId;
+  assertAgentId(bare);
+  return `${AGENT_URN_PREFIX}${bare}`;
 }
 
 export function parseAgentUrn(urn: string): string {

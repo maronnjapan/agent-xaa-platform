@@ -46,6 +46,7 @@ export function buildToolManifest(input: {
         description: tool.description,
         required_capability: tool.required_capability,
         authorization: {
+          type: tool.authorization.type,
           audience: tool.authorization.audience,
           resource: tool.authorization.resource,
           scope: tool.authorization.scope,

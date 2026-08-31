@@ -181,7 +181,7 @@ export async function requestIdJag(harness: AgentOpHarness, input: ExchangeInput
       resource: input.resource ?? DOCS_API_RESOURCE,
       scope: input.scope ?? 'docs.read',
       client_assertion_type: CLIENT_ASSERTION_TYPE,
-      client_assertion: await sign(JWT_TYP.CLIENT_ASSERTION, { iss: harness.agentId, sub: harness.agentId, aud: `${HUMAN_IDP_ISSUER}${path}`, iat, exp: iat + 120, jti: randomUUID() }),
+      client_assertion: await sign(JWT_TYP.CLIENT_ASSERTION, { iss: harness.agentId, sub: harness.agentId, aud: `${AGENT_OP_BASE}${path}`, iat, exp: iat + 120, jti: randomUUID() }),
     }).toString(),
   });
 }

@@ -23,6 +23,7 @@
     "test": "vitest --config ../../vitest.package.config.ts run"
   },
   "dependencies": {
+    "@google-cloud/pubsub": "6.0.1",
     "@maronn-openid-connect/core": "0.2.0",
     "@maronn-openid-connect/experimental": "0.0.6",
     "@xaa/crypto": "workspace:*",

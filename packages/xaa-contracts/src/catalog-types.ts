@@ -1,4 +1,4 @@
-import type { Capability, ResourceScope, ToolId } from './identifiers.js';
+import { CAPABILITIES, RESOURCE_SCOPES, TOOL_IDS, type Capability, type ResourceScope, type ToolId } from './identifiers.js';
 
 export type ConnectorId = 'internal-docs-api' | 'internal-finance-api' | 'stub-saas-calendar';
 export const CONNECTOR_IDS: readonly ConnectorId[] = ['internal-docs-api', 'internal-finance-api', 'stub-saas-calendar'];
@@ -95,7 +95,7 @@ export interface ToolManifest {
     tool_id: ToolId;
     description: string;
     required_capability: Capability;
-    authorization: { audience: string; resource: string; scope: ResourceScope };
+    authorization: { type: 'native_xaa' | 'xaa_bridge'; audience: string; resource: string; scope: ResourceScope };
     token_provider: string | null;
     api: { base_url: string; method: string; path: string };
     parameters: Record<string, unknown>;
@@ -119,21 +119,27 @@ export const toolManifestSchema = {
         additionalProperties: false,
         required: ['tool_id', 'description', 'required_capability', 'authorization', 'token_provider', 'api', 'parameters', 'constraints', 'response_schema'],
         properties: {
-          tool_id: { type: 'string' },
+          tool_id: { enum: TOOL_IDS },
           description: { type: 'string' },
-          required_capability: { type: 'string' },
+          required_capability: { enum: CAPABILITIES },
           authorization: {
-            type: 'object', additionalProperties: false, required: ['audience', 'resource', 'scope'],
-            properties: { audience: { type: 'string' }, resource: { type: 'string' }, scope: { type: 'string' } },
+            type: 'object', additionalProperties: false, required: ['type', 'audience', 'resource', 'scope'],
+            properties: {
+              type: { enum: ['native_xaa', 'xaa_bridge'] },
+              audience: { type: 'string' }, resource: { type: 'string' }, scope: { enum: RESOURCE_SCOPES },
+            },
           },
           token_provider: { type: ['string', 'null'] },
           api: {
             type: 'object', additionalProperties: false, required: ['base_url', 'method', 'path'],
-            properties: { base_url: { type: 'string' }, method: { type: 'string' }, path: { type: 'string' } },
+            properties: { base_url: { type: 'string' }, method: { enum: ['GET', 'POST', 'PATCH'] }, path: { type: 'string', pattern: '^/' } },
           },
           parameters: { type: 'object' },
           constraints: { type: 'object' },
-          response_schema: { type: 'object' },
+          response_schema: {
+            type: 'object', additionalProperties: false, required: ['type', 'allowlist'],
+            properties: { type: { enum: ['object', 'array'] }, allowlist: { type: 'array', minItems: 1, items: { type: 'string', pattern: '^([a-z_][a-z0-9_]*|[a-z_][a-z0-9_]*\\[\\]\\.[a-z_][a-z0-9_]*)$' } } },
+          },
         },
       },
     },

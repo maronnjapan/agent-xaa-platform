@@ -4,6 +4,9 @@ import { authorize, decodeJwtHeader, decodeJwtPayload, tokenRequest } from '../.
 import { AGENT_OP_CALLBACK_URI, HUMAN_IDP_ISSUER, idpPublicJwk, startHumanIdp } from '../../harness/human-idp.js';
 import { requestIdJag, startAgentOp, type AgentOpHarness } from '../../harness/agent-op.js';
 import { callResource, redeemForAccessToken, seedDocument, startResource, type ResourceHarness } from '../../harness/resource.js';
+import { executeTool } from '@xaa/agent-runtime/src/tool-executor/index';
+import { AGENT_OP_BASE, DOCS_API_RESOURCE, DOCS_AS_ISSUER } from '../../harness/agent-op.js';
+import { docsRuntime } from './runtime-flow-docs.spec.js';
 
 /**
  * REQ-01-023. The four Cross App Access steps end to end, in one process:
@@ -11,7 +14,7 @@ import { callResource, redeemForAccessToken, seedDocument, startResource, type R
  * Access Token, Access Token + DPoP -> data. Nothing is hand-minted; every token
  * comes from the service that actually issues it.
  */
-async function humanIdToken(): Promise<string> {
+export async function humanIdToken(): Promise<string> {
   const idp = await startHumanIdp();
   const result = await authorize({
     fetch: idp.fetch, clientId: 'agent-platform', redirectUri: AGENT_OP_CALLBACK_URI,
@@ -42,6 +45,38 @@ export async function walkNativeXaa(): Promise<{ agentOp: AgentOpHarness; docs: 
   const accessToken = (await redeemed.json() as { access_token: string }).access_token;
   return { agentOp, docs, accessToken, idJag };
 }
+
+describe('the native XAA path, driven by the real Runtime', () => {
+  /**
+   * The same four steps, but every request is made by the Agent Runtime's own code:
+   * five apps wired in one process (DEC-TEST-01), no token minted by the spec, and
+   * `globalThis.fetch` proven untouched.
+   */
+  it('walks login to data with nothing hand-minted', async () => {
+    const { runtime, docs, subjectToken } = await docsRuntime();
+    runtime.context.tokens.set('subject', subjectToken, Date.now() + 3_600_000);
+    await seedDocument(docs, 'testuser');
+
+    const originalFetch = globalThis.fetch;
+    let networkCalls = 0;
+    globalThis.fetch = (() => { networkCalls += 1; throw new Error('the runtime must not reach the network'); }) as unknown as typeof fetch;
+    let result;
+    try {
+      result = await executeTool({
+        context: runtime.context, http: runtime.http, logger: runtime.logger,
+        logContext: runtime.logContext, stageWrite: () => {},
+      }, { tool_id: 'internal.document.list', parameters: {} });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result).toMatchObject({ outcome: 'success' });
+    expect((result as { data: { documents: unknown[] } }).data.documents).toHaveLength(1);
+    expect(networkCalls).toBe(0);
+    // (1) Agent OP for the ID-JAG, (2) Resource AS for the Access Token, (3) the API.
+    expect(runtime.hostCalls).toEqual([AGENT_OP_BASE, DOCS_AS_ISSUER, DOCS_API_RESOURCE]);
+  });
+});
 
 describe('the native XAA path, end to end', () => {
   it('reaches GET /documents with a token nobody hand-minted', async () => {

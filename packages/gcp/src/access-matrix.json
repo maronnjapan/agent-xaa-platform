@@ -114,14 +114,15 @@
     "read": [
       "agents/*/meta",
       "agents/*/state",
-      "agents/*/instructions",
       "agents/*/manifest",
+      "agent_instructions/**",
       "catalog_tools/**",
       "documents/**",
       "payments/**"
     ],
     "write": [
       "agents/*/state",
+      "agent_instructions/**",
       "documents/**",
       "payments/**"
     ]

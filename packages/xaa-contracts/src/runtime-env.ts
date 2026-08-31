@@ -38,3 +38,32 @@ export function assertRuntimeEnv(overrides: Record<string, string>): asserts ove
     throw new Error(`runtime env overrides must be exactly: ${expected.join(', ')}`);
   }
 }
+
+/**
+ * Values the Job definition sets statically for every agent (00b): they are not
+ * per-agent, so the Provisioner never writes them into an Execution override.
+ */
+export const RUNTIME_STATIC_ENV_KEYS = [
+  'ACTIVITY_TOPIC', 'LOG_LEVEL', 'VERTEX_MODE', 'VERTEX_MODEL', 'PUBSUB_MODE',
+  'STORE_MODE', 'PROJECT_ID', 'AGENT_MAX_LIFETIME_SECONDS',
+] as const;
+
+/**
+ * REQ-05-090. A human session must not be reachable from inside an Execution. These
+ * names are the shapes that would carry one, and the Runtime refuses to start if a
+ * deployment sets any of them — a misconfiguration is caught before the first token
+ * is minted, not after it has been used.
+ */
+export const FORBIDDEN_ENV_KEYS = [
+  'HUMAN_ACCESS_TOKEN', 'HUMAN_REFRESH_TOKEN', 'SESSION_ID', 'SUBJECT_TOKEN',
+  'CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'IDP_CONNECTION_ID',
+] as const;
+
+/** Exit codes are a four-value contract with the Job (T-RUN-01), plus 78 for a bad start. */
+export const RUNTIME_EXIT_CODES = {
+  completed: 0,
+  agentExpired: 10,
+  completedWithBlock: 20,
+  failed: 30,
+  invalidStartup: 78,
+} as const;

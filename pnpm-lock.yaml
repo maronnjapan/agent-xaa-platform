@@ -79,12 +79,27 @@ importers:
 
   apps/agent-runtime:
     dependencies:
-      '@hono/node-server':
-        specifier: 2.1.1
-        version: 2.1.1(hono@4.13.5)
-      hono:
-        specifier: 4.13.5
-        version: 4.13.5
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      '@xaa/vertex':
+        specifier: workspace:*
+        version: link:../../packages/xaa-vertex
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: 3.0.1
+        version: 3.0.1(ajv@8.20.0)
     devDependencies:
       '@types/node':
         specifier: 22.18.1
@@ -551,6 +566,9 @@ importers:
       '@xaa/agent-op':
         specifier: workspace:*
         version: link:../apps/agent-op
+      '@xaa/agent-runtime':
+        specifier: workspace:*
+        version: link:../apps/agent-runtime
       '@xaa/authorization':
         specifier: workspace:*
         version: link:../apps/authorization
@@ -622,6 +640,9 @@ importers:
 
   packages/xaa-contracts:
     dependencies:
+      '@google-cloud/pubsub':
+        specifier: 6.0.1
+        version: 6.0.1
       '@maronn-openid-connect/core':
         specifier: 0.2.0
         version: 0.2.0

@@ -165,7 +165,7 @@ export async function clientAssertion(fixture: Fixture, options: { path?: string
   return signCompactJws({
     header: { alg: 'ES256', typ: options.typ ?? JWT_TYP.CLIENT_ASSERTION, ...options.header } as never,
     payload: {
-      iss: agentId, sub: agentId, aud: `${ISSUER}${options.path ?? '/xaa/token'}`,
+      iss: agentId, sub: agentId, aud: `${AGENT_OP_BASE}${options.path ?? '/xaa/token'}`,
       iat, exp: iat + (options.lifetime ?? 120), jti: options.jti ?? randomUUID(),
     },
     signer: createLocalEs256Signer({ privateKey: keyPair.privateKey, kid: agentId }),

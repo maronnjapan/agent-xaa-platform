@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.base.json","compilerOptions":{"rootDir":"src","outDir":"dist","composite":true},"include":["src/**/*.ts"]}
+{"extends": "../../tsconfig.base.json", "compilerOptions": {"rootDir": "src", "outDir": "dist", "composite": true}, "include": ["src/**/*.ts"], "references": [{"path": "../../packages/xaa-contracts"}, {"path": "../../packages/xaa-crypto"}, {"path": "../../packages/gcp"}, {"path": "../../packages/xaa-logging"}, {"path": "../../packages/xaa-vertex"}]}
