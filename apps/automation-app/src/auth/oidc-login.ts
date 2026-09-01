@@ -16,23 +16,29 @@ export interface AuthorizationRequest {
   url: string;
   state: string;
   codeVerifier: string;
+  nonce: string;
 }
 
 export async function buildAuthorizationRequest(input: {
   issuer: string;
   clientId: string;
   redirectUri: string;
+  scope?: string;
+  prompt?: 'none' | 'login' | 'consent';
 }): Promise<AuthorizationRequest> {
   const state = randomUUID();
   const codeVerifier = randomUUID() + randomUUID();
+  const nonce = randomUUID();
   const parameters = new URLSearchParams({
     response_type: 'code',
     client_id: input.clientId,
     redirect_uri: input.redirectUri,
-    scope: LOGIN_SCOPE,
+    scope: input.scope ?? LOGIN_SCOPE,
     state,
+    nonce,
     code_challenge: await sha256Base64Url(codeVerifier),
     code_challenge_method: 'S256',
   });
-  return { url: `${input.issuer}/authorize?${parameters.toString()}`, state, codeVerifier };
+  if (input.prompt) parameters.set('prompt', input.prompt);
+  return { url: `${input.issuer}/authorize?${parameters.toString()}`, state, codeVerifier, nonce };
 }

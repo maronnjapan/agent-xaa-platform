@@ -42,6 +42,7 @@ Human IdPにAgentの文脈を持ち込まないよう、issuerを1つに保っ�
 | [deviations.md](./deviations.md) | ドラフト仕様から外れた15件と、その代替実装とテスト | `pnpm check:deviations` / `:strict` |
 | [rule-traceability.md](./rule-traceability.md) | 設計ルール60件それぞれを守っているファイルとテスト | `tests/docs/docs-registry.spec.ts` |
 | [glossary.md](./glossary.md) | 用語26件と実装識別子の対応、確定した命名、使わない別名 | `pnpm check:glossary` / `:strict` |
+| [rules.json](./rules.json) | 設計ルール60件の正本。改訂したものは `revised_from` に旧文を残す | `tests/docs/docs-registry.spec.ts` |
 
 [10-design-rules.md](./10-design-rules.md) は [rules.json](./rules.json) からの生成物である。
 ルールを直すときは JSON を編集して `pnpm gen:design-rules` を実行する。Markdown を直接編集しない。
@@ -63,7 +64,8 @@ docs 01 から 11 までの記述から要件を421件抽出し、13領域374件
 | [architecture.drawio](./diagrams/architecture.drawio) | draw.ioで編集する場合の元データ |
 | [generate.py](./diagrams/generate.py) | 上記3ファイルの生成スクリプト |
 
-図を変更するときは `generate.py` のレイアウト定義を編集し、`python3 docs/diagrams/generate.py` で3ファイルをまとめて再生成する。
+図を変更するときは `generate.py` のレイアウト定義を編集し、`pnpm gen:diagrams` で3ファイルをまとめて再生成する。
+PNG に日本語フォントが載らない環境があるため、図中のラベルは英数字にしてある。
 draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に注意する。
 
 ## 変更履歴
@@ -76,3 +78,6 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 - 2026-08-30：11のイベント配信を、実行中に逐次配信する方式から、Task（`provisioning` / `task-{n}` / `lifecycle`）が完了してからまとめて再生する方式へ改めた（RULE-59）。再生は文字の一覧だけでなく、呼び出しの経路をアニメーションで示し、遮断はその経路が途中で止まる動きで表す。
 - 2026-08-30：11の画面仕様（5章）は、Task選択後の再生の中身や表示のルールを含め元の記述のまま残した。Activity Eventの記録は通常利用かデモかを区別せず常時行うことを追記した（RULE-60）。
 - 2026-08-30：docs の内容を実装するためのタスクファイルを `tasks/` へ追加した。要件421件を374タスクへ分解し、制約と docs が食い違う箇所の判断を `tasks/00-decisions.md` に、識別子と成果物の所有者を `tasks/00b-conventions.md` に確定させた。
+- 2026-08-30：制約（単一 GCP Project、IaC 管理）に合わせて RULE-06 / 32 / 33 / 34 / 42 / 44 / 47 / 49 / 53 / 57 を見直し、うち8件を改訂した。改訂前の文面は `docs/rules.json` の `revised_from` に残る。
+- 2026-08-30：docs 08 と docs 09 を単一 GCP Project 構成へ書き換えた。監査ログの分離は Project ではなく BigQuery dataset と IAM で行い、`enable_deny_policy=false` のとき Owner による削除を防げないことを本文へ明記した。
+- 2026-08-30：docs の検査を CI 必須にした。`pnpm check:docs` は要件索引・逸脱・用語・リンク・旧プロジェクト名の5検査を連結し、図は `pnpm gen:diagrams` の再生成差分で検査する。

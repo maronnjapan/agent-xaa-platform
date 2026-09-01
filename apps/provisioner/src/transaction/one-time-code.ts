@@ -1,19 +1,13 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { sha256Base64Url } from '@xaa/crypto';
+import { timingSafeEqual } from 'node:crypto';
+import {
+  COMPLETION_CODE_TTL_SECONDS, completionCodeId, createCompletionCode, emitProtocolValidation,
+  PROVISIONING_CODES_COLLECTION, type CompletionCodeRecord,
+} from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
+import type { Logger } from '@xaa/logging';
 
-/** Five minutes: long enough for a consent screen, short enough to be uninteresting. */
-export const COMPLETION_CODE_TTL_SECONDS = 300;
-
-export interface CompletionCodeRecord {
-  code_hash: string;
-  transaction_id: string;
-  human_subject: string;
-  issuer_kind: string;
-  created_at: string;
-  expires_at: string;
-  used_at: string | null;
-}
+export { COMPLETION_CODE_TTL_SECONDS };
+export type { CompletionCodeRecord };
 
 export type ConsumeFailure =
   | { ok: false; status: 400; error: 'code_expired' | 'code_already_used' | 'code_transaction_mismatch' | 'code_not_found' }
@@ -36,29 +30,23 @@ function equals(left: string, right: string): boolean {
  * codes. Consumption happens inside a transaction, so ten simultaneous redemptions
  * still produce exactly one success.
  */
-export function createCompletionCodes(documents: DocumentStore, now: () => number = () => Date.now()) {
+export function createCompletionCodes(documents: DocumentStore, now: () => number = () => Date.now(), logger?: Logger) {
   return {
     async issue(input: { transaction_id: string; human_subject: string; issuer_kind: string }): Promise<string> {
-      const code = randomBytes(32).toString('base64url');
-      const codeHash = await sha256Base64Url(code);
-      const issuedAt = now();
-      const record: CompletionCodeRecord = {
-        code_hash: codeHash,
-        transaction_id: input.transaction_id,
-        human_subject: input.human_subject,
-        issuer_kind: input.issuer_kind,
-        created_at: new Date(issuedAt).toISOString(),
-        expires_at: new Date(issuedAt + COMPLETION_CODE_TTL_SECONDS * 1000).toISOString(),
-        used_at: null,
-      };
-      await documents.set('provisioning_codes', codeHash, { ...record });
-      return code;
+      const issued = await createCompletionCode({
+        transactionId: input.transaction_id,
+        humanSubject: input.human_subject,
+        issuerKind: input.issuer_kind,
+        now: now(),
+      });
+      await documents.set(PROVISIONING_CODES_COLLECTION, issued.documentId, { ...issued.record });
+      return issued.code;
     },
 
     async consume(input: { code: string; transaction_id: string; human_subject: string }): Promise<ConsumeResult> {
-      const codeHash = await sha256Base64Url(input.code);
-      return documents.transaction(async (tx) => {
-        const record = await tx.get<CompletionCodeRecord>('provisioning_codes', codeHash);
+      const codeHash = await completionCodeId(input.code);
+      const result = await documents.transaction(async (tx) => {
+        const record = await tx.get<CompletionCodeRecord>(PROVISIONING_CODES_COLLECTION, codeHash);
         if (!record) return { ok: false, status: 400, error: 'code_not_found' };
         // Ownership is checked before the code is marked used, so a wrong caller
         // cannot burn someone else's code.
@@ -66,9 +54,29 @@ export function createCompletionCodes(documents: DocumentStore, now: () => numbe
         if (!equals(record.transaction_id, input.transaction_id)) return { ok: false, status: 400, error: 'code_transaction_mismatch' };
         if (record.used_at !== null) return { ok: false, status: 400, error: 'code_already_used' };
         if (Date.parse(record.expires_at) <= now()) return { ok: false, status: 400, error: 'code_expired' };
-        tx.set('provisioning_codes', codeHash, { ...record, used_at: new Date(now()).toISOString() });
+        tx.set(PROVISIONING_CODES_COLLECTION, codeHash, { ...record, used_at: new Date(now()).toISOString() });
         return { ok: true, record: { ...record, used_at: new Date(now()).toISOString() } };
-      });
+      }) as ConsumeResult;
+
+      // A second redemption of a code is one of the 22 protocol violations (00b §1):
+      // either the browser replayed the redirect, or someone else has the code. The
+      // code itself stays out of the event — neither in the clear nor as its hash —
+      // because a violation report is not a place to put a credential.
+      if (!result.ok && result.error === 'code_already_used' && logger) {
+        emitProtocolValidation(logger, {
+          request_id: '', trace_id: input.transaction_id, agent_id: null, human_subject: input.human_subject,
+        }, {
+          code: 'code_already_used',
+          outcome: 'fail',
+          validation_name: 'one_time_code',
+          human_subject: input.human_subject,
+          agent_id: null,
+          occurred_at: new Date(now()).toISOString(),
+          path: 'provisioner:/provisioning/{transaction_id}/resume',
+          trace_id: input.transaction_id,
+        });
+      }
+      return result;
     },
   };
 }

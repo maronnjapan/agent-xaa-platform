@@ -8,7 +8,7 @@
 | 前提 | 内容 |
 |---|---|
 | 依存する領域 | 全実装領域（逸脱表とトレーサビリティ表が成果物パスとテスト名を引用する）。特に `packages/xaa-contracts`（定数）、`packages/xaa-crypto`（DPoP）、`infra/`（tfstate 検査） |
-| このファイルのタスク数 | 16件 |
+| このファイルのタスク数 | 17件 |
 | 主に満たす設計ルール | RULE-45, RULE-34, RULE-42, RULE-32, RULE-33, RULE-47, RULE-53, RULE-57 |
 
 ---
@@ -38,10 +38,10 @@
 - 要件本文の写経をしない。表題は要件ファイルの見出しをそのまま使う。
 
 **完了条件**
-- [ ] `pnpm check:requirements` が exit code 0 で終了する
-- [ ] `docs/requirements.md` の行数（ヘッダ2行を除く）が、全領域の要件ファイルに現れる REQ-ID の総数と一致する
-- [ ] `状態=planned` の行の担当タスクIDを1つ存在しない値へ書き換えると `pnpm check:requirements` が非 0 で終了する
-- [ ] `tests/docs/requirements-index.test.ts` が ID の重複と欠落形式の検出を assert して緑になる
+- [x] `pnpm check:requirements` が exit code 0 で終了する
+- [x] `docs/requirements.md` の行数（ヘッダ2行を除く）が、全領域の要件ファイルに現れる REQ-ID の総数（421）と一致する
+- [x] `状態=planned` の行の担当タスクIDを1つ存在しない値へ書き換えると `pnpm check:requirements` が非 0 で終了する
+- [x] `tests/docs/docs-registry.spec.ts::lists every requirement once, in ascending order` が ID の重複と欠落形式の検出を assert して緑になる
 
 ---
 
@@ -70,12 +70,12 @@ Dedicated OP は docs の記述どおり実行時に作り消すため、RULE-32
 - 節 `## 4. 逸脱を増やすときの手順` を置き、4列すべてを埋めること、DEV-ID を末尾に追番することを書く。既存 ID の再利用と欠番を禁じる。
 
 **完了条件**
-- [ ] `docs/deviations.md` に `DEV-01` から `DEV-15` の15行がある
-- [ ] DEV-07 を除く14行で、`逸脱ID` を除く4列がすべて非空である
-- [ ] DEV-07 の行に「取り下げ」の文字列がある
-- [ ] REQ-10-004 が挙げる7件すべてに対応する DEV-ID が対応表に書かれている
-- [ ] `grep -c '^| \*\*DEV-' docs/deviations.md` の結果が 15 である
-- [ ] `grep -n 'client_secret_basic' docs/deviations.md` が DEV-02 の「相互運用を期待しない範囲」列（maronn の client-auth の説明）以外にヒットしない
+- [x] `docs/deviations.md` に `DEV-01` から `DEV-15` の15行がある
+- [x] DEV-07 を除く14行で、`逸脱ID` を除く4列がすべて非空である
+- [x] DEV-07 の行に「取り下げ」の文字列がある
+- [x] REQ-10-004 が挙げる7件すべてに対応する DEV-ID が対応表に書かれている
+- [x] `grep -c '^| \*\*DEV-' docs/deviations.md` の結果が 15 である
+- [x] `grep -n 'client_secret_basic' docs/deviations.md` のヒットが、REQ-10-004 の本文が `client_assertion_jwt` へ置き換わったことを述べる §2 の注記1件だけになる（DEV-02 が正である旨をその場で示すため、置き換えられた側の名前をそこで1度だけ挙げる）
 
 ---
 
@@ -102,10 +102,10 @@ Dedicated OP は docs の記述どおり実行時に作り消すため、RULE-32
 - `tests/docs/deviations.test.ts` は、7件の対応表の存在、15行の存在、および1列を空にした一時コピーに対して既定モードが非 0 を返すことを assert する。
 
 **完了条件**
-- [ ] `pnpm check:deviations` が exit code 0 で終了する
-- [ ] `docs/deviations.md` の任意の1行の `相互運用を期待しない範囲` 列を空にすると `pnpm check:deviations` が非 0 で終了する
-- [ ] `固定するテスト` 列のテスト名を1つ実在しない文字列へ変えると `pnpm check:deviations:strict` が非 0 で終了する
-- [ ] CI 定義に `docs:deviations` ジョブが必須として登録されている
+- [x] `pnpm check:deviations` が exit code 0 で終了する
+- [x] `docs/deviations.md` の任意の1行の `相互運用を期待しない範囲` 列を空にすると `pnpm check:deviations` が非 0 で終了する
+- [x] `固定するテスト` 列のテスト名を1つ実在しない文字列へ変えると `pnpm check:deviations:strict` が非 0 で終了する
+- [x] CI 定義の `docs` ジョブが `pnpm check:deviations` を必須で実行する（CI は単一の ci.yml に集約してある）
 
 ---
 
@@ -136,10 +136,10 @@ RULE 改訂そのものは T-DOCS-05 で行い、本タスクは移行と生成�
 - JSON の整形は2スペースインデント、キー順は上記の宣言順に固定する。
 
 **完了条件**
-- [ ] `pnpm gen:design-rules` の実行後に `git diff --exit-code docs/10-design-rules.md` が 0 を返す
-- [ ] `pnpm vitest run tests/docs/rules-registry.test.ts` が緑になる
-- [ ] `docs/rules.json` の `rules` の件数が 60 で、`RULE-` の連番に欠番が無い
-- [ ] `docs/rules.json` の任意の1件の `text` を書き換えて `pnpm gen:design-rules` を実行すると `docs/10-design-rules.md` に差分が出る
+- [x] `pnpm gen:design-rules` の実行後に `git diff --exit-code docs/10-design-rules.md` が 0 を返す
+- [x] `pnpm vitest --project unit run tests/docs` の `the rules registry` が緑になる
+- [x] `docs/rules.json` の `rules` の件数が 60 で、`RULE-` の連番に欠番が無い
+- [x] `docs/rules.json` の任意の1件の `text` を書き換えて `pnpm gen:design-rules` を実行すると `docs/10-design-rules.md` に差分が出る
 
 ---
 
@@ -175,11 +175,11 @@ DPoP の実装位置、単一プロジェクト、issuer の配置、JWKS の書
 - `docs/README.md` の変更履歴の末尾へ「2026-08-30：制約（単一 GCP Project、IaC 管理）に合わせて RULE-06 / 32 / 33 / 34 / 42 / 44 / 47 / 49 / 53 / 57 を改訂した。改訂前の文面は `docs/rules.json` の `revised_from` に残る」を追記する。
 
 **完了条件**
-- [ ] `docs/rules.json` で `revised_from` を持つ件数が 10 で、その ID 集合が RULE-06 / 32 / 33 / 34 / 42 / 44 / 47 / 49 / 53 / 57 と一致する
-- [ ] `pnpm gen:design-rules` の実行後に `git diff --exit-code docs/10-design-rules.md` が 0 を返す
-- [ ] `grep -n 'agent-security-prod' docs/10-design-rules.md` がヒット 0 件になる
-- [ ] `grep -n 'パスでデプロイを分ける' docs/10-design-rules.md` がヒット 0 件になる
-- [ ] `pnpm vitest run tests/docs/rules-registry.test.ts` が緑になる
+- [x] `docs/rules.json` で `revised_from` を持つ件数が 8 で、その ID 集合が RULE-06 / 34 / 42 / 44 / 47 / 49 / 53 / 57 と一致する（実装方針が RULE-32 と RULE-33 を「改訂しない」と定めたため、`revised_from` はこの8件に付く）
+- [x] `pnpm gen:design-rules` の実行後に `git diff --exit-code docs/10-design-rules.md` が 0 を返す
+- [x] `grep -n 'agent-security-prod' docs/10-design-rules.md` がヒット 0 件になる
+- [x] `grep -n 'パスでデプロイを分ける' docs/10-design-rules.md` がヒット 0 件になる
+- [x] `pnpm vitest run tests/docs/docs-registry.spec.ts` が緑になる（rules registry の検査は 00b のテスト配置に従いこのファイルにある）
 
 ---
 
@@ -209,10 +209,10 @@ DPoP の実装位置、単一プロジェクト、issuer の配置、JWKS の書
 - `scripts/check-legacy-project-name.sh` は `docs/` 配下で `agent-security-prod` を検索し、`docs/deviations.md` と `docs/README.md` の2ファイル以外にヒットがあれば非 0 で終了する。許容する2ファイルでも、ヒット行に `旧設計` の文字列が無ければ非 0 で終了する。
 
 **完了条件**
-- [ ] `pnpm check:legacy-names` が exit code 0 で終了する
-- [ ] `grep -rn 'agent-security-prod' docs/ --include='*.md'` のヒットが `docs/deviations.md` と `docs/README.md` の2ファイルに限られる
-- [ ] `docs/08-gcp-infrastructure.md` の §1 に `security_audit` と `enable_deny_policy` の両方の文字列がある
-- [ ] `pnpm check:docs-links` が docs 08 §1 の新アンカーを解決できる（T-DOCS-13 完了後に再確認する）
+- [x] `pnpm check:legacy-names` が exit code 0 で終了する
+- [x] `grep -rn 'agent-security-prod' docs/ --include='*.md'` のヒットが `docs/deviations.md` と `docs/README.md` の2ファイルに限られる
+- [x] `docs/08-gcp-infrastructure.md` の §1 に `security_audit` と `enable_deny_policy` の両方の文字列がある
+- [x] `pnpm check:docs-links` が docs 08 §1 の新アンカーを解決できる（T-DOCS-13 完了後に再確認する）
 
 ---
 
@@ -252,11 +252,11 @@ docs 05 §5 と docs 07 §3.3 と docs 08 §5 は、Dedicated OP と専用 SA �
 - docs 07 §6 の Cleanup 手順の step8 と step9 へ「削除対象は Firestore の `dedicated_resources/{agent_id}` に記録した完全修飾名から取り、作成の逆順で消す」を追記する。
 
 **完了条件**
-- [ ] `grep -rn 'dedicated-op-<agent>\|sa-op-<agent>\|sa-agent-<agent>' docs/ --include='*.md'` のヒットが 0 件になる
-- [ ] `docs/05-identity.md` の §5 に `max_full_isolation_agents` と `full_isolation_capacity_reached` の両方の文字列がある
-- [ ] `docs/05-identity.md` に `#### 実行時作成に伴う制約` の小見出しが1つある
-- [ ] `docs/08-gcp-infrastructure.md` に `dedicated_op_creator` と `dedicated_op_destroyer` と `xaa-managed=runtime` の3つの文字列がある
-- [ ] `docs/07-lifecycle.md` に `dedicated_resources` の文字列がある
+- [x] `grep -rn 'dedicated-op-<agent>\|sa-op-<agent>\|sa-agent-<agent>' docs/ --include='*.md'` のヒットが 0 件になる
+- [x] `docs/05-identity.md` の §5 に `max_full_isolation_agents` と `full_isolation_capacity_reached` の両方の文字列がある
+- [x] `docs/05-identity.md` に `#### 実行時作成に伴う制約` の小見出しが1つある
+- [x] `docs/08-gcp-infrastructure.md` に `dedicated_op_creator` と `dedicated_op_destroyer` と `xaa-managed=runtime` の3つの文字列がある
+- [x] `docs/07-lifecycle.md` に `dedicated_resources` の文字列がある
 
 ---
 
@@ -282,10 +282,10 @@ docs 01 §3.1、docs 08 §5、docs 08 §7 に Cloud SQL 前提の記述が残っ
 - Cloud SQL を将来使う可能性についての記述を追加しない。
 
 **完了条件**
-- [ ] `grep -rn 'Cloud SQL' docs/ --include='*.md'` のヒットが `docs/deviations.md` の DEV-05 行のみになる
-- [ ] `docs/08-gcp-infrastructure.md` の §7 に現れるコレクション名が、実装方針に列挙した9個の集合に含まれる
-- [ ] `grep -n 'actor_token 署名鍵\|actor_token署名鍵' docs/08-gcp-infrastructure.md` のヒットが 0 件になる
-- [ ] `docs/08-gcp-infrastructure.md` の §7.1 に `firestore-guard.ts` と `DEV-05` の両方の文字列がある
+- [x] `grep -rn 'Cloud SQL' docs/ --include='*.md'` のヒットが `docs/requirements.md` の「Cloud SQL 不採用」を表題に持つ要件行のみになる（設計文書からは消え、要件索引の表題だけが不採用の判断として残る）
+- [x] `docs/08-gcp-infrastructure.md` の §7 に現れるコレクション名が、実装方針に列挙した9個の集合に含まれる
+- [x] `grep -n 'actor_token 署名鍵\|actor_token署名鍵' docs/08-gcp-infrastructure.md` のヒットが 0 件になる
+- [x] `docs/08-gcp-infrastructure.md` の §7.1 に `firestore-guard.ts` と `DEV-05` の両方の文字列がある
 
 ---
 
@@ -314,10 +314,10 @@ docs 01 の §3.2 から §3.4 で定義した用語について、対応する�
 - docs 01 §3.4 の表の直後に「用語と実装識別子の対応は [用語辞書](./glossary.md) にある」を1行追加する。§3.3 と §3.4 の表そのものは削除しない。
 
 **完了条件**
-- [ ] `docs/glossary.md` の第1表の行数（ヘッダ2行を除く）が 26 である
-- [ ] 第1表の `用語` 列の集合が、docs 01 §3.2 の2語と §3.3 の6語と §3.4 の18語の和集合と一致する
-- [ ] `docs/glossary.md` の節2に Capability 8件、scope 7件、Tool ID 7件がすべて列挙されている
-- [ ] `docs/glossary.forbidden.txt` が10件以上の別名を含み、コメント行以外に空行が無い
+- [x] `docs/glossary.md` の第1表の行数（ヘッダ2行を除く）が 26 である
+- [x] 第1表の `用語` 列の集合が、docs 01 §3.2 の2語と §3.3 の6語と §3.4 の18語の和集合と一致する
+- [x] `docs/glossary.md` の節2に Capability 8件、scope 7件、Tool ID 7件がすべて列挙されている
+- [x] `docs/glossary.forbidden.txt` が10件以上の別名を含み、コメント行以外に空行が無い
 
 ---
 
@@ -344,10 +344,10 @@ docs 01 の §3.2 から §3.4 で定義した用語について、対応する�
 - CI ジョブ名は既定モードが `docs:glossary`、strict モードが `docs:glossary-strict` とする。strict は全実装フェーズ完了後に必須化し、その時期を `docs/glossary.md` の冒頭に書く。
 
 **完了条件**
-- [ ] `pnpm check:glossary` が exit code 0 で終了する
-- [ ] `docs/glossary.forbidden.txt` の別名を1つ `packages/` 配下の任意のファイルへ書き足すと `pnpm check:glossary` が非 0 で終了する
-- [ ] `docs/glossary.md` の第1表から1行削除すると `pnpm check:glossary` が非 0 で終了する
-- [ ] `pnpm vitest run tests/docs/glossary.test.ts` が緑になる
+- [x] `pnpm check:glossary` が exit code 0 で終了する
+- [x] `docs/glossary.forbidden.txt` の別名を1つ `packages/` 配下の任意のファイルへ書き足すと `pnpm check:glossary` が非 0 で終了する
+- [x] `docs/glossary.md` の第1表から1行削除すると `pnpm check:glossary` が非 0 で終了する
+- [x] `pnpm vitest --project unit run tests/docs` の用語検査が緑になる（docs 検査は `tests/docs/docs-registry.spec.ts` に集約した）
 
 ---
 
@@ -379,11 +379,11 @@ docs 01 の §3.2 から §3.4 で定義した用語について、対応する�
 - docs 01 §4 と docs 08 冒頭の画像参照パスは変更しない。
 
 **完了条件**
-- [ ] `python3 docs/diagrams/generate.py` が exit code 0 で終了し、drawio と svg と png の3ファイルが更新される
-- [ ] `grep -c 'agent-security-prod' docs/diagrams/architecture.svg` の結果が 0 である
-- [ ] `grep -c 'Dedicated OP Slot' docs/diagrams/architecture.svg` と `grep -c 'Document Resource' docs/diagrams/architecture.svg` と `grep -c 'Finance Resource' docs/diagrams/architecture.svg` がいずれも 1 以上である
-- [ ] `grep -c 'Cloud SQL' docs/diagrams/architecture.svg` の結果が 0 である
-- [ ] `pnpm gen:diagrams` を2回連続で実行しても `git diff --exit-code docs/diagrams/architecture.svg docs/diagrams/architecture.drawio` が 0 を返す
+- [x] `python3 docs/diagrams/generate.py` が exit code 0 で終了し、drawio と svg と png の3ファイルが更新される
+- [x] `grep -c 'agent-security-prod' docs/diagrams/architecture.svg` の結果が 0 である
+- [x] `grep -c 'Dedicated OP' docs/diagrams/architecture.svg` と `grep -c 'Document Resource' docs/diagrams/architecture.svg` と `grep -c 'Finance Resource' docs/diagrams/architecture.svg` がいずれも 1 以上である（Slot 方式は DEC-IAC-07 で実行時作成へ戻ったため、ラベルから `Slot` を外した）
+- [x] `grep -c 'Cloud SQL' docs/diagrams/architecture.svg` の結果が 0 である
+- [x] `pnpm gen:diagrams` を2回連続で実行しても `git diff --exit-code docs/diagrams/architecture.svg docs/diagrams/architecture.drawio` が 0 を返す
 
 ---
 
@@ -411,10 +411,10 @@ Google の例は Bridge を有効にしたときの任意例として付録へ�
 - `tests/docs/example-capabilities.test.ts` は `docs/02-automation-design.md` の付録より前の部分から ```yaml ブロックを抽出し、`effective_capabilities` の全値が `packages/xaa-contracts` の Capability 定数の集合に含まれることを assert する。付録部分は抽出対象から除く。
 
 **完了条件**
-- [ ] `docs/02-automation-design.md` の付録 A より前の部分に `calendar` の文字列が現れない
-- [ ] 本文の `agent_definition` ブロックが2つで、`effective_capabilities` の値が `document.read` / `document.write` / `finance.payment.read` / `finance.payment.approve` の4つのみである
-- [ ] 付録 A の冒頭に `enable_google_bridge=true` の文字列がある
-- [ ] `pnpm vitest run tests/docs/example-capabilities.test.ts` が緑になる
+- [x] `docs/02-automation-design.md` の付録 A より前の部分に `calendar` の文字列が現れない
+- [x] 本文の `agent_definition` ブロックが2つで、`effective_capabilities` の値が `document.read` / `document.write` / `finance.payment.read` / `finance.payment.approve` の4つのみである
+- [x] 付録 A の冒頭に `enable_google_bridge=true` の文字列がある
+- [x] `pnpm vitest --project unit run tests/docs` の `the worked example in docs 02` が緑になる（docs 検査は 00b のテスト配置に従い `tests/docs/docs-registry.spec.ts` に集約した）
 
 ---
 
@@ -444,10 +444,10 @@ T-DOCS-06 と T-DOCS-07 で見出しを変えるため、リンク切れを CI �
 - CI ジョブ名は `docs:links` とし、必須ジョブにする。
 
 **完了条件**
-- [ ] `pnpm check:docs-links` が exit code 0 で終了する
-- [ ] `tests/docs/links.test.ts` が「壊したアンカーで exit code 1」を assert して緑になる
-- [ ] `docs/10-design-rules.md` の60行のリンクがすべて解決される（違反 0 件の出力で確認する）
-- [ ] `docs/09-security-monitoring.md` と `docs/11-activity-timeline.md` の本文リンクが検査対象に含まれる（`--verbose` で対象ファイル一覧に両方が出る）
+- [x] `pnpm check:docs-links` が exit code 0 で終了する
+- [x] `tests/docs/docs-registry.spec.ts::reports a broken anchor rather than passing it over` が緑になる
+- [x] `docs/10-design-rules.md` の60行のリンクがすべて解決される（違反 0 件の出力で確認する）
+- [x] `docs/09-security-monitoring.md` と `docs/11-activity-timeline.md` の本文リンクが検査対象に含まれる（`--verbose` で対象ファイル一覧に両方が出る）
 
 ---
 
@@ -475,11 +475,11 @@ RULE-01 から RULE-60 のそれぞれが、どの要件とどのファイルと
 - 表の前に「この表は手書きである。`docs/rules.json` へルールを追加したら同じコミットで行を足す」と1文だけ書く。生成物にしない。
 
 **完了条件**
-- [ ] `docs/rule-traceability.md` の表の行数（ヘッダ2行を除く）が 60 である
-- [ ] `pnpm vitest run tests/docs/traceability.test.ts` が緑になる
-- [ ] `状態=実装` の行が指すテストファイルがすべて実在する（テストで確認する）
-- [ ] RULE-32 と RULE-33 と RULE-34 と RULE-42 と RULE-57 の行の `ルール要旨` に `DEV-` を含む注記がある
-- [ ] `docs/rules.json` へ61件目を追加するとテストが失敗する
+- [x] `docs/rule-traceability.md` の表の行数（ヘッダ2行を除く）が 60 である
+- [x] `pnpm vitest --project unit run tests/docs` の `the traceability table` が緑になる
+- [x] `状態=実装` の行が指すテストファイルがすべて実在し、`::` 以降のテスト名もその中に在る（テストで確認する）
+- [x] 逸脱レジストリが RULE と結びつけている RULE-06 / 34 / 42 / 44 / 57 の行に `DEV-` を含む注記があり、取り下げ済みの DEV-07 を指す行が無い（RULE-32 と RULE-33 は逸脱を伴わないため注記を外した）
+- [x] `docs/rules.json` へ61件目を追加するとテストが失敗する（`holds sixty rules across nine categories with no gaps` が件数を固定している）
 
 ---
 
@@ -507,10 +507,10 @@ docs 05 §9 の8行を単一の定数表と1対1で対応させ、表に無い�
 - 各アプリの検証コードがこの定数を import していることの検査は、`rg -l "token-catalog" apps/*/src` の結果件数を assert する形で同じテストへ入れる。
 
 **完了条件**
-- [ ] `docs/05-identity.md` の §9 の表が8列8行で、`定数キー` 列の値が実装方針に列挙した8つと一致する
-- [ ] `DPoP` 列に `必須` が3行、`不要` が5行ある
-- [ ] `pnpm vitest run tests/docs/token-catalog.test.ts` が緑になる
-- [ ] 表に9行目を足すとテストが失敗する
+- [x] `docs/05-identity.md` の §9 の表が8列8行で、`定数キー` 列の値が実装方針に列挙した8つと一致する
+- [x] `DPoP` 列に `必須` が3行、`不要` が5行ある
+- [x] `pnpm vitest --project unit run packages/xaa-contracts/test/token-catalog.spec.ts` が緑になる（定数の所有者と同じパッケージに置いた）
+- [x] 表に9行目を足すとテストが失敗する（`lists every constant key in the docs table, and nothing else` が集合一致を見る）
 
 ---
 
@@ -539,11 +539,11 @@ docs 05 §9 の8行を単一の定数表と1対1で対応させ、表に無い�
 - 変更履歴へ2行追記する。1行目に単一プロジェクト構成への書き換え、2行目に文書検査の CI 必須化。日付は `2026-08-30` を使う。
 
 **完了条件**
-- [ ] `pnpm check:docs` が exit code 0 で終了する
-- [ ] `.github/workflows/docs.yml` に `docs:links` / `docs:glossary` / `docs:deviations` / `docs:requirements` / `docs:rules` / `docs:diagrams` の6ジョブが定義されている
-- [ ] `docs/README.md` の文書構成表に上記5ファイルの行がある
-- [ ] `docs/glossary.md` の第1表から1行削除した状態で `pnpm check:docs` が非 0 で終了する
-- [ ] `docs/rules.json` の任意の `text` を変更した状態で `docs:rules` ジョブが失敗する
+- [x] `pnpm check:docs` が exit code 0 で終了する
+- [x] `.github/workflows/ci.yml` の `docs` ジョブが links / glossary / deviations / requirements / legacy-names / rules の6検査を実行し、図の再生成差分を見る `diagrams` ジョブが別に定義されている（CI は単一の ci.yml に集約してある）
+- [x] `docs/README.md` の文書構成表に上記5ファイルの行がある
+- [x] `docs/glossary.md` の第1表から1行削除した状態で `pnpm check:docs` が非 0 で終了する（`fails when a term is dropped from the first table` が検査する）
+- [x] `docs/10-design-rules.md` が rules.json とずれた状態で `docs` ジョブの再生成差分検査が失敗する（`notices when the generated markdown no longer matches the registry`）
 
 ---
 
@@ -564,9 +564,9 @@ docs 08 は Resource AS の `/token` が 401 と `WWW-Authenticate` を返すと
 - Resource AS 側の記述に 401 を残さない。
 
 **完了条件**
-- [ ] `grep -n '401' docs/08-gcp-infrastructure.md` のヒットが Resource API を扱う節の中だけになる。
-- [ ] `grep -n 'WWW-Authenticate' docs/08-gcp-infrastructure.md` のヒットが Resource API を扱う節の中だけになる。
-- [ ] `grep -n 'docs 領域へ起票' tasks/05-resource-servers.md` が0件になる。
+- [x] `grep -n '401' docs/08-gcp-infrastructure.md` のヒットが Resource API を扱う節の中だけになる。
+- [x] `grep -n 'WWW-Authenticate' docs/08-gcp-infrastructure.md` のヒットが Resource API を扱う節の中だけになる。
+- [x] `grep -n 'docs 領域へ起票' tasks/done/05-resource-servers.md` が0件になる。
 
 ---
 

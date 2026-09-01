@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compile, SchemaValidationError } from '@xaa/contracts';
 import { authorizationDecisionResponseSchema, DECISION_RESPONSE_KEYS, ROUTES } from '../src/routes/index.js';
 import { loadConfig } from '../src/config.js';
-import { testConfig } from './helpers.js';
+import { createAuthzHarness, testConfig } from './helpers.js';
 
 describe('route surface', () => {
   it('exposes no GET besides healthz', () => {
@@ -47,5 +47,32 @@ describe('route surface', () => {
     expect(() => loadConfig(complete)).not.toThrow();
     expect(() => loadConfig({ ...complete, ISSUER: undefined })).toThrow(/ISSUER/);
     expect(() => loadConfig({ ...complete, VERTEX_MODEL: undefined })).toThrow(/VERTEX_MODEL/);
+  });
+});
+
+/**
+ * The guard refuses correctly whether or not anyone is listening; what this fixes is
+ * that somebody is. Security Detection's whole input is these lines, so a Control Plane
+ * that refuses silently looks, from the detector's side, like a platform where nothing
+ * was ever refused (T-SEC-12).
+ */
+describe('a refusal leaves a record', () => {
+  it('writes one protocol_validation line when the token does not verify', async () => {
+    const harness = await createAuthzHarness();
+
+    const response = await harness.fetch('/api/work-requests', {
+      method: 'POST',
+      headers: { Authorization: 'DPoP not-a-token', 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(401);
+    const lines = harness.logs.map((line) => JSON.parse(line) as { event: string; fields: Record<string, unknown> });
+    const validations = lines.filter((line) => line.event === 'protocol_validation');
+    expect(validations).toHaveLength(1);
+    // `code` is redacted by name; `validation` is the value the detector reads.
+    expect(validations[0]!.fields.validation).toBe('invalid_signature');
+    expect(validations[0]!.fields.outcome).toBe('fail');
+    expect(validations[0]!.fields.path).toBe('authorization:/api');
   });
 });

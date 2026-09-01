@@ -103,14 +103,16 @@
     {
       "id": "RULE-06",
       "category": "identity",
-      "text": "Human Control PlaneのAccess TokenはDPoP-boundとする。Agent RuntimeからAgent OPへのToken ExchangeとNative Resource ASへの提示でもDPoPを必須とし、ID-JAGを `cnf.jkt` で束縛する。外部SaaSへの接続だけは相手の仕様に従う",
+      "text": "Human Control Plane の Access Token は DPoP-bound とする。Agent Runtime から Agent OP への Token Exchange と Native Resource AS への提示でも DPoP を必須とし、ID-JAG を `cnf.jkt` で束縛する。DPoP はライブラリの機能ではなく `packages/xaa-crypto` の自前実装であり、対応するのは Runtime から Agent OP、Runtime から Resource AS と Resource API、Automation App から Control Plane の3経路に限る。Bridge から外部 SaaS への外向きは Bearer とする",
       "sources": [
         {
           "label": "05. §2",
           "doc": "05-identity.md",
           "anchor": "#2-dpop"
         }
-      ]
+      ],
+      "revised_from": "Human Control PlaneのAccess TokenはDPoP-boundとする。Agent RuntimeからAgent OPへのToken ExchangeとNative Resource ASへの提示でもDPoPを必須とし、ID-JAGを `cnf.jkt` で束縛する。外部SaaSへの接続だけは相手の仕様に従う",
+      "revised_reason": "DEC-ID-12 / DEC-ID-13"
     },
     {
       "id": "RULE-43",
@@ -127,14 +129,16 @@
     {
       "id": "RULE-44",
       "category": "identity",
-      "text": "DPoP検証では、Access Tokenの `cnf.jkt` とDPoP Proofの鍵の一致を必ず確認する。Proofが添付されていることの確認だけで済ませない",
+      "text": "DPoP 検証では、Access Token の `cnf.jkt` と DPoP Proof の鍵の一致を必ず確認する。Access Token と併用する Proof には `ath` を必須とし、検証は 署名、typ、htm、htu、iat 窓、jti 重複、ath 一致 の順で行う。Proof が添付されていることの確認だけで済ませない",
       "sources": [
         {
           "label": "05. §2.1",
           "doc": "05-identity.md",
           "anchor": "#21-受け取り側の検証手順"
         }
-      ]
+      ],
+      "revised_from": "DPoP検証では、Access Tokenの `cnf.jkt` とDPoP Proofの鍵の一致を必ず確認する。Proofが添付されていることの確認だけで済ませない",
+      "revised_reason": "DEC-ID-12"
     },
     {
       "id": "RULE-07",
@@ -394,14 +398,16 @@
     {
       "id": "RULE-47",
       "category": "xaa-bridge",
-      "text": "Human IdPにAgentの文脈を持ち込まない。issuerは1つに保ち、人間の文脈とAgentの文脈はパスでデプロイを分ける",
+      "text": "Human IdP に Agent の文脈を持ち込まない。issuer は1つに保ち、Agent の文脈は別デプロイへ分ける。パスに置くか別ホストに置くかは配置プロファイル `issuer_profile` で選ぶ",
       "sources": [
         {
           "label": "05. §3.2",
           "doc": "05-identity.md",
           "anchor": "#32-issuerを分けずデプロイだけ分ける理由"
         }
-      ]
+      ],
+      "revised_from": "Human IdPにAgentの文脈を持ち込まない。issuerは1つに保ち、人間の文脈とAgentの文脈はパスでデプロイを分ける",
+      "revised_reason": "DEC-ID-04"
     },
     {
       "id": "RULE-48",
@@ -418,14 +424,16 @@
     {
       "id": "RULE-49",
       "category": "xaa-bridge",
-      "text": "Token Exchangeでは、`actor_token` が指すAgent Registrationの `human_subject` と `subject_token` の `sub` の一致を必ず確認する。有効な `subject_token` に無関係な `actor_token` を組み合わせられないようにする",
+      "text": "Token Exchange では、`actor_token` が指す Agent Registration の `human_subject` と `subject_token` の `sub` の一致を必ず確認する。照合は actorTokenResolver の内側ではなく、subject と actor が揃った位置に置いた自前ステップで行う",
       "sources": [
         {
           "label": "05. §6.3",
           "doc": "05-identity.md",
           "anchor": "#63-agent-opの検証手順"
         }
-      ]
+      ],
+      "revised_from": "Token Exchangeでは、`actor_token` が指すAgent Registrationの `human_subject` と `subject_token` の `sub` の一致を必ず確認する。有効な `subject_token` に無関係な `actor_token` を組み合わせられないようにする",
+      "revised_reason": "DEC-ID-07"
     },
     {
       "id": "RULE-50",
@@ -574,14 +582,16 @@
     {
       "id": "RULE-34",
       "category": "gcp",
-      "text": "実行系は `agent-platform-prod` に集約し、監査ログの保存だけを `agent-security-prod` へ分離する",
+      "text": "実行系と監査ログを同一 GCP Project 内で、BigQuery dataset と Service Account と IAM で分離する。Platform 側の Service Account に監査 dataset の削除権限を与えない。同一プロジェクトの Owner は実行系と監査ログの両方に届くため、プロジェクトを分ける構成より保護は弱い",
       "sources": [
         {
           "label": "08. §1",
           "doc": "08-gcp-infrastructure.md",
-          "anchor": "#1-gcp-projectの構成"
+          "anchor": "#1-gcp-projectと監査領域の構成"
         }
-      ]
+      ],
+      "revised_from": "実行系は `agent-platform-prod` に集約し、監査ログの保存だけを `agent-security-prod` へ分離する",
+      "revised_reason": "DEC-SCOPE-01 / DEV-14"
     },
     {
       "id": "RULE-35",
@@ -627,14 +637,16 @@
     {
       "id": "RULE-53",
       "category": "gcp",
-      "text": "共有JWKSはアプリではなくCloud Storageから配信し、各アプリには自分の鍵の書き込みだけを許す",
+      "text": "共有 JWKS はアプリではなく Cloud Storage から配信する。各アプリは自分専用のオブジェクト `keys/<prefix>-<kid>.json` だけを書き、`jwks.json` への集約は jwks-publish Job が行う",
       "sources": [
         {
           "label": "08. §2.1",
           "doc": "08-gcp-infrastructure.md",
           "anchor": "#21-human-idpとagent-opの配置"
         }
-      ]
+      ],
+      "revised_from": "共有JWKSはアプリではなくCloud Storageから配信し、各アプリには自分の鍵の書き込みだけを許す",
+      "revised_reason": "DEC-IAC-13"
     },
     {
       "id": "RULE-38",
@@ -687,14 +699,16 @@
     {
       "id": "RULE-42",
       "category": "monitoring",
-      "text": "Platform側のService AccountにSecurity Logの削除権限を与えない",
+      "text": "Platform 側の Service Account に Security Log の削除権限を与えない。監査 dataset の IAM は authoritative な binding で固定し、削除可能なロールを一切付与しないことで満たす",
       "sources": [
         {
           "label": "09. §4",
           "doc": "09-security-monitoring.md",
           "anchor": "#4-正規化と保存"
         }
-      ]
+      ],
+      "revised_from": "Platform側のService AccountにSecurity Logの削除権限を与えない",
+      "revised_reason": "DEV-14"
     },
     {
       "id": "RULE-54",
@@ -745,7 +759,7 @@
     {
       "id": "RULE-57",
       "category": "activity-timeline",
-      "text": "ブラウザはFirestoreへ直接アクセスしない。Activity EventはAutomation Appの認証済みセッションを介してのみ配信する",
+      "text": "ブラウザは Firestore へ直接アクセスしない。Firestore Security Rules は作らず、フロントに Firestore SDK と Firebase Auth を含めないことと、サーバ側のパスガードで担保する",
       "sources": [
         {
           "label": "11. §4",
@@ -757,7 +771,9 @@
           "doc": "11-activity-timeline.md",
           "anchor": "#7-アクセス制御"
         }
-      ]
+      ],
+      "revised_from": "ブラウザはFirestoreへ直接アクセスしない。Activity EventはAutomation Appの認証済みセッションを介してのみ配信する",
+      "revised_reason": "DEC-IAC-10 / DEV-13"
     },
     {
       "id": "RULE-58",

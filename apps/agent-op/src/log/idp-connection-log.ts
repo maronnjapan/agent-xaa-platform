@@ -1,3 +1,4 @@
+import { createLogger } from '@xaa/logging';
 /**
  * REQ-09-009. Five fields, correlated by idp_connection_id alone: agent_id and
  * human_subject are deliberately absent so this record cannot be used to profile a
@@ -15,7 +16,16 @@ export const IDP_CONNECTION_LOG_FIELDS = [
   'idp_connection_id', 'rotation_result', 'reuse_detected', 'subject_token_reissue', 'revoke_result',
 ] as const;
 
-/** Every key is always present; a path that does not apply writes `n/a`. */
+/**
+ * Every key is always present; a path that does not apply writes `n/a`.
+ *
+ * The envelope names `agent_op_idp_connection` as the source, which is both what the
+ * Log Sink filters on and the key the normalizer picks a converter by. `agent_id` and
+ * `human_subject` stay null on purpose: this record correlates by connection alone, so
+ * it cannot be used to profile a person's agents.
+ */
 export function emitIdpConnectionLog(record: IdpConnectionLogRecord, write: (line: string) => void = (line) => process.stdout.write(line)): void {
-  write(`${JSON.stringify({ logName: 'agent_op_idp_connection', ...record })}\n`);
+  createLogger('shared-agent-op', 'agent_op_idp_connection', write).info('idp_connection', {
+    request_id: '', trace_id: record.idp_connection_id, agent_id: null, human_subject: null,
+  }, { ...record });
 }

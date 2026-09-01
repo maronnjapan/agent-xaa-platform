@@ -30,21 +30,23 @@ ICONS = {
 # kind: group / app / box / iconnode / actor
 NODES = [
     # 枠
-    ("g_platform",  "group", "agent-platform-prod",   180,  30, 1000, 820, ()),
+    ("g_platform",  "group", "agent-xaa-platform (single GCP Project)", 180,  30, 1000, 800, ()),
     ("g_control",   "group", "Control Plane",         200,  70,  960, 120, ()),
     ("g_op",        "group", "Agent OP / same issuer as Human IdP", 200, 250,  380, 110, ()),
     ("g_data",      "group", "Data / Keys",           220, 570,  500, 110, ()),
-    ("g_tel",       "group", "Telemetry",             240, 705,  560, 110, ()),
-    ("g_security",  "group", "agent-security-prod",   180, 890, 1000, 110, ()),
-    ("g_google",    "group", "Google",               1240, 250,  220, 130, ()),
-    ("g_native",    "group", "Native XAA Resource",  1240, 420,  220, 130, ()),
+    ("g_tel",       "group", "Telemetry",             240, 705,  760, 110, ()),
+    ("g_google",    "group", "Google|only when enable_google_bridge=true", 1240, 250, 220, 130, ()),
+    ("g_docs",      "group", "Document Resource",    1240, 420,  220, 110, ()),
+    ("g_fin",       "group", "Finance Resource",     1240, 560,  220, 110, ()),
     # 外部
     ("user",  "actor",    "Human User",         55,  90,  30, 60, ()),
     ("hidp",  "box",      "Human IdP",          10, 280, 120, 50, ()),
     ("gas",   "box",      "Google OAuth AS",  1260, 285, 180, 34, ()),
     ("gapi",  "box",      "Google API",       1260, 330, 180, 34, ()),
-    ("nas",   "box",      "Resource AS",      1260, 455, 180, 34, ()),
-    ("napi",  "box",      "Resource API",     1260, 500, 180, 34, ()),
+    ("nas_docs",  "box",  "Resource AS",      1260, 448, 180, 30, ()),
+    ("napi_docs", "box",  "Resource API",     1260, 488, 180, 30, ()),
+    ("nas_fin",   "box",  "Resource AS",      1260, 588, 180, 30, ()),
+    ("napi_fin",  "box",  "Resource API",     1260, 628, 180, 30, ()),
     # Control Plane
     ("auto",  "app", "Automation App",        220, 105, 200, 60, ("run",)),
     ("authz", "app", "Authorization Platform",450, 105, 200, 60, ("run",)),
@@ -52,23 +54,27 @@ NODES = [
     ("life",  "app", "Lifecycle Manager",     910, 105, 200, 60, ("run", "scheduler")),
     # Identity / Runtime
     ("sop",   "app", "Shared Agent OP",       220, 285, 160, 60, ("run",)),
-    ("dop",   "app", "Dedicated Agent OP",    400, 285, 160, 60, ("run",)),
+    ("dop",   "app", "Dedicated OP xN|created and destroyed at run time",
+                                              400, 275, 160, 80, ("run",)),
     ("run",   "app", "Agent Runtime|Cloud Run Job / 1 Agent = 1 Execution",
                                               650, 275, 260, 80, ("run",)),
     ("gb",    "app", "Google Bridge",         960, 285, 180, 60, ("run",)),
     # Data / Keys
-    ("sql",    "iconnode", "Cloud SQL",       255, 610,  30, 40, ("sql",)),
     ("fs",     "iconnode", "Firestore",       373, 610,  34, 40, ("firestore",)),
     ("kms",    "iconnode", "Cloud KMS",       484, 610,  32, 40, ("kms",)),
     ("secret", "box",      "Secret Manager",  580, 615, 110, 32, ()),
     ("vertex", "iconnode", "Vertex AI",       780, 612,  40, 36, ("vertex",)),
-    # Telemetry
+    # Telemetry. The audit dataset sits in the same Project; the separation is IAM.
     ("logging", "iconnode", "Cloud Logging",  260, 741,  40, 38, ("logging",)),
     ("pubsub",  "iconnode", "Pub/Sub",        420, 740,  36, 40, ("pubsub",)),
     ("sec",     "app",      "Security Detection", 560, 735, 200, 50, ("run",)),
-    # Security Project
-    ("bq", "iconnode", "BigQuery",            660, 920,  40, 40, ("bq",)),
+    ("bq",      "iconnode", "BigQuery (security_audit)", 890, 740, 40, 40, ("bq",)),
 ]
+
+# 破線で描くもの。既定の apply では作られない部分を、実線の常設構成と見分けられるようにする。
+GROUP_DASHED = {"g_google"}
+NODE_DASHED = {"gb"}
+
 NODE = {n[0]: n for n in NODES}
 
 # --- エッジ定義: id, src, dst, label, dashed, exit(rel), entry(rel), 中間点 ---
@@ -80,19 +86,21 @@ EDGES = [
     ("e_auto_prov", "auto", "prov", "create",            False, (0.8, 0.0), (0.5, 0.0), [(380, 50), (780, 50)]),
     ("e_prov_op",   "prov", "g_op", "register / deploy", False, (0.25, 1.0), (0.5, 0.0), [(730, 225), (390, 225)]),
     ("e_prov_run",  "prov", "run",  "start",             False, (0.5, 1.0), (0.5, 0.0), []),
-    ("e_prov_gb",   "prov", "gb",   "binding",           False, (0.75, 0.0), (0.944, 0.0), [(830, 85), (1130, 85)]),
+    ("e_prov_gb",   "prov", "gb",   "binding",           True,  (0.75, 0.0), (0.944, 0.0), [(830, 85), (1130, 85)]),
     ("e_life_run",  "life", "run",  "revoke",            True,  (0.5, 1.0), (0.769, 0.0), [(1010, 245), (850, 245)]),
     ("e_run_op",    "run",  "g_op", "ID-JAG",            False, (0.0, 0.5), (1.0, 0.59), []),
     ("e_op_hidp",   "g_op", "hidp", "subject_token",     False, (0.0, 0.9), (1.0, 0.9), [(165, 349), (165, 325)]),
-    ("e_run_gb",    "run",  "gb",   "ID-JAG",            False, (1.0, 0.5), (0.0, 0.5), []),
-    ("e_gb_gas",    "gb",   "gas",  "Refresh Token",     False, (1.0, 0.28), (0.0, 0.5), []),
-    ("e_run_gapi",  "run",  "gapi", "Access Token",      False, (0.9, 1.0), (0.0, 0.5), [(884, 400), (1200, 400), (1200, 347)]),
-    ("e_run_nas",   "run",  "nas",  "ID-JAG",            False, (0.33, 1.0), (0.0, 0.5), [(736, 472)]),
-    ("e_run_napi",  "run",  "napi", "Access Token",      False, (0.66, 1.0), (0.0, 0.5), [(822, 517)]),
+    ("e_run_gb",    "run",  "gb",   "ID-JAG",            True,  (1.0, 0.5), (0.0, 0.5), []),
+    ("e_gb_gas",    "gb",   "gas",  "Refresh Token",     True,  (1.0, 0.28), (0.0, 0.5), []),
+    ("e_run_gapi",  "run",  "gapi", "Access Token",      True,  (0.9, 1.0), (0.0, 0.5), [(884, 400), (1200, 400), (1200, 347)]),
+    ("e_run_nas",   "run",  "nas_docs",  "ID-JAG",       False, (0.33, 1.0), (0.0, 0.5), [(736, 463)]),
+    ("e_run_napi",  "run",  "napi_docs", "Access Token", False, (0.66, 1.0), (0.0, 0.5), [(822, 503)]),
+    ("e_run_nasf",  "run",  "nas_fin",   "ID-JAG",       False, (0.2, 1.0), (0.0, 0.5), [(702, 603)]),
+    ("e_run_napif", "run",  "napi_fin",  "Access Token", False, (0.8, 1.0), (0.0, 0.5), [(858, 643)]),
     ("e_op_kms",    "g_op", "kms",  "sign",              False, (0.79, 1.0), (0.625, 0.0), []),
     ("e_log_pubsub","logging","pubsub", "",              False, (1.0, 0.5), (0.0, 0.5), []),
     ("e_pubsub_sec","pubsub", "sec",    "",              False, (1.0, 0.5), (0.0, 0.5), []),
-    ("e_log_bq",    "logging","bq",  "Log Sink",         False, (0.0, 0.5), (0.5, 0.0), [(215, 760), (215, 868), (660, 868)]),
+    ("e_log_bq",    "logging","bq",  "Log Sink",         False, (0.5, 1.0), (0.5, 1.0), [(280, 800), (910, 800)]),
 ]
 
 FONT = "Helvetica, Arial, sans-serif"
@@ -142,7 +150,8 @@ def emit_drawio(path):
 
     for nid, kind, label, x, y, w, h, icons in NODES:
         if kind == "group":
-            vertex(nid, label, S_GROUP, x, y, w, h)
+            style = S_GROUP + ("dashPattern=1 3;" if nid in GROUP_DASHED else "")
+            vertex(nid, label.replace("|", "&#10;"), style, x, y, w, h)
         elif kind == "actor":
             vertex(nid, label, S_ACTOR, x, y, w, h)
         elif kind == "box":
@@ -151,8 +160,9 @@ def emit_drawio(path):
         elif kind == "iconnode":
             vertex(nid, label, icon_style(icons[0]), x, y, w, h)
         elif kind == "app":
+            style = S_APP + ("dashed=1;" if nid in NODE_DASHED else "")
             vertex(nid, label.replace("|", '<br><font style="font-size:10px">') +
-                   ("</font>" if "|" in label else ""), S_APP, x, y, w, h)
+                   ("</font>" if "|" in label else ""), style, x, y, w, h)
             ix = x + 6
             for k in icons:
                 vertex(f"{nid}_icon_{k}", "", icon_style(k), ix, y + 6, 18, 18)
@@ -213,9 +223,13 @@ def emit_svg(path):
     for nid, kind, label, x, y, w, h, _ in NODES:
         if kind != "group":
             continue
+        pattern = "2 3" if nid in GROUP_DASHED else "6 4"
         o.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="none" stroke="#000000" '
-                 f'stroke-dasharray="6 4"/>')
-        o.append(text(x + 6, y + 15, label, 12, "start", bold=True))
+                 f'stroke-dasharray="{pattern}"/>')
+        head, _, note = label.partition("|")
+        o.append(text(x + 6, y + 15, head, 12, "start", bold=True))
+        if note:
+            o.append(text(x + 6, y + 28, note, 9, "start"))
 
     # エッジ（ノードの下）
     for edge in EDGES:
@@ -258,7 +272,9 @@ def emit_svg(path):
             o.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#ffffff" stroke="#000000"/>')
             o.append(text(x + w / 2, y + h / 2 + size * 0.35, label, size))
         elif kind == "app":
-            o.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#ffffff" stroke="#000000"/>')
+            dash = ' stroke-dasharray="4 3"' if nid in NODE_DASHED else ""
+            o.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#ffffff" '
+                     f'stroke="#000000"{dash}/>')
             ix = x + 6
             for k in icons:
                 o.append(icon(k, ix, y + 6, 18, 18))

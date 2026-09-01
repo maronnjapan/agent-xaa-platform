@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
+import { completionCodeId } from '@xaa/contracts';
+import { createLogger } from '@xaa/logging';
 import { createTransactionStore } from '../src/transaction/store.js';
 import { InvalidTransactionTransition, isTerminal, transition, TRANSACTION_TTL_SECONDS } from '../src/transaction/state.js';
 import { createCompletionCodes, COMPLETION_CODE_TTL_SECONDS } from '../src/transaction/one-time-code.js';
@@ -114,5 +116,41 @@ describe('one-time completion code', () => {
     const code = await codes.issue(input);
     await codes.consume({ code, ...input, human_subject: 'someone-else' });
     expect((await codes.consume({ code, ...input })).ok).toBe(true);
+  });
+});
+
+/**
+ * 00b §1 puts `code_already_used` among the 22 protocol violations and names T-PROV-15
+ * as the code that raises it. Security Detection classifies a refusal from that event;
+ * a refusal that only becomes a 400 is one the pipeline never sees.
+ */
+describe('a code redeemed twice', () => {
+  it('raises the protocol violation, carrying neither the code nor its hash', async () => {
+    const lines: string[] = [];
+    const logger = createLogger('provisioner', 'provisioner', (line) => { lines.push(line); });
+    const { documents } = store();
+    const codes = createCompletionCodes(documents, () => Date.now(), logger);
+    const code = await codes.issue({ transaction_id: 'txn-1', human_subject: 'testuser', issuer_kind: 'idp' });
+    const input = { code, transaction_id: 'txn-1', human_subject: 'testuser' };
+
+    expect((await codes.consume(input)).ok).toBe(true);
+    expect(await codes.consume(input)).toEqual({ ok: false, status: 400, error: 'code_already_used' });
+
+    const events = lines.map((line) => JSON.parse(line) as { event: string; fields: Record<string, unknown> })
+      .filter((entry) => entry.event === 'protocol_validation');
+    expect(events).toHaveLength(1);
+    expect(events[0]!.fields).toMatchObject({ validation: 'code_already_used', outcome: 'fail', validation_name: 'one_time_code' });
+    expect(JSON.stringify(events)).not.toContain(code);
+    expect(JSON.stringify(events)).not.toContain(await completionCodeId(code));
+  });
+
+  it('stays silent on the first redemption', async () => {
+    const lines: string[] = [];
+    const logger = createLogger('provisioner', 'provisioner', (line) => { lines.push(line); });
+    const { documents } = store();
+    const codes = createCompletionCodes(documents, () => Date.now(), logger);
+    const code = await codes.issue({ transaction_id: 'txn-1', human_subject: 'testuser', issuer_kind: 'idp' });
+    await codes.consume({ code, transaction_id: 'txn-1', human_subject: 'testuser' });
+    expect(lines.join('\n')).not.toContain('protocol_validation');
   });
 });

@@ -16,13 +16,13 @@ User:
 今までの日報から自動化できそうな業務を提案してほしい
 
 Automation Design AI:
-日報の内容から、毎日の予定確認を自動化候補として提案します。
+日報の内容から、業務記録の要約作成を自動化候補として提案します。
 
 User:
-Google Calendarを確認して、重要な予定を整理してほしい。
+業務記録を読んで、その日の作業をまとめた日報を作ってほしい。
 
 Automation Design AI:
-では「Google Calendarから予定を取得し、重要な予定を整理する」
+では「業務記録を読み、当日分の日報を作成して記録する」
 という作業内容でAgentを作成します。
 ```
 
@@ -30,7 +30,7 @@ Automation Design AI:
 
 | 決めること | 決めないこと |
 |---|---|
-| 何の作業をするか（Work Definition） | 必要な権限（`calendar.event.read` など） |
+| 何の作業をするか（Work Definition） | 必要な権限（`document.read` など） |
 | 自動化候補、業務内容、処理順序、ユーザー確認事項、安全上の注意 | どのResourceへアクセスできるか |
 | Agentの希望生存時間（最大24時間） | Isolation Level |
 
@@ -46,10 +46,10 @@ Automation App側は、アクセス可能なResourceやCapabilityの一覧を保
 ```yaml
 business_work_request:
   human_subject: user-123
-  purpose: daily_schedule_analysis
+  purpose: daily_work_log_summary
   description: |
-    Google Calendarから当日の予定を取得し、
-    重要な予定を抽出して整理する
+    業務記録から当日分を読み取り、
+    日報としてまとめて記録する
   constraints:
     external_message_send: false
   requested_lifetime_hours: 24
@@ -68,18 +68,19 @@ Authorization Platformの結果（Effective Capability + Security Profile）を�
 
 ```yaml
 agent_definition:
-  agent_purpose: daily_schedule_notification
+  agent_purpose: daily_work_log_summary
   human_subject: user-123
 
   work_definition:
     description: |
-      Google Calendarから予定を取得し、重要な予定を整理する
+      業務記録を読み、当日分の日報を作成して記録する
     operations:
-      - retrieve_calendar_events
-      - analyze_events
+      - read_documents
+      - write_document
 
   effective_capabilities:
-    - calendar.event.read
+    - document.read
+    - document.write
 
   lifetime:
     max_hours: 24
@@ -130,3 +131,56 @@ Automation Appから、作成済みAgentに対して以下の操作ができる�
 - 追加指示による処理は、Agent生成時に確定したEffective Agent Permissionを超えてはならない。既存Agentの権限昇格は行わない。追加指示で権限外のToolが必要になった場合、Tool Executorは実行を拒否し、ユーザーへその旨を返す。
 - より広い権限が必要な場合は既存Agentを変更せず、ユーザーが新しいAgentを一から作成する（Work Definition再定義 → 権限決定 → 新規Provisioning）。
 - これらの操作はHuman Access Token（DPoP-bound）で認証し、`human_subject` がAgentの委譲元ユーザーと一致する場合のみ許可する。操作内容は監査ログへ記録する。
+
+## 付録 A. Google Bridge を有効にした場合の例
+
+この付録は `enable_google_bridge=true` のときだけ成り立つ。
+既定の apply では Bridge も stub SaaS も作られないため、本文の例は外部SaaSを使わないものにしてある。
+
+外部SaaSを含める場合、対話と要求は次の形になる。
+
+```text
+User:
+Google Calendarを確認して、重要な予定を整理してほしい。
+
+Automation Design AI:
+では「Google Calendarから予定を取得し、重要な予定を整理する」
+という作業内容でAgentを作成します。
+```
+
+```yaml
+business_work_request:
+  human_subject: user-123
+  purpose: daily_schedule_analysis
+  description: |
+    Google Calendarから当日の予定を取得し、
+    重要な予定を抽出して整理する
+  constraints:
+    external_message_send: false
+  requested_lifetime_hours: 24
+```
+
+```yaml
+agent_definition:
+  agent_purpose: daily_schedule_notification
+  human_subject: user-123
+
+  work_definition:
+    description: |
+      Google Calendarから予定を取得し、重要な予定を整理する
+    operations:
+      - retrieve_calendar_events
+      - analyze_events
+
+  effective_capabilities:
+    - calendar.event.read
+
+  lifetime:
+    max_hours: 24
+
+  security_profile:
+    isolation_level: standard
+```
+
+外部SaaSのAccess TokenはOAuth Bridgeが保持し、Agentへは渡らない（[06. OAuth Bridge](./06-oauth-bridge.md)）。
+

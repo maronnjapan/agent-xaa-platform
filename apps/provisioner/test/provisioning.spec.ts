@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { createDpopProof, generateEs256KeyPair, jwkThumbprint, type Es256KeyPair } from '@xaa/crypto';
 import { RUNTIME_ENV_KEYS } from '@xaa/contracts';
+import { computeExpiresAt, HARD_CAP_SECONDS } from '../src/agent/expiry.js';
 import { createProvisionerHarness, seedDecision, recordingAdmin, PROVISIONER_BASE, HUMAN_IDP_ISSUER, type ProvisionerHarness } from './helpers.js';
 
 /**
@@ -205,6 +206,45 @@ describe('POST /provisioning refuses before it writes', () => {
   });
 });
 
+/**
+ * Rule-based detection compares an agent against what it was given. With no baseline
+ * the detector emits no hit at all, so a provisioning that skipped this produced an
+ * agent every rule was blind to (T-SEC-25).
+ */
+describe('the agent baseline', () => {
+  it('is written once provisioning has succeeded, from what the agent was given', async () => {
+    const target = await harness();
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const { agent_id: agentId } = await response.json() as { agent_id: string };
+
+    const baseline = await target.documents.get<{
+      effective_capabilities: string[]; expected_tools: string[]; expected_resources: string[];
+      expected_rate: { id_jag: { max: number } }; lifetime: string;
+      current_session_behavior: Record<string, number>;
+    }>('agents', `${agentId}__baseline`);
+    expect(baseline).toBeDefined();
+    expect(baseline!.effective_capabilities).toEqual(['document.read']);
+    expect(baseline!.expected_tools.length).toBeGreaterThan(0);
+    expect(baseline!.expected_resources.length).toBeGreaterThan(0);
+    // The registration's expiry, copied rather than recomputed.
+    const meta = await target.documents.get<{ expires_at: string }>('agents', `${agentId}__meta`);
+    expect(baseline!.lifetime).toBe(meta!.expires_at);
+    expect(Object.values(baseline!.current_session_behavior).every((value) => value === 0)).toBe(true);
+  });
+
+  it('is not written when the provisioning stops for consent', async () => {
+    const target = await harness({ idpConnectionStatus: 'CONSENT_REQUIRED' });
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+
+    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+
+    const rows = await target.documents.listAll('agents');
+    expect(rows.filter((row) => row.id.endsWith('__baseline'))).toHaveLength(0);
+  });
+});
+
 describe('POST /provisioning, FULL_ISOLATION', () => {
   it('creates the six dedicated resources in order and records each one', async () => {
     const target = await harness();
@@ -217,8 +257,15 @@ describe('POST /provisioning, FULL_ISOLATION', () => {
 
     expect(target.admin.calls.map((call) => call.method)).toEqual([
       'createServiceAccount', 'createServiceAccount', 'createCryptoKey', 'createCryptoKey',
-      ...Array.from({ length: 9 }, () => 'bindRole'),
-      'createService', 'createJob',
+      // The OP identity's six grants: both keys, Firestore, the JWKS bucket, the activity
+      // topic and the shared client secret.
+      ...Array.from({ length: 6 }, () => 'bindRole'),
+      'createService',
+      // The rest need the service to exist first: who may invoke the dedicated OP (the
+      // agent and the Provisioner), which Resource AS the agent may invoke (two in the
+      // harness), then Vertex, Firestore and the activity topic for the agent itself.
+      ...Array.from({ length: 7 }, () => 'bindRole'),
+      'createJob',
     ]);
     const ledger = await target.documents.get<{ created: Array<{ kind: string; name: string }>; status: string }>('dedicated_resources', body.agent_id);
     expect(ledger!.status).toBe('READY');
@@ -263,7 +310,85 @@ describe('POST /provisioning, FULL_ISOLATION', () => {
     const target = await harness({ admin: recordingAdmin({ failAt: 'createCryptoKey' }) });
     const decisionId = await seedDecision(target, { capabilities: ['finance.payment.approve'], isolationLevel: 'full_isolation' });
     await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 }).catch(() => undefined);
-    const ledgers = await target.documents.listAll<{ created: unknown[] }>('dedicated_resources');
+    const ledgers = (await target.documents.listAll<{ created: unknown[]; status: string; last_error: string | null }>('dedicated_resources'))
+      .filter((row) => row.id.startsWith('agent-'));
+    expect(ledgers).toHaveLength(1);
     expect(ledgers[0]!.data.created).toHaveLength(2);
+    // The half-built agent is handed to Lifecycle rather than left looking healthy:
+    // the sweep deletes what the ledger lists, and only a FAILED one is its business.
+    expect(ledgers[0]!.data.status).toBe('FAILED');
+    expect(ledgers[0]!.data.last_error).not.toBe(null);
+  });
+});
+
+/**
+ * The lifetime ceiling is enforced twice: Terraform validates the variable, and the
+ * code clamps whatever it was actually given. An operator exporting a larger value by
+ * hand is not a deployment, and it must not be able to mint an agent that outlives the
+ * day it was made (T-PROV-20).
+ */
+describe('the 24-hour ceiling', () => {
+  it('clamps a lifetime the environment allowed but the platform does not', () => {
+    const now = Date.parse('2026-01-01T00:00:00.000Z');
+    const capped = computeExpiresAt({ requestedLifetimeHours: 48, agentMaxLifetimeSeconds: 172_800, now });
+    expect(capped.lifetimeSeconds).toBe(HARD_CAP_SECONDS);
+    expect(Date.parse(capped.expiresAt) - now).toBe(HARD_CAP_SECONDS * 1000);
+  });
+
+  it('refuses a request for more than a day even when the variable says otherwise', async () => {
+    const target = await harness({ config: { agentMaxLifetimeSeconds: 172_800 } });
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 48 });
+    expect(response.status).toBe(400);
+    expect((await response.json() as { error: string }).error).toBe('invalid_request');
+  });
+
+  it('accepts a full day and expires exactly then', async () => {
+    const target = await harness({ config: { agentMaxLifetimeSeconds: 172_800 } });
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 24 });
+    const body = await response.json() as { expires_at: string };
+    expect(Date.parse(body.expires_at) - Date.now()).toBeLessThanOrEqual(HARD_CAP_SECONDS * 1000);
+    expect(Date.parse(body.expires_at) - Date.now()).toBeGreaterThan(HARD_CAP_SECONDS * 1000 - 60_000);
+  });
+});
+
+describe('what a refusal tells the caller', () => {
+  it('names the capabilities that were not covered, not just that one was not', async () => {
+    const target = await harness();
+    const decisionId = await seedDecision(target, { capabilities: ['document.read', 'document.write'] });
+    // The decision was made when both were held; only one still is.
+    await target.seedStore.delete('human_permissions', 'testuser__document.write');
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'capability_not_subset_of_human_permission', capabilities: ['document.write'],
+    });
+  });
+});
+
+/**
+ * 00b §3 gives `agents/{agent_id}/manifest` a writer (T-PROV-06) and a reader
+ * (T-RUN-06). Only the reader and the delete existed, so cleanup deleted a document
+ * nobody had ever written.
+ */
+describe('the manifest copy', () => {
+  it('is written beside the registration and matches what the job was handed', async () => {
+    const target = await harness();
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+    const body = await (await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 })).json() as { agent_id: string };
+
+    const stored = await target.documents.get<Record<string, unknown>>('agents', `${body.agent_id}__manifest`);
+    expect(stored).toBeDefined();
+    const values = Object.fromEntries(target.jobRuns[0]!.env.map((entry) => [entry.name, entry.value]));
+    expect(stored).toEqual(JSON.parse(values.TOOL_MANIFEST!));
+  });
+
+  it('is not left behind when the provisioning fails', async () => {
+    const target = await harness({ verifyStatus: 'PENDING' });
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const rows = await target.documents.listAll('agents');
+    expect(rows.filter((row) => row.id.endsWith('__manifest'))).toEqual([]);
   });
 });

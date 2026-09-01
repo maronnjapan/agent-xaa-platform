@@ -18,12 +18,17 @@ describe('token exchange log', () => {
 
     const ok = await createFixture();
     await exchange(ok);
-    const success = JSON.parse(ok.exchangeLogs[0]!) as Record<string, unknown>;
+    const line = JSON.parse(ok.exchangeLogs[0]!) as Record<string, unknown>;
+    // The envelope the Log Sink filters on and the normalizer dispatches on: without
+    // it the record never reaches Security Detection at all (T-SEC-05).
+    expect(line.log_source).toBe('agent_op');
+    expect(line.event).toBe('token_exchange');
+    const success = line.fields as Record<string, unknown>;
     for (const field of fields) expect(Object.keys(success)).toContain(field);
 
     const bad = await createFixture({ registration: { human_subject: 'user-B' } });
     await exchange(bad, { form: { subject_token: await subjectToken(bad, { sub: 'user-A' }) } });
-    const failure = JSON.parse(bad.exchangeLogs[0]!) as Record<string, unknown>;
+    const failure = (JSON.parse(bad.exchangeLogs[0]!) as { fields: Record<string, unknown> }).fields;
     for (const field of fields) expect(Object.keys(failure)).toContain(field);
     expect(failure.delegation_check).toBe(false);
     expect(failure.error_code).toBe('invalid_grant');
@@ -71,9 +76,12 @@ describe('ID-JAG issuance ledger', () => {
   it('three issuances produce three records with distinct jti', async () => {
     const fixture = await createFixture();
     for (let attempt = 0; attempt < 3; attempt += 1) await exchange(fixture);
-    const ids = fixture.ledgerLogs.map((line) => (JSON.parse(line) as { jti: string }).jti);
+    const ids = fixture.ledgerLogs.map((line) => (JSON.parse(line) as { fields: { jti: string } }).fields.jti);
     expect(new Set(ids).size).toBe(3);
-    expect(fixture.ledgerLogs.every((line) => (JSON.parse(line) as { logName: string }).logName === 'idjag_issuance')).toBe(true);
+    expect(fixture.ledgerLogs.every((line) => {
+      const entry = JSON.parse(line) as { event: string; log_source: string };
+      return entry.event === 'idjag_issuance' && entry.log_source === 'agent_op';
+    })).toBe(true);
   });
 
   it('a rejected request produces no ledger record', async () => {

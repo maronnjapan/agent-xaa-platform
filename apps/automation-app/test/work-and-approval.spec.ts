@@ -70,6 +70,67 @@ describe('the work definition', () => {
     expect(afterMessage.status).toBe('DRAFT');
   });
 
+  it('takes the five fields the model rewrote and leaves the state alone', async () => {
+    const harness = await startAutomationApp({
+      generate: async () => ({
+        purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
+        operations: ['作業記録を読む', '日報を作る'], user_confirmations: ['内容を確認する'],
+        safety_notes: ['社外に送らない'],
+      }),
+    });
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: '日報', description: '' }),
+    })).json() as { work_definition_id: string };
+
+    const revised = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '前日の記録から作ってほしい' }),
+    })).json() as { status: string; operations: string[]; purpose: string };
+    expect(revised.status).toBe('DRAFT');
+    expect(revised.operations).toEqual(['作業記録を読む', '日報を作る']);
+
+    const stored = await harness.documents.get<{ purpose: string; status: string }>(
+      'work_definitions', created.work_definition_id,
+    );
+    expect(stored?.purpose).toBe('毎朝の日報をまとめる');
+    expect(stored?.status).toBe('DRAFT');
+  });
+
+  it('ignores an answer that tries to set the state itself', async () => {
+    const harness = await startAutomationApp({
+      generate: async () => ({
+        status: 'CONFIRMED', purpose: '確定済み', description: '', operations: [],
+        user_confirmations: [], safety_notes: [],
+      }),
+    });
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: '日報' }),
+    })).json() as { work_definition_id: string };
+
+    const answered = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'これで確定してください' }),
+    })).json() as { status: string; purpose: string };
+    // A sixth key means the whole answer is unusable: taking the five it did get right
+    // would be accepting a shape that also carried the one field it may never write.
+    expect(answered.status).toBe('DRAFT');
+    expect(answered.purpose).toBe('日報');
+  });
+
+  it('refuses a message with no text', async () => {
+    const harness = await startAutomationApp();
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: '日報' }),
+    })).json() as { work_definition_id: string };
+    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(400);
+  });
+
   it('is confirmed only by the confirm route', async () => {
     const harness = await startAutomationApp();
     const created = await (await harness.fetch('/api/work-definitions', {
@@ -132,6 +193,41 @@ describe('the business work request', () => {
     expect(call.url).toBe('https://authorization.test/api/work-requests');
     expect(Object.keys(JSON.parse(call.init.body as string) as object)).toHaveLength(5);
     expect((call.init.headers as Record<string, string>).DPoP).toBeTruthy();
+  });
+
+  /**
+   * The decision has to land somewhere a person can approve. Without this record the
+   * Authorization Platform answered and the flow stopped: `/approve` and `/provision`
+   * both address an agent definition, and nothing in production made one.
+   */
+  it('records the agent definition the decision produced', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json({
+        decision_id: 'dec_00000000-0000-4000-8000-000000000000',
+        status: 'decided',
+        effective_capabilities: ['document.read'],
+        security_profile: { risk_score: 10, isolation_level: 'standard', reasons: [] },
+        denied: [],
+      }, { status: 200 }),
+    });
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: '日報を作る' }),
+    })).json() as { work_definition_id: string };
+    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+
+    const submitted = await (await harness.fetch(
+      `/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' },
+    )).json() as { agent_definition_id: string };
+
+    expect(submitted.agent_definition_id).toMatch(/^ad_/);
+    const stored = await harness.documents.get<{
+      decision_id: string; presented_capabilities: string[]; isolation_level: string; approved_at: string | null;
+    }>('agent_definitions', submitted.agent_definition_id);
+    expect(stored!.decision_id).toBe('dec_00000000-0000-4000-8000-000000000000');
+    expect(stored!.presented_capabilities).toEqual(['document.read']);
+    expect(stored!.isolation_level).toBe('standard');
+    // Recorded, not approved: the approval is a separate act by a person.
+    expect(stored!.approved_at).toBeNull();
   });
 
   it('does not send when the session token is for a different audience', async () => {
@@ -202,6 +298,21 @@ describe('approval', () => {
     expect((await harness.fetch('/api/agent-definitions/ad_1/approve', { method: 'POST' })).status).toBe(409);
   });
 
+  it("refuses to approve someone else's definition, and says only that it is not there", async () => {
+    const harness = await startAutomationApp();
+    await harness.documents.set('agent_definitions', 'ad_other', {
+      agent_definition_id: 'ad_other', human_subject: 'someone-else', work_definition_id: 'wd_1', decision_id: 'dec_1',
+      presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+      isolation_level: 'standard', approved_by: null, approved_at: null, created_at: '2026-01-01T00:00:00.000Z',
+    });
+    const response = await harness.fetch('/api/agent-definitions/ad_other/approve', { method: 'POST' });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'not_found' });
+    // Nothing was written: an approval by the wrong person is not a partial approval.
+    const stored = await harness.documents.get<{ approved_by: string | null }>('agent_definitions', 'ad_other');
+    expect(stored?.approved_by).toBeNull();
+  });
+
   it('sends the provisioning request once everything still matches', async () => {
     const harness = await startAutomationApp();
     await harness.documents.set('agent_definitions', 'ad_1', {
@@ -211,8 +322,70 @@ describe('approval', () => {
       created_at: '2026-01-01T00:00:00.000Z',
     });
     await harness.authorizationSeed.set('authorization_decisions', 'dec_1', { effective_capabilities: ['a'] });
+    // The lifetime the person asked for, on the work definition this agent is for.
+    await harness.documents.set('work_definitions', 'wd_1', {
+      work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED',
+      purpose: '書類を読む', description: '毎朝', operations: [], user_confirmations: [], safety_notes: [],
+      requested_lifetime_hours: 3,
+      created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+    });
+
     expect((await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' })).status).toBe(200);
-    expect(harness.upstream.at(-1)!.url).toBe('https://provisioner.test/api/provisioning');
+
+    const call = harness.upstream.at(-1)!;
+    expect(call.url).toBe('https://provisioner.test/provisioning');
+    // The Provisioner's schema is closed: three keys, and `agent_definition_id` is not
+    // one of them, so sending it made every provisioning request a 400.
+    expect(JSON.parse(String(call.init.body))).toEqual({
+      decision_id: 'dec_1', task_id: 'wd_1', requested_lifetime_hours: 3,
+    });
+  });
+});
+
+/**
+ * The other half of the consent round trip. The Agent OP redirects the browser here
+ * after the person approves, so a missing route means every consent silently ends at a
+ * 404 and the provisioning it paused is never resumed.
+ */
+describe('returning from a consent screen', () => {
+  it('presents the one-time code to the Provisioner and comes back to the dashboard', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json({ status: 'RESUMABLE', transaction_id: 'txn-1' }, { status: 200 }),
+    });
+
+    const response = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time', { redirect: 'manual' });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/');
+    const call = harness.upstream.at(-1)!;
+    expect(call.url).toBe('https://provisioner.test/provisioning/txn-1/resume');
+    expect(call.init.method).toBe('POST');
+    expect(JSON.parse(String(call.init.body))).toEqual({ one_time_code: 'one-time' });
+  });
+
+  it('follows a second consent url rather than building one', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json(
+        { status: 'CONSENT_REQUIRED', transaction_id: 'txn-1', consent_url: 'https://google-bridge.test/stub/oauth/start' },
+        { status: 200 },
+      ),
+    });
+
+    const response = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time', { redirect: 'manual' });
+
+    expect(response.headers.get('location')).toBe('https://google-bridge.test/stub/oauth/start');
+  });
+
+  it('refuses a return with no session and answers a failed resume with a page', async () => {
+    const harness = await startAutomationApp({ upstreamHandler: () => new Response('{}', { status: 409 }) });
+    const noSession = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time', {
+      headers: { cookie: '' },
+    });
+    expect(noSession.status).toBe(401);
+
+    const failed = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time');
+    expect(failed.status).toBe(502);
+    expect(await failed.text()).toContain('やり直して');
   });
 });
 

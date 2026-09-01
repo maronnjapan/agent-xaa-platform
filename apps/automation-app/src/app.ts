@@ -25,18 +25,27 @@ import { suggestAutomations } from './automation/suggestions.js';
 import { buildDailyReport } from './reports/daily-report.js';
 import { emitAgentStopped, emitConfirmed, emitProposed } from './activity/emit.js';
 import { instructionRequestSchema, timelineResponseSchema } from './schemas/index.js';
+import { createLoginRoutes } from './auth/login-flow.js';
+import { createPageRoutes } from './ui/routes.js';
+import { createSignalSource } from './signals/registry.js';
+import type { WorkSignalSource } from './signals/work-signal-source.js';
+import { loadSuggestionPrompt } from './prompts/load.js';
+import { reviseDraft } from './work-definition/dialogue.js';
 
 export interface AutomationAppDeps {
   config: AutomationAppConfig;
   documents: DocumentStore;
   sessions?: SessionStore;
   verifyAccessToken(token: string): Promise<Record<string, unknown>>;
+  verifyIdToken(token: string): Promise<Record<string, unknown>>;
   fetchImpl?: typeof fetch;
   now?: () => number;
   auditWrite?: (line: string) => void;
   promptTemplate?: string;
+  signals?: WorkSignalSource;
   generate?: Parameters<typeof suggestAutomations>[0]['generate'];
   pushAudience?: string;
+  identityTokenProvider?: (audience: string) => Promise<string>;
 }
 
 type Env = UserVariables & AgentOwnerVariables;
@@ -60,8 +69,28 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
   const workDefinitions = createWorkDefinitionStore(deps.documents);
   const agentDefinitions = createAgentDefinitionStore(deps.documents);
   const now = deps.now ?? (() => Date.now());
+  const promptTemplate = deps.promptTemplate ?? loadSuggestionPrompt();
+  // The documents are read as this app, with its own service identity: the person in
+  // front of the screen has no agent yet, so there is no delegation to travel on
+  // (T-APP-04), and the read happens before anything has been decided about one.
+  const docsOrigin = new URL(deps.config.docsApiUrl).origin;
+  const docsAuthorization = async (): Promise<string> =>
+    (deps.identityTokenProvider ? `Bearer ${await deps.identityTokenProvider(docsOrigin)}` : '');
+  const signals = deps.signals ?? createSignalSource('document-rs', {
+    baseUrl: deps.config.docsApiUrl,
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    authorization: docsAuthorization,
+  });
 
   app.get('/healthz', (context) => context.json({ status: 'ok', app: 'automation-app' }));
+  app.route('/', createLoginRoutes({
+    config: deps.config,
+    documents: deps.documents,
+    sessions,
+    verifyIdToken: deps.verifyIdToken,
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    now,
+  }));
 
   /**
    * Pub/Sub, not a person. Verified by the delivery's OIDC token: the body names the
@@ -88,16 +117,64 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     return context.json({ status: outcome }, 200);
   });
 
+  /**
+   * Where the browser lands after a consent screen.
+   *
+   * The Agent OP's `/xaa/callback` sends the person here with the transaction id and a
+   * one-time code, because the Provisioner is internal-only and no browser can reach it
+   * (RULE-37). This route is the only thing that can turn that return trip into a
+   * resumed provisioning: it presents the code on the person's own session, and then
+   * either follows the next consent URL the Provisioner names or comes back to the
+   * dashboard.
+   */
+  app.get(
+    '/provisioning/resume',
+    requireUser({ sessions, clientId: deps.config.clientId, verifyAccessToken: deps.verifyAccessToken }),
+    async (context) => {
+      const transactionId = context.req.query('transaction_id');
+      const code = context.req.query('code');
+      if (!transactionId || !code) return consentFailurePage(400);
+
+      let response: Response;
+      try {
+        response = await createControlPlaneClient({
+          session: context.get('session'),
+          ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+          ...(deps.identityTokenProvider ? { identityTokenProvider: deps.identityTokenProvider } : {}),
+        }).send('agent-provisioner', {
+          url: new URL(
+            `/provisioning/${encodeURIComponent(transactionId)}/resume`,
+            deps.config.agentProvisionerUrl,
+          ).toString(),
+          method: 'POST',
+          body: { one_time_code: code },
+          requiredScope: 'agent:provision',
+        });
+      } catch {
+        return consentFailurePage(502);
+      }
+      if (!response.ok) return consentFailurePage(502);
+
+      // A second consent is answered the same way the first was: by following the URL
+      // the Provisioner names. This app never builds one (RULE-37).
+      const body = await response.json().catch(() => ({})) as { consent_url?: unknown };
+      if (typeof body.consent_url === 'string') return context.redirect(body.consent_url, 302);
+      return context.redirect('/', 302);
+    },
+  );
+
   app.use('/api/*', requireUser({ sessions, clientId: deps.config.clientId, verifyAccessToken: deps.verifyAccessToken }));
 
   app.post('/api/automation/suggestions', async (context) => {
-    const body = await context.req.json().catch(() => ({})) as { from?: string; to?: string };
+    const body = await context.req.json().catch(() => ({})) as { from?: unknown; to?: unknown };
+    if (typeof body.from !== 'string' || typeof body.to !== 'string') {
+      return context.json({ error: 'invalid_request' }, 400);
+    }
     const suggestions = await suggestAutomations({
-      signals: [],
-      promptTemplate: deps.promptTemplate ?? '{{signals}}',
+      signals: await signals.fetch({ humanSubject: context.get('humanSubject'), from: body.from, to: body.to }),
+      promptTemplate,
       ...(deps.generate ? { generate: deps.generate } : {}),
     });
-    void body;
     return context.json(suggestions, 200);
   });
 
@@ -112,15 +189,24 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       return context.json({ error: 'invalid_request' }, 400);
     }
     const report = await buildDailyReport({
-      signals: [], ...(deps.generate ? { generate: deps.generate } : {}),
+      signals: await signals.fetch({ humanSubject: context.get('humanSubject'), from: body.from, to: body.to }),
+      ...(deps.generate ? { generate: deps.generate } : {}),
     });
     if (!report) return context.json({ error: 'no_work_log' }, 422);
+    const authorization = await docsAuthorization();
     const response = await (deps.fetchImpl ?? globalThis.fetch)(
       new URL('/documents', deps.config.docsApiUrl).toString(),
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'daily_report', title: report.title, body: report.body }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authorization ? { Authorization: authorization } : {}),
+        },
+        // `occurred_at` is what the report is about, so the Resource Server stores it
+        // under the day it covers rather than the moment it was written.
+        body: JSON.stringify({
+          type: 'daily_report', title: report.title, body: report.body, occurred_at: body.to,
+        }),
       },
     );
     const created = await response.json().catch(() => ({})) as { document_id?: string };
@@ -168,8 +254,20 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     if (!definition || definition.human_subject !== context.get('humanSubject')) {
       return context.json({ error: 'not_found' }, 404);
     }
-    // Whatever the model says, the state is untouched here.
-    return context.json({ work_definition_id: definition.work_definition_id, status: definition.status }, 200);
+    const body = await context.req.json().catch(() => ({})) as { text?: unknown };
+    if (typeof body.text !== 'string' || body.text.trim() === '') {
+      return context.json({ error: 'invalid_request' }, 400);
+    }
+    const draft = await reviseDraft({
+      definition, message: body.text, ...(deps.generate ? { generate: deps.generate } : {}),
+    });
+    // Whatever the model says, the state is untouched here: the revision covers five
+    // fields and `status` is not one of them.
+    const revised = draft
+      ? { ...definition, ...draft, updated_at: new Date(now()).toISOString() }
+      : definition;
+    if (draft) await workDefinitions.save(revised);
+    return context.json(revised, 200);
   });
 
   app.post('/api/work-definitions/:id/submit', async (context) => {
@@ -181,11 +279,35 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       const response = await submitBusinessWorkRequest({
         definition,
         client: createControlPlaneClient({
-          session: context.get('session'), ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+          session: context.get('session'),
+          ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+          ...(deps.identityTokenProvider ? { identityTokenProvider: deps.identityTokenProvider } : {}),
         }),
         authorizationPlatformUrl: deps.config.authorizationPlatformUrl,
       });
-      return context.json(await response.json().catch(() => ({})), response.status as 200);
+      const decision = await response.json().catch(() => ({})) as {
+        decision_id?: unknown;
+        effective_capabilities?: unknown;
+        security_profile?: { isolation_level?: unknown };
+      };
+      if (!response.ok || typeof decision.decision_id !== 'string') {
+        return context.json(decision, response.status as 200);
+      }
+      // What the person is about to be shown, recorded before they see it. Approval and
+      // provisioning both read this record, so without it the decision came back and the
+      // rest of the flow had nothing to act on (RULE-08).
+      const agentDefinition = await agentDefinitions.create({
+        humanSubject: definition.human_subject,
+        workDefinitionId: definition.work_definition_id,
+        decisionId: decision.decision_id,
+        capabilities: Array.isArray(decision.effective_capabilities)
+          ? decision.effective_capabilities.map(String)
+          : [],
+        isolationLevel: typeof decision.security_profile?.isolation_level === 'string'
+          ? decision.security_profile.isolation_level
+          : 'standard',
+      }, now());
+      return context.json({ ...decision, agent_definition_id: agentDefinition.agent_definition_id }, 200);
     } catch (error) {
       if (error instanceof WorkDefinitionNotConfirmed) return context.json({ error: error.code }, 409);
       return context.json({ error: 'internal_error' }, 500);
@@ -194,6 +316,8 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
 
   app.post('/api/agent-definitions/:id/approve', async (context) => {
     try {
+      // Ownership is settled before the record is touched, and a stranger's id answers
+      // 404 like a missing one: anything else would confirm the record exists (RULE-56).
       const approved = await agentDefinitions.approve(context.req.param('id'), context.get('humanSubject'), now());
       return context.json(approved, 200);
     } catch (error) {
@@ -219,12 +343,23 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       }
       throw error;
     }
+    // The Provisioner's body is fixed at three keys and rejects anything else
+    // (`additionalProperties: false`), so the lifetime comes from the work definition
+    // this agent was approved for rather than from a fourth key it would refuse.
+    const work = await workDefinitions.find(definition.work_definition_id);
+    if (!work) return context.json({ error: 'not_found' }, 404);
     const response = await createControlPlaneClient({
-      session: context.get('session'), ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      session: context.get('session'),
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      ...(deps.identityTokenProvider ? { identityTokenProvider: deps.identityTokenProvider } : {}),
     }).send('agent-provisioner', {
-      url: new URL('/api/provisioning', deps.config.agentProvisionerUrl).toString(),
+      url: new URL('/provisioning', deps.config.agentProvisionerUrl).toString(),
       method: 'POST',
-      body: { decision_id: definition.decision_id, agent_definition_id: definition.agent_definition_id },
+      body: {
+        decision_id: definition.decision_id,
+        task_id: definition.work_definition_id,
+        requested_lifetime_hours: work.requested_lifetime_hours,
+      },
       requiredScope: 'agent:provision',
     });
     return context.json(await response.json().catch(() => ({})), response.status as 200);
@@ -244,7 +379,9 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     const agentId = context.get('agentId');
     const response = await stopAgent({
       client: createControlPlaneClient({
-        session: context.get('session'), ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+        session: context.get('session'),
+        ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+        ...(deps.identityTokenProvider ? { identityTokenProvider: deps.identityTokenProvider } : {}),
       }),
       lifecycleManagerUrl: deps.config.lifecycleManagerUrl,
       agentId,
@@ -303,6 +440,15 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
 
   app.route('/api/demo', createDemoReplayRoute({ documents: deps.documents }));
 
+  app.route('/', createPageRoutes({
+    config: deps.config,
+    documents: deps.documents,
+    sessions,
+    verifyAccessToken: deps.verifyAccessToken,
+    ...(deps.auditWrite ? { auditWrite: deps.auditWrite } : {}),
+    now,
+  }));
+
   return app;
 
   function audit(operation: 'status_read' | 'stop' | 'add_instruction', agentId: string, subject: string, text?: string): void {
@@ -312,6 +458,17 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       ...(text === undefined ? {} : { instruction_text: text }),
     }, deps.auditWrite);
   }
+}
+
+/** No detail: the browser is told the attempt failed, and the reason stays in the logs. */
+const CONSENT_FAILURE_PAGE = '<!doctype html><meta charset="utf-8"><title>Agent XAA</title>'
+  + '<p>同意の結果を受け取れませんでした。管理画面からやり直してください。</p>';
+
+function consentFailurePage(status: 400 | 502): Response {
+  return new Response(CONSENT_FAILURE_PAGE, {
+    status,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
 }
 
 export default createApp;

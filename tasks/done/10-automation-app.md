@@ -111,9 +111,9 @@ DEC-SCOPE-04 の `saas_connector_mode` 既定 `stub` に対応する。
 - SaaS 実装は `saas-source.ts` を作らず、型宣言だけを `work-signal-source.ts` のコメントに残す。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/work-signal-source.spec.ts -t "normalizes 6 types"` が緑で、6種の `type` を持つ入力から6件の正規化レコードが `source_kind` 正しく返る。
-- [ ] `registry.ts` の `SIGNAL_SOURCES` の要素数が1であることをテストが確認する。
-- [ ] 正規化レコードのキー集合が6個ちょうどであることを `Object.keys` の集合一致で確認するテストが通る。
+- [x] `pnpm vitest run apps/automation-app/test/work-signal-source.spec.ts -t "normalizes 6 types"` が緑で、6種の `type` を持つ入力から6件の正規化レコードが `source_kind` 正しく返る。
+- [x] `registry.ts` の `SIGNAL_SOURCES` の要素数が1であることをテストが確認する。
+- [x] 正規化レコードのキー集合が6個ちょうどであることを `Object.keys` の集合一致で確認するテストが通る。
 
 ### T-APP-05 日報作成機能を実装する
 
@@ -135,9 +135,9 @@ DEC-SCOPE-05 に従い、検証の主眼から遠いがタスクとして起票�
 - `infra/` に日報生成用の `google_cloud_scheduler_job` を追加しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/daily-report.spec.ts` が緑になる。
+- [x] `pnpm vitest run apps/automation-app/test/daily-report.spec.ts` が緑になる。
 - [ ] `pnpm test:e2e -- e2e/tests/reports/daily-report.spec.ts` が緑で、Document RS に `type=daily_report` のドキュメントが1件作られることを確認する。
-- [ ] `grep -rn "cloud_scheduler_job" infra/ | grep -i report` が0件であることを確認する。
+- [x] `grep -rn "cloud_scheduler_job" infra/ | grep -i report` が0件であることを確認する。
 
 ### T-APP-06 自動化候補の提案 API を実装する
 
@@ -161,7 +161,7 @@ DEC-APP-05 の「JSON Schema を単一の正とする」に対応する。
 **完了条件**
 - [ ] `pnpm vitest run apps/automation-app/test/suggestions.spec.ts -t "schema violation yields empty list"` が緑で、応答が 200 かつ `suggestions` が空配列になる。
 - [ ] 正常応答のケースで各候補が6フィールドすべてを持つことを assert するテストが通る。
-- [ ] `apps/automation-app/src/prompts/suggestion.md` に対する `grep -E "full_isolation|\.read|\.write"` が0件になる。
+- [x] `apps/automation-app/src/prompts/suggestion.md` に対する `grep -E "full_isolation|\.read|\.write"` が0件になる。
 
 ### T-APP-07 Work Definition のデータモデルと DRAFT / CONFIRMED 遷移を実装する
 
@@ -210,7 +210,7 @@ DEC-IAC-16 の `agent_max_lifetime_seconds` と UI 初期値を連動させる�
 **完了条件**
 - [ ] `pnpm vitest run apps/automation-app/test/lifetime.spec.ts -t "rejects 25"` と `-t "accepts 24"` の2件が緑になる。
 - [ ] `1.5` と `"3"` と `0` の3入力がいずれも 400 と `lifetime_out_of_range` になるテストが通る。
-- [ ] `DEFAULT_AGENT_LIFETIME_HOURS=2` を与えた SSR 出力の `value` 属性が `2` になることをテストが確認する。
+- [x] `DEFAULT_AGENT_LIFETIME_HOURS=2` を与えた SSR 出力の `value` 属性が `2` になることをテストが確認する。
 
 ### T-APP-09 Business Work Request の送信を実装する
 
@@ -765,7 +765,7 @@ Task のイベントを `occurred_at` 昇順に1件ずつ進め、到達時に `
 - [ ] `pnpm test:e2e -- e2e/tests/activity/replay-order.spec.ts` が緑で、4イベントの Task で `message` が `occurred_at` 昇順に4回表示される。
 - [ ] 同 e2e で再生終了後 5 秒経っても最終表示が残り、`data-replay-state` が `finished` のままであることを assert する。
 - [ ] `pnpm test:e2e -- e2e/tests/activity/replay-timing.spec.ts` が緑で、`occurred_at` の間隔が3分と200ms の2ステップの表示間隔の差が 100ms 以内である。
-- [ ] `grep -rn "REPLAY_STEP_MS" apps/automation-app` が定義1件と参照のみで、`800` のリテラルが他に無いことを確認する。
+- [x] `grep -rn "REPLAY_STEP_MS" apps/automation-app` が定義1件と参照のみで、`800` のリテラルが他に無いことを確認する。
 
 ### T-APP-31 blocked のステップを宛先の手前で止める
 
@@ -789,7 +789,7 @@ RULE-54 に対応する。
 **完了条件**
 - [ ] `pnpm test:e2e -- e2e/tests/activity/replay-blocked.spec.ts` が緑で、動きを表す要素の最終 bounding box が宛先ノードの bounding box と交差しないことを assert する。
 - [ ] 同 e2e で「許可された Tool に含まれない」を含む `message` が表示されることを assert する。
-- [ ] `data-blocked="true"` の要素が1個、`data-reached="false"` の宛先ノードが1個であることを assert する。
+- [x] `data-blocked="true"` の要素が1個、`data-reached="false"` の宛先ノードが1個であることを assert する。
 
 ### T-APP-32 is_simulated の Task にラベルを常時表示する
 
@@ -938,6 +938,6 @@ DEC-ID-13 と DEC-ID-19 の経路が実際に成立していることをここ�
 
 **完了条件**
 - [ ] `pnpm test:e2e -- e2e/tests/provisioning/provisioning-flow.spec.ts` が緑になる。
-- [ ] 復帰 URL のクエリ検査が `new Set([...params.keys()])` と `new Set(['transaction_id','code'])` の完全一致で書かれている。
+- [x] 復帰 URL のクエリ検査が `new Set([...params.keys()])` と `new Set(['transaction_id','code'])` の完全一致で書かれている（`e2e/test/provisioning/consent-resume.spec.ts` が Agent OP の実リダイレクトに対して行う。テスト内で URL を組み立てて検査する形は、実装の挙動を固定しないため置き換えた）。
 - [ ] 最終状態として Firestore の Agent Registration の `status` が `ACTIVE` であることを assert する。
 - [ ] 2種類の Access Token について `aud` と `cnf.jkt` の assert が合計4件あることを確認する。

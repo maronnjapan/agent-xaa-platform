@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import {
+  completionCodeId, PROVISIONING_CODES_COLLECTION, type CompletionCodeRecord,
+} from '@xaa/contracts';
 import { createFixture, fakeEnvelope, type Fixture } from './helpers.js';
 
 const TOKEN_BEARING = /(access_token|refresh_token|id_token|[?&#]token=)/;
@@ -38,12 +41,18 @@ describe('GET /xaa/callback', () => {
     expect(JSON.stringify(stored)).not.toContain('id-1');
   });
 
-  it('moves the transaction to RESUMABLE', async () => {
+  /**
+   * The transaction's status belongs to the Provisioner (00b §3): its resume route is
+   * what takes WAITING_IDP_CONSENT to RESUMABLE. Moving it here first made that
+   * transition illegal, and every resume answered 500.
+   */
+  it('leaves the transaction status for the Provisioner to move', async () => {
     const fixture = await createFixture({ config: { mode: 'callback' } });
     await seedState(fixture);
     fixture.humanIdpResponses.push(Response.json({ refresh_token: 'rt-1' }));
     await callback(fixture);
-    expect((await fixture.documents.get<{ status: string }>('provisioning_transactions', 'txn-1'))!.status).toBe('RESUMABLE');
+    expect((await fixture.documents.get<{ status: string }>('provisioning_transactions', 'txn-1'))!.status)
+      .toBe('WAITING_IDP_CONSENT');
   });
 
   it('rejects a reused state', async () => {
@@ -86,15 +95,27 @@ describe('GET /xaa/callback', () => {
     expect(await surfaceOf(response)).not.toMatch(TOKEN_BEARING);
   });
 
-  it('issues a one-time code that is stored unused with a TTL', async () => {
+  /**
+   * Where the code is written matters as much as that it is written: the Provisioner
+   * redeems it out of `provisioning_codes` keyed by the code's hash, and a code stored
+   * anywhere else is a consent that can never be resumed.
+   */
+  it('issues a one-time code where the Provisioner redeems it, hashed and unused', async () => {
     const fixture = await createFixture({ config: { mode: 'callback' } });
     await seedState(fixture);
     fixture.humanIdpResponses.push(Response.json({ refresh_token: 'rt-1' }));
     const location = (await callback(fixture)).headers.get('location')!;
     const code = new URL(location).searchParams.get('code')!;
-    const record = await fixture.documents.get<{ transaction_id: string; used: boolean }>('bridge_consent_codes', code);
+
+    const record = await fixture.documents.get<CompletionCodeRecord>(
+      PROVISIONING_CODES_COLLECTION, await completionCodeId(code),
+    );
     expect(record).toBeDefined();
     expect(record!.transaction_id).toBe('txn-1');
-    expect(record!.used).toBe(false);
+    expect(record!.human_subject).toBe('user-1');
+    expect(record!.issuer_kind).toBe('idp');
+    expect(record!.used_at).toBeNull();
+    // The plaintext code is never a document id and never a stored value.
+    expect(JSON.stringify(record)).not.toContain(code);
   });
 });

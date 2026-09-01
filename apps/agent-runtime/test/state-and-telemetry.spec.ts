@@ -197,12 +197,18 @@ describe('activity events', () => {
 
   it('publish failure does not fail the tool call', async () => {
     process.env.PUBSUB_MODE = 'gcp';
+    resetActivityPublisherForTesting({
+      topic: () => ({ async publishMessage() { throw new Error('publish failed'); } }),
+    });
     const lines: string[] = [];
     const logger = createLogger('agent-runtime', 'agent_runtime', (line) => lines.push(line));
-    await expect(publishToolSucceeded({
-      context: activityContext, toolId: 'internal.document.list', logger, ctx: logContext,
-    })).resolves.toBeUndefined();
-    delete process.env.PUBSUB_MODE;
+    try {
+      await expect(publishToolSucceeded({
+        context: activityContext, toolId: 'internal.document.list', logger, ctx: logContext,
+      })).resolves.toBeUndefined();
+    } finally {
+      delete process.env.PUBSUB_MODE;
+    }
     expect(lines.some((line) => line.includes('activity_publish_failed'))).toBe(true);
   });
 

@@ -3,11 +3,12 @@ set -uo pipefail
 
 command -v gcloud >/dev/null && command -v jq >/dev/null || { echo 'invoker-matrix: gcloud and jq are required' >&2; exit 2; }
 demo_dir=${DEMO_TF_DIR:-infra/envs/demo}
-project_id=${PROJECT_ID:-$(terraform -chdir="$demo_dir" output -raw project_id 2>/dev/null)}
-region=${REGION:-$(terraform -chdir="$demo_dir" output -raw region 2>/dev/null)}
+read -r -a tf_command <<<"${TF:-terraform}"
+project_id=${PROJECT_ID:-$("${tf_command[@]}" -chdir="$demo_dir" output -raw project_id 2>/dev/null)}
+region=${REGION:-$("${tf_command[@]}" -chdir="$demo_dir" output -raw region 2>/dev/null)}
 [[ -n "$project_id" && -n "$region" ]] || { echo 'invoker-matrix: PROJECT_ID and REGION are required' >&2; exit 2; }
-edges=$(terraform -chdir="$demo_dir" output -json invoker_edges 2>/dev/null) || { echo 'invoker-matrix: invoker_edges output unavailable' >&2; exit 2; }
-public=$(terraform -chdir="$demo_dir" output -json public_services 2>/dev/null) || { echo 'invoker-matrix: public_services output unavailable' >&2; exit 2; }
+edges=$("${tf_command[@]}" -chdir="$demo_dir" output -json invoker_edges 2>/dev/null) || { echo 'invoker-matrix: invoker_edges output unavailable' >&2; exit 2; }
+public=$("${tf_command[@]}" -chdir="$demo_dir" output -json public_services 2>/dev/null) || { echo 'invoker-matrix: public_services output unavailable' >&2; exit 2; }
 
 temp_dir=$(mktemp -d)
 trap 'rm -rf -- "$temp_dir"' EXIT

@@ -1,7 +1,10 @@
-import { normalizeEntries } from '../normalize/index.js';
-import { detectRuleHits } from '../rules/index.js';
+import { TOOL_BINDINGS } from '@xaa/contracts';
+import { normalizeEntries, type NormalizedEvent } from '../normalize/index.js';
+import { detectRuleHits, type AgentRegistrationView } from '../rules/index.js';
+import { detectDeviations, type Deviation } from '../baseline/deviation.js';
 import { correlate } from '../correlate/index.js';
 import type { AgentBaseline } from '../baseline/types.js';
+import type { SecurityFinding } from '../correlate/finding.js';
 import { dispatch, score, type DispatchCounters, type DispatchDeps } from './dispatch.js';
 import type {
   CorrelatedBatch, NormalizedBatch, ProtocolViolationRecord, RawLogBatch,
@@ -31,10 +34,17 @@ export function runPipeline(entries: readonly unknown[], deps: PipelineDeps): Sc
 
 export const PIPELINE_STAGES = ['collect', 'normalize', 'validateProtocol', 'detectRules', 'correlate', 'score'] as const;
 
+/** Which capability each tool needs, from the one table the Provisioner also built from. */
+const TOOL_CAPABILITIES: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(TOOL_BINDINGS).map(([toolId, binding]) => [toolId, binding.capability]),
+);
+
 /** The production wiring of the six stages. */
 export function createPipelineDeps(input: {
   baselines: ReadonlyMap<string, AgentBaseline>;
   counters: DispatchCounters;
+  registrations?: ReadonlyMap<string, AgentRegistrationView>;
+  maxLifetimeSeconds?: number | null;
   financeResourceUrl?: string;
   now?: () => number;
 }): PipelineDeps {
@@ -69,16 +79,59 @@ export function createPipelineDeps(input: {
       __stage: 'rule_hits',
       events: batch.events,
       violations: batch.violations,
-      hits: detectRuleHits({ events: batch.events, violations: batch.violations, baselines: input.baselines }).hits,
+      hits: detectRuleHits({
+        events: batch.events, violations: batch.violations, baselines: input.baselines,
+        registrations: input.registrations ?? new Map(),
+        maxLifetimeSeconds: input.maxLifetimeSeconds ?? null,
+      }).hits,
+      // Run beside the rules, never from inside them. The rules answer "did anything
+      // cross a line"; this answers "what did the agent do that is not what it was built
+      // for", and the second question still has an answer when the first does not.
+      deviations: deviationsByAgent(batch.events, input.baselines),
     }),
     correlate: (batch) => ({
       __stage: 'correlated',
-      findings: correlate({ hits: batch.hits, violations: batch.violations, ...(input.now ? { now: input.now } : {}) }),
+      findings: correlate({
+        hits: batch.hits, violations: batch.violations, deviations: batch.deviations,
+        ...(input.now ? { now: input.now } : {}),
+      }),
+      events: batch.events,
     }),
     score: (batch) => score(batch, {
       ...(input.financeResourceUrl ? { financeResourceUrl: input.financeResourceUrl } : {}),
+      // Without this the resource-sensitivity factor is unreachable: `computeScore` only
+      // adds it when it is told which resources the finding's events touched, and nothing
+      // else in the pipeline knows.
+      resourcesFor: (finding) => resourcesOf(finding, batch.events),
     }, input.counters),
   };
+}
+
+function deviationsByAgent(
+  events: readonly NormalizedEvent[],
+  baselines: ReadonlyMap<string, AgentBaseline>,
+): Map<string, Deviation[]> {
+  const byAgent = new Map<string, NormalizedEvent[]>();
+  for (const event of events) {
+    const agentId = event.actor.agent_id;
+    if (!agentId) continue;
+    byAgent.set(agentId, [...(byAgent.get(agentId) ?? []), event]);
+  }
+  const deviations = new Map<string, Deviation[]>();
+  for (const [agentId, agentEvents] of byAgent) {
+    const baseline = baselines.get(agentId);
+    if (!baseline) continue;
+    deviations.set(agentId, detectDeviations({ baseline, events: agentEvents, toolCapabilities: TOOL_CAPABILITIES }));
+  }
+  return deviations;
+}
+
+/** The resources named by the events this finding was actually built from. */
+export function resourcesOf(finding: SecurityFinding, events: readonly NormalizedEvent[]): string[] {
+  const related = new Set(finding.related_events);
+  return [...new Set(events
+    .filter((event) => related.has(event.metadata.correlation_uid) && event.api.resource !== '')
+    .map((event) => event.api.resource))];
 }
 
 export { dispatch, score };

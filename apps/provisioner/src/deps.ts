@@ -1,3 +1,4 @@
+import type { ActivityEvent } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 import type { Logger } from '@xaa/logging';
 import type { JobRunner } from './job/execute.js';
@@ -17,6 +18,8 @@ export interface ProvisionerConfig {
   maxFullIsolationAgents: number;
   activityTopic: string;
   dpopIatSkewSeconds: number;
+  /** Service-account emails allowed on `/internal/*`; empty refuses every caller. */
+  internalCallers: string[];
 }
 
 export interface IdpConnectionResult {
@@ -31,11 +34,22 @@ export interface ProvisionerDeps {
   jobs: JobRunner;
   clock: { now(): number };
   logger?: Logger;
-  publishActivity?: (event: Record<string, unknown>) => Promise<void>;
+  /** Test seam for the Activity topic; production publishes through @xaa/contracts. */
+  publishActivity?: (event: ActivityEvent) => Promise<void>;
+  /** Verifies a Google-issued OIDC ID Token; injected so tests need no Google JWKS. */
+  verifyInternalCaller?: (token: string, audience: string) => Promise<string | null>;
   /** Agent OP owns the refresh token; the Provisioner only asks for a connection. */
   agentOp: {
-    createIdpConnection(input: { agentId: string; humanSubject: string; idpConnectionId: string; expiresAt: string }): Promise<IdpConnectionResult>;
+    createIdpConnection(input: {
+      agentId: string;
+      humanSubject: string;
+      idpConnectionId: string;
+      expiresAt: string;
+      transactionId: string;
+    }): Promise<IdpConnectionResult>;
     verifyIdpConnection(idpConnectionId: string): Promise<{ status: string }>;
+    /** Compensation for `idp_consent`: the connection outlives the failed run otherwise. */
+    revokeIdpConnection?(idpConnectionId: string): Promise<void>;
   };
   /** Only reached from the full_isolation branch (T-PROV-27). */
   createDedicated: (input: {

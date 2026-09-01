@@ -36,6 +36,56 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 
 ## 運用手順
 
+### プロジェクト作成から一括実行する
+
+`scripts/deploy-gcp-guide.sh` は、GCP 認証、プロジェクト作成、請求先の関連付け、Terraform、Secret Manager、イメージ配布、SSO 鍵の初期化、seed、IAM 検証を順に実行する。
+
+通常の Google アカウントまたは Google Workspace の SSO を使う場合は、次のように実行する。
+
+```bash
+PROJECT_ID=<globally-unique-project-id> \
+BILLING_ACCOUNT_ID=<XXXXXX-XXXXXX-XXXXXX> \
+GCP_AUTH_MODE=browser \
+scripts/deploy-gcp-guide.sh all
+```
+
+Workforce Identity Federation を使う場合は、管理者から受け取った login config を指定する。
+
+```bash
+PROJECT_ID=<globally-unique-project-id> \
+BILLING_ACCOUNT_ID=<XXXXXX-XXXXXX-XXXXXX> \
+GCP_AUTH_MODE=workforce \
+WORKFORCE_LOGIN_CONFIG=/secure/path/login-config.json \
+scripts/deploy-gcp-guide.sh all
+```
+
+Terraform は Application Default Credentials を使う。
+
+このスクリプトはサービスアカウント鍵 JSON を作らない。
+
+Human IdP の二つの client secret はローカルで生成し、平文を表示せずに Secret Manager へ渡す。
+
+SSO 署名鍵は Human IdP が初回アクセス時に生成し、KMS で包んだ状態で GCS に保存するため、スクリプトは秘密鍵を取得しない。
+
+IAM 到達性検証では、実行者に不足している `roles/iam.serviceAccountTokenCreator` を対象 Service Account にだけ一時付与し、検証後に削除する。
+
+外部 Google OAuth を有効にする場合は、Google Auth Platform で Web application の OAuth client を作り、secret をファイルから渡す。
+
+```bash
+ENABLE_GOOGLE_BRIDGE=true \
+SAAS_CONNECTOR_MODE=google \
+GOOGLE_OAUTH_CLIENT_SECRET_FILE=/secure/path/client-secret.txt \
+scripts/deploy-gcp-guide.sh all
+```
+
+実行内容だけを確認する場合は `--dry-run` を付ける。
+
+`tasks/done` の監査が失敗している間、スクリプトは GCP を変更する前に停止する。
+
+監査結果を確認したうえで検証用デプロイを続ける場合に限り、`--allow-unverified` を付ける。
+
+### 個別の Make ターゲットを使う
+
 `make bootstrap PROJECT_ID=<id>` は state バケットを作る初回専用操作であり、通常は数分で終わる。
 `make shared-apply PROJECT_ID=<id>` は共有 API と永続リソースを作り、初回の API 有効化を含む場合は十数分かかることがある。
 `make images PROJECT_ID=<id> REGISTRY=<region>-docker.pkg.dev/<id>/xaa` は全アプリをビルドして、Git commit 由来のタグで push する。

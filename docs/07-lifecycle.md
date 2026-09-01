@@ -206,6 +206,10 @@ Agent OPとRuntimeは、Template-based、Immutableに近い、Automated Provisio
 11. 必要な監査情報のみSecurity Planeへ保持
 ```
 
+step8 と step9 が消す資源の完全修飾名は、Provisionerが作成時に書いた台帳 `dedicated_resources/{agent_id}` から取る。
+名前を組み立て直さないのは、作った側と消す側が別々に名前を導くと、片方だけ変わったときに消し残しが出るためである。
+削除は作成の逆順に行い、消した資源には台帳へ `deleted_at` を書く。
+
 Agent OPの停止だけでは不十分である。
 既にAccess Tokenが払い出されている可能性があるため、Bridge側のBindingも停止する。
 3のRevokeはAgentごとの付与に対して行うため、同じユーザーの他のAgentと本人のSSOセッションは残る（[05. §4.1](./05-identity.md#41-human-idp-connection)）。

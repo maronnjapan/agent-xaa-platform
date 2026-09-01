@@ -1,0 +1,122 @@
+/*
+ * The moving part of a replay.
+ *
+ * A step is a circle travelling along the path between two boxes. The duration is a
+ * custom property the script sets from REPLAY_STEP_MS, so the picture is paced by the
+ * same constant the sequencing uses and the two cannot drift apart; nothing here knows
+ * how long the step really took, because a replay shows the order of what happened,
+ * not its duration (REQ-11-025).
+ *
+ * `animation-fill-mode: forwards` with a single iteration is what leaves the result
+ * standing at the end. A replay that looped would make a viewer doubt whether what they
+ * saw happened once.
+ */
+
+.replay {
+  position: relative;
+  margin: 1rem 0;
+}
+
+.replay-canvas {
+  width: 100%;
+  height: auto;
+}
+
+.replay-node rect {
+  fill: #ffffff;
+  stroke: #5a6b7a;
+  stroke-width: 1.5;
+}
+
+.replay-node text {
+  font-size: 13px;
+  fill: #24313b;
+}
+
+/* Hidden boxes keep their place in the DOM so the layout is identical across tasks. */
+.replay-node[hidden] {
+  display: none;
+}
+
+.replay-node[data-reached="true"] rect {
+  stroke: #1d5c33;
+  stroke-width: 2.5;
+}
+
+.replay-node[data-reached="false"] rect {
+  stroke-dasharray: 4 3;
+}
+
+.replay-arrow {
+  fill: none;
+  stroke: #97a6b2;
+  stroke-width: 2;
+}
+
+.replay-dot {
+  fill: #2f6fb5;
+  offset-distance: 0%;
+  offset-rotate: 0deg;
+  animation-name: replay-travel;
+  animation-duration: var(--step-ms, 1s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+@keyframes replay-travel {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+}
+
+/*
+ * A refusal is an arrow that never arrives. The stop is the same fraction of every
+ * path — the ratio is defined once, in `replay-config.ts`, and handed to the element —
+ * so "it stopped short" reads the same way whichever two boxes were involved.
+ */
+.replay-dot.is-blocked {
+  animation-name: replay-travel-blocked;
+}
+
+@keyframes replay-travel-blocked {
+  from { offset-distance: 0%; }
+  to { offset-distance: calc(100% * var(--stop-ratio, 1)); }
+}
+
+.replay-dot[data-emphasis="ev-blocked-tool"] {
+  fill: #d8a94f;
+}
+
+.replay-dot[data-emphasis="ev-blocked-security"] {
+  fill: #a32020;
+}
+
+.replay-stop {
+  fill: none;
+  stroke-width: 2;
+}
+
+.replay-stop[data-emphasis="ev-blocked-tool"] {
+  stroke: #d8a94f;
+}
+
+.replay-stop[data-emphasis="ev-blocked-security"] {
+  stroke: #a32020;
+}
+
+.replay-banner {
+  font-size: 14px;
+  fill: #6d1111;
+}
+
+.replay-messages {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+}
+
+.simulated-canvas {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+}

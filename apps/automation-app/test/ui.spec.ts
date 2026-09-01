@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds } from '../src/ui/replay/nodes.js';
+import {
+  NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds,
+} from '../src/ui/replay/nodes.js';
 import { EMPHASIS_CLASSES, EMPHASIS_LABELS, emphasisClass } from '../src/ui/replay/emphasis.js';
 import { buildReplayPlan, isFinished } from '../../automation-app/client/src/replay-plan.js';
+import { playReplay } from '../../automation-app/client/src/replay.js';
 import { REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../../automation-app/client/src/replay-config.js';
 import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
@@ -14,6 +17,7 @@ import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { BLOCKED_GUIDANCE_TEXT } from '../src/ui/components/blocked-guidance.js';
 import { TIMELINE_NOTE } from '../src/ui/components/timeline-link.js';
 import { SIMULATED_LABEL } from '../src/ui/components/simulated-badge.js';
+import { FakeDocument, FakeElement, element } from './fake-dom.js';
 
 const repoRoot = new URL('../../../', import.meta.url).pathname;
 const render = async (element: unknown): Promise<string> => String(await element);
@@ -273,5 +277,97 @@ describe('the frontend bundle', () => {
     ]) {
       expect(() => execFileSync('bash', [`scripts/checks/${script}`], { cwd: repoRoot })).not.toThrow();
     }
+  });
+});
+
+describe('the replay as it is drawn', () => {
+  const document_ = new FakeDocument();
+
+  function canvas(): FakeElement {
+    const root = element(document_, 'div', { class: 'replay', 'data-replay-state': 'idle' });
+    const svg = element(document_, 'svg');
+    for (const node of REPLAY_NODES) {
+      svg.appendChild(element(document_, 'g', {
+        'data-node': node.id, 'data-reached': 'false',
+        'data-x': String(node.x), 'data-y': String(node.y),
+      }));
+    }
+    svg.appendChild(element(document_, 'g', { 'data-arrows': 'true' }));
+    svg.appendChild(element(document_, 'text', { 'data-banner': 'true' }));
+    root.appendChild(svg);
+    root.appendChild(element(document_, 'ol', { 'data-messages': 'true' }));
+    return root;
+  }
+
+  function play(root: FakeElement, events: unknown[]): void {
+    vi.useFakeTimers();
+    try {
+      playReplay(root as unknown as HTMLElement, events as never);
+      vi.advanceTimersByTime(REPLAY_STEP_MS * (events.length + 1));
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  const step = (overrides: Record<string, unknown> = {}) => ({
+    event_id: 'a', occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime',
+    phase: 'tool_call', outcome: 'success', message: '読みました',
+    detail: { target: 'resource-api' }, ...overrides,
+  });
+
+  it('gives each step a path and an animation paced by the step length', () => {
+    const root = canvas();
+    play(root, [step()]);
+    const dot = root.querySelectorAll('[data-emphasis]')[0]!;
+    expect(dot.getAttribute('class')).toBe('replay-dot');
+    expect(dot.style.getPropertyValue('offset-path')).toMatch(/^path\('M 260 220 L /);
+    expect(dot.style.getPropertyValue('--step-ms')).toBe(`${REPLAY_STEP_MS}ms`);
+    expect(root.querySelectorAll('[data-arrows]')[0]!.children.some((child) => child.tagName === 'path')).toBe(true);
+    expect(root.getAttribute('data-replay-state')).toBe('finished');
+  });
+
+  it('stops a blocked step short of the box and marks that one box unreached', () => {
+    const root = canvas();
+    play(root, [step({ outcome: 'blocked', message: '許可された Tool に含まれない' })]);
+    const dot = root.querySelectorAll('[data-blocked="true"]')[0]!;
+    expect(dot.getAttribute('class')).toBe('replay-dot is-blocked');
+    expect(dot.style.getPropertyValue('--stop-ratio')).toBe(String(BLOCKED_STOP_RATIO));
+    expect(root.querySelectorAll('[data-blocked="true"]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-stop="true"]')).toHaveLength(1);
+
+    // Exactly one destination is refused, and every box the task never touched carries
+    // no verdict at all — otherwise "the one that was not reached" means nothing.
+    const unreached = root.querySelectorAll('[data-reached="false"]');
+    expect(unreached).toHaveLength(1);
+    expect(unreached[0]!.getAttribute('data-node')).toBe('resource-api');
+
+    // The stop mark, and the dot that ends on it, must not overlap the destination box.
+    const stopped = root.querySelectorAll('[data-stop="true"]')[0]!;
+    const [x, y] = /translate\(([-\d.]+),([-\d.]+)\)/.exec(stopped.getAttribute('transform') ?? '')!.slice(1).map(Number) as [number, number];
+    const destination = REPLAY_NODES.find((node) => node.id === 'resource-api')!;
+    const clear = Math.abs(x - destination.x) > NODE_HALF_WIDTH || Math.abs(y - destination.y) > NODE_HALF_HEIGHT;
+    expect(clear).toBe(true);
+  });
+
+  it('draws a blocked security event more strongly than a blocked tool call', () => {
+    const security = canvas();
+    play(security, [step({ phase: 'security', outcome: 'blocked' })]);
+    const tool = canvas();
+    play(tool, [step({ phase: 'tool_call', outcome: 'blocked' })]);
+    expect(security.querySelectorAll('[data-blocked="true"]')[0]!.getAttribute('data-emphasis'))
+      .toBe(emphasisClass('blocked', 'security'));
+    expect(tool.querySelectorAll('[data-blocked="true"]')[0]!.getAttribute('data-emphasis'))
+      .toBe(emphasisClass('blocked', 'tool_call'));
+  });
+
+  it('keeps every message and adds one per step', () => {
+    const root = canvas();
+    play(root, [
+      step({ event_id: 'a', message: '一番目' }),
+      step({ event_id: 'b', occurred_at: '2026-01-01T00:03:00.000Z', message: '二番目', detail: { target: 'resource-as' } }),
+    ]);
+    const messages = root.querySelectorAll('[data-messages]')[0]!;
+    expect(messages.children.map((line) => line.textContent)).toEqual(['一番目', '二番目']);
+    expect(messages.children.map((line) => line.getAttribute('data-step-index'))).toEqual(['0', '1']);
   });
 });

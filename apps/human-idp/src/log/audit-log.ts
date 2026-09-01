@@ -1,4 +1,5 @@
 import { AUTH_RESULTS, DPOP_STATUS, type AuthResult, type DpopStatusValue } from '@xaa/contracts';
+import { createLogger } from '@xaa/logging';
 
 export interface HumanIdpAuditEvent {
   client_id: string | null;
@@ -31,16 +32,18 @@ export function emitHumanIdpAudit(
   context: HumanIdpAuditContext,
   write: (line: string) => void = (line) => process.stdout.write(line),
 ): void {
-  const entry = {
-    human_subject: context.human_subject,
-    agent_id: null,
+  if (TOKEN_SHAPE.test(JSON.stringify(event))) throw new Error('audit log entry contains a raw token');
+  // The shared envelope, because the Log Sink keeps a line only when it carries a
+  // `log_source` and Security Detection picks its converter by the same field. Written
+  // bare, these records were dropped before either saw them (T-SEC-05).
+  createLogger('human-idp', 'human_idp', write).info('idp_authenticate', {
+    request_id: '',
     trace_id: context.trace_id,
-    timestamp: new Date().toISOString(),
-    ...event,
-  };
-  const line = JSON.stringify(entry);
-  if (TOKEN_SHAPE.test(line)) throw new Error('audit log entry contains a raw token');
-  write(`${line}\n`);
+    // Human IdP does not know about agents, and the key is present rather than omitted
+    // so the shared correlation schema still validates.
+    agent_id: null,
+    human_subject: context.human_subject,
+  }, { ...event });
 }
 
 /** Extracts the trace id from Cloud Run's header, generating one when absent. */

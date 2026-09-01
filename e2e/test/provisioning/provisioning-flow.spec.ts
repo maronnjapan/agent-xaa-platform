@@ -151,12 +151,10 @@ describe('from login to a running agent', () => {
     // Nothing runs while consent is outstanding.
     expect(provisioner.jobRuns).toHaveLength(0);
 
-    // The Agent OP returns the person with these two parameters and no others: an
-    // exact set comparison, so an extra parameter is a failure rather than ignored.
-    const returnUrl = new URL('https://automation-app.test/provisioning/resume');
-    returnUrl.searchParams.set('transaction_id', body.transaction_id);
-    returnUrl.searchParams.set('code', 'one-time-code');
-    expect(new Set([...returnUrl.searchParams.keys()])).toEqual(new Set(['transaction_id', 'code']));
+    // Where the person is sent back to, and with what, is asserted against the Agent
+    // OP's own redirect in `consent-resume.spec.ts`. Building the URL here and then
+    // checking its parameters would only test this test.
+    expect(body.transaction_id).toMatch(/^txn_/);
   });
 });
 
@@ -170,6 +168,6 @@ describe('the screen and the agent agree on whose it is', () => {
     });
     const response = await automation.fetch(`/api/agents/${agentId}/stop`, { method: 'POST' });
     expect(response.status).toBe(200);
-    expect(automation.upstream.at(-1)!.url).toBe(`https://lifecycle.test/api/agents/${agentId}/revoke`);
+    expect(automation.upstream.at(-1)!.url).toBe(`https://lifecycle.test/agents/${agentId}/revoke`);
   });
 });

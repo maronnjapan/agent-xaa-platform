@@ -1,0 +1,81 @@
+/*
+ * Four kinds of row, told apart without relying on colour.
+ *
+ * The badge text already names each kind, so what these rules add is weight: a blocked
+ * security event carries a thicker border and a stronger ground than a blocked tool
+ * call, because one is a detection firing and the other is an agent asking for
+ * something it was never granted (RULE-54). Drawing them alike would teach people to
+ * skim past both.
+ *
+ * The classes come from `emphasisClass`; no rule here branches on an event type, and
+ * there is deliberately no selector that recreates the decision in CSS.
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.ev-info {
+  border-color: #b6c2cf;
+  background: #eef2f6;
+  color: #2b3a46;
+}
+
+.ev-success {
+  border-color: #8fc7a1;
+  background: #e8f5ec;
+  color: #1d5c33;
+}
+
+.ev-blocked-tool {
+  border-color: #d8a94f;
+  background: #fdf3e1;
+  color: #6b4a06;
+}
+
+/* Thicker and darker than every other kind: the one row nobody may skim past. */
+.ev-blocked-security {
+  border-width: 3px;
+  border-color: #a32020;
+  background: #f8dcda;
+  color: #6d1111;
+  font-weight: 700;
+}
+
+.warning-icon {
+  flex: none;
+}
+
+/*
+ * A simulated row is striped as well as labelled (RULE-58). The label alone travels
+ * badly — it can be scrolled past, or cropped in a screenshot — and the whole risk is
+ * someone believing a demonstration happened, so the ground under the row changes too.
+ */
+.simulated-badge {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid #7a5aa8;
+  border-radius: 0.25rem;
+  background: #f2ecfa;
+  color: #46296e;
+  font-size: 0.8rem;
+}
+
+.task-button:has(.simulated-badge),
+.replay:has(.simulated-canvas) {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(122, 90, 168, 0.14) 0,
+    rgba(122, 90, 168, 0.14) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}

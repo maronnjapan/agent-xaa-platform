@@ -1,0 +1,9 @@
+{
+  "severity": "INFO", "app": "shared-agent-op", "log_source": "agent_op_idp_connection", "event": "idp_connection",
+  "request_id": "req-conn-1", "trace_id": "b0f2a1c4-0000-4000-8000-000000000006",
+  "agent_id": "agent-abcdefghijklmnopqrstuvwxyz", "human_subject": "testuser", "timestamp": "2026-01-01T12:00:05.000Z",
+  "fields": {
+    "idp_connection_id": "idpconn-1", "refresh_rotation_result": "rotated",
+    "refresh_reuse_detected": false, "subject_token_refetch_result": "ok", "revoke_result": null
+  }
+}

@@ -5,12 +5,20 @@ import { assertValidCapabilityId, CAPABILITIES, compile, TOOL_IDS } from '@xaa/c
 const assertConnectorSchema: (value: unknown) => asserts value is ConnectorSeed = compile(connectorSchema);
 const assertToolSchema: (value: unknown) => asserts value is ToolSeed = compile(toolSchema);
 
+/**
+ * The row as it is stored, not a shape of its own.
+ *
+ * 00b §3 fixes `catalog_connectors` on flat fields, and the Provisioner reads it through
+ * `CatalogConnector`. Validating a nested shape here would mean the seed accepted a
+ * document the one reader of that collection cannot use.
+ */
 export interface ConnectorSeed {
   connector_id: string;
   resource_type: 'native_xaa' | 'oauth_bridge';
   tools: string[];
-  authorization?: { audience: string; resource: string };
-  bridge?: { audience: string };
+  authorization_audience?: string;
+  authorization_resource?: string;
+  bridge_audience?: string;
   [key: string]: unknown;
 }
 
@@ -32,8 +40,8 @@ export function validateSeed(connectors: ConnectorSeed[], tools: ToolSeed[]): vo
   for (const connector of connectors) {
     try { assertConnectorSchema(connector); } catch { errors.push(`${connector.connector_id ?? '<unknown>'} / connector schema`); }
     if (!['native_xaa', 'oauth_bridge'].includes(connector.resource_type)) errors.push(`${connector.connector_id} / resource_type`);
-    if (connector.resource_type === 'native_xaa' && (!connector.authorization?.audience || !connector.authorization.resource)) errors.push(`${connector.connector_id} / authorization.resource`);
-    if (connector.resource_type === 'oauth_bridge' && !connector.bridge?.audience) errors.push(`${connector.connector_id} / bridge.audience`);
+    if (!connector.authorization_audience || !connector.authorization_resource) errors.push(`${connector.connector_id} / authorization_resource`);
+    if (connector.resource_type === 'oauth_bridge' && !connector.bridge_audience) errors.push(`${connector.connector_id} / bridge_audience`);
     for (const toolId of connector.tools) if (!toolIds.has(toolId)) errors.push(`${connector.connector_id} / unknown tool ${toolId}`);
   }
   for (const tool of tools) {

@@ -492,7 +492,7 @@ Agent OP が発行した ID-JAG の `jti` と `kid` と `typ` を台帳へ書き
 - `/internal/batch/*` は `sa-scheduler` 以外からの呼び出しを 403 にする。ミドルウェアで OIDC の `email` を検査する。
 
 **完了条件**
-- [ ] `apps/security-detection/test/signing-key-misuse.spec.ts::joins from resource as side` が、生成される SQL 文字列の `FROM` 句が `resource_as.redeem` 由来のテーブルであることを検査する。
+- [x] `apps/security-detection/test/signing-key-misuse.spec.ts::joins from resource as side` が、生成される SQL 文字列の `FROM` 句が `resource_as.redeem` 由来のテーブルであることを検査する。
 - [ ] `e2e/test/security/signing-key-misuse.spec.ts::unrecorded jti becomes critical finding` が、台帳書き込みを抑止した状態で ID-JAG を Resource AS へ提示し、バッチ実行後に `level=CRITICAL` の行が1件できることを検査する。
 - [ ] 同 spec の `::wrong typ becomes critical finding` が `typ` を書き換えた JWT でも1件できることを検査する。
 - [ ] `::same jti is not detected twice` が同じバッチを2回実行しても行数が増えないことを検査する。
@@ -651,10 +651,10 @@ Runtime 侵害と Agent OP 設定改竄の兆候を拾う分類にあたる。
 - `detail` には `observed` と `expected` の2キーを入れる。`expected` は Baseline と Registration から取った値の配列とする。
 
 **完了条件**
-- [ ] `apps/security-detection/test/rules-authorization.spec.ts::status errors 20 no hit, 21 medium, 101 high` が緑になる。
-- [ ] `::unmapped scope hits medium with a single event` が緑になる。
-- [ ] `::unknown audience hits medium with a single event` と `::unknown resource hits medium with a single event` が緑になる。
-- [ ] `::audience comparison is exact` が、`https://resource-docs-as-x.run.app` の登録に対し `https://resource-docs-as-x.run.app.evil` が Hit することを検査する。
+- [x] `apps/security-detection/test/rules-authorization.spec.ts::status errors 20 no hit, 21 medium, 101 high` が緑になる。
+- [x] `::unmapped scope hits medium with a single event` が緑になる。
+- [x] `::unknown audience hits medium with a single event` と `::unknown resource hits medium with a single event` が緑になる。
+- [x] `::audience comparison is exact` が、`https://resource-docs-as-x.run.app` の登録に対し `https://resource-docs-as-x.run.app.evil` が Hit することを検査する。
 
 ---
 
@@ -680,10 +680,10 @@ Tool Executor が同期で止めた事象を、中央でも1件として記録�
 - `rule_id` は `tool.unknown_tool` / `tool.not_provisioned` / `tool.unexpected_resource` の3つに固定する。
 
 **完了条件**
-- [ ] `apps/security-detection/test/rules-tool.spec.ts::unknown tool id hits medium` が緑になる。
-- [ ] `::not provisioned tool links unauthorized_tool by trace_id` が `related_events` に該当の Protocol Validation イベントが1件入ることを検査する。
-- [ ] `::not provisioned tool still hits when no matching validation event` が `related_events` が空配列で Hit 1件になることを検査する。
-- [ ] `::unexpected resource hits medium` が緑になる。
+- [x] `apps/security-detection/test/rules-tool.spec.ts::unknown tool id hits medium` が緑になる。
+- [x] `::not provisioned tool links unauthorized_tool by trace_id` が `related_events` に該当の Protocol Validation イベントが1件入ることを検査する。
+- [x] `::not provisioned tool still hits when no matching validation event` が `related_events` が空配列で Hit 1件になることを検査する。
+- [x] `::unexpected resource hits medium` が緑になる。
 
 ---
 
@@ -710,9 +710,9 @@ DEC-IAC-16 の `agent_max_lifetime_seconds` を上限の唯一の出どころに
 - `rule_id` は `lifetime.age_exceeded` と `lifetime.access_after_expiry` の2つに固定する。
 
 **完了条件**
-- [ ] `apps/security-detection/test/rules-lifetime.spec.ts::age max plus one second hits high` が上限 3600 に対し 3601 で HIGH、3600 で Hit なしになることを検査する。
-- [ ] `::access after expires_at hits high` が緑になる。
-- [ ] `::skips events without age fields` が Hit 0件になることを検査する。
+- [x] `apps/security-detection/test/rules-lifetime.spec.ts::age max plus one second hits high` が上限 3600 に対し 3601 で HIGH、3600 で Hit なしになることを検査する。
+- [x] `::access after expires_at hits high` が緑になる。
+- [x] `::skips events without age fields` が Hit 0件になることを検査する。
 - [ ] `e2e/test/lifetime/expired-access.spec.ts::expired agent is denied and rule hit is recorded` が、期限切れ Agent のアクセスが拒否され `rule_hits` に1行増えることを検査する。
 
 ---
@@ -740,9 +740,9 @@ Isolation は RULE-31 から RULE-33 の中心であり、要件は blocker で�
 - `rule_id` は `isolation.cross_agent_idp` / `isolation.dedicated_op_mismatch` / `isolation.multi_subject_actor` の3つに固定する。
 
 **完了条件**
-- [ ] `apps/security-detection/test/rules-isolation.spec.ts::cross agent idp access hits high` が緑になる。
-- [ ] `::dedicated op mismatch hits high` が、`op_agent_id` が `agent-a` の行に `agent_id` が `agent-b` として現れたとき Hit することを検査する。
-- [ ] `::same act sub with two subjects hits high once` が、`act.sub` 同一で `sub` が user-A と user-B の発行記録2件を入力して Hit が1件になることを検査する。
+- [x] `apps/security-detection/test/rules-isolation.spec.ts::cross agent idp access hits high` が緑になる。
+- [x] `::dedicated op mismatch hits high` が、`op_agent_id` が `agent-a` の行に `agent_id` が `agent-b` として現れたとき Hit することを検査する。
+- [x] `::same act sub with two subjects hits high once` が、`act.sub` 同一で `sub` が user-A と user-B の発行記録2件を入力して Hit が1件になることを検査する。
 - [ ] `bash infra/tests/runtime-mutation-scope.sh` が `apps/security-detection/src` に GCP リソース変更 API の呼び出しが無いことを検査して0で終了する。
 
 ---
@@ -768,10 +768,10 @@ AI の出力を後段で検算する位置づけであり、RULE-09 と RULE-10 
 - `rule_id` は `authz_ai.unknown_capability` / `authz_ai.out_of_taxonomy_format` / `authz_ai.large_gap` の3つに固定する。
 
 **完了条件**
-- [ ] `apps/security-detection/test/rules-authz-ai.spec.ts::unknown capability hits high` が緑になる。
-- [ ] `::url form hits high` と `::http method form hits high` が `https://api.example.com/v1/x` と `GET /v1/documents` の両方で HIGH になることを検査する。
-- [ ] `::gap 50 percent no hit, 51 percent medium` が境界値を検査する。
-- [ ] `::empty proposed produces no hit` が緑になる。
+- [x] `apps/security-detection/test/rules-authz-ai.spec.ts::unknown capability hits high` が緑になる。
+- [x] `::url form hits high` と `::http method form hits high` が `https://api.example.com/v1/x` と `GET /v1/documents` の両方で HIGH になることを検査する。
+- [x] `::gap 50 percent no hit, 51 percent medium` が境界値を検査する。
+- [x] `::empty proposed produces no hit` が緑になる。
 
 ---
 
@@ -1135,10 +1135,10 @@ Activity Event に Raw なログや Token を含めない。
 - 発行は T-SEC-34 の `dispatch` が QUARANTINED の遷移依頼に成功した後に1回だけ行う。依頼が失敗した場合は発行しない。
 
 **完了条件**
-- [ ] `e2e/test/activity/quarantine-event.spec.ts::critical finding emits one quarantine event` が緑になる。
-- [ ] `::related_finding_id is not null` が緑になる。
-- [ ] `::payload contains no jwt like string` が `/eyJ[A-Za-z0-9_-]{10,}/` に一致しないことを検査する。
-- [ ] `::no event when transition request fails` が緑になる。
+- [x] `e2e/test/activity/quarantine-event.spec.ts::critical finding emits one quarantine event` が緑になる。
+- [x] `::related_finding_id is not null` が緑になる。
+- [x] `::payload contains no jwt like string` が `/eyJ[A-Za-z0-9_-]{10,}/` に一致しないことを検査する。
+- [x] `::no event when transition request fails` が緑になる。
 
 ---
 

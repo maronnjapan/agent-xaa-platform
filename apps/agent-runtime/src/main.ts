@@ -6,6 +6,7 @@ import { createExecutionContext } from './context/execution-context.js';
 import { loadEnv, ForbiddenEnvKey, MissingEnvKey } from './env.js';
 import { buildAllowedHosts } from './http/allowed-hosts.js';
 import { createRuntimeHttpClient } from './http/http-client.js';
+import { createInvokerTokenProvider } from './http/internal-invoker-token.js';
 import { manifestSha256 } from './manifest/load.js';
 import { runReasoningLoop } from './reasoning/loop.js';
 import { createRuntimeStore } from './store/runtime-store.js';
@@ -57,7 +58,22 @@ async function main(): Promise<number> {
     return RUNTIME_EXIT_CODES.failed;
   }
 
-  const http = createRuntimeHttpClient({ allowedHosts: buildAllowedHosts(env, context.manifest) });
+  // The Agent OP and the Bridge sit behind Cloud Run's IAM check, so a call to either
+  // needs this Execution's own `run.invoker` token beside the agent's credentials. On
+  // GCP only: there is no metadata server anywhere else, and asking for one would turn
+  // every local run into a timeout.
+  const internalOrigins = new Set([
+    new URL(env.AGENT_OP_BASE_URL).origin,
+    ...context.manifest.tools
+      .map((tool) => tool.token_provider)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      .map((value) => new URL(value).origin),
+  ]);
+  const http = createRuntimeHttpClient({
+    allowedHosts: buildAllowedHosts(env, context.manifest),
+    internalOrigins,
+    invokerToken: createInvokerTokenProvider({ enabled: process.env.STORE_MODE === 'gcp' }),
+  });
   const activityContext = {
     humanSubject: context.humanSubject, agentId: context.agentId, taskId: context.taskId,
     traceId: logContext.trace_id, manifest: context.manifest,

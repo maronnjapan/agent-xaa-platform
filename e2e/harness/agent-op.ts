@@ -56,6 +56,9 @@ export interface StartAgentOpOptions {
   scopes?: string[];
   config?: Partial<AgentOpConfig>;
   expiresAt?: string;
+  /** One Firestore across several apps, for a test that spans them. */
+  shared?: ReturnType<typeof createFirestoreDouble>;
+  automationAppUrl?: string;
 }
 
 export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentOpHarness> {
@@ -66,7 +69,7 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
   const opSigner = createLocalEs256Signer({ privateKey: opKeyPair.privateKey, kid: 'op-shared-1' });
   const now = () => Date.now();
 
-  const firestore = createFirestoreDouble();
+  const firestore = options.shared ?? createFirestoreDouble();
   const documents = createFirestoreDocumentStore(firestore, 'agent-op');
   const seed = createFirestoreDocumentStore(firestore, 'provisioner');
   const lifecycleStore = createFirestoreDocumentStore(firestore, 'lifecycle-manager');
@@ -101,6 +104,8 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
       humanIdpAuthorizeUrl: `${HUMAN_IDP_ISSUER}/authorize`,
       humanIdpTokenUrl: `${HUMAN_IDP_ISSUER}/token`,
       humanIdpRevokeUrl: `${HUMAN_IDP_ISSUER}/revoke`,
+      agentOpCallbackUrl: AGENT_OP_BASE,
+      clientSecretAgentPlatform: 'test-agent-platform-secret',
       idJagLifetimeSeconds: 300, agentId: null, signerMode: 'local', storeMode: 'emulator',
       publicBaseUrl: AGENT_OP_BASE,
       ...options.config,
@@ -130,6 +135,8 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
     writeExchangeLog: (line) => { exchangeLogs.push(line); },
     writeLedger: (line) => { ledgerLogs.push(line); },
     ...(options.humanIdpFetch ? { humanIdpFetch: options.humanIdpFetch } : {}),
+    // Where the callback sends the browser back to, as Terraform injects it.
+    automationAppUrl: options.automationAppUrl ?? 'https://automation-app.test',
   };
 
   const app = createAgentOp(deps);

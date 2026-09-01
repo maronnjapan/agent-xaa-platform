@@ -4,12 +4,13 @@ set -uo pipefail
 
 command -v gcloud >/dev/null && command -v jq >/dev/null && command -v curl >/dev/null || { echo 'reachability: gcloud, jq, and curl are required' >&2; exit 2; }
 demo_dir=${DEMO_TF_DIR:-infra/envs/demo}
-project_id=${PROJECT_ID:-$(terraform -chdir="$demo_dir" output -raw project_id 2>/dev/null)}
-region=${REGION:-$(terraform -chdir="$demo_dir" output -raw region 2>/dev/null)}
+read -r -a tf_command <<<"${TF:-terraform}"
+project_id=${PROJECT_ID:-$("${tf_command[@]}" -chdir="$demo_dir" output -raw project_id 2>/dev/null)}
+region=${REGION:-$("${tf_command[@]}" -chdir="$demo_dir" output -raw region 2>/dev/null)}
 [[ -n "$project_id" && -n "$region" ]] || { echo 'reachability: PROJECT_ID and REGION are required' >&2; exit 2; }
 
-urls=$(terraform -chdir="$demo_dir" output -json service_urls 2>/dev/null) || { echo 'reachability: demo Terraform output is unavailable' >&2; exit 2; }
-edges=$(terraform -chdir="$demo_dir" output -json invoker_edges 2>/dev/null) || { echo 'reachability: invoker_edges output is unavailable' >&2; exit 2; }
+urls=$("${tf_command[@]}" -chdir="$demo_dir" output -json service_urls 2>/dev/null) || { echo 'reachability: demo Terraform output is unavailable' >&2; exit 2; }
+edges=$("${tf_command[@]}" -chdir="$demo_dir" output -json invoker_edges 2>/dev/null) || { echo 'reachability: invoker_edges output is unavailable' >&2; exit 2; }
 cases=$(jq -c '[to_entries[] | {caller_sa:(.value.member|sub("^serviceAccount:";"")|split("@")[0]), target:.value.service, path:"/healthz", expect:200}]' <<<"$edges")
 cases=$(jq -c -s '.[0] + .[1]' <(printf '%s' "$cases") infra/tests/reachability-cases.json)
 

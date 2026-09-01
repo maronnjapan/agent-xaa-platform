@@ -10,6 +10,11 @@ import type { Logger } from '@xaa/logging';
  *   find itself unregistered;
  * - each step declares how to undo itself, and `noop` is written out rather than
  *   omitted, so "this step needs no compensation" is a decision on the record.
+ *
+ * `create_dedicated_resources` sits inside the list rather than beside it: T-PROV-28
+ * gives it a compensation of its own, and a step that can be undone but has no place
+ * in the order is a step whose undo nobody can schedule. It runs only on the
+ * FULL_ISOLATION branch, which is why a run may skip it — see `runProvisioning`.
  */
 export const PROVISIONING_STEPS = [
   'create_transaction',
@@ -18,6 +23,7 @@ export const PROVISIONING_STEPS = [
   'set_expires_at',
   'idp_consent',
   'verify_idp_connection',
+  'create_dedicated_resources',
   'external_consent',
   'create_agent_binding',
   'register_agent',
@@ -45,15 +51,33 @@ export class PreconditionFailed extends Error {
   }
 }
 
+/**
+ * Stops the run without failing it. A provisioning that pauses for consent has done
+ * nothing wrong, so nothing it did may be undone: the transaction stays alive and the
+ * resume picks it up from `pending_step`.
+ */
+export class ProvisioningHalted extends Error {
+  constructor(readonly at: ProvisioningStep) { super('provisioning_halted'); }
+}
+
 export interface RunResult {
   completed: ProvisioningStep[];
   failedAt?: ProvisioningStep;
+  /** Set when a step asked to pause rather than fail; nothing is compensated. */
+  haltedAt?: ProvisioningStep;
+  /** What the failing step threw, so the caller can map it to a status code. */
+  error?: unknown;
   compensated: ProvisioningStep[];
   compensationFailures: Array<{ step: ProvisioningStep; error: string }>;
 }
 
 /**
  * Runs the steps in order and, on failure, undoes what succeeded in reverse.
+ *
+ * A run may leave steps out — STANDARD creates no dedicated resources and no Bridge
+ * binding — but it may never reorder them: the position in `PROVISIONING_STEPS` has to
+ * increase with every entry, so a caller cannot register an agent before its IdP
+ * connection was verified by handing the steps over in the wrong order.
  *
  * A compensation that itself fails does not stop the rest: leaving four resources
  * behind because the fifth refused to delete is worse than reporting five problems.
@@ -63,14 +87,21 @@ export async function runProvisioning(steps: Step[], context: StepContext, logge
   const completed: ProvisioningStep[] = [];
   const result: RunResult = { completed, compensated: [], compensationFailures: [] };
 
-  for (const [index, step] of steps.entries()) {
-    const expected = PROVISIONING_STEPS[PROVISIONING_STEPS.indexOf(steps[0]!.id) + index];
-    if (expected !== undefined && step.id !== expected) throw new PreconditionFailed(expected, step.id);
+  let previous = -1;
+  for (const step of steps) {
+    const position = PROVISIONING_STEPS.indexOf(step.id);
+    if (position <= previous) throw new PreconditionFailed(PROVISIONING_STEPS[previous + 1]!, step.id);
+    previous = position;
     try {
       await step.run(context);
       completed.push(step.id);
     } catch (error) {
+      if (error instanceof ProvisioningHalted) {
+        result.haltedAt = step.id;
+        return result;
+      }
       result.failedAt = step.id;
+      result.error = error;
       for (const done of [...completed].reverse()) {
         const compensation = steps.find((candidate) => candidate.id === done)?.compensate;
         if (compensation === undefined || compensation === 'noop') continue;

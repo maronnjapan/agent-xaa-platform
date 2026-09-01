@@ -1,7 +1,8 @@
 import { PubSub } from '@google-cloud/pubsub';
-import { createFirestoreDocumentStore, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
+import { createFirestoreDocumentStore, createIdentityTokenProvider, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
 import { createVertexClient } from '@xaa/vertex';
 import { loadConfig } from './config.js';
+import { createReprovisionClient } from './reevaluate/reprovision-client.js';
 import type { AuthorizationDeps } from './app.js';
 
 export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): Promise<AuthorizationDeps & { port: number }> {
@@ -22,11 +23,11 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
         await pubsub.topic(config.activityTopic).publishMessage({ json: event });
       },
     } : {}),
-    requestReprovision: async (humanSubject: string, reason: string) => {
-      // Lifecycle owns the transition; Authorization only asks.
-      await fetch(`${config.lifecycleManagerUrl}/internal/agents/${encodeURIComponent(humanSubject)}/reprovision`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reason }),
-      });
-    },
+    // Lifecycle owns the transition; Authorization only asks, over a call its own
+    // service account is named for (`ALLOWED_CALLER_SAS`).
+    requestReprovision: createReprovisionClient({
+      lifecycleBaseUrl: config.lifecycleManagerUrl,
+      identityToken: createIdentityTokenProvider(),
+    }),
   };
 }

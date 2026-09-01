@@ -11,14 +11,18 @@
       "policy_decisions/**",
       "ai_proposals/**",
       "work_definitions/**",
-      "dpop_jti/**"
+      "dpop_jti/**",
+      "agents/*",
+      "agents/*/meta",
+      "permission_change_receipts/**"
     ],
     "write": [
       "authorization_decisions/**",
       "policy_decisions/**",
       "ai_proposals/**",
       "work_definitions/**",
-      "dpop_jti/**"
+      "dpop_jti/**",
+      "permission_change_receipts/**"
     ]
   },
   "provisioner": {
@@ -44,6 +48,7 @@
   "automation-app": {
     "read": [
       "sessions/**",
+      "login_transactions/**",
       "work_definitions/**",
       "agent_definitions/**",
       "agents/*/meta",
@@ -54,6 +59,7 @@
     ],
     "write": [
       "sessions/**",
+      "login_transactions/**",
       "work_definitions/**",
       "agent_definitions/**",
       "agent_instructions/**",
@@ -70,7 +76,8 @@
       "idp_connection_rotations/**",
       "bridge_consent_states/**",
       "bridge_consent_codes/**",
-      "provisioning_transactions/**"
+      "provisioning_transactions/**",
+      "provisioning_codes/**"
     ],
     "write": [
       "idp_connections/**",
@@ -80,7 +87,8 @@
       "idp_connection_rotations/**",
       "bridge_consent_states/**",
       "bridge_consent_codes/**",
-      "provisioning_transactions/**"
+      "provisioning_transactions/**",
+      "provisioning_codes/**"
     ]
   },
   "lifecycle-manager": {
@@ -113,7 +121,8 @@
       "connector_definitions/**",
       "bridge_consent_states/**",
       "bridge_consent_codes/**",
-      "bridge_dpop_jti/**"
+      "bridge_dpop_jti/**",
+      "provisioning_transactions/**"
     ],
     "write": [
       "agent_bindings/**",
@@ -250,10 +259,12 @@
     "read": [
       "agents/*/baseline",
       "agents/*/meta",
-      "security_findings/**"
+      "security_findings/**",
+      "batch_state/**"
     ],
     "write": [
-      "security_findings/**"
+      "security_findings/**",
+      "batch_state/**"
     ]
   }
 }

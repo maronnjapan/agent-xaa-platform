@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { compile, SchemaValidationError } from '@xaa/contracts';
 import type { ControlPlaneVariables } from '@xaa/control-plane-auth';
+import type { Logger } from '@xaa/logging';
 import { createCompletionCodes } from '../transaction/one-time-code.js';
 import { isTerminal } from '../transaction/state.js';
 import type { ProvisionerDeps } from '../deps.js';
@@ -29,9 +30,9 @@ const assertBody: (value: unknown) => asserts value is { one_time_code: string }
  * The subject is checked before the code is consumed, so a wrong caller cannot burn
  * someone else's code by trying.
  */
-export function createResumeRoute(deps: ProvisionerDeps): Hono<Env> {
+export function createResumeRoute(deps: ProvisionerDeps & { logger: Logger }): Hono<Env> {
   const app = new Hono<Env>();
-  const codes = createCompletionCodes(deps.documents, () => deps.clock.now());
+  const codes = createCompletionCodes(deps.documents, () => deps.clock.now(), deps.logger);
 
   // Declared explicitly so a browser landing here gets a clear 405 rather than a 404.
   app.get('/:transaction_id/resume', (context) => context.body(null, 405, { Allow: 'POST' }));
@@ -59,7 +60,12 @@ export function createResumeRoute(deps: ProvisionerDeps): Hono<Env> {
     if (!consumed.ok) return context.json({ error: consumed.error }, consumed.status);
 
     // The consent is only believed once the issuing service confirms it: a code says
-    // the browser came back, not that the connection is usable.
+    // the browser came back, not that the connection is usable. Which service is asked
+    // follows the code's own `issuer_kind`, so a code minted for an external connector
+    // cannot be redeemed by asking the Agent OP about an IdP connection instead. The
+    // Bridge is disabled by default (DEC-SCOPE-04) and this service holds no client for
+    // it, so such a code is refused rather than verified against the wrong issuer.
+    if (consumed.record.issuer_kind !== 'idp') return context.json({ error: 'connection_not_ready' }, 409);
     const verified = await deps.agentOp.verifyIdpConnection(`idpconn-${transaction.agent_id}`);
     if (verified.status !== 'READY') return context.json({ error: 'connection_not_ready' }, 409);
 

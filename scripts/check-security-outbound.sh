@@ -29,5 +29,17 @@ for forbidden in AGENT_OP RESOURCE_DOCS_AS RESOURCE_FINANCE_AS BRIDGE; do
   fi
 done
 
+# The route it must address, and the one 00b §4 retires. A detector that decides to
+# quarantine an agent and posts to a path nobody serves is a detector with no effect.
+if ! grep -q "/internal/agents/" apps/security-detection/src/server.ts \
+  || ! grep -q "/transition" apps/security-detection/src/server.ts; then
+  echo 'the transition request must address /internal/agents/{agent_id}/transition' >&2
+  status=1
+fi
+if grep -q '/internal/security/transition' apps/security-detection/src/server.ts; then
+  echo 'the retired /internal/security/transition path is still named' >&2
+  status=1
+fi
+
 [ "$status" -eq 0 ] && echo "ok: one outbound destination, the Lifecycle Manager"
 exit "$status"

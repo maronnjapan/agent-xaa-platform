@@ -7,7 +7,8 @@
   "authorization": {
     "medium_multiplier": 1,
     "high_multiplier": 3,
-    "codes": ["unknown_audience", "unknown_resource", "scope_out_of_range", "status_error"]
+    "codes": ["unknown_audience", "unknown_resource", "scope_out_of_range", "status_error"],
+    "status_error": { "medium": 20, "high": 100 }
   },
   "tool": {
     "medium_multiplier": 1,

@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
-import { randomBytes } from 'node:crypto';
-import { PLATFORM_CLIENT_ID } from '@xaa/contracts';
+import {
+  createCompletionCode, PLATFORM_CLIENT_ID, PROVISIONING_CODES_COLLECTION,
+} from '@xaa/contracts';
 import type { AgentOpDeps } from '../deps.js';
 import { createAgentOpStore } from '../store/index.js';
-
-const ONE_TIME_CODE_TTL_SECONDS = 300;
 
 interface ConsentStateRecord {
   transaction_id: string;
@@ -40,6 +39,11 @@ export function createXaaCallbackRoute(deps: AgentOpDeps, automationAppUrl: stri
     // One-shot: consumed before anything else can fail, so a retry cannot replay it.
     await deps.documents.update('bridge_consent_states', state, { used: true });
 
+    if (Date.parse(record.expires_at) <= (deps.now?.() ?? Date.now())) {
+      await failTransaction(deps, record.transaction_id);
+      return failure('the transaction expired');
+    }
+
     if (error || !code) {
       await failTransaction(deps, record.transaction_id);
       return failure('authorization was not granted');
@@ -51,11 +55,14 @@ export function createXaaCallbackRoute(deps: AgentOpDeps, automationAppUrl: stri
 
     const response = await httpFetch(deps.config.humanIdpTokenUrl, {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${PLATFORM_CLIENT_ID}:${deps.config.clientSecretAgentPlatform}`).toString('base64')}`,
+      },
       body: new URLSearchParams({
         grant_type: 'authorization_code', code,
         redirect_uri: `${deps.config.publicBaseUrl}/xaa/callback`,
-        client_id: PLATFORM_CLIENT_ID, code_verifier: record.code_verifier,
+        code_verifier: record.code_verifier,
       }).toString(),
     });
     if (!response.ok) {
@@ -79,22 +86,24 @@ export function createXaaCallbackRoute(deps: AgentOpDeps, automationAppUrl: stri
       expires_at: record.expires_at,
     });
 
-    // runTransaction makes the resume single-shot even if the browser reloads.
-    await deps.documents.transaction(async (tx) => {
-      const transaction = await tx.get<{ status: string }>('provisioning_transactions', record.transaction_id);
-      if (transaction && transaction.status !== 'RESUMABLE') {
-        tx.update('provisioning_transactions', record.transaction_id, { status: 'RESUMABLE' });
-      }
-    });
+    // The transaction's status is the Provisioner's to move (00b §3): its resume route
+    // is what takes WAITING_IDP_CONSENT to RESUMABLE, and moving it here first made
+    // that transition illegal and every resume a 500. What makes this single-shot is
+    // the consent state consumed above and the one-time code below, both of which are
+    // spent exactly once.
 
-    const oneTimeCode = randomBytes(16).toString('base64url');
-    await deps.documents.set('bridge_consent_codes', oneTimeCode, {
-      transaction_id: record.transaction_id,
-      expire_at: deps.documents.expiryFromNow(ONE_TIME_CODE_TTL_SECONDS, deps.now?.()),
-      used: false,
+    // The Provisioner redeems this, so it is written in the Provisioner's shape and in
+    // the Provisioner's collection: only the hash is stored, and the row carries the
+    // subject the redemption is checked against (T-PROV-15).
+    const completion = await createCompletionCode({
+      transactionId: record.transaction_id,
+      humanSubject: record.human_subject,
+      issuerKind: 'idp',
+      now: deps.now?.(),
     });
+    await deps.documents.set(PROVISIONING_CODES_COLLECTION, completion.documentId, { ...completion.record });
 
-    const location = `${automationAppUrl}/provisioning/resume?transaction_id=${encodeURIComponent(record.transaction_id)}&code=${encodeURIComponent(oneTimeCode)}`;
+    const location = `${automationAppUrl}/provisioning/resume?transaction_id=${encodeURIComponent(record.transaction_id)}&code=${encodeURIComponent(completion.code)}`;
     return context.body(null, 302, { Location: location });
   });
   return app;

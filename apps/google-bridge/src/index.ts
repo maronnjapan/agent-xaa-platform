@@ -269,6 +269,41 @@ export function createInternalApp(deps: BridgeDeps): Hono {
     }
   });
 
+  /**
+   * The eighth internal route (00b §4). Cleanup asks for the upstream connection to be
+   * given up when the reason is abnormal — a quarantine or a disabled identity.
+   *
+   * The refresh token is sent to the SaaS's own revocation endpoint and the connection
+   * is marked REVOKED whatever the far side answers: once the platform has decided to
+   * stop using a credential, keeping the row ACTIVE because a remote host was briefly
+   * unreachable would leave the next request believing it may still be used.
+   */
+  app.post('/connections/:connection_id/revoke-upstream', callerAuthz(['lifecycle'], authz), async (context) => {
+    const connectionId = context.req.param('connection_id');
+    const connection = await wiring.connections.find(connectionId);
+    // Already gone is success: cleanup retries, and a missing connection is the goal.
+    if (!connection) return context.body(null, 204);
+
+    const connector = await wiring.connectors.getConnector(connection.connector_id).catch(() => undefined);
+    if (connector) {
+      const body = new URLSearchParams({
+        token: await cipher.decryptRefreshToken(connection.encrypted_refresh_token),
+        token_type_hint: 'refresh_token',
+        client_id: connector.client_id,
+        client_secret: await deps.readSecret(connector.secret_name),
+      });
+      await wiring.bridgeFetch(connector.revocation_endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+        signal: AbortSignal.timeout(10_000),
+      }, allowedHostsFor({ connector, jwksUrl: deps.config.jwksUrl })).catch(() => undefined);
+    }
+
+    await wiring.connections.setStatus(connectionId, 'REVOKED');
+    return context.body(null, 204);
+  });
+
   app.post('/bindings/:agent_id/disable', callerAuthz(['lifecycle'], authz), async (context) => {
     await wiring.bindings.disableAll(context.req.param('agent_id'));
     // 204 even for nothing: cleanup retries, and "already disabled" is success.

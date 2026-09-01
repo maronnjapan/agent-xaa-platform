@@ -13,8 +13,14 @@ export const AUTHZ_BASE = 'https://authorization.test';
 export interface AuthorizationHarness {
   fetch: Fetcher;
   documents: DocumentStore;
+  /** Scoped as the Provisioner, for the agents this platform only reads. */
+  provisionerStore: DocumentStore;
+  /** Scoped as the seed Job, which is the only writer of the permission tables. */
+  seedStore: DocumentStore;
   logs: string[];
   activity: Array<Record<string, unknown>>;
+  /** Every Re-Provisioning this platform asked Lifecycle Manager for, in order. */
+  reprovisions: Array<{ agentId: string; effectiveCapabilities: string[]; workDefinitionId: string; reason: string }>;
 }
 
 export async function startAuthorization(options: {
@@ -23,13 +29,17 @@ export async function startAuthorization(options: {
   humanPermissions: string[];
   model?: FakeModel;
   vertex?: VertexClient;
+  shared?: ReturnType<typeof createFirestoreDouble>;
 }): Promise<AuthorizationHarness> {
-  const firestore = createFirestoreDouble();
+  const firestore = options.shared ?? createFirestoreDouble();
   const documents = createFirestoreDocumentStore(firestore, 'authorization');
-  await seedAuthorizationData(documents, options.humanPermissions, createFirestoreDocumentStore(firestore, 'seed'));
+  const provisionerStore = createFirestoreDocumentStore(firestore, 'provisioner');
+  const seedStore = createFirestoreDocumentStore(firestore, 'seed');
+  await seedAuthorizationData(documents, options.humanPermissions, seedStore);
 
   const logs: string[] = [];
   const activity: Array<Record<string, unknown>> = [];
+  const reprovisions: AuthorizationHarness['reprovisions'] = [];
   const config: AuthorizationConfig = {
     port: 8080, issuer: HUMAN_IDP_ISSUER, jwksUrl: 'https://storage.test/xaa-jwks/jwks.json',
     authzAudience: 'authorization-platform', authzPublicBaseUrl: AUTHZ_BASE,
@@ -50,10 +60,13 @@ export async function startAuthorization(options: {
     fetchImpl: (async () => Response.json({ keys: [{ ...options.idpPublicJwk, kid: 'idp-testkey', alg: 'RS256', use: 'sig' }] })) as unknown as typeof fetch,
     logger: createLogger('authorization', 'policy_engine', (line) => { logs.push(line); }),
     publishActivity: async (event) => { activity.push(event); },
+    // Lifecycle Manager's side of the call is its own test's business; what this one
+    // has to see is whether the ask happened at all, and with which capabilities.
+    requestReprovision: async (request) => { reprovisions.push({ ...request }); },
   });
 
   return {
-    documents, logs, activity,
+    documents, provisionerStore, seedStore, logs, activity, reprovisions,
     fetch: async (path, init) => app.fetch(new Request(new URL(path, AUTHZ_BASE), init)),
   };
 }

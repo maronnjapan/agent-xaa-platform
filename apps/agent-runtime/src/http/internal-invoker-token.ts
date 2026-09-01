@@ -30,3 +30,14 @@ export function createInvokerTokenProvider(input: {
     return (await response.text()).trim() as InvokerIdToken;
   };
 }
+
+/**
+ * The header Cloud Run's IAM check reads when the request already carries an
+ * `Authorization` of its own.
+ *
+ * Built here, in the one module allowed to name a Bearer header, so a Service Account
+ * token can never be assembled into a resource call by hand (T-RUN-15).
+ */
+export function invokerAuthorizationHeader(token: InvokerIdToken): Record<string, string> {
+  return { 'X-Serverless-Authorization': `Bearer ${token}` };
+}

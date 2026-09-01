@@ -1,3 +1,4 @@
+import { createLogger } from '@xaa/logging';
 import { shortIdOf } from '../keys/dedicated-key.js';
 
 /**
@@ -46,9 +47,16 @@ export function buildLedgerRecord(claims: Record<string, unknown>, kid: string, 
   };
 }
 
-/** Written right after signing and before the response is built, never afterwards. */
+/**
+ * Written right after signing and before the response is built, never afterwards.
+ *
+ * Carried in the shared logger's envelope: the Log Sink keeps a line only when it has
+ * a `log_source`, so a bare record never reaches the ledger-versus-redemption
+ * reconciliation it exists for (T-SEC-05, T-SEC-15).
+ */
 export function emitIssuanceLedger(record: IssuanceLedgerRecord, write: (line: string) => void = (line) => process.stdout.write(line)): void {
-  const line = JSON.stringify({ logName: 'idjag_issuance', ...record });
-  if (COMPACT_JWS.test(line)) throw new Error('issuance ledger must not contain a compact JWS');
-  write(`${line}\n`);
+  if (COMPACT_JWS.test(JSON.stringify(record))) throw new Error('issuance ledger must not contain a compact JWS');
+  createLogger('shared-agent-op', 'agent_op', write).info('idjag_issuance', {
+    request_id: '', trace_id: record.jti, agent_id: record.agent_id, human_subject: record.sub,
+  }, { ...record });
 }

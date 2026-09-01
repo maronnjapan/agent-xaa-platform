@@ -1,0 +1,13 @@
+{
+  "severity": "INFO", "app": "resource-docs-as", "log_source": "native_resource_as", "event": "resource_as.redeem",
+  "request_id": "req-as-1", "trace_id": "b0f2a1c4-0000-4000-8000-000000000008",
+  "agent_id": "agent-abcdefghijklmnopqrstuvwxyz", "human_subject": "testuser", "timestamp": "2026-01-01T12:00:07.000Z",
+  "fields": {
+    "idjag_iss": "https://shared-agent-op.test", "idjag_sub": "testuser",
+    "idjag_act_sub": "urn:agent:agent-abcdefghijklmnopqrstuvwxyz", "idjag_client_id": "agent-platform",
+    "idjag_jti": "jti-1", "idjag_kid": "op-shared-1", "idjag_typ": "oauth-id-jag+jwt",
+    "audience": "https://resource-docs-as.test", "resource": "https://resource-docs-api.test",
+    "scope": "docs.read", "cnf_jkt_match": true, "token_issued": true,
+    "authorization_decision": "allow", "validation_name": null, "step": "redeem", "result": "issued"
+  }
+}

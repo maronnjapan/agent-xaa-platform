@@ -1,3 +1,4 @@
+import type { Deviation } from '../baseline/deviation.js';
 import { hitId, type RuleHit } from '../rules/types.js';
 import { groupByWindow, parseWindowKey } from '../rules/window.js';
 import type { ProtocolViolationRecord } from '../pipeline/types.js';
@@ -7,6 +8,8 @@ import { correlateCrossAgent } from './cross-agent.js';
 export interface CorrelateInput {
   hits: readonly RuleHit[];
   violations: readonly ProtocolViolationRecord[];
+  /** Keyed by agent id; attached to that agent's finding and to no other. */
+  deviations?: ReadonlyMap<string, readonly Deviation[]>;
   now?: () => number;
 }
 
@@ -68,6 +71,9 @@ export function correlate(input: CorrelateInput): SecurityFinding[] {
       risk_level: null,
       review_status: 'none',
       created_at: createdAt,
+      // A cross-agent finding gets none: it belongs to two agents, and one agent's
+      // baseline says nothing about what the pair of them did.
+      deviations: [...(input.deviations?.get(subject) ?? [])],
     });
   }
   return [...cross.findings, ...findings];

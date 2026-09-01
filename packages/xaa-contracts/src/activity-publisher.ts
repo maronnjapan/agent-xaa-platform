@@ -21,9 +21,9 @@ export function drainActivityQueueForTesting(): ActivityEvent[] {
   return memoryQueue.splice(0, memoryQueue.length);
 }
 
-export function resetActivityPublisherForTesting(): void {
+export function resetActivityPublisherForTesting(client?: PubSubLike): void {
   memoryQueue.length = 0;
-  gcpClient = undefined;
+  gcpClient = client;
 }
 
 export async function publishActivityEvent(event: ActivityEvent): Promise<void> {

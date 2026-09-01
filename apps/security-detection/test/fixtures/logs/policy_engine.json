@@ -1,0 +1,11 @@
+{
+  "severity": "INFO", "app": "authorization", "log_source": "policy_engine", "event": "policy.decide",
+  "request_id": "req-policy-1", "trace_id": "b0f2a1c4-0000-4000-8000-000000000003",
+  "agent_id": null, "human_subject": "testuser", "timestamp": "2026-01-01T12:00:02.000Z",
+  "fields": {
+    "proposed_capabilities": ["document.read", "document.write"],
+    "effective_capabilities": ["document.read"],
+    "security_profile": "standard", "isolation_level": "standard",
+    "decision": "approved", "policy_id": "policy-1", "decision_reason": "least_privilege"
+  }
+}

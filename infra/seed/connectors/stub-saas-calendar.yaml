@@ -3,7 +3,7 @@
 connector_id: stub-saas-calendar
 resource_type: oauth_bridge
 authorization_audience: ${bridge:internal}
-authorization_resource: ${resource:stub}
+authorization_resource: ${issuer:stub_saas}/calendar
 bridge_audience: ${bridge:internal}
 status: ACTIVE
 risk_level: medium

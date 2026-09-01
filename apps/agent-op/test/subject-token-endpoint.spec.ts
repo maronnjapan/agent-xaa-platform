@@ -53,7 +53,7 @@ describe('POST /xaa/subject-token', () => {
     await call(fixture);
     const stored = await fixture.documents.get<{ encrypted_refresh_token: string }>('idp_connections', fixture.registration.idp_connection_id);
     expect(await fakeEnvelope.decrypt(stored!.encrypted_refresh_token, fixture.agentId)).toBe('rt-new');
-    expect((JSON.parse(fixture.connectionLogs[0]!) as { rotation_result: string }).rotation_result).toBe('rotated');
+    expect((JSON.parse(fixture.connectionLogs[0]!) as { fields: { rotation_result: string } }).fields.rotation_result).toBe('rotated');
   });
 
   it('keeps the existing ciphertext when the response has no refresh_token', async () => {
@@ -63,7 +63,7 @@ describe('POST /xaa/subject-token', () => {
     await call(fixture);
     const stored = await fixture.documents.get<{ encrypted_refresh_token: string }>('idp_connections', fixture.registration.idp_connection_id);
     expect(await fakeEnvelope.decrypt(stored!.encrypted_refresh_token, fixture.agentId)).toBe('rt-original');
-    expect((JSON.parse(fixture.connectionLogs[0]!) as { rotation_result: string }).rotation_result).toBe('not_rotated');
+    expect((JSON.parse(fixture.connectionLogs[0]!) as { fields: { rotation_result: string } }).fields.rotation_result).toBe('not_rotated');
   });
 
   it('rejects a request without DPoP', async () => {
@@ -99,7 +99,9 @@ describe('POST /xaa/subject-token', () => {
     await seedConnection(fixture);
     fixture.humanIdpResponses.push(Response.json({ id_token: 'a.b.c', refresh_token: 'rt-new' }));
     await call(fixture);
-    const record = JSON.parse(fixture.connectionLogs[0]!) as Record<string, unknown>;
+    const line = JSON.parse(fixture.connectionLogs[0]!) as Record<string, unknown>;
+    expect(line.log_source).toBe('agent_op_idp_connection');
+    const record = line.fields as Record<string, unknown>;
     for (const field of ['idp_connection_id', 'rotation_result', 'reuse_detected', 'subject_token_reissue', 'revoke_result']) {
       expect(Object.keys(record)).toContain(field);
     }

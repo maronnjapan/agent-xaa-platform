@@ -11,9 +11,9 @@ import type { CleanupContext } from '../../clients/types.js';
 export async function bridgeBindingDisable(context: CleanupContext): Promise<'succeeded' | 'skipped'> {
   const baseUrl = context.clients.endpoints.bridgeUrl;
   if (!baseUrl || context.domain.bridge_binding_ids.length === 0) return 'skipped';
-  for (const bindingId of context.domain.bridge_binding_ids) {
-    const status = await context.clients.bridge.disableBinding({ baseUrl, bindingId });
-    if (status >= 500 || status === 0) throw new Error('bridge_disable_failed');
-  }
+  // One call, by agent: the Bridge disables every binding an agent holds, and the
+  // binding ids are what tell this step there is anything to disable at all.
+  const status = await context.clients.bridge.disableBindings({ baseUrl, agentId: context.domain.agent_id });
+  if (status >= 500 || status === 0) throw new Error('bridge_disable_failed');
   return 'succeeded';
 }

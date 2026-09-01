@@ -33,7 +33,7 @@ export function requireInternalCaller(options: InternalOidcOptions): MiddlewareH
     } catch {
       return context.json({ error: 'caller_not_allowed' }, 403);
     }
-    if (!email || !options.allowedCallers.some((allowed) => email!.startsWith(allowed))) {
+    if (!email || !options.allowedCallers.includes(email)) {
       return context.json({ error: 'caller_not_allowed' }, 403);
     }
     context.set('callerEmail' as never, email as never);

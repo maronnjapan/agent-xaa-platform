@@ -320,13 +320,13 @@ Security Profileに応じて、Agent OPとRuntimeをどこまで物理分離す�
 | | **STANDARD** | **FULL_ISOLATION** |
 |---|---|---|
 | 対象 | 通常Agent | 高セキュリティAgent（financial、admin、sensitive write等） |
-| Agent OP プロセス | Shared Agent OP（Cloud Run Service共有） | Agent専用Cloud Run Service `dedicated-op-<agent>` |
+| Agent OP プロセス | Shared Agent OP（Cloud Run Service共有） | Agent専用Cloud Run Service `dedicated-op-<short>` |
 | Agent Registration | Agentごと | Agentごと |
 | ID-JAG署名鍵（KMS） | Shared OPに1つ | 専用OPごとに1つ（専用OP SAのみ署名可） |
 | Agent Client Credential | Agentごと（Executionへ渡す） | Agentごと |
 | XAA Static Config | Agentごと | Agentごと |
-| Agent Runtime | Agentごとに1 Cloud Run Job Execution（Job定義とSAは共有） | Agent専用Job定義 + 専用SA `sa-agent-<agent>` |
-| IAM Binding | 共有（`sa-agent-runtime` → `shared-agent-op`） | Agent専用（`sa-agent-<agent>` → `dedicated-op-<agent>` のみ） |
+| Agent Runtime | Agentごとに1 Cloud Run Job Execution（Job定義とSAは共有） | Agent専用Job定義 + 専用SA `sa-agent-<short>` |
+| IAM Binding | 共有（`sa-agent-runtime` → `shared-agent-op`） | Agent専用（`sa-agent-<short>` → `dedicated-op-<short>` のみ） |
 | Human IdP Connection | Agentごと（Shared OPが保持） | Agentごと（専用OPが保持） |
 | Bridge Agent Binding | Agentごと | Agentごと（専用Connection） |
 | Network Policy | 共通 | 必要に応じて専用 |
@@ -373,6 +373,16 @@ Shared OPのSAを流用すると、そのSAが持つ全Agentの鍵に署名で�
 ただしFULL_ISOLATIONでも縮まらない範囲がある。
 Dedicated OPのID-JAG署名鍵も共有issuerのJWKSに載るため、この鍵が漏れた場合に偽造できるID-JAGの範囲は、Shared OPの鍵が漏れた場合と変わらない（[§3.3](#33-agent-op署名鍵の制約)）。
 FULL_ISOLATIONが縮めるのは、1つの侵害で到達できるRegistrationとRefresh Tokenの数であって、偽造能力の広さではない。
+
+#### 実行時作成に伴う制約
+
+FULL_ISOLATIONの資源はTerraformではなくAgent Provisionerが実行時に作り、Lifecycle ManagerがCleanupで消す。
+名前は `<short>`（`agent_id` の乱数部の末尾12文字）から組み立てる。
+Service Accountの `account_id` が6文字以上30文字以下という制約に収まる長さである。
+
+- 同時に存在できるFULL_ISOLATION Agentの数は変数 `max_full_isolation_agents`（既定 5）で上限を持つ。上限に達した要求は `full_isolation_capacity_reached` と 503 で返り、Firestoreには何も書かれない。
+- KMSのCryptoKeyは削除できない。Cleanupが行うのはCryptoKeyVersionの破棄予約であり、空のKeyがKey Ringに残る。課金と利用はVersionの破棄で止まる。
+- 実行時に作る資源は `dedicated-op-<short>` / `sa-op-<short>` / `idjag-<short>` / `idpconn-<short>` / `agent-runtime-<short>` / `sa-agent-<short>` の6接頭辞に限る。作成と削除の呼び出しはこの接頭辞の検査（`assertRuntimeName`）を通す。
 
 #### Blast Radius
 
@@ -613,14 +623,14 @@ Googleなど、ID-JAGを理解しない外部SaaSの場合のフローは [06. �
 
 | Token | 発行者 | 用途 | `typ` | `aud` | DPoP | 定数キー | 備考 |
 |---|---|---|---|---|---|---|---|
-| Human ID Token（ログイン用） | Human IdP | Automation Appへのログイン | `JWT` | `automation-app` | なし | `human_id_token_login` | - |
+| Human ID Token（ログイン用） | Human IdP | Automation Appへのログイン | `JWT` | `automation-app` | 不要 | `human_id_token_login` | - |
 | Human Access Token | Human IdP | Control Plane API | `at+jwt` | 呼び先のアプリ名 | 必須 | `human_access_token` | - |
-| Human ID Token（XAA用） | Human IdP | Token Exchangeの `subject_token` | `JWT` | `agent-platform` | なし | `human_id_token_xaa` | 短期 |
-| Human Refresh Token（XAA用） | Human IdP | 上のID Tokenの再取得 | `-` | - | なし | `human_refresh_token_xaa` | Agentごと。Agent OPだけが保持 |
-| Agent Assertion | Agent自身 | Token Exchangeの `actor_token` | `agent-assertion+jwt` | Agent OPの `/xaa/token` | なし | `agent_assertion` | 本システム独自のプロファイル |
+| Human ID Token（XAA用） | Human IdP | Token Exchangeの `subject_token` | `JWT` | `agent-platform` | 不要 | `human_id_token_xaa` | 短期 |
+| Human Refresh Token（XAA用） | Human IdP | 上のID Tokenの再取得 | `opaque` | - | 不要 | `human_refresh_token_xaa` | Agentごと。Agent OPだけが保持 |
+| Agent Assertion | Agent自身 | Token Exchangeの `actor_token` | `agent-assertion+jwt` | Agent OPの `/xaa/token` | 不要 | `agent_assertion` | 本システム独自のプロファイル |
 | ID-JAG | Agent OP（共有issuerとして） | Cross App Accessの認可グラント | `oauth-id-jag+jwt` | Resource ASのissuer | 必須 | `id_jag` | `sub` は人間、`act` はAgent |
 | Native Resource Access Token | Native Resource AS | Resource API呼び出し | `at+jwt` | Resource ASのissuer | 必須 | `native_resource_access_token` | - |
-| SaaS Access Token | 外部OAuth AS | SaaS API呼び出し | `-` | 外部SaaSの定めるもの | なし | `saas_access_token` | Bridge経由でAgentへ払い出す。外向きにDPoPを要求しない |
+| SaaS Access Token | 外部OAuth AS | SaaS API呼び出し | `opaque` | 外部SaaSの定めるもの | 不要 | `saas_access_token` | Bridge経由でAgentへ払い出す。外向きにDPoPを要求しない |
 
 AgentがRuntimeで保持してよいもの：XAA用のHuman ID Token、ID-JAG、Resource Access Token、Google Access Token等の短期Token、ExecutionのDPoP鍵、Task Execution Context。
 Access Tokenは原則としてメモリのみ、永続化なし、短期とする。

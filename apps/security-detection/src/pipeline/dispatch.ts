@@ -1,3 +1,4 @@
+import type { NormalizedEvent } from '../normalize/index.js';
 import type { SecurityFinding } from '../correlate/finding.js';
 import { toLevel } from '../score/level.js';
 import { computeScore } from '../score/compute.js';
@@ -9,8 +10,12 @@ export interface DispatchCounters {
 }
 
 export interface DispatchDeps {
-  /** Called only for MEDIUM and above; the spy in tests counts these. */
-  analyze(finding: SecurityFinding): Promise<void>;
+  /**
+   * Called only for MEDIUM and above; the spy in tests counts these. The batch's events
+   * come with it so the Security AI summary is built from the evidence this finding was
+   * made of, rather than from a second read of the logs.
+   */
+  analyze(finding: SecurityFinding, events: readonly NormalizedEvent[]): Promise<void>;
   storeNormalized(finding: SecurityFinding): Promise<void>;
   storeFinding(finding: SecurityFinding): Promise<void>;
   financeResourceUrl?: string;
@@ -20,6 +25,7 @@ export interface DispatchDeps {
 export function score(batch: CorrelatedBatch, deps: Pick<DispatchDeps, 'financeResourceUrl' | 'resourcesFor'>, counters: DispatchCounters): ScoredBatch {
   return {
     __stage: 'scored',
+    events: batch.events,
     findings: batch.findings.map((finding) => {
       const value = computeScore({
         finding,
@@ -49,6 +55,6 @@ export async function dispatch(batch: ScoredBatch, deps: DispatchDeps, counters:
       continue;
     }
     await deps.storeFinding(finding);
-    await deps.analyze(finding);
+    await deps.analyze(finding, batch.events);
   }
 }

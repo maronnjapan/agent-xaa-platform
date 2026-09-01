@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import {
-  REASON_TO_VIOLATION, type CapabilityDecision, type SecurityProfile,
-} from '@xaa/contracts';
+import type { CapabilityDecision, Characteristics, SecurityProfile } from '@xaa/contracts';
+import type { LogContext, Logger } from '@xaa/logging';
 import { computeEffectiveCapabilities } from '../policy/effective.js';
 import { mergeCharacteristics } from '../policy/characteristics.js';
 import { filterToTaxonomy } from '../ai/taxonomy-filter.js';
 import { inferCapabilities, type VertexClient } from '../ai/authorization-ai.js';
 import type { Warning } from '../ai/output-guard.js';
 import { buildWorkDefinition } from '../work-definition/build.js';
+import { publishDecisionActivity, type ActivityPublisher } from '../activity/publish.js';
+import { inferenceInputHash, logAiInference } from '../log/ai-log.js';
+import { logPolicyDecision } from '../log/policy-log.js';
 import { loadPolicyInputs } from './load-policy-inputs.js';
 import type { AuthorizationStore } from '../store/authorization-store.js';
 import type { BusinessWorkRequest } from '../validation/work-request.js';
@@ -29,7 +31,12 @@ export interface DecideDeps {
   store: AuthorizationStore;
   vertex: VertexClient;
   clock: { now(): number };
-  publishActivity?: (event: Record<string, unknown>) => Promise<void>;
+  /** The model behind `vertex`, recorded so a decision can be tied to what proposed it. */
+  modelVersion: string;
+  /** Used only when the seeded taxonomy carries no version of its own. */
+  taxonomyVersion: string;
+  logger?: Logger;
+  publishActivity?: ActivityPublisher;
   onWarning?: (warning: Warning) => void;
   recordStep?: (step: DecisionStep) => void;
   onDecided?: (record: DecisionRecord) => void;
@@ -63,10 +70,15 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
   const step = (name: DecisionStep) => deps.recordStep?.(name);
   const createdAt = new Date(deps.clock.now()).toISOString();
   const decisionId = `dec_${randomUUID()}`;
+  const context = logContext(input.humanSubject, decisionId);
 
   step('validate');
   const taxonomy = await deps.store.loadTaxonomy();
   const taxonomyIds = new Set(taxonomy.map((entry) => entry.capability_id));
+  // The seeded rows carry no version column today, so the configured value stands in.
+  // The data wins where it exists: what was actually read is what the decision was
+  // made against.
+  const taxonomyVersion = taxonomy.find((entry) => typeof entry.version === 'string')?.version ?? deps.taxonomyVersion;
 
   step('work_definition');
   const { workDefinition, dropped } = await buildWorkDefinition({
@@ -83,25 +95,46 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
     taxonomy: taxonomy.map((entry) => ({ capability_id: entry.capability_id, description: entry.description })),
   }, { vertex: deps.vertex, ...(deps.onWarning ? { onWarning: deps.onWarning } : {}) });
 
+  if (deps.logger) {
+    logAiInference(deps.logger, context, {
+      // No agent exists yet; the decision is what the not-yet-created agent is
+      // carried by, from here through provisioning.
+      agent_draft_id: decisionId,
+      work_definition_id: workDefinition.work_definition_id,
+      work_definition_hash: await inferenceInputHash({
+        description: input.description, operations: workDefinition.operations,
+      }),
+      proposed_capabilities: proposal.capabilities,
+      confidence: proposal.confidence,
+      taxonomy_version: taxonomyVersion,
+      model_version: deps.modelVersion,
+    });
+  }
+
   step('taxonomy_filter');
   const filtered = filterToTaxonomy(proposal.capabilities, taxonomyIds);
 
-  step('save_proposal');
-  await deps.store.saveProposal(`prop_${randomUUID()}`, {
+  const saveProposal = (capabilities: string[], characteristics?: Characteristics) => deps.store.saveProposal(`prop_${randomUUID()}`, {
     decision_id: decisionId,
     work_definition_id: workDefinition.work_definition_id,
-    proposed_capabilities: filtered.kept,
+    proposed_capabilities: capabilities,
+    ...(characteristics ? { characteristics } : {}),
     dropped_out_of_taxonomy: filtered.dropped,
     dropped_target_resource: dropped.dropped_target_resource,
     dropped_operation: dropped.dropped_operation,
     confidence: proposal.confidence,
+    taxonomy_version: taxonomyVersion,
+    model_version: deps.modelVersion,
     created_at: createdAt,
   });
 
   // Nothing survived the taxonomy filter, so there is nothing for the Policy Engine
   // to decide. The decision is still recorded: "we asked and the answer was nothing"
-  // is an auditable outcome.
+  // is an auditable outcome, and the proposal is stored without characteristics rather
+  // than with seven defaults nobody derived.
   if (filtered.kept.length === 0) {
+    step('save_proposal');
+    await saveProposal([]);
     const record: DecisionRecord = {
       decision_id: decisionId, status: 'no_capability_inferred', human_subject: input.humanSubject,
       work_definition_id: workDefinition.work_definition_id, proposed_capabilities: [],
@@ -129,6 +162,12 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
   step('security_profile');
   const output = computeEffectiveCapabilities(policyInput);
 
+  // The proposal is stored with the merged characteristics rather than the AI's raw
+  // ones: a re-evaluation replays the Policy Engine from this record alone (RULE-10),
+  // and it must see the same inputs this decision saw.
+  step('save_proposal');
+  await saveProposal(filtered.kept, merged.characteristics);
+
   const record: DecisionRecord = {
     decision_id: decisionId,
     status: 'decided',
@@ -147,27 +186,38 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
   await deps.store.saveDecision(decisionId, { ...record });
   await deps.store.savePolicyDecisions(decisionId, output.decisions, createdAt);
 
-  step('activity_event');
-  await deps.publishActivity?.({
-    event_type: 'AUTHORIZATION_DECIDED',
-    phase: 'authorization',
-    outcome: output.effective.length > 0 ? 'allowed' : 'blocked',
-    human_subject: input.humanSubject,
-    decision_id: decisionId,
-    detail: {
+  if (deps.logger) {
+    logPolicyDecision(deps.logger, context, {
+      decision_id: decisionId,
+      proposed_capabilities: filtered.kept,
       effective_capabilities: output.effective,
-      isolation_level: output.securityProfile.isolation_level,
-      denied: output.denied.map((entry) => ({
-        capability_id: entry.capability_id,
-        violation_code: REASON_TO_VIOLATION[entry.reason_code],
-      })),
-    },
-    occurred_at: createdAt,
+      security_profile: output.securityProfile,
+      decisions: output.decisions,
+    });
+  }
+
+  step('activity_event');
+  await publishDecisionActivity({
+    decisionId,
+    humanSubject: input.humanSubject,
+    effective: output.effective,
+    decisions: output.decisions,
+    securityProfile: output.securityProfile,
+    occurredAt: createdAt,
+  }, {
+    ...(deps.publishActivity ? { publish: deps.publishActivity } : {}),
+    ...(deps.logger ? { logger: deps.logger } : {}),
   });
 
   step('respond');
   deps.onDecided?.(record);
   return record;
+}
+
+function logContext(humanSubject: string, decisionId: string): LogContext {
+  // No agent has been created at decision time, and the decision id is what later
+  // records join on, so it carries the correlation instead.
+  return { request_id: '', trace_id: `authz-${decisionId}`, agent_id: null, human_subject: humanSubject };
 }
 
 export type { BusinessWorkRequest };

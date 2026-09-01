@@ -12,6 +12,13 @@ export interface TransitionRequest {
 export type LifecycleSender = (request: TransitionRequest) => Promise<Response>;
 
 /**
+ * `refused` means this platform decided not to ask — no agent, or a transition the state
+ * machine does not allow. `failed` means it asked and the Lifecycle Manager did not take
+ * it. The two are kept apart because only the second is an incident.
+ */
+export type TransitionOutcome = 'sent' | 'refused' | 'failed';
+
+/**
  * Asks the Lifecycle Manager to act. It never acts itself.
  *
  * Everything this service could do to an agent — stop issuance, cancel the job, destroy
@@ -25,17 +32,25 @@ export async function requestTransition(input: {
   from: AgentSecurityState;
   to: AgentSecurityState;
   send: LifecycleSender;
-}): Promise<'sent' | 'refused'> {
+}): Promise<TransitionOutcome> {
   if (!input.finding.agent_id) return 'refused';
   if (!canTransition(input.from, input.to)) return 'refused';
   // Once. The far side is idempotent on the finding id, so a retry here would only
   // duplicate the record of the request.
-  await input.send({
-    agent_id: input.finding.agent_id,
-    from: input.from,
-    to: input.to,
-    finding_id: input.finding.finding_id,
-    reason_code: input.finding.finding_type,
-  });
-  return 'sent';
+  let response: Response;
+  try {
+    response = await input.send({
+      agent_id: input.finding.agent_id,
+      from: input.from,
+      to: input.to,
+      finding_id: input.finding.finding_id,
+      reason_code: input.finding.finding_type,
+    });
+  } catch {
+    return 'failed';
+  }
+  // The answer is read, not assumed. Treating an unreachable Lifecycle Manager as a
+  // completed transition would put "your agent was isolated" on someone's timeline
+  // while the agent kept working.
+  return response.ok ? 'sent' : 'failed';
 }

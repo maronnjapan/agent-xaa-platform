@@ -187,6 +187,39 @@ describe('the route surface', () => {
   });
 });
 
+/**
+ * 00b names eight internal routes; this one was missing, so the Lifecycle Manager's
+ * step5 called a path the Bridge does not serve and recorded the 404 as success —
+ * a refresh token left live at the SaaS after the platform had decided to give it up.
+ */
+describe('giving up the upstream connection', () => {
+  it('sends the refresh token to the connector\'s revocation endpoint and marks it REVOKED', async () => {
+    const harness = createBridgeHarness({
+      jwks: await jwks(), readTransaction: transactionReader(), caller: SA.lifecycle,
+    });
+    await seedConnector(harness);
+    await completeConsent(harness);
+    const id = connectionId(STUB_CONNECTOR.connector_id, 'testuser');
+
+    const response = await harness.internal(`/connections/${encodeURIComponent(id)}/revoke-upstream`, {
+      method: 'POST', headers: { Authorization: `Bearer ${SA.lifecycle}` },
+    });
+
+    expect(response.status).toBe(204);
+    expect(harness.outbound).toContain(STUB_CONNECTOR.revocation_endpoint);
+    const stored = await harness.documents.get<{ status: string }>('bridge_connections', id);
+    expect(stored!.status).toBe('REVOKED');
+  });
+
+  it('treats an unknown connection as already given up', async () => {
+    const harness = createBridgeHarness({ jwks: await jwks(), caller: SA.lifecycle });
+    const response = await harness.internal('/connections/nothing-here/revoke-upstream', {
+      method: 'POST', headers: { Authorization: `Bearer ${SA.lifecycle}` },
+    });
+    expect(response.status).toBe(204);
+  });
+});
+
 describe('the connector registry', () => {
   it('finds a connector by an exact resource match', async () => {
     const harness = createBridgeHarness();

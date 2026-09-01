@@ -23,7 +23,8 @@
   "dependencies": {
     "@google-cloud/firestore": "9.0.0",
     "@xaa/contracts": "workspace:*",
-    "@xaa/crypto": "workspace:*"
+    "@xaa/crypto": "workspace:*",
+    "google-auth-library": "11.0.2"
   },
   "devDependencies": {
     "@types/node": "22.18.1",

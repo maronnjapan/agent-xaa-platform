@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Deviation } from '../baseline/deviation.js';
 
 export const FINDING_TYPES = [
   'anomalous_agent_activity', 'potential_agent_compromise',
@@ -22,6 +23,15 @@ export interface SecurityFinding {
   risk_level: RiskLevel | null;
   review_status: ReviewStatus;
   created_at: string;
+  /**
+   * How far the agent strayed from its own baseline during this window.
+   *
+   * Carried on the finding rather than folded into `contributing_codes`, because a
+   * deviation is a description and a code is an alarm (T-SEC-26). Nothing scores off
+   * these; they exist so the Security AI, and the person reviewing after it, can read
+   * what the agent actually did rather than only what tripped.
+   */
+  deviations?: Deviation[];
 }
 
 /**

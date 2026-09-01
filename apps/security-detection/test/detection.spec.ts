@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { execFile } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { LOG_SOURCES } from '@xaa/logging';
 import { CLASS_UID, UNMAPPED_CLASS_UID, normalizeEntries } from '../src/normalize/index.js';
 import { runPipeline, createPipelineDeps, PIPELINE_STAGES, dispatch, type DispatchCounters } from '../src/pipeline/index.js';
@@ -18,7 +20,7 @@ import { needsHumanReview } from '../src/response/review.js';
 import { fallbackResponse, parseAiOutput } from '../src/ai/output.js';
 import { AiInputTooLarge, AI_INPUT_KEYS, buildAiInput, AI_INPUT_LIMIT_BYTES } from '../src/ai/input.js';
 import { createInProcessBus, startPullLoop } from '../src/ingest/subscriber.js';
-import { AGENT_ID, OTHER_AGENT_ID, baselineFor, logEntry } from '../src/testing/harness.js';
+import { AGENT_ID, OTHER_AGENT_ID, baselineFor, createSecurityHarness, logEntry } from '../src/testing/harness.js';
 
 const converterDir = new URL('../src/normalize/converters', import.meta.url).pathname;
 
@@ -74,12 +76,27 @@ describe('the pipeline', () => {
       collect: stub('collect', { __stage: 'raw', entries: [] }),
       normalize: stub('normalize', { __stage: 'normalized', events: [], unmapped: [] }),
       validateProtocol: stub('validateProtocol', { __stage: 'validated', events: [], violations: [] }),
-      detectRules: stub('detectRules', { __stage: 'rule_hits', events: [], violations: [], hits: [] }),
-      correlate: stub('correlate', { __stage: 'correlated', findings: [] }),
-      score: stub('score', { __stage: 'scored', findings: [] }),
+      detectRules: stub('detectRules', { __stage: 'rule_hits', events: [], violations: [], hits: [], deviations: new Map() }),
+      correlate: stub('correlate', { __stage: 'correlated', findings: [], events: [] }),
+      score: stub('score', { __stage: 'scored', findings: [], events: [] }),
     });
     expect(called).toEqual([...PIPELINE_STAGES]);
   });
+
+  /**
+   * The compiler, not a convention, is what stops a stage being skipped. This runs the
+   * type checker over a file that tries it: a green `tsc` here would mean the branded
+   * batch types had quietly become interchangeable again.
+   */
+  it('fails to compile a run that skips a stage', async () => {
+    const project = new URL('./type-fixtures/tsconfig.json', import.meta.url).pathname;
+    const failure = await promisify(execFile)('npx', ['tsc', '--noEmit', '-p', project], {
+      cwd: new URL('../../..', import.meta.url).pathname,
+    }).then(() => null, (error: { code?: number; stdout?: string }) => error);
+    expect(failure).not.toBeNull();
+    expect(failure!.code).not.toBe(0);
+    expect(failure!.stdout).toContain('skip-stage.ts');
+  }, 60_000);
 
   it('reads a protocol violation out of the log rather than re-deciding it', () => {
     const counters: DispatchCounters = { low_events_total: 0, unmapped_code_total: 0 };
@@ -361,7 +378,7 @@ describe('dispatch', () => {
     let analyzed = 0;
     let stored = 0;
     let normalized = 0;
-    await dispatch({ __stage: 'scored', findings: [finding('LOW')] }, {
+    await dispatch({ __stage: 'scored', findings: [finding('LOW')], events: [] }, {
       analyze: async () => { analyzed += 1; },
       storeFinding: async () => { stored += 1; },
       storeNormalized: async () => { normalized += 1; },
@@ -376,7 +393,7 @@ describe('dispatch', () => {
     const counters: DispatchCounters = { low_events_total: 0, unmapped_code_total: 0 };
     let analyzed = 0;
     let stored = 0;
-    await dispatch({ __stage: 'scored', findings: [finding('HIGH')] }, {
+    await dispatch({ __stage: 'scored', findings: [finding('HIGH')], events: [] }, {
       analyze: async () => { analyzed += 1; },
       storeFinding: async () => { stored += 1; },
       storeNormalized: async () => undefined,
@@ -512,5 +529,83 @@ describe('ingest', () => {
     bus.subscribe(async (payload) => { seen.push(payload); });
     await bus.publish({ a: 1 });
     expect(seen).toEqual([{ a: 1 }]);
+  });
+
+  /** What the pull loop hands over: a Cloud Logging entry wrapping our own line. */
+  function delivered(count: number) {
+    return Array.from({ length: count }, (_unused, index) => ({
+      insertId: `log-${index}`,
+      resource: { type: 'cloud_run_revision' },
+      jsonPayload: logEntry({
+        timestamp: `2026-01-01T12:0${index % 10}:00.000Z`, fields: { result: 'issued' },
+      }),
+    }));
+  }
+
+  const overCeiling = () =>
+    baselineFor().expected_rate.id_jag.max * THRESHOLDS.token!.medium_multiplier + 1;
+
+  /** A rate the baseline calls excessive, plus one refusal the Agent OP already logged. */
+  function batchWithBoth() {
+    return [
+      ...delivered(overCeiling()),
+      { jsonPayload: logEntry({ severity: 'WARNING', fields: { validation: 'human_subject_mismatch' } }) },
+    ];
+  }
+
+  it('takes a delivered batch through the pipeline and stores what it finds', async () => {
+    const harness = createSecurityHarness();
+    await harness.seedStore.set('agents', `${AGENT_ID}__baseline`, baselineFor() as never);
+
+    await harness.runOnce(batchWithBoth());
+
+    const stored = await harness.documents.listAll<{ agent_id: string; contributing_codes: string[] }>('security_findings');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.data.agent_id).toBe(AGENT_ID);
+    // Both halves of the batch reached the finding: the rate rule only fires because the
+    // baseline was read out of Firestore for this agent id.
+    expect(stored[0]!.data.contributing_codes).toContain('human_subject_mismatch');
+    expect(stored[0]!.data.contributing_codes.some((code) => code.startsWith('token.'))).toBe(true);
+  });
+
+  it('scores without a rate rule when the agent has no baseline written', async () => {
+    const harness = createSecurityHarness();
+    await harness.runOnce(batchWithBoth());
+    const stored = await harness.documents.listAll<{ contributing_codes: string[] }>('security_findings');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.data.contributing_codes.some((code) => code.startsWith('token.'))).toBe(false);
+  });
+
+  it('keeps the push route closed unless a caller check is configured', async () => {
+    const open = createSecurityHarness();
+    const refused = await open.fetch('/internal/security-events/push', {
+      method: 'POST', headers: { Authorization: 'Bearer token' },
+      body: JSON.stringify({ message: { data: '' } }),
+    });
+    expect(refused.status).toBe(403);
+
+    const guarded = createSecurityHarness({ callerVerify: async (token) => (token === 'good' ? 'sa-pubsub@test' : null) });
+    expect((await guarded.fetch('/internal/security-events/push', {
+      method: 'POST', headers: { Authorization: 'Bearer bad' },
+      body: JSON.stringify({ message: { data: '' } }),
+    })).status).toBe(403);
+  });
+
+  it('runs one push message and acknowledges it with 204', async () => {
+    const harness = createSecurityHarness({ callerVerify: async () => 'sa-pubsub@test' });
+    await harness.seedStore.set('agents', `${AGENT_ID}__baseline`, baselineFor() as never);
+    const message = Buffer.from(JSON.stringify(delivered(1)[0])).toString('base64');
+
+    const response = await harness.fetch('/internal/security-events/push', {
+      method: 'POST', headers: { Authorization: 'Bearer good' },
+      body: JSON.stringify({ message: { data: message } }),
+    });
+
+    expect(response.status).toBe(204);
+    const malformed = await harness.fetch('/internal/security-events/push', {
+      method: 'POST', headers: { Authorization: 'Bearer good' },
+      body: JSON.stringify({ message: { data: 'not base64 json' } }),
+    });
+    expect(malformed.status).toBe(400);
   });
 });

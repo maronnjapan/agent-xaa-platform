@@ -17,7 +17,8 @@ export async function stopAgent(input: {
   agentId: string;
 }): Promise<Response> {
   return input.client.send('lifecycle-manager', {
-    url: new URL(`/api/agents/${encodeURIComponent(input.agentId)}/revoke`, input.lifecycleManagerUrl).toString(),
+    // `/agents/{id}/revoke`, the route the Lifecycle Manager actually serves (00b §4).
+    url: new URL(`/agents/${encodeURIComponent(input.agentId)}/revoke`, input.lifecycleManagerUrl).toString(),
     method: 'POST',
     requiredScope: 'agent:revoke',
   });

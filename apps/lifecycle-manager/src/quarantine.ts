@@ -31,9 +31,9 @@ export async function quarantine(input: {
     baseUrl: input.clients.endpoints.agentOpUrl, agentId: input.agentId,
   });
   const bridgeUrl = input.clients.endpoints.bridgeUrl;
-  if (bridgeUrl) {
-    for (const bindingId of input.bridgeBindingIds) {
-      await input.clients.bridge.disableBinding({ baseUrl: bridgeUrl, bindingId }).catch(() => undefined);
-    }
+  if (bridgeUrl && input.bridgeBindingIds.length > 0) {
+    await input.clients.bridge
+      .disableBindings({ baseUrl: bridgeUrl, agentId: input.agentId })
+      .catch(() => undefined);
   }
 }

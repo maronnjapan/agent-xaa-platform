@@ -56,6 +56,27 @@ export const workDefinitionSchema = {
   },
 } as const;
 
+/**
+ * What one turn of the design conversation may rewrite.
+ *
+ * `status` is not a property here, and `additionalProperties: false` means the model
+ * cannot smuggle it in. The five fields are the ones a person describes in words; the
+ * state is not one of them (RULE-08).
+ */
+export const workDefinitionDraftSchema = {
+  $id: 'work-definition-draft',
+  type: 'object',
+  additionalProperties: false,
+  required: ['purpose', 'description', 'operations', 'user_confirmations', 'safety_notes'],
+  properties: {
+    purpose: { type: 'string' },
+    description: { type: 'string' },
+    operations: { type: 'array', items: { type: 'string' } },
+    user_confirmations: { type: 'array', items: { type: 'string' } },
+    safety_notes: { type: 'array', items: { type: 'string' } },
+  },
+} as const;
+
 export const BUSINESS_WORK_REQUEST_KEYS = [
   'human_subject', 'purpose', 'description', 'constraints', 'requested_lifetime_hours',
 ] as const;

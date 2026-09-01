@@ -7,11 +7,21 @@ import type { createDedicatedLedger } from './dedicated-ledger.js';
  * STANDARD provisioning can be shown to call none of it.
  */
 export interface GcpAdmin {
-  createServiceAccount(input: { accountId: string; description: string }): Promise<string>;
+  createServiceAccount(input: { accountId: string; description: string }): Promise<{
+    name: string;
+    email: string;
+    member: string;
+  }>;
   createCryptoKey(input: { keyRing: string; keyId: string; purpose: 'EC_SIGN_P256_SHA256' | 'ENCRYPT_DECRYPT'; labels: Record<string, string> }): Promise<string>;
   bindRole(input: { resource: string; member: string; role: string }): Promise<string>;
   createService(input: { name: string; serviceAccount: string; env: Record<string, string>; labels: Record<string, string> }): Promise<{ name: string; uri: string }>;
-  createJob(input: { name: string; serviceAccount: string; taskTimeoutSeconds: number; labels: Record<string, string> }): Promise<string>;
+  createJob(input: {
+    name: string;
+    serviceAccount: string;
+    taskTimeoutSeconds: number;
+    env: Record<string, string>;
+    labels: Record<string, string>;
+  }): Promise<string>;
   healthCheck(uri: string): Promise<boolean>;
 }
 
@@ -57,6 +67,12 @@ export async function createDedicatedResources(options: {
   signingKeyRing: string;
   connectionKeyRing: string;
   imageEnv: Record<string, string>;
+  runtimeEnv: Record<string, string>;
+  jwksBucket: string;
+  activityTopic: string;
+  runtimeInvokerServices: readonly string[];
+  provisionerMember: string;
+  agentPlatformClientSecret: string;
   taskTimeoutSeconds: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -69,9 +85,9 @@ export async function createDedicatedResources(options: {
 
   // (1) and (2): the two identities.
   const opServiceAccount = await options.admin.createServiceAccount({ accountId: assertRuntimeName(names.opServiceAccount), description });
-  await options.ledger.record(options.agentId, 'service_account', opServiceAccount);
+  await options.ledger.record(options.agentId, 'service_account', opServiceAccount.name);
   const agentServiceAccount = await options.admin.createServiceAccount({ accountId: assertRuntimeName(names.agentServiceAccount), description });
-  await options.ledger.record(options.agentId, 'service_account', agentServiceAccount);
+  await options.ledger.record(options.agentId, 'service_account', agentServiceAccount.name);
 
   // (3) and (4): the two keys, in the key rings Terraform provides.
   const signingKeyName = await options.admin.createCryptoKey({
@@ -85,23 +101,53 @@ export async function createDedicatedResources(options: {
 
   // (5): the bindings. The role names come from the shared constant table, so the
   // Terraform-side check and this code cannot disagree about what is granted.
-  for (const role of DEDICATED_OP_SA_ROLES) {
-    const binding = await options.admin.bindRole({ resource: signingKeyName, member: opServiceAccount, role });
-    await options.ledger.record(options.agentId, 'iam_binding', binding);
-  }
-  for (const role of new Set(DEDICATED_AGENT_SA_ROLES)) {
-    const binding = await options.admin.bindRole({ resource: agentServiceAccount, member: agentServiceAccount, role });
+  const projectResource = `projects/${options.projectId}`;
+  const activityTopicResource = `${projectResource}/topics/${options.activityTopic}`;
+  const opTargets = [
+    [signingKeyName, roleEnding(DEDICATED_OP_SA_ROLES, '/cloudkms.signerVerifier')],
+    [connectionKeyName, roleEnding(DEDICATED_OP_SA_ROLES, '/cloudkms.cryptoKeyEncrypterDecrypter')],
+    [projectResource, roleEnding(DEDICATED_OP_SA_ROLES, '/datastore.user')],
+    [`projects/_/buckets/${options.jwksBucket}`, roleEnding(DEDICATED_OP_SA_ROLES, '/storage.objectCreator')],
+    [activityTopicResource, roleEnding(DEDICATED_OP_SA_ROLES, '/pubsub.publisher')],
+    [options.agentPlatformClientSecret, roleEnding(DEDICATED_OP_SA_ROLES, '/secretmanager.secretAccessor')],
+  ] as const;
+  for (const [resource, role] of opTargets) {
+    const binding = await options.admin.bindRole({ resource, member: opServiceAccount.member, role });
     await options.ledger.record(options.agentId, 'iam_binding', binding);
   }
 
   // (6): the dedicated OP.
   const service = await options.admin.createService({
     name: assertRuntimeName(names.opService),
-    serviceAccount: opServiceAccount,
-    env: { ...options.imageEnv, AGENT_ID: options.agentId, KMS_IDJAG_KEY: signingKeyName, KMS_IDP_CONNECTION_KEY: connectionKeyName },
+    serviceAccount: opServiceAccount.email,
+    env: {
+      ...options.imageEnv,
+      AGENT_ID: options.agentId,
+      KMS_IDJAG_KEY: `${signingKeyName}/cryptoKeyVersions/1`,
+      KMS_IDP_CONNECTION_KEY: connectionKeyName,
+      CLIENT_SECRET_AGENT_PLATFORM_SECRET: options.agentPlatformClientSecret,
+    },
     labels,
   });
   await options.ledger.record(options.agentId, 'cloud_run_service', service.name);
+
+  const runInvoker = roleEnding(DEDICATED_AGENT_SA_ROLES, '/run.invoker');
+  for (const member of [agentServiceAccount.member, options.provisionerMember]) {
+    const binding = await options.admin.bindRole({ resource: service.name, member, role: runInvoker });
+    await options.ledger.record(options.agentId, 'iam_binding', binding);
+  }
+  for (const resource of options.runtimeInvokerServices) {
+    const binding = await options.admin.bindRole({ resource, member: agentServiceAccount.member, role: runInvoker });
+    await options.ledger.record(options.agentId, 'iam_binding', binding);
+  }
+  for (const [resource, role] of [
+    [projectResource, roleEnding(DEDICATED_AGENT_SA_ROLES, '/aiplatform.user')],
+    [projectResource, roleEnding(DEDICATED_AGENT_SA_ROLES, '/datastore.user')],
+    [activityTopicResource, roleEnding(DEDICATED_AGENT_SA_ROLES, '/pubsub.publisher')],
+  ] as const) {
+    const binding = await options.admin.bindRole({ resource, member: agentServiceAccount.member, role });
+    await options.ledger.record(options.agentId, 'iam_binding', binding);
+  }
 
   const deadline = now() + HEALTH_TIMEOUT_MS;
   while (!await options.admin.healthCheck(service.uri)) {
@@ -112,8 +158,9 @@ export async function createDedicatedResources(options: {
   // (7): the runtime job, timed out at the agent's remaining life.
   const jobName = await options.admin.createJob({
     name: assertRuntimeName(names.runtimeJob),
-    serviceAccount: agentServiceAccount,
+    serviceAccount: agentServiceAccount.email,
     taskTimeoutSeconds: options.taskTimeoutSeconds,
+    env: { ...options.runtimeEnv, ISOLATION_LEVEL: 'full_isolation' },
     labels,
   });
   await options.ledger.record(options.agentId, 'cloud_run_job', jobName);
@@ -123,6 +170,12 @@ export async function createDedicatedResources(options: {
     signingKeyName,
     connectionKeyName,
     runtimeJobName: jobName,
-    agentServiceAccount,
+    agentServiceAccount: agentServiceAccount.email,
   };
+}
+
+function roleEnding(roles: readonly string[], suffix: string): string {
+  const role = roles.find((candidate) => candidate.endsWith(suffix));
+  if (!role) throw new Error(`dedicated IAM contract is missing ${suffix}`);
+  return role;
 }

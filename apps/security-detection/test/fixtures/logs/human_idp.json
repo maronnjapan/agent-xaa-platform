@@ -1,0 +1,10 @@
+{
+  "severity": "INFO", "app": "human-idp", "log_source": "human_idp", "event": "idp_authenticate",
+  "request_id": "", "trace_id": "b0f2a1c4-0000-4000-8000-000000000001",
+  "agent_id": null, "human_subject": "testuser", "timestamp": "2026-01-01T12:00:00.000Z",
+  "fields": {
+    "client_id": "agent-platform", "audience": "agent-platform", "scope": "openid offline_access",
+    "auth_result": "success", "failure_code": null, "dpop_status": "absent",
+    "source_ip": null, "user_agent": null
+  }
+}

@@ -12,6 +12,7 @@ export * from './catalog-types.js';
 export * from './runtime-env.js';
 export * from './client-assertion-type.js';
 export * from './collections.js';
+export * from './completion-code.js';
 export * from './dedicated-iam.js';
 export * from './grant-types.js';
 export * from './http-client.js';

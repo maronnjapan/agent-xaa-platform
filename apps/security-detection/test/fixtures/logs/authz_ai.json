@@ -1,0 +1,10 @@
+{
+  "severity": "INFO", "app": "authorization", "log_source": "authz_ai", "event": "authz_ai.infer",
+  "request_id": "req-ai-1", "trace_id": "b0f2a1c4-0000-4000-8000-000000000002",
+  "agent_id": null, "human_subject": "testuser", "timestamp": "2026-01-01T12:00:01.000Z",
+  "fields": {
+    "agent_draft_id": "draft-1", "work_definition_id": "wd-1", "work_definition_hash": "sha256:abc",
+    "proposed_capabilities": ["document.read", "document.write"], "confidence": 0.82,
+    "taxonomy_version": "2026-01", "model_version": "v1", "result": "ok"
+  }
+}

@@ -4,6 +4,7 @@ export interface ReplayEvent {
   event_id: string;
   occurred_at: string;
   source: string;
+  phase?: string;
   outcome: string;
   message: string;
   detail?: Record<string, unknown>;
@@ -15,6 +16,8 @@ export interface ReplayStep {
   from: string | null;
   to: string | null;
   message: string;
+  outcome: string;
+  phase: string;
   blocked: boolean;
   stopRatio: number;
   delayMs: number;
@@ -60,6 +63,8 @@ export function buildReplayPlan(
       from,
       to,
       message: event.message,
+      outcome: event.outcome,
+      phase: event.phase ?? '',
       blocked,
       stopRatio: blocked ? BLOCKED_STOP_RATIO : 1,
       delayMs: REPLAY_STEP_MS,

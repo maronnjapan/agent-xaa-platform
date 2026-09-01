@@ -65,7 +65,10 @@ export function createXaaTokenRoute(deps: AgentOpDeps): Hono {
       trace.error_code = mapped.body.error;
       return context.json(mapped.body, mapped.status);
     } finally {
-      emitTokenExchangeLog(trace, deps.writeExchangeLog);
+      emitTokenExchangeLog(trace, deps.writeExchangeLog, {
+        traceId: context.req.header('X-Cloud-Trace-Context')?.split('/')[0] ?? '',
+        requestId: context.req.header('X-Request-Id') ?? '',
+      });
     }
   });
   return app;

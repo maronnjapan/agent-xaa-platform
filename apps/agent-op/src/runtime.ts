@@ -3,6 +3,7 @@ import { Storage } from '@google-cloud/storage';
 import { PubSub } from '@google-cloud/pubsub';
 import { createKmsEs256Signer } from '@xaa/crypto/kms';
 import { createFirestoreDocumentStore, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
+import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import { loadConfig } from './config.js';
 import type { AgentOpAppDeps } from './app.js';
 import { createKmsEnvelopeCipher } from './idp-connection/crypto.js';
@@ -48,6 +49,18 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   };
 
   if (config.mode === 'token') {
+    deps.serviceIdentity = {
+      async verify(authorization) {
+        const token = authorization?.match(/^Bearer (.+)$/)?.[1];
+        if (!token) return null;
+        try {
+          const payload = await verifyGoogleServiceIdentity(token, { audience: config.publicBaseUrl });
+          return typeof payload.email === 'string' ? payload.email : null;
+        } catch { return null; }
+      },
+    };
+    deps.lifecycleServiceAccount = env.LIFECYCLE_SA_EMAIL ?? '';
+    deps.provisionerServiceAccount = env.PROVISIONER_SA_EMAIL ?? '';
     // Refusing to start beats issuing grants whose key is absent from the JWK Set.
     await publishPublicKey({
       storage, bucket: config.jwksBucket, kid: signer.kid,

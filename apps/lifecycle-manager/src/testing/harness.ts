@@ -64,7 +64,8 @@ export function recordingClients(options: {
       async revokeByActor({ baseUrl, actorSub }) { record('revokeByActor', `${baseUrl}|${actorSub}`); return status(`revokeByActor:${baseUrl}`); },
     },
     bridge: {
-      async disableBinding({ bindingId }) { record('disableBinding', bindingId); return status('disableBinding'); },
+      async disableBindings({ agentId }) { record('disableBindings', agentId); return status('disableBindings'); },
+      async deleteBindings({ agentId }) { record('deleteBindings', agentId); return status('deleteBindings'); },
       async revokeUpstream({ connectionId }) { record('revokeUpstream', connectionId); return status('revokeUpstream'); },
     },
     endpoints: {
@@ -131,7 +132,12 @@ export function createLifecycleHarness(options: {
     })) as unknown as typeof fetch,
     internalAuth: {
       audience: LIFECYCLE_BASE,
-      allowedCallers: options.allowedCallers ?? ['sa-scheduler@', 'sa-security@', 'sa-authorization@'],
+      // Full emails, as Terraform injects them: the check is membership, not a prefix.
+      allowedCallers: options.allowedCallers ?? [
+        'sa-scheduler@xaa-test.iam.gserviceaccount.com',
+        'sa-security@xaa-test.iam.gserviceaccount.com',
+        'sa-authorization@xaa-test.iam.gserviceaccount.com',
+      ],
       verify: async (token) => (token === 'invalid' ? null : options.callerEmail ?? 'sa-scheduler@xaa-test.iam.gserviceaccount.com'),
     },
     logger: createLogger('lifecycle-manager', 'provisioner', (line) => logs.push(line)),

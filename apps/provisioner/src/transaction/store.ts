@@ -13,6 +13,8 @@ export interface ProvisioningTransaction {
   status: TransactionStatus;
   pending_step: string | null;
   dedicated_short_id: string | null;
+  /** The last Activity Event number handed out for this transaction (T-PROV-32). */
+  sequence: number;
   created_at: string;
   expires_at: string;
 }
@@ -21,7 +23,7 @@ export const provisioningTransactionSchema = {
   $id: 'provisioning-transaction',
   type: 'object',
   additionalProperties: false,
-  required: ['transaction_id', 'human_subject', 'agent_id', 'required_capabilities', 'required_connectors', 'isolation_level', 'status', 'pending_step', 'dedicated_short_id', 'created_at', 'expires_at'],
+  required: ['transaction_id', 'human_subject', 'agent_id', 'required_capabilities', 'required_connectors', 'isolation_level', 'status', 'pending_step', 'dedicated_short_id', 'sequence', 'created_at', 'expires_at'],
   properties: {
     transaction_id: { type: 'string', pattern: '^txn_[A-Za-z0-9_-]{22}$' },
     human_subject: { type: 'string', minLength: 1 },
@@ -32,6 +34,7 @@ export const provisioningTransactionSchema = {
     status: { enum: TRANSACTION_STATUSES },
     pending_step: { type: ['string', 'null'] },
     dedicated_short_id: { type: ['string', 'null'] },
+    sequence: { type: 'integer', minimum: 0 },
     created_at: { type: 'string', format: 'date-time' },
     expires_at: { type: 'string', format: 'date-time' },
   },
@@ -45,10 +48,14 @@ export function newTransactionId(): string {
 }
 
 export interface TransactionStore {
-  create(input: Omit<ProvisioningTransaction, 'transaction_id' | 'status' | 'created_at' | 'expires_at'>): Promise<ProvisioningTransaction>;
+  create(input: Omit<ProvisioningTransaction, 'transaction_id' | 'status' | 'sequence' | 'created_at' | 'expires_at'>): Promise<ProvisioningTransaction>;
   find(transactionId: string): Promise<ProvisioningTransaction | undefined>;
   advance(transactionId: string, to: TransactionStatus, patch?: Partial<ProvisioningTransaction>): Promise<ProvisioningTransaction>;
   abandon(transactionId: string): Promise<ProvisioningTransaction | undefined>;
+  /** Moves the resume point without changing the status (T-PROV-28). */
+  markStep(transactionId: string, pendingStep: string): Promise<void>;
+  /** Hands out the next Activity Event number, once, even under concurrent emitters. */
+  nextSequence(transactionId: string): Promise<number>;
 }
 
 export function createTransactionStore(documents: DocumentStore, now: () => number = () => Date.now()): TransactionStore {
@@ -62,6 +69,7 @@ export function createTransactionStore(documents: DocumentStore, now: () => numb
         ...input,
         transaction_id: newTransactionId(),
         status: 'CREATED',
+        sequence: 0,
         created_at: new Date(createdAt).toISOString(),
         expires_at: new Date(createdAt + TRANSACTION_TTL_SECONDS * 1000).toISOString(),
       };
@@ -77,7 +85,9 @@ export function createTransactionStore(documents: DocumentStore, now: () => numb
       if (!current) throw new Error(`unknown transaction: ${transactionId}`);
       const next: ProvisioningTransaction = { ...current, ...patch, status: transition(current.status, to) };
       assertTransaction(next);
-      await documents.set('provisioning_transactions', transactionId, { ...next });
+      // Only the changed fields are written: `sequence` is advanced by a different
+      // writer, and a whole-document overwrite would put back the number this call read.
+      await documents.update('provisioning_transactions', transactionId, { ...patch, status: next.status });
       return next;
     },
 
@@ -91,8 +101,22 @@ export function createTransactionStore(documents: DocumentStore, now: () => numb
       if (!current) return undefined;
       if (isTerminal(current.status)) return current;
       const next: ProvisioningTransaction = { ...current, status: transition(current.status, 'ABANDONED') };
-      await documents.set('provisioning_transactions', transactionId, { ...next });
+      await documents.update('provisioning_transactions', transactionId, { status: next.status });
       return next;
+    },
+
+    async markStep(transactionId, pendingStep) {
+      await documents.update('provisioning_transactions', transactionId, { pending_step: pendingStep });
+    },
+
+    async nextSequence(transactionId) {
+      return documents.transaction(async (tx) => {
+        const current = await tx.get<ProvisioningTransaction>('provisioning_transactions', transactionId);
+        if (!current) throw new Error(`unknown transaction: ${transactionId}`);
+        const sequence = (current.sequence ?? 0) + 1;
+        tx.update('provisioning_transactions', transactionId, { sequence });
+        return sequence;
+      });
     },
   };
 }

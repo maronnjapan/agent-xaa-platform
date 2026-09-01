@@ -74,6 +74,7 @@ export async function startAutomationAppHarness(options: {
 
   const config: AutomationAppConfig = {
     port: 8080, issuer: ISSUER, clientId: 'automation-app',
+    clientSecret: 'test-automation-app-secret', publicBaseUrl: AUTOMATION_APP_BASE,
     authorizationPlatformUrl: AUTHORIZATION_BASE, agentProvisionerUrl: PROVISIONER_BASE,
     lifecycleManagerUrl: LIFECYCLE_BASE, docsApiUrl: 'https://resource-docs-api.test',
     activityTopic: 'agent-activity-stream', defaultAgentLifetimeHours: 1,
@@ -87,6 +88,8 @@ export async function startAutomationAppHarness(options: {
     documents,
     sessions,
     verifyAccessToken: async (token) =>
+      JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString('utf8')) as Record<string, unknown>,
+    verifyIdToken: async (token) =>
       JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString('utf8')) as Record<string, unknown>,
     auditWrite: (line) => auditLines.push(line),
     fetchImpl: (async (url: string | URL | Request, init: RequestInit = {}) => {

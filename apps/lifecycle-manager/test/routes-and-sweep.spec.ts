@@ -5,6 +5,7 @@ import { sweep } from '../src/sweep.js';
 import { quarantine } from '../src/quarantine.js';
 import { cleanupAgent } from '../src/cleanup/index.js';
 import { handleIdentityDisabled, REVOCABLE_STATUSES } from '../src/subscribers/identity-disabled.js';
+import { createIdentityDisabledHandler, startIdentityDisabledSubscriber } from '../src/subscribers/runner.js';
 import { AGENT_STATUSES } from '../src/state-machine.js';
 import { createLifecycleHarness, recordingClients, seedDomain, type LifecycleHarness } from '../src/testing/harness.js';
 
@@ -105,12 +106,26 @@ describe('the sweep', () => {
 
 describe('the tick endpoint', () => {
   it('rejects an unknown caller', async () => {
-    const harness = createLifecycleHarness({ allowedCallers: ['sa-scheduler@'], callerEmail: 'sa-other@xaa-test.iam.gserviceaccount.com' });
+    const harness = createLifecycleHarness({
+      allowedCallers: ['sa-scheduler@xaa-test.iam.gserviceaccount.com'],
+      callerEmail: 'sa-other@xaa-test.iam.gserviceaccount.com',
+    });
     const response = await harness.fetch('/internal/tick', {
       method: 'POST', headers: { Authorization: 'Bearer token' },
     });
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'caller_not_allowed' });
+  });
+
+  it('rejects a caller whose email merely starts with an allowed one', async () => {
+    const harness = createLifecycleHarness({
+      allowedCallers: ['sa-scheduler@xaa-test.iam.gserviceaccount.com'],
+      callerEmail: 'sa-scheduler@xaa-test.iam.gserviceaccount.com.attacker.example',
+    });
+    const response = await harness.fetch('/internal/tick', {
+      method: 'POST', headers: { Authorization: 'Bearer token' },
+    });
+    expect(response.status).toBe(403);
   });
 
   it('rejects a request with no token at all', async () => {
@@ -137,7 +152,7 @@ describe('quarantine', () => {
       documents: harness.documents, clients: harness.clients, agentId,
       bridgeBindingIds: ['bind-1'], severity: 'CRITICAL',
     });
-    expect(harness.clients.calls.map((entry) => entry.target)).toEqual(['disableIssuance', 'disableBinding']);
+    expect(harness.clients.calls.map((entry) => entry.target)).toEqual(['disableIssuance', 'disableBindings']);
     // The process keeps running and keeps writing its checkpoint: evidence, not mercy.
     expect(harness.clients.calls.filter((entry) => entry.target === 'cancelExecution')).toHaveLength(0);
     expect((await harness.documents.get<{ status: string }>('agents', `${agentId}__meta`))!.status).toBe('QUARANTINED');
@@ -252,5 +267,64 @@ describe('a disabled human identity', () => {
     });
     expect(result).toEqual({ revoked: [], failed: [], abandoned: 0 });
     expect(lines.some((line) => line.includes('invalid_identity_disabled_event'))).toBe(true);
+  });
+});
+
+/**
+ * The handler existed long before anything called it. These fix the wiring itself: a
+ * delivered message must reach `handleIdentityDisabled`, and every message must be
+ * acked, because redelivery would re-run cleanup for the agents already settled.
+ */
+describe('the identity-disabled subscriber', () => {
+  function delivery() {
+    const acked: string[] = [];
+    let listener: ((message: { data: Buffer; ack(): void; nack(): void }) => void) | undefined;
+    return {
+      acked,
+      subscription: { on: (_event: 'message', handler: (message: { data: Buffer; ack(): void; nack(): void }) => void) => { listener = handler; } },
+      send: (raw: string) => listener!({
+        data: Buffer.from(raw),
+        ack: () => acked.push('ack'),
+        nack: () => acked.push('nack'),
+      }),
+    };
+  }
+
+  async function settled(harness: LifecycleHarness, cleaned: Array<[string, string]>) {
+    const { acked, subscription, send } = delivery();
+    startIdentityDisabledSubscriber(subscription, createIdentityDisabledHandler({
+      documents: harness.documents,
+      logger,
+      cleanup: async (agentId, reason) => {
+        cleaned.push([agentId, reason]);
+        return { status: 'DESTROYED', steps: [] } as never;
+      },
+    }));
+    return { acked, send };
+  }
+
+  it('takes a delivered message to the cleanup of that person\'s agents', async () => {
+    const harness = createLifecycleHarness();
+    const agentId = await seedDomain(harness, { expiresAt: new Date(Date.now() + HOUR).toISOString() });
+    const cleaned: Array<[string, string]> = [];
+    const { acked, send } = await settled(harness, cleaned);
+
+    send(JSON.stringify({ human_subject: 'testuser', disabled_at: '2026-01-01T00:00:00.000Z' }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(cleaned).toEqual([[agentId, 'IDENTITY_DISABLED']]);
+    expect(acked).toEqual(['ack']);
+  });
+
+  it('acks a message it cannot parse rather than letting it come back', async () => {
+    const harness = createLifecycleHarness();
+    const cleaned: Array<[string, string]> = [];
+    const { acked, send } = await settled(harness, cleaned);
+
+    send('not json');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(cleaned).toEqual([]);
+    expect(acked).toEqual(['ack']);
   });
 });

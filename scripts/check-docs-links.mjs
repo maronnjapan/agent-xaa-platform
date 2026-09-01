@@ -5,7 +5,7 @@
 // Both halves are checked — the file, and the anchor within it — because a renamed
 // heading breaks a link silently while the file still resolves.
 import { access, readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const violations = [];
@@ -21,7 +21,20 @@ function toAnchor(heading) {
     .replace(/\s/g, '-')}`;
 }
 
-const files = (await readdir(join(root, 'docs'))).filter((name) => name.endsWith('.md'));
+/** Every document under docs/, not only the ones directly in it. */
+async function markdownUnder(directory) {
+  const found = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...await markdownUnder(path));
+    else if (entry.name.endsWith('.md')) found.push(relative(join(root, 'docs'), path));
+  }
+  return found.sort();
+}
+
+const files = await markdownUnder(join(root, 'docs'));
+const verbose = process.argv.includes('--verbose');
+if (verbose) for (const name of files) console.log(`checking docs/${name}`);
 const anchors = new Map();
 for (const name of files) {
   const text = await readFile(join(root, 'docs', name), 'utf8');
@@ -30,8 +43,17 @@ for (const name of files) {
 
 for (const name of files) {
   const text = await readFile(join(root, 'docs', name), 'utf8');
-  for (const link of text.matchAll(/\[[^\]]*\]\(\.\/([^)#]+)(#[^)]*)?\)/g)) {
-    const [, target, anchor] = link;
+  // Reference-style links and raw HTML are not checkable by this script and are not
+  // needed: the two inline forms cover every cross-reference in these documents.
+  if (/\][ ]?\[[^\]]+\]/.test(text)) violations.push(`${name}: uses a reference-style link`);
+  if (/<a\s/i.test(text)) violations.push(`${name}: uses an HTML <a> link`);
+
+  for (const link of text.matchAll(/\[[^\]]*\]\(([^)\s#]+)(#[^)\s]*)?\)/g)) {
+    const [, href, anchor] = link;
+    if (/^[a-z]+:/i.test(href)) continue;
+    // Relative to the document that carries the link, then named from docs/ so it can
+    // be looked up in the same map whatever directory it lives in.
+    const target = relative(join(root, 'docs'), resolve(join(root, 'docs', dirname(name)), href));
     if (!anchors.has(target)) {
       // Not a document: a diagram or another asset, checked as a file on disk.
       try {

@@ -2,7 +2,14 @@ import type { LogEntry } from '@xaa/logging';
 import { CLASS_UID } from '../class-uid.js';
 import { SEVERITY_ID, type NormalizedEvent } from '../schema.js';
 
-/** resource_api: docs 09 §2. */
+/**
+ * resource_api: docs 09 §2.
+ *
+ * The producer is `logApiAccess` in @xaa/resource-guard, which writes `response_status`
+ * and `http_method` (docs 09 §2's field list for `resource_api.access`). Reading only
+ * `status` left `api.status` holding the severity, so every refusal looked like `INFO`
+ * and the authorization classification counted none of them.
+ */
 export function convert(entry: LogEntry): NormalizedEvent {
   const fields = entry.fields;
   return {
@@ -19,9 +26,9 @@ export function convert(entry: LogEntry): NormalizedEvent {
     },
     api: {
       operation: String(fields.tool_id ?? entry.event),
-      method: String(fields.method ?? 'GET'),
+      method: String(fields.http_method ?? fields.method ?? 'GET'),
       resource: String(fields.resource ?? ''),
-      status: String(fields.status ?? entry.severity),
+      status: String(fields.response_status ?? fields.status ?? entry.severity),
     },
     metadata: {
       correlation_uid: entry.trace_id || entry.request_id,

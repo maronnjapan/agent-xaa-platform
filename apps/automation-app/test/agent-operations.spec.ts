@@ -111,7 +111,7 @@ describe('stopping an agent', () => {
     const response = await harness.fetch(`/api/agents/${AGENT_ID}/stop`, { method: 'POST' });
     expect(response.status).toBe(200);
     const call = harness.upstream.at(-1)!;
-    expect(call.url).toBe(`https://lifecycle.test/api/agents/${AGENT_ID}/revoke`);
+    expect(call.url).toBe(`https://lifecycle.test/agents/${AGENT_ID}/revoke`);
     const headers = call.init.headers as Record<string, string>;
     expect(headers.Authorization).toMatch(/^DPoP /);
     expect(headers.DPoP).toBeTruthy();

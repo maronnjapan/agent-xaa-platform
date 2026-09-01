@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSecurityHarness, AGENT_ID } from '../src/testing/harness.js';
+import { CALLER_TOKEN, createSecurityHarness, AGENT_ID } from '../src/testing/harness.js';
 import type { StoredFinding } from '../src/index.js';
 
 async function seedPending(harness: ReturnType<typeof createSecurityHarness>, overrides: Partial<StoredFinding> = {}): Promise<string> {
@@ -14,9 +14,11 @@ async function seedPending(harness: ReturnType<typeof createSecurityHarness>, ov
   return finding.finding_id;
 }
 
-const review = (harness: ReturnType<typeof createSecurityHarness>, id: string, body: unknown) =>
+const review = (harness: ReturnType<typeof createSecurityHarness>, id: string, body: unknown, token = CALLER_TOKEN) =>
   harness.fetch(`/internal/review/${id}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
   });
 
 /**

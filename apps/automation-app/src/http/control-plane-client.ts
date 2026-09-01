@@ -35,6 +35,7 @@ export interface ControlPlaneClient {
 export function createControlPlaneClient(input: {
   session: Session;
   fetchImpl?: typeof fetch;
+  identityTokenProvider?: (audience: string) => Promise<string>;
 }): ControlPlaneClient {
   const send = input.fetchImpl ?? globalThis.fetch;
   return {
@@ -52,6 +53,9 @@ export function createControlPlaneClient(input: {
         DPoP: await createDpopProof({ method: request.method, url: request.url, keyPair, accessToken }),
       };
       if (request.body !== undefined) headers['Content-Type'] = 'application/json';
+      if (input.identityTokenProvider) {
+        headers['X-Serverless-Authorization'] = `Bearer ${await input.identityTokenProvider(new URL(request.url).origin)}`;
+      }
       return send(request.url, {
         method: request.method,
         headers,

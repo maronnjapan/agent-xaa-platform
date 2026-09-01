@@ -90,6 +90,36 @@ export async function createAgentRegistration(documents: DocumentStore, registra
   await documents.set('agents', `${registration.agent_id}__meta`, { ...registration });
 }
 
+/**
+ * The Tool Manifest as it was handed to the execution (00b §3: this document's writer
+ * is T-PROV-06, its reader T-RUN-06).
+ *
+ * It is a copy, not the source: the Runtime receives the manifest through the job
+ * environment and verifies its digest there. This document exists so that a manifest
+ * can still be read back for an agent already running, and so that cleanup has
+ * something to delete.
+ */
+export async function writeAgentManifest(
+  documents: DocumentStore, agentId: string, manifest: Record<string, unknown>,
+): Promise<void> {
+  await documents.set('agents', `${agentId}__manifest`, manifest);
+}
+
+export async function deleteAgentManifest(documents: DocumentStore, agentId: string): Promise<void> {
+  await documents.delete('agents', `${agentId}__manifest`);
+}
+
+/**
+ * The one write that turns a registration into a running agent. It lives here rather
+ * than at the call site because every write to `agents/{agent_id}/meta` belongs to this
+ * module (00b §3), and a second writer is how two of them start disagreeing.
+ */
+export async function setJobExecutionName(
+  documents: DocumentStore, agentId: string, executionName: string,
+): Promise<void> {
+  await documents.update('agents', `${agentId}__meta`, { job_execution_name: executionName });
+}
+
 /** Provisioner writes exactly these three; anything else belongs to Lifecycle. */
 export async function setProvisioningStatus(
   documents: DocumentStore, agentId: string, status: 'CREATED' | 'PROVISIONING' | 'ACTIVE',

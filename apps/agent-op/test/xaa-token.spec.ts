@@ -70,7 +70,7 @@ describe('POST /xaa/token issues an ID-JAG', () => {
     await issued(fixture);
     expect(fixture.exchangeLogs).toHaveLength(1);
     expect(fixture.ledgerLogs).toHaveLength(1);
-    const trace = JSON.parse(fixture.exchangeLogs[0]!) as Record<string, unknown>;
+    const trace = (JSON.parse(fixture.exchangeLogs[0]!) as { fields: Record<string, unknown> }).fields;
     for (const field of ['op_runtime_id', 'op_kind', 'requested_audience', 'requested_resource', 'requested_scope',
       'subject_token_iss', 'subject_token_aud', 'subject_token_sub', 'actor_token_sub', 'actor_token_jti',
       'delegation_check', 'dpop_result', 'issued_id_jag', 'agent_expiry_check', 'error_code']) {

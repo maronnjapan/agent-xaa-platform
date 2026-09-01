@@ -5,6 +5,7 @@ locals {
     "roles/datastore.user",
     "roles/storage.objectCreator",
     "roles/pubsub.publisher",
+    "roles/secretmanager.secretAccessor",
   ]
   dedicated_agent_sa_roles = [
     "roles/run.invoker",

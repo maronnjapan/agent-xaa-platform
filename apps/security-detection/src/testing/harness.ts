@@ -1,8 +1,8 @@
 import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
-import { CAPABILITIES, TOOL_IDS } from '@xaa/contracts';
+import { CAPABILITIES, TOOL_IDS, type ActivityEvent } from '@xaa/contracts';
 import { createLogger } from '@xaa/logging';
 import type { LogEntry } from '@xaa/logging';
-import createApp, { type SecurityDetectionDeps } from '../index.js';
+import { createSecurityDetection, type DetectionRun, type SecurityDetectionDeps } from '../index.js';
 import type { AgentBaseline } from '../baseline/types.js';
 import { buildBaseline } from '../baseline/build.js';
 import type { TransitionRequest } from '../response/dispatch.js';
@@ -10,36 +10,61 @@ import type { TransitionRequest } from '../response/dispatch.js';
 export const AGENT_ID = 'agent-abcdefghijklmnopqrstuvwxyz';
 export const OTHER_AGENT_ID = 'agent-zzzzzzzzzzzzzzzzzzzzzzzzzz';
 export const FINANCE_RESOURCE = 'https://resource-finance-api.test';
+/** The bearer the harness's caller checks accept; anything else is refused, as in production. */
+export const CALLER_TOKEN = 'good';
 
 export interface SecurityHarness {
   fetch(path: string, init?: RequestInit): Promise<Response>;
+  /** The ingestion run the pull loop and the push route both call. */
+  runOnce: DetectionRun;
   documents: DocumentStore;
+  /** The same Firestore seen as the Provisioner, which is what writes a baseline. */
+  seedStore: DocumentStore;
   transitions: TransitionRequest[];
   logs: string[];
+  activity: ActivityEvent[];
   aiCalls: number;
 }
 
 export function createSecurityHarness(options: {
   aiOutput?: string | null;
   now?: () => number;
+  maxLifetimeSeconds?: number;
+  /** Present only when the test exercises the push route, as in production. */
+  callerVerify?(token: string): Promise<string | null>;
+  /** Defaults to a configured check, so the review route is reachable but never open. */
+  reviewerVerify?(token: string): Promise<string | null>;
+  /** What the Lifecycle Manager answers. Anything but 2xx is a refused transition. */
+  transitionStatus?: number;
 } = {}): SecurityHarness {
-  const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'security-detection');
+  const firestore = createFirestoreDouble();
+  const documents = createFirestoreDocumentStore(firestore, 'security-detection');
+  const seedStore = createFirestoreDocumentStore(firestore, 'provisioner');
   const transitions: TransitionRequest[] = [];
   const logs: string[] = [];
+  const activity: ActivityEvent[] = [];
   const state = { aiCalls: 0 };
 
   const deps: SecurityDetectionDeps = {
     documents,
-    sendToLifecycle: async (request) => { transitions.push(request); return new Response(null, { status: 202 }); },
+    sendToLifecycle: async (request) => {
+      transitions.push(request);
+      return new Response(null, { status: options.transitionStatus ?? 202 });
+    },
     analyze: async () => { state.aiCalls += 1; return options.aiOutput ?? null; },
     logger: createLogger('security-detection', 'agent_op', (line) => logs.push(line)),
+    publishActivity: async (event) => { activity.push(event); },
     ...(options.now ? { now: options.now } : {}),
+    ...(options.maxLifetimeSeconds ? { maxLifetimeSeconds: options.maxLifetimeSeconds } : {}),
+    ...(options.callerVerify ? { callerVerify: options.callerVerify } : {}),
+    reviewerVerify: options.reviewerVerify
+      ?? (async (token: string) => (token === CALLER_TOKEN ? 'sa-security@test' : null)),
     financeResourceUrl: FINANCE_RESOURCE,
   };
 
-  const app = createApp(deps);
+  const { app, runOnce } = createSecurityDetection(deps);
   return {
-    documents, transitions, logs,
+    documents, seedStore, transitions, logs, activity, runOnce,
     get aiCalls() { return state.aiCalls; },
     fetch: async (path, init) => app.fetch(new Request(new URL(path, 'https://security-detection.test'), init)),
   };

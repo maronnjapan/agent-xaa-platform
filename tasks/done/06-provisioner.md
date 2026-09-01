@@ -376,7 +376,7 @@ Authorization Platform の決定を信頼せず、Provisioner 側でも Human Pe
 
 **完了条件**
 - [ ] `pnpm vitest run apps/provisioner/test/capability-subset.spec.ts` が緑になり、Human Permission が `[document.read]` のユーザーに `[document.read, document.write]` の Definition を送ると 400 `capability_not_subset_of_human_permission` が返ることを assert している
-- [ ] 応答の `capabilities` が `["document.write"]` になるテストが通る
+- [x] 応答の `capabilities` が `["document.write"]` になるテストが通る
 - [ ] `human_permissions` ドキュメントが存在しないユーザーで 400 になるテストが通る
 - [ ] 400 応答の後に `provisioning_transactions` の件数が増えないテストが通る
 
@@ -470,7 +470,7 @@ Consent からの復帰に使う one-time code を実装する（RULE-23）。
 - [ ] `pnpm vitest run apps/provisioner/test/one-time-code.spec.ts` が緑になり、期限超過と2回目消費と `transaction_id` 不一致と別ユーザーの Access Token の4ケースがそれぞれ 400 / 400 / 400 / 403 になることを assert している
 - [ ] 並行に同じ code で `consumeCompletionCode` を10回呼んで成功が1回だけになるテストが通る
 - [ ] `provisioning_codes` のドキュメントに平文 code が保存されないことを assert するテストが通る
-- [ ] `code_already_used` のとき Protocol Validation イベントが1件送られるテストが通る
+- [x] `code_already_used` のとき Protocol Validation イベントが1件送られるテストが通る
 
 ---
 
@@ -788,10 +788,10 @@ FULL_ISOLATION の Agent 数に上限を置き、上限に達していたら Pro
 - 上限到達は構造化ログへ `event: "full_isolation_capacity_reached"` として出し、Activity Event としては発行しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/full-isolation-capacity.spec.ts` が緑になり、上限到達時に 503 と `full_isolation_capacity_reached` が返ることを assert している
-- [ ] 503 の後に `provisioning_transactions` と `dedicated_resources` の件数がどちらも増えないテストが通る
-- [ ] `MAX_FULL_ISOLATION_AGENTS=2` で並行に3件の FULL_ISOLATION 要求を投げても成功が2件を超えないテストが通る
-- [ ] `MAX_FULL_ISOLATION_AGENTS` 未設定で起動すると例外になるテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/full-isolation-capacity.spec.ts` が緑になり、上限到達時に 503 と `full_isolation_capacity_reached` が返ることを assert している
+- [x] 503 の後に `provisioning_transactions` と `dedicated_resources` の件数がどちらも増えないテストが通る
+- [x] `MAX_FULL_ISOLATION_AGENTS=2` で並行に3件の FULL_ISOLATION 要求を投げても成功が2件を超えないテストが通る
+- [x] `MAX_FULL_ISOLATION_AGENTS` 未設定で起動すると例外になるテストが通る
 - [ ] `grep -rn "dedicated_op_slot_exhausted\|no_isolation_slot_available\|slot_unavailable" apps/ packages/` の結果が0件である
 
 ---
@@ -830,7 +830,7 @@ Cleanup と掃除はこの台帳だけを見て消す対象を決め、名前を
 - [ ] `pnpm vitest run apps/provisioner/test/dedicated-ledger.spec.ts` が緑になる
 - [ ] 6リソースの作成後に `created` が6件で、`kind` が5種すべてを含むことを assert するテストが通る
 - [ ] 同じ `name` を2回追記しても `created` が増えないテストが通る
-- [ ] 3件目の作成で失敗させたとき `status` が `FAILED` かつ `created` が2件、`last_error` が空でないことを assert するテストが通る
+- [x] 3件目の作成で失敗させたとき `status` が `FAILED` かつ `created` が2件、`last_error` が空でないことを assert するテストが通る
 
 ---
 
@@ -891,7 +891,7 @@ Connection が READY でない状態で外部 Consent 以降へ進む経路を�
 - [ ] `pnpm vitest run apps/provisioner/test/order.spec.ts` が緑になり、正常系のステップ実行ログが上記11段と順序まで一致することを assert している
 - [ ] IdP Connection が未 READY の状態で `create_agent_binding` へ到達できず 409 `precondition_failed` になるテストが通る
 - [ ] `register_agent` で意図的に失敗させると、Binding が無効化され Connection が REVOKED になり、実行時に作った GCP リソースが1つも残らないことを assert する統合テストが緑になる
-- [ ] 補償の1つを失敗させても残りの補償が実行され、失敗一覧がログに出るテストが通る
+- [x] 補償の1つを失敗させても残りの補償が実行され、失敗一覧がログに出るテストが通る
 
 ---
 
@@ -976,10 +976,10 @@ Raw Token と秘密鍵をログへ出さない（RULE-38）。
 - ログのシンクは Terraform の Log Sink で BigQuery の `security_audit` dataset へ入る。アプリ側で BigQuery へ直接書かない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/provisioning-log.spec.ts` が緑になり、14フィールドがすべて存在することを assert している
-- [ ] JWT 形式の文字列を含む値を渡すと `log_contains_token` が投げられログが出ないテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/provisioning-log.spec.ts` が緑になり、14フィールドがすべて存在することを assert している
+- [x] JWT 形式の文字列を含む値を渡すと `log_contains_token` が投げられログが出ないテストが通る
 - [ ] `e2e/test/provision-log.spec.ts` で STANDARD と FULL_ISOLATION を各1回実行し、FULL_ISOLATION 側のログの `dedicated_short_id` が非 null であることを assert する
-- [ ] STANDARD 側のログの `dedicated_short_id` が null かつ `dedicated_op` が false であることを assert する
+- [x] STANDARD 側のログの `dedicated_short_id` が null かつ `dedicated_op` が false であることを assert する
 
 ---
 
@@ -1012,6 +1012,6 @@ Provisioning Transaction の完了時に終端イベントを1件だけ発行す
 
 **完了条件**
 - [ ] `pnpm vitest run apps/provisioner/test/activity-events.spec.ts` が緑になり、1回の Provisioning から11種のイベントが `sequence` 昇順で発行されることを assert している
-- [ ] いずれのペイロードにも JWT 形式の文字列が含まれないことを assert するテストが通る
+- [x] いずれのペイロードにも JWT 形式の文字列が含まれないことを assert するテストが通る
 - [ ] `e2e/test/events-provisioner.spec.ts` で外部 Consent を伴う Provisioning から `activity_kind: "CONSENT_REQUIRED"` が1件、`AGENT_PROVISIONED` が1件だけ出ることを assert する
-- [ ] 失敗した Provisioning で `AGENT_PROVISIONED` が0件になることを assert するテストが通る
+- [x] 失敗した Provisioning で `AGENT_PROVISIONED` が0件になることを assert するテストが通る

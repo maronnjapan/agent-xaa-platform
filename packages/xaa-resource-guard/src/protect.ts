@@ -68,7 +68,12 @@ export function createResourceProtection(options: ResourceProtectionOptions): Mi
         agentId: actorUrn.slice(AGENT_URN_PREFIX.length),
         scopes,
         isolationLevel: typeof payload.isolation_level === 'string' ? payload.isolation_level : '',
-        constraints: payload.constraints && typeof payload.constraints === 'object' ? payload.constraints as Record<string, unknown> : {},
+        // `xaa_constraints`, the name the Resource AS mints (T-RES-20). Reading a bare
+        // `constraints` here silently made every token-carried limit absent, which is
+        // an approval cap that never applies rather than a cap that fails closed.
+        constraints: payload.xaa_constraints && typeof payload.xaa_constraints === 'object'
+          ? payload.xaa_constraints as Record<string, unknown>
+          : {},
       });
       await next();
     } catch (error) {

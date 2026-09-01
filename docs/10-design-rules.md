@@ -12,9 +12,9 @@
 | RULE-03 | Agent Registration（client credential、XAA config、Human IdP Connection、expires_at）はIsolation Levelに関わらずAgentごとに作る | [05. §4](./05-identity.md#4-agent-registrationstandardでもagentごとに作る) |
 | RULE-04 | 1 Agent = 1 Cloud Run Job Execution とする。複数のAgentを1つのプロセスで動かさない | [07. §4.1](./07-lifecycle.md#41-実行形態) |
 | RULE-05 | GCP Service AccountはアプリがGCP IAMに対して名乗る身元であり、Agentの身元ではない。Agentの身元はID-JAGである | [08. §4](./08-gcp-infrastructure.md#4-gcp-service-accountとは) |
-| RULE-06 | Human Control PlaneのAccess TokenはDPoP-boundとする。Agent RuntimeからAgent OPへのToken ExchangeとNative Resource ASへの提示でもDPoPを必須とし、ID-JAGを `cnf.jkt` で束縛する。外部SaaSへの接続だけは相手の仕様に従う | [05. §2](./05-identity.md#2-dpop) |
+| RULE-06 | Human Control Plane の Access Token は DPoP-bound とする。Agent Runtime から Agent OP への Token Exchange と Native Resource AS への提示でも DPoP を必須とし、ID-JAG を `cnf.jkt` で束縛する。DPoP はライブラリの機能ではなく `packages/xaa-crypto` の自前実装であり、対応するのは Runtime から Agent OP、Runtime から Resource AS と Resource API、Automation App から Control Plane の3経路に限る。Bridge から外部 SaaS への外向きは Bearer とする | [05. §2](./05-identity.md#2-dpop) |
 | RULE-43 | Control Plane APIの `human_subject` はAccess Tokenの `sub` を正とする。リクエストボディの値をそのまま信頼しない | [05. §1.1](./05-identity.md#11-human_subjectの出どころ) |
-| RULE-44 | DPoP検証では、Access Tokenの `cnf.jkt` とDPoP Proofの鍵の一致を必ず確認する。Proofが添付されていることの確認だけで済ませない | [05. §2.1](./05-identity.md#21-受け取り側の検証手順) |
+| RULE-44 | DPoP 検証では、Access Token の `cnf.jkt` と DPoP Proof の鍵の一致を必ず確認する。Access Token と併用する Proof には `ath` を必須とし、検証は 署名、typ、htm、htu、iat 窓、jti 重複、ath 一致 の順で行う。Proof が添付されていることの確認だけで済ませない | [05. §2.1](./05-identity.md#21-受け取り側の検証手順) |
 
 ## 権限決定
 
@@ -50,9 +50,9 @@
 | RULE-24 | Bridge ConnectionはHuman Userごと、Agent BindingはAgentごとに持つ。BindingはAgent破棄時に必ず削除する | [06. §3](./06-oauth-bridge.md#3-credential保持方針) |
 | RULE-45 | Cross App Accessは `draft-ietf-oauth-identity-assertion-authz-grant` に準拠する。逸脱する箇所は、逸脱していることと相互運用を期待しない範囲を文書に明示する | [05. §3.1](./05-identity.md#31-cross-app-accessにおける役割の対応) |
 | RULE-46 | ID-JAGの `sub` は委譲元の人間、`act` は代理として動くAgentとする。Agentを `sub` に置かず、`client_id` でAgent個体を表さない | [05. §6.4](./05-identity.md#64-id-jag) |
-| RULE-47 | Human IdPにAgentの文脈を持ち込まない。issuerは1つに保ち、人間の文脈とAgentの文脈はパスでデプロイを分ける | [05. §3.2](./05-identity.md#32-issuerを分けずデプロイだけ分ける理由) |
+| RULE-47 | Human IdP に Agent の文脈を持ち込まない。issuer は1つに保ち、Agent の文脈は別デプロイへ分ける。パスに置くか別ホストに置くかは配置プロファイル `issuer_profile` で選ぶ | [05. §3.2](./05-identity.md#32-issuerを分けずデプロイだけ分ける理由) |
 | RULE-48 | Agent OPのID-JAG署名鍵はHuman IdPのSSO署名鍵と別鍵とし、`typ` が `oauth-id-jag+jwt` のJWT以外を署名しない | [05. §3.3](./05-identity.md#33-agent-op署名鍵の制約) |
-| RULE-49 | Token Exchangeでは、`actor_token` が指すAgent Registrationの `human_subject` と `subject_token` の `sub` の一致を必ず確認する。有効な `subject_token` に無関係な `actor_token` を組み合わせられないようにする | [05. §6.3](./05-identity.md#63-agent-opの検証手順) |
+| RULE-49 | Token Exchange では、`actor_token` が指す Agent Registration の `human_subject` と `subject_token` の `sub` の一致を必ず確認する。照合は actorTokenResolver の内側ではなく、subject と actor が揃った位置に置いた自前ステップで行う | [05. §6.3](./05-identity.md#63-agent-opの検証手順) |
 | RULE-50 | Agentごとのクライアント登録を作らない。`client_id` は `agent-platform` 1つとし、Agent個体は `cnf.jkt` と `act` と監査ログで識別する | [05. §6.5](./05-identity.md#65-agentごとのクライアント登録を作らない理由) |
 | RULE-51 | Human IdP ConnectionのRefresh TokenはAgent OPだけが保持する。Agentごとに作り、`expires_at` を超えず、Cleanupで必ずRevokeする | [05. §4.1](./05-identity.md#41-human-idp-connection) |
 | RULE-52 | 各Resource ASにおける `agent-platform` の登録scopeは、そのResource ASで必要な最小に保つ。ID-JAG署名鍵が漏れた場合の上限がこの値になる | [05. §3.3](./05-identity.md#33-agent-op署名鍵の制約) |
@@ -80,11 +80,11 @@
 
 | ID | ルール | 出典 |
 |---|---|---|
-| RULE-34 | 実行系は `agent-platform-prod` に集約し、監査ログの保存だけを `agent-security-prod` へ分離する | [08. §1](./08-gcp-infrastructure.md#1-gcp-projectの構成) |
+| RULE-34 | 実行系と監査ログを同一 GCP Project 内で、BigQuery dataset と Service Account と IAM で分離する。Platform 側の Service Account に監査 dataset の削除権限を与えない。同一プロジェクトの Owner は実行系と監査ログの両方に届くため、プロジェクトを分ける構成より保護は弱い | [08. §1](./08-gcp-infrastructure.md#1-gcp-projectと監査領域の構成) |
 | RULE-35 | 責務分離はService Account、IAM、KMS Key、Secret、DB Userで行う。アプリごとに専用のService Accountを作り、デフォルトService Accountを使わない | [08. §4](./08-gcp-infrastructure.md#4-gcp-service-accountとは)、[08. §5](./08-gcp-infrastructure.md#5-service-account一覧) |
 | RULE-36 | Cloud Run IAMはXAAの代替ではない。IAMは「どのアプリが呼べるか」、ID-JAGは「どのAgentとして何にアクセスできるか」を決める | [08. §8](./08-gcp-infrastructure.md#8-ネットワークと公開範囲) |
 | RULE-37 | Internetへ公開するのは、Automation App、Google BridgeとAgent OPのOAuth Callback、issuerのメタデータとJWKSだけとする | [08. §8](./08-gcp-infrastructure.md#8-ネットワークと公開範囲) |
-| RULE-53 | 共有JWKSはアプリではなくCloud Storageから配信し、各アプリには自分の鍵の書き込みだけを許す | [08. §2.1](./08-gcp-infrastructure.md#21-human-idpとagent-opの配置) |
+| RULE-53 | 共有 JWKS はアプリではなく Cloud Storage から配信する。各アプリは自分専用のオブジェクト `keys/<prefix>-<kid>.json` だけを書き、`jwks.json` への集約は jwks-publish Job が行う | [08. §2.1](./08-gcp-infrastructure.md#21-human-idpとagent-opの配置) |
 
 ## 監視
 
@@ -94,7 +94,7 @@
 | RULE-39 | Raw Logをそのまま全部AIへ投入しない。Protocol Validation → Rule → Correlation → Risk Score → AI の順で処理する | [09. §1](./09-security-monitoring.md#1-基本方針) |
 | RULE-40 | AgentごとのBaselineをAgent Definitionから構築する | [09. §5.4](./09-security-monitoring.md#54-agent-baseline) |
 | RULE-41 | 異常なAgentをAgent Identity Domain単位でQuarantine / Revoke / Destroyできるようにする | [09. §6](./09-security-monitoring.md#6-response) |
-| RULE-42 | Platform側のService AccountにSecurity Logの削除権限を与えない | [09. §4](./09-security-monitoring.md#4-正規化と保存) |
+| RULE-42 | Platform 側の Service Account に Security Log の削除権限を与えない。監査 dataset の IAM は authoritative な binding で固定し、削除可能なロールを一切付与しないことで満たす | [09. §4](./09-security-monitoring.md#4-正規化と保存) |
 
 ## アクティビティタイムライン
 
@@ -103,7 +103,7 @@
 | RULE-54 | Activity Monitoring UIは人間向けの可視化だけを行い、認可判断や検知判断は行わない。表示するのはPolicy Engine、Tool Executor、Security Detectionがすでに下した決定である | [11. §2](./11-activity-timeline.md#2-基本方針) |
 | RULE-55 | Activity Eventは、Security Detectionが収集する詳細ログ（09）とは別系統のPub/Subトピックとする。発行元のアプリが人間向けの説明文をイベント生成時に埋め込む | [11. §3](./11-activity-timeline.md#3-activity-event)、[11. §4](./11-activity-timeline.md#4-配信経路) |
 | RULE-56 | Activity Feedの参照範囲はAccess Tokenの`sub`と一致する`human_subject`のイベントに限る。他ユーザーのログイン操作やAgentは表示しない | [11. §2](./11-activity-timeline.md#2-基本方針)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
-| RULE-57 | ブラウザはFirestoreへ直接アクセスしない。Activity EventはAutomation Appの認証済みセッションを介してのみ配信する | [11. §4](./11-activity-timeline.md#4-配信経路)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
+| RULE-57 | ブラウザは Firestore へ直接アクセスしない。Firestore Security Rules は作らず、フロントに Firestore SDK と Firebase Auth を含めないことと、サーバ側のパスガードで担保する | [11. §4](./11-activity-timeline.md#4-配信経路)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
 | RULE-58 | デモ用に台本化したActivity Eventには`is_simulated`を付与し、実イベントと視覚的に区別する。台本の再生は操作者自身のセッション範囲に閉じる | [11. §6.2](./11-activity-timeline.md#62-台本で補う)、[11. §7](./11-activity-timeline.md#7-アクセス制御) |
 | RULE-59 | Activity Timelineは実行中のイベントを逐次配信しない。ログイン〜Provisioning、Taskごとの処理、Agent終了はそれぞれの終端イベントが記録されてから、一連の流れをまとめて再生する | [11. §2](./11-activity-timeline.md#2-基本方針)、[11. §3.3](./11-activity-timeline.md#33-task境界)、[11. §4](./11-activity-timeline.md#4-配信経路) |
 | RULE-60 | Activity Eventの記録は、通常利用かデモかを区別せず常時行う。デモのために記録を開始する操作は無い。操作者が明示的に行うのは、実演が難しいケースを補う台本イベントの追加だけである | [11. §2](./11-activity-timeline.md#2-基本方針)、[11. §6.2](./11-activity-timeline.md#62-台本で補う) |

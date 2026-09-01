@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
-import { controlPlaneAuth, type ControlPlaneVariables } from '@xaa/control-plane-auth';
+import { controlPlaneAuth, createProtocolValidationEmitter, type ControlPlaneVariables } from '@xaa/control-plane-auth';
 import { compile } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 import { createLogger, type LogContext, type Logger } from '@xaa/logging';
 import type { LifecycleConfig, CleanupReason } from './config.js';
 import { CLEANUP_REASONS } from './config.js';
 import { cleanupAgent, type CleanupDeps } from './cleanup/index.js';
+import type { CleanupOutcome } from './cleanup/result.js';
 import type { CleanupClients } from './clients/types.js';
 import { assertAgentOwnership, ForbiddenSubject } from './ownership.js';
 import { AgentNotFound, writeStatus } from './status-writer.js';
@@ -60,15 +61,12 @@ type Env = { Variables: ControlPlaneVariables & { callerEmail: string } };
  * one accepts no body at all — the subject comes from the verified token, never from
  * what was sent (RULE-43) — and every internal one is gated on a named service account.
  */
-function createApp(deps: LifecycleDeps): Hono<Env> {
-  const app = new Hono<Env>();
-  const logger = deps.logger ?? createLogger('lifecycle-manager', 'provisioner');
-  const now = deps.now ?? (() => Date.now());
-  const logContext = (agentId: string | null): LogContext => ({
-    request_id: 'lifecycle', trace_id: 'lifecycle', agent_id: agentId, human_subject: null,
-  });
+const logContext = (agentId: string | null): LogContext => ({
+  request_id: 'lifecycle', trace_id: 'lifecycle', agent_id: agentId, human_subject: null,
+});
 
-  const cleanupDeps = (agentId: string): CleanupDeps => ({
+function cleanupDepsFor(deps: LifecycleDeps, logger: Logger, now: () => number, agentId: string): CleanupDeps {
+  return {
     documents: deps.documents, clients: deps.clients, logger, logContext: logContext(agentId), now,
     onDestroyed: async (domain, reason) => {
       const eventType = eventTypeFor(reason);
@@ -79,8 +77,28 @@ function createApp(deps: LifecycleDeps): Hono<Env> {
         ...(deps.publishActivity ? { publish: deps.publishActivity } : {}),
       });
     },
-  });
+  };
+}
 
+/**
+ * Cleanup as the subscriber sees it (T-LIFE-15).
+ *
+ * The identity feed runs outside the HTTP app but must destroy agents exactly the way
+ * the routes do, down to the Activity Event, so both take this one function rather than
+ * each assembling its own dependencies.
+ */
+export function createCleanupRunner(deps: LifecycleDeps): (agentId: string, reason: CleanupReason) => Promise<CleanupOutcome> {
+  const logger = deps.logger ?? createLogger('lifecycle-manager', 'provisioner');
+  const now = deps.now ?? (() => Date.now());
+  return (agentId, reason) => cleanupAgent(agentId, reason, cleanupDepsFor(deps, logger, now, agentId));
+}
+
+function createApp(deps: LifecycleDeps): Hono<Env> {
+  const app = new Hono<Env>();
+  const logger = deps.logger ?? createLogger('lifecycle-manager', 'provisioner');
+  const now = deps.now ?? (() => Date.now());
+
+  const cleanupDeps = (agentId: string): CleanupDeps => cleanupDepsFor(deps, logger, now, agentId);
   const runCleanup = (agentId: string, reason: CleanupReason) => cleanupAgent(agentId, reason, cleanupDeps(agentId));
 
   app.get('/healthz', (context) => context.json({ status: 'ok' }));
@@ -92,6 +110,7 @@ function createApp(deps: LifecycleDeps): Hono<Env> {
   app.post('/agents/:agent_id/revoke', controlPlaneAuth({
     ...deps.accessToken,
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    protocolValidation: createProtocolValidationEmitter({ logger, path: 'lifecycle:/agents' }),
   }), async (context) => {
     const agentId = context.req.param('agent_id');
     const subject = context.get('humanSubject');

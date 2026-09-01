@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ManifestIntegrityError, deepFreeze, loadToolManifest, manifestSha256 } from '../src/manifest/load.js';
 import { buildToolDeclarations } from '../src/reasoning/tool-declarations.js';
 import { buildAllowedHosts, assertHostAllowed, HostNotAllowed, PLATFORM_HOSTS } from '../src/http/allowed-hosts.js';
+import { createRuntimeHttpClient } from '../src/http/http-client.js';
+import type { InvokerIdToken } from '../src/http/internal-invoker-token.js';
 import { AGENT_OP, DOCS_API, DOCS_AS, docsManifest } from './helpers.js';
 
 function envFor(manifest: unknown, sha?: string): { TOOL_MANIFEST: string; TOOL_MANIFEST_SHA256: string } {
@@ -103,5 +105,42 @@ describe('the reachable host set', () => {
     const hosts = buildAllowedHosts({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest());
     expect(Object.isFrozen(hosts)).toBe(true);
     expect(() => (hosts as Set<string>).add('evil.example.test')).toThrow();
+  });
+});
+
+/**
+ * Cloud Run refuses a call to an INTERNAL_ONLY service before the app sees it, so the
+ * Execution's own invoker token has to ride along to the Agent OP and the Bridge — and
+ * nowhere else, because a platform identity arriving at a resource would be an identity
+ * that resource could act on.
+ */
+describe('the invoker token on internal calls', () => {
+  const AGENT_OP_ORIGIN = new URL(AGENT_OP).origin;
+
+  function clientFor(sent: Array<{ url: string; headers: Record<string, string> }>) {
+    return createRuntimeHttpClient({
+      allowedHosts: buildAllowedHosts({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest()),
+      internalOrigins: new Set([AGENT_OP_ORIGIN]),
+      invokerToken: async (audience) => `id-token-for-${audience}` as InvokerIdToken,
+      fetch: async (url, init) => {
+        sent.push({ url, headers: (init.headers ?? {}) as Record<string, string> });
+        return new Response('{}', { status: 200 });
+      },
+    });
+  }
+
+  it('carries the token to the Agent OP beside the request\'s own Authorization', async () => {
+    const sent: Array<{ url: string; headers: Record<string, string> }> = [];
+    await clientFor(sent).send(`${AGENT_OP}/xaa/token`, {
+      method: 'POST', headers: { Authorization: 'DPoP agent-token' },
+    });
+    expect(sent[0]!.headers['X-Serverless-Authorization']).toBe(`Bearer id-token-for-${AGENT_OP_ORIGIN}`);
+    expect(sent[0]!.headers.Authorization).toBe('DPoP agent-token');
+  });
+
+  it('leaves a resource call untouched', async () => {
+    const sent: Array<{ url: string; headers: Record<string, string> }> = [];
+    await clientFor(sent).send(`${DOCS_API}/documents`, { method: 'GET' });
+    expect(sent[0]!.headers['X-Serverless-Authorization']).toBeUndefined();
   });
 });

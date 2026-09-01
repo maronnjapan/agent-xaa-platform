@@ -31,7 +31,11 @@ describe('Human IdP audit log', () => {
     });
     expect(failed.error).toBe('invalid_scope');
 
-    const entries = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    const written = lines.map((line) => JSON.parse(line) as { log_source: string; fields: Record<string, unknown> });
+    // The envelope first: a line without `log_source` is dropped by the Log Sink and
+    // never reaches the detector, whatever it says (T-SEC-05).
+    expect(written.every((entry) => entry.log_source === 'human_idp')).toBe(true);
+    const entries = written.map((entry) => ({ ...entry, ...entry.fields }) as Record<string, unknown>);
     expect(entries.length).toBeGreaterThanOrEqual(2);
     for (const entry of entries) {
       for (const field of [...COMMON, ...SPECIFIC]) expect(Object.keys(entry)).toContain(field);
@@ -62,7 +66,9 @@ describe('Human IdP audit log', () => {
         code_verifier: ok.pkce.verifier, client_id: 'automation-app',
       },
     });
-    const statuses = lines.map((line) => JSON.parse(line) as { dpop_status: string; scope: string | null });
+    const statuses = lines.map((line) => (JSON.parse(line) as {
+      fields: { dpop_status: string; scope: string | null };
+    }).fields);
     expect(statuses.some((entry) => entry.dpop_status === 'not_applicable')).toBe(true);
     expect(statuses.some((entry) => entry.dpop_status === 'valid')).toBe(true);
   });

@@ -1,7 +1,10 @@
 import { JobsClient, ServicesClient } from '@google-cloud/run';
 import { KeyManagementServiceClient } from '@google-cloud/kms';
 import { PubSub } from '@google-cloud/pubsub';
-import { createFirestoreDocumentStore, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
+import { Storage } from '@google-cloud/storage';
+import { GoogleAuth } from 'google-auth-library';
+import { assertRuntimeName, publishActivityEvent } from '@xaa/contracts';
+import { createFirestoreDocumentStore, createIdentityTokenProvider, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
 import { createTransactionStore } from './transaction/store.js';
@@ -29,6 +32,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ProvisionerCon
     maxFullIsolationAgents: Number(required(env, 'MAX_FULL_ISOLATION_AGENTS')),
     activityTopic: required(env, 'ACTIVITY_TOPIC'),
     dpopIatSkewSeconds: Number(env.DPOP_IAT_SKEW_SECONDS ?? '60'),
+    // Re-provisioning is asked for by Lifecycle and by nothing else. An unset variable
+    // leaves the list empty, which refuses every caller rather than opening the route.
+    internalCallers: (env.LIFECYCLE_SA_EMAIL ?? '').split(',').map((email) => email.trim()).filter(Boolean),
   };
 }
 
@@ -36,8 +42,21 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   const config = loadConfig(env);
   const firestore = getFirestore({ signer: 'kms', vertex: 'fake', pubsub: 'gcp', store: env.STORE_MODE === 'gcp' ? 'gcp' : 'emulator' }, env);
   const documents = createFirestoreDocumentStore(firestore, 'provisioner');
-  const pubsub = new PubSub();
   const admin = createGcpAdmin(env);
+  const identityToken = createIdentityTokenProvider();
+
+  const callAgentOp = async (path: string, body?: unknown): Promise<Response> => {
+    const url = new URL(path, config.sharedAgentOpUrl).toString();
+    const token = await identityToken(new URL(url).origin);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`agent OP call failed: ${response.status}`);
+    return response;
+  };
 
   return {
     config,
@@ -54,17 +73,20 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
     },
     clock: { now: () => Date.now() },
     jtiStore: new FirestoreJtiStore(firestore),
-    publishActivity: async (event) => { await pubsub.topic(config.activityTopic).publishMessage({ json: event }); },
+    // The shared publisher validates against the canonical schema before it sends. A
+    // raw topic write here would put events on the stream the subscriber then drops.
+    publishActivity: publishActivityEvent,
     agentOp: {
       async createIdpConnection(input) {
-        const response = await fetch(`${config.sharedAgentOpUrl}/internal/idp-connections`, {
-          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
-        });
+        const response = await callAgentOp('/internal/idp-connections', input);
         return response.json() as Promise<{ status: 'READY' | 'CONSENT_REQUIRED'; consentUrl: string }>;
       },
       async verifyIdpConnection(idpConnectionId) {
-        const response = await fetch(`${config.sharedAgentOpUrl}/internal/idp-connections/${encodeURIComponent(idpConnectionId)}/verify`, { method: 'POST' });
+        const response = await callAgentOp(`/internal/idp-connections/${encodeURIComponent(idpConnectionId)}/verify`);
         return response.json() as Promise<{ status: string }>;
+      },
+      async revokeIdpConnection(idpConnectionId) {
+        await callAgentOp(`/internal/idp-connections/${encodeURIComponent(idpConnectionId)}/revoke`);
       },
     },
     createDedicated: (input) => createDedicatedResources({
@@ -76,14 +98,21 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
       signingKeyRing: required(env, 'IDJAG_KEY_RING'),
       connectionKeyRing: required(env, 'IDP_CONNECTION_KEY_RING'),
       imageEnv: JSON.parse(env.DEDICATED_OP_ENV ?? '{}') as Record<string, string>,
+      runtimeEnv: JSON.parse(env.DEDICATED_RUNTIME_ENV ?? '{}') as Record<string, string>,
+      jwksBucket: required(env, 'JWKS_BUCKET'),
+      activityTopic: config.activityTopic,
+      runtimeInvokerServices: JSON.parse(required(env, 'DEDICATED_RUNTIME_INVOKER_SERVICES')) as string[],
+      provisionerMember: `serviceAccount:${required(env, 'PROVISIONER_SA_EMAIL')}`,
+      agentPlatformClientSecret: required(env, 'AGENT_PLATFORM_CLIENT_SECRET_ID'),
       taskTimeoutSeconds: input.taskTimeoutSeconds,
     }),
   };
 }
 
 /**
- * The GCP admin calls, all of them behind assertRuntimeName inside dedicated.ts. No
- * name outside the six runtime prefixes can reach these methods.
+ * The GCP admin calls. Every mutating method re-checks its own name with
+ * assertRuntimeName, so the boundary holds at the call site as well as at the caller in
+ * dedicated.ts: no name outside the six runtime prefixes can reach a GCP API from here.
  */
 function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
   const project = env.PROJECT_ID ?? '';
@@ -91,18 +120,27 @@ function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
   const kms = new KeyManagementServiceClient();
   const services = new ServicesClient();
   const jobs = new JobsClient();
+  const pubsub = new PubSub();
+  const storage = new Storage();
+  const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+  const identityToken = createIdentityTokenProvider(auth);
   return {
     async createServiceAccount(input) {
-      // The IAM v1 admin API has no first-party client in the allowed dependency
-      // set, so the REST endpoint is called directly with the ambient credentials.
-      const response = await fetch(`https://iam.googleapis.com/v1/projects/${project}/serviceAccounts`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accountId: input.accountId, serviceAccount: { description: input.description } }),
+      assertRuntimeName(input.accountId);
+      const response = await auth.request<{ name?: string; email?: string }>({
+        url: `https://iam.googleapis.com/v1/projects/${project}/serviceAccounts`,
+        method: 'POST',
+        data: { accountId: input.accountId, serviceAccount: { description: input.description } },
       });
-      const created = await response.json() as { email?: string };
-      return `serviceAccount:${created.email ?? `${input.accountId}@${project}.iam.gserviceaccount.com`}`;
+      const email = response.data.email ?? `${input.accountId}@${project}.iam.gserviceaccount.com`;
+      return {
+        name: response.data.name ?? `projects/${project}/serviceAccounts/${email}`,
+        email,
+        member: `serviceAccount:${email}`,
+      };
     },
     async createCryptoKey(input) {
+      assertRuntimeName(input.keyId);
       const [key] = await kms.createCryptoKey({
         parent: input.keyRing, cryptoKeyId: input.keyId,
         cryptoKey: {
@@ -113,8 +151,12 @@ function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
       });
       return key.name ?? `${input.keyRing}/cryptoKeys/${input.keyId}`;
     },
-    async bindRole(input) { return `${input.resource}|${input.role}|${input.member}`; },
+    async bindRole(input) {
+      await addIamBinding({ ...input, kms, services, pubsub, storage, auth });
+      return `${input.resource}|${input.role}|${input.member}`;
+    },
     async createService(input) {
+      assertRuntimeName(input.name);
       const [operation] = await services.createService({
         parent: `projects/${project}/locations/${region}`,
         serviceId: input.name,
@@ -123,14 +165,24 @@ function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
           ingress: 'INGRESS_TRAFFIC_INTERNAL_ONLY',
           template: {
             serviceAccount: input.serviceAccount.replace(/^serviceAccount:/, ''),
-            containers: [{ image: env.AGENT_OP_IMAGE ?? '', env: Object.entries(input.env).map(([name, value]) => ({ name, value })) }],
+              containers: [{ image: env.AGENT_OP_IMAGE ?? '', env: serviceEnvironment(input.env) }],
           },
         },
       });
-      const service = await operation.promise().then(([value]) => value);
+      let service = await operation.promise().then(([value]) => value);
+      if (!input.env.PUBLIC_BASE_URL && service.uri) {
+        const containers = service.template?.containers ?? [];
+        if (containers[0]) containers[0].env = serviceEnvironment({ ...input.env, PUBLIC_BASE_URL: service.uri });
+        const [update] = await services.updateService({
+          service,
+          updateMask: { paths: ['template.containers'] },
+        });
+        service = await update.promise().then(([value]) => value);
+      }
       return { name: service.name ?? '', uri: service.uri ?? '' };
     },
     async createJob(input) {
+      assertRuntimeName(input.name);
       const [operation] = await jobs.createJob({
         parent: `projects/${project}/locations/${region}`,
         jobId: input.name,
@@ -141,7 +193,10 @@ function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
             template: {
               maxRetries: 0, timeout: { seconds: input.taskTimeoutSeconds },
               serviceAccount: input.serviceAccount.replace(/^serviceAccount:/, ''),
-              containers: [{ image: env.AGENT_RUNTIME_IMAGE ?? '' }],
+              containers: [{
+                image: env.AGENT_RUNTIME_IMAGE ?? '',
+                env: Object.entries(input.env).map(([name, value]) => ({ name, value })),
+              }],
             },
           },
         },
@@ -150,9 +205,104 @@ function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
       return job.name ?? '';
     },
     async healthCheck(uri) {
-      try { return (await fetch(`${uri}/healthz`)).ok; } catch { return false; }
+      try {
+        const token = await identityToken(new URL(uri).origin);
+        return (await fetch(`${uri}/healthz`, { headers: { Authorization: `Bearer ${token}` } })).ok;
+      } catch { return false; }
     },
   };
 }
 
 export { verifyGoogleServiceIdentity };
+
+function serviceEnvironment(values: Record<string, string>) {
+  const secret = values.CLIENT_SECRET_AGENT_PLATFORM_SECRET;
+  return [
+    ...Object.entries(values)
+      .filter(([name]) => name !== 'CLIENT_SECRET_AGENT_PLATFORM_SECRET')
+      .map(([name, value]) => ({ name, value })),
+    ...(secret ? [{
+      name: 'CLIENT_SECRET_AGENT_PLATFORM',
+      valueSource: { secretKeyRef: { secret, version: 'latest' } },
+    }] : []),
+  ];
+}
+
+interface IamBinding { role?: string | null; members?: string[] | null }
+interface IamPolicy { bindings?: IamBinding[] | null; etag?: string | Uint8Array | null; version?: number | null }
+
+function addMember(policy: IamPolicy, role: string, member: string): boolean {
+  const bindings = policy.bindings ?? [];
+  const binding = bindings.find((candidate) => candidate.role === role);
+  if (binding) {
+    const members = binding.members ?? [];
+    if (members.includes(member)) return false;
+    binding.members = [...members, member];
+  } else {
+    bindings.push({ role, members: [member] });
+  }
+  policy.bindings = bindings;
+  policy.version = Math.max(policy.version ?? 1, 3);
+  return true;
+}
+
+async function addIamBinding(input: {
+  resource: string;
+  role: string;
+  member: string;
+  kms: KeyManagementServiceClient;
+  services: ServicesClient;
+  pubsub: PubSub;
+  storage: Storage;
+  auth: GoogleAuth;
+}): Promise<void> {
+  if (/\/keyRings\/[^/]+\/cryptoKeys\//.test(input.resource)) {
+    const [policy] = await input.kms.getIamPolicy(
+      { resource: input.resource, options: { requestedPolicyVersion: 3 } } as never,
+    );
+    if (addMember(policy as IamPolicy, input.role, input.member)) {
+      await input.kms.setIamPolicy({ resource: input.resource, policy } as never);
+    }
+    return;
+  }
+  if (/\/locations\/[^/]+\/services\//.test(input.resource)) {
+    const [policy] = await input.services.getIamPolicy(
+      { resource: input.resource, options: { requestedPolicyVersion: 3 } } as never,
+    );
+    if (addMember(policy as IamPolicy, input.role, input.member)) {
+      await input.services.setIamPolicy({ resource: input.resource, policy } as never);
+    }
+    return;
+  }
+  if (input.resource.startsWith('projects/_/buckets/')) {
+    const bucket = input.storage.bucket(input.resource.slice('projects/_/buckets/'.length));
+    const [policy] = await bucket.iam.getPolicy({ requestedPolicyVersion: 3 });
+    if (addMember(policy as IamPolicy, input.role, input.member)) await bucket.iam.setPolicy(policy);
+    return;
+  }
+  if (/^projects\/[^/]+\/topics\//.test(input.resource)) {
+    const topic = input.pubsub.topic(input.resource);
+    const [policy] = await topic.iam.getPolicy();
+    if (addMember(policy as IamPolicy, input.role, input.member)) await topic.iam.setPolicy(policy);
+    return;
+  }
+  if (/^projects\/[^/]+\/secrets\//.test(input.resource)) {
+    const endpoint = `https://secretmanager.googleapis.com/v1/${input.resource}`;
+    const response = await input.auth.request<IamPolicy>({ url: `${endpoint}:getIamPolicy`, method: 'GET' });
+    if (addMember(response.data, input.role, input.member)) {
+      await input.auth.request({ url: `${endpoint}:setIamPolicy`, method: 'POST', data: { policy: response.data } });
+    }
+    return;
+  }
+  if (/^projects\/[^/]+$/.test(input.resource)) {
+    const endpoint = `https://cloudresourcemanager.googleapis.com/v1/${input.resource}`;
+    const response = await input.auth.request<IamPolicy>({
+      url: `${endpoint}:getIamPolicy`, method: 'POST', data: { options: { requestedPolicyVersion: 3 } },
+    });
+    if (addMember(response.data, input.role, input.member)) {
+      await input.auth.request({ url: `${endpoint}:setIamPolicy`, method: 'POST', data: { policy: response.data } });
+    }
+    return;
+  }
+  throw new Error(`unsupported IAM binding resource: ${input.resource}`);
+}

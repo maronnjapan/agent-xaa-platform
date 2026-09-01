@@ -210,7 +210,7 @@ REQ-08-044 が禁じる「Cloud Run IAM の通過を理由に検証をスキッ�
 - `verifyIdJagAssertion` には `{ assertion, issuer: config.issuer, clientId: tokenClient.clientId, identityProviders }` を渡す。`issuer` は環境変数 `ISSUER` の値で、Terraform が注入した Cloud Run URL と一致する。
 - ライブラリが行う検証（`typ`、`alg`、外部鍵取得ヘッダ、`iss` の信頼リスト一致、自己発行の拒否、署名、`aud` のバイト一致、`exp` と `iat` と `nbf`、`jti` と `sub` の非空、`client_id` の一致）を自前で再実装しない。
 - `IdJagError` は生成物の catch 分岐がそのまま 400 で返す。この分岐を変更しない。
-- `/token` は RFC 6749 §5.2 に従い、assertion 欠落を 400 `invalid_request`、検証失敗を 400 `invalid_grant` で返す。REQ-08-044 の受入条件が言う「401 と `WWW-Authenticate`」は Resource API 側（T-RES-11）で満たす。AS の token エンドポイントで 401 を返す分岐を作らない。docs 側の記述の訂正は docs 領域へ起票する。
+- `/token` は RFC 6749 §5.2 に従い、assertion 欠落を 400 `invalid_request`、検証失敗を 400 `invalid_grant` で返す。REQ-08-044 の受入条件が言う「401 と `WWW-Authenticate`」は Resource API 側（T-RES-11）で満たす。AS の token エンドポイントで 401 を返す分岐を作らない。docs 側の記述の訂正は T-DOCS-17 が行う。
 - リクエストの呼び出し元 SA や Cloud Run のヘッダを読んで検証を分岐させるコードを書かない。
 
 **完了条件**

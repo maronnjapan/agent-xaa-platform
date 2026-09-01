@@ -1,4 +1,4 @@
-import type { PlatformEndpoints } from '@xaa/contracts';
+import { DISABLED_ENDPOINT, type PlatformEndpoints } from '@xaa/contracts';
 
 export interface ResolvedEndpoints {
   agentOpUrl: string;
@@ -30,6 +30,9 @@ export function resolveEndpoints(endpoints: PlatformEndpoints): ResolvedEndpoint
     provisionerUrl: read('provisioner_url'),
     docsAsUrl: read('resource_docs_as_issuer'),
     financeAsUrl: read('resource_finance_as_issuer'),
-    bridgeUrl: typeof bridge === 'string' && bridge !== '' ? bridge : null,
+    // `https://disabled.invalid` is how Terraform spells "no Bridge here": the schema
+    // requires a URI, so absence cannot be an empty string. Taking it literally made
+    // every quarantine and identity-disabled cleanup fail on a DNS lookup.
+    bridgeUrl: typeof bridge === 'string' && bridge !== '' && bridge !== DISABLED_ENDPOINT ? bridge : null,
   };
 }

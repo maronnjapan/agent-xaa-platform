@@ -9,7 +9,7 @@ import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore
 import { createLogger } from '@xaa/logging';
 import { readFileSync, readdirSync } from 'node:fs';
 import { parse } from 'yaml';
-import type { CatalogConnector, CatalogTool, IsolationLevel } from '@xaa/contracts';
+import type { ActivityEvent, CatalogConnector, CatalogTool, IsolationLevel } from '@xaa/contracts';
 import createApp, { type ProvisionerAppDeps } from '../app.js';
 import { createTransactionStore } from '../transaction/store.js';
 import type { DedicatedResult, GcpAdmin } from '../dedicated.js';
@@ -40,8 +40,7 @@ function resolvePlaceholders(text: string): string {
     .replaceAll('${resource:docs}', 'https://resource-docs-api.test')
     .replaceAll('${issuer:finance}', 'https://resource-finance-as.test')
     .replaceAll('${resource:finance}', 'https://resource-finance-api.test')
-    .replaceAll('${issuer:stub}', 'https://stub-saas-op.test')
-    .replaceAll('${resource:stub}', 'https://stub-saas-api.test')
+    .replaceAll('${issuer:stub_saas}', 'https://stub-saas-op.test')
     .replaceAll('${bridge:internal}', 'https://google-bridge.test');
 }
 
@@ -67,7 +66,10 @@ export const testConfig: ProvisionerConfig = {
   maxFullIsolationAgents: 5,
   activityTopic: 'agent-activity-stream',
   dpopIatSkewSeconds: 60,
+  internalCallers: ['sa-lifecycle@xaa-test.iam.gserviceaccount.com'],
 };
+
+export const LIFECYCLE_CALLER = 'sa-lifecycle@xaa-test.iam.gserviceaccount.com';
 
 export interface AdminCall { method: string; name: string }
 
@@ -82,7 +84,8 @@ export function recordingAdmin(options: { failAt?: string } = {}): GcpAdmin & { 
     calls,
     async createServiceAccount(input) {
       record('createServiceAccount', input.accountId);
-      return `serviceAccount:${input.accountId}@xaa-test.iam.gserviceaccount.com`;
+      const email = `${input.accountId}@xaa-test.iam.gserviceaccount.com`;
+      return { name: `projects/xaa-test/serviceAccounts/${email}`, email, member: `serviceAccount:${email}` };
     },
     async createCryptoKey(input) {
       record('createCryptoKey', input.keyId);
@@ -109,21 +112,26 @@ export interface ProvisionerHarness {
   seedStore: DocumentStore;
   admin: GcpAdmin & { calls: AdminCall[] };
   jobRuns: Array<{ jobName: string; env: Array<{ name: string; value: string }> }>;
-  activity: Array<Record<string, unknown>>;
+  activity: ActivityEvent[];
   logs: string[];
+  revokedConnections: string[];
   deps: ProvisionerAppDeps;
   fetch(path: string, init?: RequestInit): Promise<Response>;
 }
 
 export async function createProvisionerHarness(options: {
+  /** One Firestore across several apps, for a test that spans them. */
+  shared?: ReturnType<typeof createFirestoreDouble>;
   config?: Partial<ProvisionerConfig>;
   idpConnectionStatus?: 'READY' | 'CONSENT_REQUIRED';
   verifyStatus?: string;
   admin?: GcpAdmin & { calls: AdminCall[] };
   now?: () => number;
   idpPublicJwk?: JsonWebKey;
+  /** Resolves an `/internal/*` bearer token to a caller email; defaults to sa-lifecycle. */
+  verifyInternalCaller?: (token: string, audience: string) => Promise<string | null>;
 } = {}): Promise<ProvisionerHarness> {
-  const firestore = createFirestoreDouble();
+  const firestore = options.shared ?? createFirestoreDouble();
   const documents = createFirestoreDocumentStore(firestore, 'provisioner');
   const seedStore = createFirestoreDocumentStore(firestore, 'seed');
   for (const tool of seededTools()) await seedStore.set('catalog_tools', tool.tool_id, { ...tool });
@@ -131,8 +139,9 @@ export async function createProvisionerHarness(options: {
 
   const admin = options.admin ?? recordingAdmin();
   const jobRuns: Array<{ jobName: string; env: Array<{ name: string; value: string }> }> = [];
-  const activity: Array<Record<string, unknown>> = [];
+  const activity: ActivityEvent[] = [];
   const logs: string[] = [];
+  const revokedConnections: string[] = [];
   const now = options.now ?? (() => Date.now());
 
   const { createDedicatedResources } = await import('../dedicated.js');
@@ -147,6 +156,10 @@ export async function createProvisionerHarness(options: {
     jtiStore: new InMemoryJtiStore(now),
     logger: createLogger('provisioner', 'provisioner', (line) => { logs.push(line); }),
     publishActivity: async (event) => { activity.push(event); },
+    // The token itself is never checked in tests: what matters is that a caller who is
+    // not on the allow-list is refused, and that is the email, not the signature.
+    verifyInternalCaller: options.verifyInternalCaller
+      ?? (async (token) => (token === 'lifecycle-token' ? LIFECYCLE_CALLER : null)),
     fetchImpl: (async () => Response.json({
       keys: [{ ...(options.idpPublicJwk ?? {}), kid: 'idp-testkey', alg: 'RS256', use: 'sig' }],
     })) as unknown as typeof fetch,
@@ -158,6 +171,7 @@ export async function createProvisionerHarness(options: {
         };
       },
       async verifyIdpConnection() { return { status: options.verifyStatus ?? 'READY' }; },
+      async revokeIdpConnection(idpConnectionId) { revokedConnections.push(idpConnectionId); },
     },
     createDedicated: (input): Promise<DedicatedResult> => createDedicatedResources({
       admin, ledger: input.ledger, agentId: input.agentId,
@@ -165,6 +179,15 @@ export async function createProvisionerHarness(options: {
       signingKeyRing: 'projects/xaa-test/locations/asia-northeast1/keyRings/idjag-signing',
       connectionKeyRing: 'projects/xaa-test/locations/asia-northeast1/keyRings/idp-connection-encryption',
       imageEnv: { ISSUER: HUMAN_IDP_ISSUER },
+      runtimeEnv: { PROJECT_ID: 'xaa-test' },
+      jwksBucket: 'xaa-test-jwks',
+      activityTopic: 'agent-activity-stream',
+      runtimeInvokerServices: [
+        'projects/xaa-test/locations/asia-northeast1/services/resource-docs-as',
+        'projects/xaa-test/locations/asia-northeast1/services/resource-finance-as',
+      ],
+      provisionerMember: 'serviceAccount:sa-provisioner@xaa-test.iam.gserviceaccount.com',
+      agentPlatformClientSecret: 'projects/xaa-test/secrets/human-idp-agent-platform-client-secret',
       taskTimeoutSeconds: input.taskTimeoutSeconds,
       now, sleep: async () => undefined,
     }),
@@ -172,7 +195,7 @@ export async function createProvisionerHarness(options: {
 
   const app = createApp(deps);
   return {
-    documents, seedStore, admin, jobRuns, activity, logs, deps,
+    documents, seedStore, admin, jobRuns, activity, logs, revokedConnections, deps,
     fetch: async (path, init) => app.fetch(new Request(new URL(path, PROVISIONER_BASE), init)),
   };
 }

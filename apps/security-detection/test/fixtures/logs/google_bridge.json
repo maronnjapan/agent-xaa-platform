@@ -1,0 +1,11 @@
+{
+  "severity": "INFO", "app": "google-bridge", "log_source": "google_bridge", "event": "bridge.token",
+  "request_id": "req-bridge-1", "trace_id": "b0f2a1c4-0000-4000-8000-000000000007",
+  "agent_id": "agent-abcdefghijklmnopqrstuvwxyz", "human_subject": "testuser", "timestamp": "2026-01-01T12:00:06.000Z",
+  "fields": {
+    "id_jag_iss": "https://shared-agent-op.test", "id_jag_verify_result": "ok",
+    "connection_id": "conn-1", "requested_resource": "https://www.googleapis.com/calendar/v3",
+    "requested_scope": "calendar.read", "agent_expiry_check": "active",
+    "google_refresh_result": "ok", "access_token_issue_result": "ok", "result": "ok"
+  }
+}

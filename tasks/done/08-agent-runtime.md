@@ -9,7 +9,7 @@ Tool Executor は同じイメージ内のモジュールであり、LLM が選�
 | 前提 | 内容 |
 |---|---|
 | 依存する領域 | PROV（Tool Manifest と Agent Client Credential の受け渡し）、OP（`/xaa/token` と `/xaa/subject-token`）、RES（Resource AS と Resource API）、BRIDGE（P6 の外部 SaaS 経路）、IAC（Job 定義と SA のロール）、TEST（E2E とハーネス） |
-| このファイルのタスク数 | 26件 |
+| このファイルのタスク数 | 30件 |
 | 主に満たす設計ルール | RULE-02, RULE-04, RULE-17, RULE-18, RULE-19, RULE-21, RULE-22, RULE-38 |
 
 ---

@@ -1,4 +1,4 @@
-import { REPLAY_NODES, REPLAY_VIEWBOX, visibleNodeIds } from '../replay/nodes.js';
+import { NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_NODES, REPLAY_VIEWBOX, visibleNodeIds } from '../replay/nodes.js';
 import { SimulatedBadge } from './simulated-badge.js';
 import type { Element } from '../element.js';
 
@@ -29,10 +29,18 @@ export function ReplayCanvas(props: {
             class="replay-node"
             data-node={node.id}
             data-reached="false"
+            data-x={String(node.x)}
+            data-y={String(node.y)}
             transform={`translate(${node.x},${node.y})`}
             {...(visible.has(node.id) ? {} : { hidden: true })}
           >
-            <rect x="-70" y="-22" width="140" height="44" rx="6" />
+            <rect
+              x={String(-NODE_HALF_WIDTH)}
+              y={String(-NODE_HALF_HEIGHT)}
+              width={String(NODE_HALF_WIDTH * 2)}
+              height={String(NODE_HALF_HEIGHT * 2)}
+              rx="6"
+            />
             <text text-anchor="middle" dy="5">{node.label}</text>
           </g>
         ))}

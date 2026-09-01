@@ -53,7 +53,7 @@ describe('Agent OP persistence surface', () => {
     };
     await walk(root);
     expect([...names].sort()).toEqual([
-      'agents', 'bridge_consent_codes', 'bridge_consent_states', 'idp_connection_rotations',
+      'agents', 'bridge_consent_states', 'idp_connection_rotations',
       'idp_connections', 'provisioning_transactions',
     ]);
   });

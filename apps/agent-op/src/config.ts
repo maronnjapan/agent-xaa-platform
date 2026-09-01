@@ -15,6 +15,8 @@ export interface AgentOpConfig {
   humanIdpAuthorizeUrl: string;
   humanIdpTokenUrl: string;
   humanIdpRevokeUrl: string;
+  agentOpCallbackUrl: string;
+  clientSecretAgentPlatform: string;
   idJagLifetimeSeconds: number;
   /**
    * The agent this process is dedicated to, or null for the shared OP. A dedicated
@@ -56,6 +58,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentOpConfig 
     humanIdpAuthorizeUrl: required(env, 'HUMAN_IDP_AUTHORIZE_URL'),
     humanIdpTokenUrl: required(env, 'HUMAN_IDP_TOKEN_URL'),
     humanIdpRevokeUrl: required(env, 'HUMAN_IDP_REVOKE_URL'),
+    agentOpCallbackUrl: required(env, 'AGENT_OP_CALLBACK_URL'),
+    clientSecretAgentPlatform: required(env, 'CLIENT_SECRET_AGENT_PLATFORM'),
     idJagLifetimeSeconds,
     agentId,
     signerMode: oneOf(env, 'SIGNER_MODE', ['local', 'kms'] as const),

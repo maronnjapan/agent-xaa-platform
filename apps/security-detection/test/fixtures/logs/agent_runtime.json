@@ -1,0 +1,13 @@
+{
+  "severity": "INFO", "app": "agent-runtime", "log_source": "agent_runtime", "event": "runtime.tool_call",
+  "request_id": "req-run-1", "trace_id": "b0f2a1c4-0000-4000-8000-00000000000a",
+  "agent_id": "agent-abcdefghijklmnopqrstuvwxyz", "human_subject": "testuser", "timestamp": "2026-01-01T12:00:09.000Z",
+  "fields": {
+    "execution_id": "exec-1", "task_id": "task-1", "tool_id": "internal.document.list",
+    "required_capability": "document.read", "audience": "https://resource-docs-as.test",
+    "resource": "https://resource-docs-api.test", "scope": "docs.read",
+    "stage": "tool_call", "outcome": "success", "operation": "list",
+    "agent_age_seconds": 120, "expires_at": "2026-01-02T12:00:03.000Z",
+    "span_id": "span-1", "latency_ms": 51
+  }
+}

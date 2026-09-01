@@ -1,3 +1,13 @@
+/**
+ * What Terraform writes for an endpoint that this deployment does not have.
+ *
+ * The schema requires every key to be a URI, so an absent service cannot be an empty
+ * string; it is this sentinel instead. A reader that takes it at face value will send a
+ * real request to a host that does not resolve, which is why the value is named here
+ * rather than repeated as a literal on either side.
+ */
+export const DISABLED_ENDPOINT = 'https://disabled.invalid';
+
 export const PLATFORM_ENDPOINT_KEYS = [
   'issuer', 'jwks_url', 'xaa_token_url', 'xaa_callback_url', 'subject_token_url',
   'authorization_url', 'provisioner_url', 'lifecycle_url', 'resource_docs_as_issuer',

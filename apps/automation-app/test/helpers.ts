@@ -13,6 +13,8 @@ export const config: AutomationAppConfig = {
   port: 8080,
   issuer: ISSUER,
   clientId: 'automation-app',
+  clientSecret: 'test-automation-secret',
+  publicBaseUrl: 'https://automation-app.test',
   authorizationPlatformUrl: 'https://authorization.test',
   agentProvisionerUrl: 'https://provisioner.test',
   lifecycleManagerUrl: 'https://lifecycle.test',
@@ -75,6 +77,8 @@ export interface Harness {
 
 export async function startAutomationApp(options: {
   subject?: string;
+  config?: Partial<AutomationAppConfig>;
+  identityTokenProvider?: (audience: string) => Promise<string>;
   tokenAudience?: string | string[];
   tokenTyp?: string;
   scope?: string;
@@ -110,13 +114,15 @@ export async function startAutomationApp(options: {
   const auditLines: string[] = [];
   const upstream: Array<{ url: string; init: RequestInit }> = [];
   const app = createApp({
-    config,
+    config: { ...config, ...options.config },
     documents,
     sessions,
     verifyAccessToken: options.verifyAccessToken ?? (async (token) => decodePayload(token)),
+    verifyIdToken: async (token) => decodePayload(token),
     auditWrite: (line) => auditLines.push(line),
     ...(options.now ? { now: options.now } : {}),
     ...(options.generate ? { generate: options.generate } : {}),
+    ...(options.identityTokenProvider ? { identityTokenProvider: options.identityTokenProvider } : {}),
     fetchImpl: (async (url: string | URL | Request, init: RequestInit = {}) => {
       const target = String(url);
       upstream.push({ url: target, init });

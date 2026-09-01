@@ -38,6 +38,8 @@ export function baseConfig(overrides: Partial<AgentOpConfig> = {}): AgentOpConfi
     humanIdpAuthorizeUrl: `${ISSUER}/authorize`,
     humanIdpTokenUrl: `${ISSUER}/token`,
     humanIdpRevokeUrl: `${ISSUER}/revoke`,
+    agentOpCallbackUrl: 'https://agent-op-callback.test',
+    clientSecretAgentPlatform: 'test-agent-platform-secret',
     idJagLifetimeSeconds: 300,
     agentId: null,
     signerMode: 'local',

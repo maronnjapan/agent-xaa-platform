@@ -54,13 +54,17 @@ export async function dedicatedSaDelete(context: CleanupContext): Promise<'succe
 /**
  * What the name check should look at.
  *
- * A binding is recorded as `resource|role|member`, and the thing being protected is the
- * resource it sits on — the role and the member are not names in the runtime space at
- * all. Checking the whole string would reject every binding; checking the resource is
- * the question actually worth asking.
+ * A binding is recorded as `resource|role|member`. Some bindings intentionally sit on
+ * shared project, bucket or topic resources, so the runtime namespace guard applies to
+ * the member being removed. Removing a runtime-only member from a shared policy cannot
+ * revoke a Terraform-managed service account, while accepting an arbitrary member
+ * could.
  */
 function guardedName(kind: string, name: string): string {
-  return kind === 'iam_binding' ? name.split('|')[0]! : name;
+  if (kind !== 'iam_binding') return name;
+  const [, , member] = name.split('|');
+  if (!member?.startsWith('serviceAccount:')) throw new Error('invalid IAM binding ledger entry');
+  return member.slice('serviceAccount:'.length).split('@')[0]!;
 }
 
 async function destroy(context: CleanupContext, kind: string, name: string): Promise<void> {

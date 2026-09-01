@@ -37,6 +37,41 @@ describe('the token catalogue', () => {
     expect(bound.sort()).toEqual(['human_access_token', 'id_jag', 'native_resource_access_token']);
   });
 
+  /**
+   * The `typ` and DPoP columns, read out of the table rather than trusted. They were
+   * `-` and `なし` while the constant said `opaque` and false, which is two answers to
+   * the same question in the two places a reader looks.
+   */
+  it('carries the same typ and DPoP value in the table as in the constant', async () => {
+    const section = (await readFile(docsPath, 'utf8')).split('### 9. Tokenの種類と保持ルール')[1]!;
+    const rows = section.split('\n').filter((line) => line.startsWith('| ') && line.split('|').length >= 9);
+    const byKey = new Map(rows
+      .map((line) => line.split('|').map((cell) => cell.trim().replaceAll('`', '')))
+      .filter((cells) => cells[7] !== '定数キー')
+      .map((cells) => [cells[7]!, { typ: cells[4]!, dpop: cells[6]! }]));
+
+    for (const [key, value] of Object.entries(TOKEN_CATALOG)) {
+      const row = byKey.get(key);
+      expect(row, `no table row for ${key}`).toBeDefined();
+      expect(row!.typ, key).toBe(value.typ);
+      expect(row!.dpop, key).toBe(value.dpop ? '必須' : '不要');
+    }
+  });
+
+  /**
+   * Nothing imports the catalogue yet, and that is the point of pinning the number: the
+   * table is a description of what the verifiers already enforce through `JWT_TYP`, so
+   * a day when an app starts reading it is a day someone chose a second source of truth.
+   */
+  it('is a description, not a runtime lookup', async () => {
+    const { execFileSync } = await import('node:child_process');
+    const root = new URL('../../../', import.meta.url).pathname;
+    const found = execFileSync('bash', ['-c', "grep -rl 'TOKEN_CATALOG' apps/*/src 2>/dev/null | wc -l"], {
+      cwd: root, encoding: 'utf8',
+    }).trim();
+    expect(found).toBe('0');
+  });
+
   it('lists every constant key in the docs table, and nothing else', async () => {
     const section = (await readFile(docsPath, 'utf8')).split('### 9. Tokenの種類と保持ルール')[1]!;
     const table = section.split('\n\n')[2] ?? section;

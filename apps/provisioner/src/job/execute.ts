@@ -1,6 +1,7 @@
 import { assertRuntimeEnv, RUNTIME_ENV_KEYS, type RuntimeEnvOverrides } from '@xaa/contracts';
 import { sha256Base64Url } from '@xaa/crypto';
 import type { DocumentStore } from '@xaa/gcp';
+import { setJobExecutionName } from '../agent/registration.js';
 
 export interface JobRunner {
   runJob(input: { jobName: string; env: Array<{ name: string; value: string }> }): Promise<{ executionName: string }>;
@@ -41,6 +42,6 @@ export async function startAgentExecution(options: {
     jobName: options.jobName,
     env: RUNTIME_ENV_KEYS.map((name) => ({ name, value: env[name] })),
   });
-  await options.documents.update('agents', `${options.agentId}__meta`, { job_execution_name: executionName });
+  await setJobExecutionName(options.documents, options.agentId, executionName);
   return executionName;
 }

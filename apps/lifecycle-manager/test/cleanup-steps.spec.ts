@@ -6,6 +6,8 @@ import { AUDIT_FIELDS } from '../src/cleanup/steps/audit-persist.js';
 import { DOMAIN_SUBDOCUMENTS, FORBIDDEN_DOMAIN_KEYS, loadDomain, DomainSchemaViolation } from '../src/domain.js';
 import { createLifecycleHarness, recordingClients, seedDomain, type LifecycleHarness } from '../src/testing/harness.js';
 import { createLogger } from '@xaa/logging';
+import { DISABLED_ENDPOINT, PLATFORM_ENDPOINT_KEYS, type PlatformEndpoints } from '@xaa/contracts';
+import { resolveEndpoints } from '../src/endpoints.js';
 
 const logContext = { request_id: 'r', trace_id: 't', agent_id: null, human_subject: null };
 
@@ -125,12 +127,20 @@ describe('step4 and step5, the credentials already issued', () => {
     expect(outcome.status).toBe('DESTROYED');
   });
 
-  it('disables each binding when the bridge is deployed', async () => {
+  /**
+   * By agent, not by binding: `/bindings/{agent_id}/disable` is the route the Bridge
+   * serves, and the per-binding path this used to call was never one of them (00b §4).
+   */
+  it('disables the agent\'s bindings when the bridge is deployed, then deletes them', async () => {
     const harness = createLifecycleHarness({ clients: recordingClients({ bridgeUrl: 'https://bridge.test' }) });
     const agentId = await seedDomain(harness, { bridgeBindingIds: ['bind-1', 'bind-2'] });
+
     await cleanupAgent(agentId, 'EXPIRED', deps(harness));
-    expect(harness.clients.calls.filter((entry) => entry.target === 'disableBinding').map((entry) => entry.argument))
-      .toEqual(['bind-1', 'bind-2']);
+
+    expect(harness.clients.calls.filter((entry) => entry.target === 'disableBindings').map((entry) => entry.argument))
+      .toEqual([agentId]);
+    expect(harness.clients.calls.filter((entry) => entry.target === 'deleteBindings').map((entry) => entry.argument))
+      .toEqual([agentId]);
   });
 });
 
@@ -213,5 +223,46 @@ describe('the agent identity domain', () => {
     await expect(loadDomain(harness.documents, agentId)).resolves.toMatchObject({
       agent_id: agentId, isolation_level: 'standard', bridge_binding_ids: [],
     });
+  });
+});
+
+/**
+ * `enable_google_bridge=false` is the default deployment, and endpoints.json spells the
+ * missing Bridge as a URI because the schema has no way to say "absent". Reading that
+ * URI as a destination made step5 send a real request to a host that does not resolve,
+ * so every quarantine and every disabled identity ended in a failed cleanup.
+ */
+describe('where the other services are', () => {
+  function endpoints(overrides: Partial<PlatformEndpoints> = {}): PlatformEndpoints {
+    const base = Object.fromEntries(PLATFORM_ENDPOINT_KEYS.map((key) => [
+      key,
+      key === 'agent_max_lifetime_seconds' ? 3600
+        : key === 'enable_google_bridge' ? false
+        : key === 'vertex_model' || key === 'vertex_location' ? 'test'
+        : `https://${key.replaceAll('_', '-')}.test`,
+    ])) as unknown as PlatformEndpoints;
+    return { ...base, xaa_token_url: 'https://shared-agent-op.test/xaa/token', ...overrides };
+  }
+
+  it('reads the disabled sentinel as no Bridge at all', () => {
+    const resolved = resolveEndpoints(endpoints({ bridge_internal_url: DISABLED_ENDPOINT }));
+    expect(resolved.bridgeUrl).toBeNull();
+  });
+
+  it('keeps a real Bridge url', () => {
+    const resolved = resolveEndpoints(endpoints({ bridge_internal_url: 'https://google-bridge.test' }));
+    expect(resolved.bridgeUrl).toBe('https://google-bridge.test');
+    expect(resolved.agentOpUrl).toBe('https://shared-agent-op.test');
+  });
+
+  it('leaves the abnormal-reason cleanup free of a Bridge call when there is none', async () => {
+    const harness = createLifecycleHarness();
+    harness.clients.endpoints.bridgeUrl = null;
+    const agentId = await seedDomain(harness);
+
+    const outcome = await cleanupAgent(agentId, 'IDENTITY_DISABLED', deps(harness));
+
+    expect(outcome.results.find((entry) => entry.step === 'credential_revoke')!.status).toBe('succeeded');
+    expect(harness.clients.calls.map((call) => call.target)).not.toContain('revokeUpstream');
   });
 });

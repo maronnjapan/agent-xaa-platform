@@ -313,6 +313,9 @@ importers:
       '@google-cloud/run':
         specifier: 4.0.0
         version: 4.0.0
+      '@google-cloud/storage':
+        specifier: 8.0.1
+        version: 8.0.1
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
@@ -337,6 +340,9 @@ importers:
       ajv-formats:
         specifier: 3.0.1
         version: 3.0.1(ajv@8.20.0)
+      google-auth-library:
+        specifier: 11.0.2
+        version: 11.0.2
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -362,6 +368,9 @@ importers:
       '@google-cloud/run':
         specifier: 4.0.0
         version: 4.0.0
+      '@google-cloud/storage':
+        specifier: 8.0.1
+        version: 8.0.1
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.5)
@@ -380,6 +389,9 @@ importers:
       '@xaa/logging':
         specifier: workspace:*
         version: link:../../packages/xaa-logging
+      google-auth-library:
+        specifier: 11.0.2
+        version: 11.0.2
       hono:
         specifier: 4.13.5
         version: 4.13.5
@@ -762,6 +774,9 @@ importers:
       '@xaa/crypto':
         specifier: workspace:*
         version: link:../xaa-crypto
+      google-auth-library:
+        specifier: 11.0.2
+        version: 11.0.2
     devDependencies:
       '@types/node':
         specifier: 22.18.1
@@ -824,6 +839,9 @@ importers:
       '@xaa/crypto':
         specifier: workspace:*
         version: link:../xaa-crypto
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../xaa-logging
       hono:
         specifier: 4.13.5
         version: 4.13.5

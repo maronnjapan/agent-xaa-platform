@@ -26,7 +26,10 @@ export const CRITICAL_SINGLETON_FACTORS: readonly ScoreFactor[] = ['delegation_m
  */
 export function factorFor(code: string): ScoreFactor | null {
   if (code.startsWith('token.')) return 'request_rate';
-  if (code.startsWith('authorization_ai.')) return 'authorization_ai_anomaly';
+  // Two prefixes for one factor: the category is `authorization_ai`, and the fixed rule
+  // ids the Authorization AI classification emits are namespaced `authz_ai.` after the
+  // service that produced the evidence.
+  if (code.startsWith('authorization_ai.') || code.startsWith('authz_ai.')) return 'authorization_ai_anomaly';
   if (code.startsWith('authorization.')) return 'authorization_violation';
   if (code.startsWith('tool.')) return 'privilege_escalation_attempt';
   if (code.startsWith('lifetime.')) return 'agent_expiration_violation';

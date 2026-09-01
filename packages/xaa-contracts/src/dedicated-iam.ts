@@ -4,6 +4,7 @@ export const DEDICATED_OP_SA_ROLES = [
   'roles/datastore.user',
   'roles/storage.objectCreator',
   'roles/pubsub.publisher',
+  'roles/secretmanager.secretAccessor',
 ] as const;
 
 export const DEDICATED_AGENT_SA_ROLES = [

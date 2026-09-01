@@ -30,6 +30,17 @@ export const REPLAY_NODES: readonly ReplayNode[] = [
 export const REPLAY_VIEWBOX = '0 0 720 300';
 
 /**
+ * Half a box, in the diagram's own units.
+ *
+ * Exported because the browser needs them too: an arrow has to end on the edge of the
+ * destination rather than at its centre, or a step that stopped short would still be
+ * drawn on top of the box it never reached. One pair of numbers, so the picture and
+ * the geometry cannot disagree.
+ */
+export const NODE_HALF_WIDTH = 70;
+export const NODE_HALF_HEIGHT = 22;
+
+/**
  * `lifecycle-manager` and `security-detection` are deliberately absent.
  *
  * They act on an agent rather than talking to one, so drawing an arrow from them

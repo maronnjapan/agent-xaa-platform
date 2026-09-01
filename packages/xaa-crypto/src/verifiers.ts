@@ -29,6 +29,10 @@ export function verifyHumanAccessToken(token: string, options: { issuer: string;
   return verifyJwtInternal(token, { ...options, typ: 'at+jwt' });
 }
 
+export function verifyHumanIdToken(token: string, options: { issuer: string; jwks: JwksCache; audience: string }): Promise<Record<string, unknown>> {
+  return verifyJwtInternal(token, { ...options, typ: 'JWT' });
+}
+
 export async function verifyIdJag(token: string, options: { issuer: string; jwks: JwksCache; audience: string; resource: string }): Promise<Record<string, unknown>> {
   const payload = await verifyJwtInternal(token, { ...options, typ: 'oauth-id-jag+jwt' });
   if (payload.aud !== options.audience) throw new XaaCryptoError('invalid_signature', 'token verification failed');

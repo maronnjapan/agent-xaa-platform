@@ -119,9 +119,10 @@ describe('POST /v1/authorization/decisions', () => {
     expect(body.security_profile.isolation_level).toBe('standard');
   });
 
-  it('publishes one activity event per decision', async () => {
+  it('publishes the capability and isolation events per decision', async () => {
     const { authz } = await submit({ body: request });
-    expect(authz.activity).toHaveLength(1);
+    expect(authz.activity.map((event) => (event.detail as { event_type: string }).event_type))
+      .toEqual(['CAPABILITY_DECIDED', 'ISOLATION_DECIDED']);
   });
 
   it('serves healthz without a token', async () => {

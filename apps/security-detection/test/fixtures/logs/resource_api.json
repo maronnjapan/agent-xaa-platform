@@ -1,0 +1,10 @@
+{
+  "severity": "INFO", "app": "resource-docs-api", "log_source": "resource_api", "event": "resource_api.access",
+  "request_id": "req-api-1", "trace_id": "b0f2a1c4-0000-4000-8000-000000000009",
+  "agent_id": "agent-abcdefghijklmnopqrstuvwxyz", "human_subject": "testuser", "timestamp": "2026-01-01T12:00:08.000Z",
+  "fields": {
+    "tool_id": "internal.document.list", "operation": "list", "http_method": "GET",
+    "resource": "https://resource-docs-api.test", "response_status": 200,
+    "outcome": "success", "latency_ms": 42
+  }
+}

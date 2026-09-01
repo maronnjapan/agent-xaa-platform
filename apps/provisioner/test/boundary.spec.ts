@@ -73,9 +73,13 @@ describe('the provisioner keeps inside its boundary', () => {
   });
 
   it('reaches the dedicated module only from the full_isolation branch', async () => {
-    const route = (await sources()).find((file) => file.path.endsWith('routes/provisioning.ts'))!;
-    const lines = route.text.split('\n');
-    const guard = lines.findIndex((line) => line.includes("isolationLevel === 'full_isolation'") && line.includes('if ('));
+    const callers = (await sources())
+      .filter((file) => !file.path.includes('/testing/') && file.text.includes('deps.createDedicated('));
+    expect(callers.map((file) => file.path.split('/src/')[1])).toEqual(['provisioning/flow.ts']);
+    const lines = callers[0]!.text.split('\n');
+    // The step that creates them is only put into the run for a full_isolation
+    // request, so the guard has to come first in the file as well as at run time.
+    const guard = lines.findIndex((line) => line.includes("request.isolationLevel === 'full_isolation' ?"));
     const call = lines.findIndex((line) => line.includes('deps.createDedicated('));
     expect(guard).toBeGreaterThan(-1);
     expect(call).toBeGreaterThan(guard);
@@ -85,6 +89,28 @@ describe('the provisioner keeps inside its boundary', () => {
     const text = (await sources()).map((file) => file.text).join('\n');
     for (const discarded of ['dedicated_op_slot_exhausted', 'no_isolation_slot_available', 'slot_unavailable', 'isolation_slots', 'dedicated_op_slots']) {
       expect(text).not.toContain(discarded);
+    }
+  });
+
+  /**
+   * 00b §3 puts one writer in front of `agents/{agent_id}/meta`. The rule is not about
+   * tidiness: Lifecycle owns the status field after provisioning ends, and a second
+   * writer here is how a registration starts disagreeing with the agent it describes.
+   */
+  it('writes the agent registration from one module only', async () => {
+    const offenders = (await sources())
+      .filter((file) => !file.path.endsWith('agent/registration.ts'))
+      .filter((file) => /\.(set|update|delete)\(\s*'agents',[^)]*__meta/.test(file.text));
+    expect(offenders.map((file) => file.path.split('/src/')[1])).toEqual([]);
+  });
+
+  it('writes no other sub-document of an agent from outside its own owner', async () => {
+    const owners: Record<string, string> = { __meta: 'agent/registration.ts', __manifest: 'agent/registration.ts', __baseline: 'baseline-hook.ts' };
+    for (const [suffix, owner] of Object.entries(owners)) {
+      const writers = (await sources())
+        .filter((file) => new RegExp(`\\.(set|update|delete)\\(\\s*'agents',[^)]*${suffix}`).test(file.text))
+        .map((file) => file.path.split('/src/')[1]);
+      expect(writers).toEqual([owner]);
     }
   });
 

@@ -81,8 +81,24 @@ jobs:
       - run: pnpm check:deviations
       - run: pnpm check:glossary
       - run: pnpm check:docs-links
+      - run: pnpm check:legacy-names
       # The generated rules table must already match its source.
       - run: pnpm gen:design-rules && git diff --exit-code docs/10-design-rules.md
+  # The diagram is generated too, and from Python rather than Node. A drawing that has
+  # drifted from its layout definition is the one artefact nobody notices going stale.
+  diagrams:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # The PNG is left out: it is rendered by cairosvg, which is optional, so its bytes
+      # depend on whether the runner happens to have it.
+      - run: pnpm gen:diagrams && git diff --exit-code docs/diagrams/architecture.svg docs/diagrams/architecture.drawio
   # The strict variants open every path and grep every test name, so they need the
   # implementation to be complete. Required now that it is.
   docs-strict:

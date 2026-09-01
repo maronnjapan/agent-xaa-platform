@@ -7,6 +7,7 @@ import { createXaaTokenRoute } from './routes/xaa-token.js';
 import { createSubjectTokenRoute } from './routes/xaa-subject-token.js';
 import { createXaaCallbackRoute } from './routes/xaa-callback.js';
 import { createInternalRevokeRoute, type ServiceIdentityVerifier } from './routes/internal-revoke-connection.js';
+import { createInternalIdpConnectionsRoute } from './routes/internal-idp-connections.js';
 import { createAgentOpStore } from './store/index.js';
 import { emitProtocolViolationEvent, type AgentOpViolationCode } from './log/protocol-violation-event.js';
 
@@ -14,6 +15,7 @@ export interface AgentOpAppDeps extends AgentOpDeps {
   automationAppUrl?: string;
   serviceIdentity?: ServiceIdentityVerifier;
   lifecycleServiceAccount?: string;
+  provisionerServiceAccount?: string;
 }
 
 /**
@@ -36,6 +38,11 @@ function createApp(deps: AgentOpAppDeps): Hono {
     app.route('/xaa/subject-token', createSubjectTokenRoute(deps));
     if (deps.serviceIdentity && deps.lifecycleServiceAccount) {
       app.route('/internal/revoke-connection', createInternalRevokeRoute(deps, deps.serviceIdentity, deps.lifecycleServiceAccount));
+    }
+    if (deps.serviceIdentity && deps.provisionerServiceAccount) {
+      app.route('/internal/idp-connections', createInternalIdpConnectionsRoute(
+        deps, deps.serviceIdentity, deps.provisionerServiceAccount,
+      ));
     }
   } else {
     app.route('/xaa/callback', createXaaCallbackRoute(deps, deps.automationAppUrl ?? ''));

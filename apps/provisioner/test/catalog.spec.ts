@@ -3,7 +3,8 @@ import { CAPABILITIES, TOOL_IDS } from '@xaa/contracts';
 import { resolveAllowedTools } from '../src/catalog/resolve-tools.js';
 import { buildXaaConfig, InvalidXaaConfig } from '../src/catalog/build-xaa-config.js';
 import { buildToolManifest, ManifestContainsSecret } from '../src/catalog/build-manifest.js';
-import { seededConnectors, seededTools } from './helpers.js';
+import { createCatalogRepository } from '../src/catalog/repository.js';
+import { createProvisionerHarness, seededConnectors, seededTools } from './helpers.js';
 
 const catalogue = seededTools();
 const connectors = seededConnectors();
@@ -129,5 +130,41 @@ describe('building the tool manifest', () => {
     const resolved = resolveAllowedTools(['document.read'], catalogue);
     const manifest = buildToolManifest({ agentId, expiresAt, tools: resolved.ok ? resolved.tools : [], connectors, addedConstraints: {} });
     expect(Object.keys(manifest).sort()).toEqual(['agent_id', 'expires_at', 'tools']);
+  });
+});
+
+/**
+ * Turning a connector off is how an operator stops agents reaching a service. The
+ * repository is the only place that can honour it: everything downstream — the
+ * resolution, the manifest, the registration — takes the rows it hands over as the
+ * whole catalogue.
+ */
+describe('the catalogue repository', () => {
+  async function seeded(status: 'ACTIVE' | 'DISABLED') {
+    const harness = await createProvisionerHarness();
+    const target = connectors.find((connector) => connector.connector_id === 'internal-docs-api')!;
+    await harness.seedStore.set('catalog_connectors', target.connector_id, { ...target, status });
+    return createCatalogRepository(harness.documents);
+  }
+
+  it('hides a disabled connector and every tool under it', async () => {
+    const repository = await seeded('DISABLED');
+    expect((await repository.connectors()).map((connector) => connector.connector_id)).not.toContain('internal-docs-api');
+    expect((await repository.tools()).some((tool) => tool.connector_id === 'internal-docs-api')).toBe(false);
+    expect(await repository.findConnectorById('internal-docs-api')).toBeUndefined();
+    expect(await repository.findToolById('internal.document.get')).toBeUndefined();
+    expect(await repository.findToolsByCapability('document.read')).toEqual([]);
+  });
+
+  it('hands over the tools of an active connector', async () => {
+    const repository = await seeded('ACTIVE');
+    expect((await repository.findToolsByCapability('document.read')).length).toBeGreaterThan(0);
+    expect(await repository.findToolById('internal.document.get')).toBeDefined();
+  });
+
+  it('leaves an agent no tool for a capability whose connector was turned off', async () => {
+    const repository = await seeded('DISABLED');
+    const result = resolveAllowedTools(['document.read'], await repository.tools());
+    expect(result).toEqual({ ok: false, code: 'no_tool_for_capability', capability_id: 'document.read' });
   });
 });

@@ -64,10 +64,18 @@ export function createAgentDefinitionStore(documents: DocumentStore): AgentDefin
     async find(id) {
       return documents.get<AgentDefinition>('agent_definitions', id);
     },
-    /** Approving twice is refused: the second click would restate consent nobody gave. */
+    /**
+     * Approving twice is refused: the second click would restate consent nobody gave.
+     *
+     * Someone else's definition is refused the same way a missing one is. Approval is
+     * the record of a particular person having looked at a particular permission set
+     * (RULE-08), so it can only be given by the person the set was shown to — and
+     * answering differently for "not yours" than for "not there" would let ids be
+     * probed for existence (RULE-56).
+     */
     async approve(id, humanSubject, now = Date.now()) {
       const existing = await documents.get<AgentDefinition>('agent_definitions', id);
-      if (!existing) throw new ApprovalRequired();
+      if (!existing || existing.human_subject !== humanSubject) throw new ApprovalRequired();
       if (existing.approved_at !== null) throw new AlreadyApproved();
       const approved: AgentDefinition = {
         ...existing, approved_by: humanSubject, approved_at: new Date(now).toISOString(),

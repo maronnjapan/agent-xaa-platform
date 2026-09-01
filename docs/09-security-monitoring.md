@@ -68,10 +68,10 @@ Schemaには、OCSFのようなVendor非依存のSecurity Schemaを採用する�
 保存経路は次の一方向のみとする。
 
 ```text
-各アプリ → Cloud Logging → Log Sink / Pub/Sub → agent-security-prod（BigQuery）
+各アプリ → Cloud Logging → Log Sink → BigQuery dataset security_audit
 ```
 
-Platform側のService AccountにはSecurity Project上のログを削除する権限を与えない（[08. §1](./08-gcp-infrastructure.md#1-gcp-projectの構成)）。
+Platform側のService Accountには監査 dataset のログを削除する権限を与えない（[08. §1](./08-gcp-infrastructure.md#1-gcp-projectと監査領域の構成)）。
 
 ## 5. 検知の段階
 

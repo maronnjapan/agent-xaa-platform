@@ -33,8 +33,10 @@ export interface ResourceAsClient {
   revokeByActor(input: { baseUrl: string; actorSub: string }): Promise<number>;
 }
 
+/** The three routes 00b §4 gives the Bridge for cleanup, addressed as it names them. */
 export interface BridgeClient {
-  disableBinding(input: { baseUrl: string; bindingId: string }): Promise<number>;
+  disableBindings(input: { baseUrl: string; agentId: string }): Promise<number>;
+  deleteBindings(input: { baseUrl: string; agentId: string }): Promise<number>;
   revokeUpstream(input: { baseUrl: string; connectionId: string }): Promise<number>;
 }
 

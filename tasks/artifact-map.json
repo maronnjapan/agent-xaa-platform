@@ -1,0 +1,48 @@
+{
+  "$comment": "宣言した成果物パスと、その挙動を実際に持つファイルの対応。tasks/00b-conventions.md 5節「成果物の唯一の所有者」の機械可読版であり、pnpm check:done がパス不在を解決するのに使う。統合や改名で宣言どおりのパスが無くなった場合だけ書く。挙動そのものが無い場合は、ここへ書かずに実装する。",
+  "T-DOCS-01": {
+    "declared": ["scripts/check-requirements-index.ts", "tests/docs/requirements-index.test.ts"],
+    "owner": ["scripts/check-requirements-index.mjs", "tests/docs/docs-registry.spec.ts"],
+    "why": "検査スクリプトは Node が直接実行する .mjs にした（ビルド生成物を経由させないため）。docs の検査テストは 00b のテスト拡張子 .spec.ts に従い、1ファイルへ集約した"
+  },
+  "T-DOCS-03": {
+    "declared": ["scripts/check-deviations.ts", "tests/docs/deviations.test.ts"],
+    "owner": ["scripts/check-deviations.mjs", "tests/docs/docs-registry.spec.ts"],
+    "why": "T-DOCS-01 と同じ理由"
+  },
+  "T-DOCS-04": {
+    "declared": ["scripts/gen-design-rules.ts", "tests/docs/rules-registry.test.ts"],
+    "owner": ["scripts/gen-design-rules.mjs", "tests/docs/docs-registry.spec.ts"],
+    "why": "T-DOCS-01 と同じ理由"
+  },
+  "T-DOCS-10": {
+    "declared": ["scripts/check-glossary.ts", "tests/docs/glossary.test.ts"],
+    "owner": ["scripts/check-glossary.mjs", "tests/docs/docs-registry.spec.ts"],
+    "why": "T-DOCS-01 と同じ理由"
+  },
+  "T-DOCS-12": {
+    "declared": ["tests/docs/example-capabilities.test.ts"],
+    "owner": ["tests/docs/docs-registry.spec.ts"],
+    "why": "docs 02 の例示検証は docs 検査の1 describe として同じファイルに置いた"
+  },
+  "T-DOCS-13": {
+    "declared": ["scripts/check-docs-links.ts", "tests/docs/links.test.ts"],
+    "owner": ["scripts/check-docs-links.mjs", "tests/docs/docs-registry.spec.ts"],
+    "why": "T-DOCS-01 と同じ理由"
+  },
+  "T-DOCS-14": {
+    "declared": ["tests/docs/traceability.test.ts"],
+    "owner": ["tests/docs/docs-registry.spec.ts"],
+    "why": "T-DOCS-12 と同じ理由"
+  },
+  "T-DOCS-15": {
+    "declared": ["tests/docs/token-catalog.test.ts"],
+    "owner": ["packages/xaa-contracts/test/token-catalog.spec.ts"],
+    "why": "突き合わせ先の定数 TOKEN_CATALOG と同じパッケージに置いた。定数が動けば同じコミットでテストが動く"
+  },
+  "T-DOCS-16": {
+    "declared": [".github/workflows/docs.yml"],
+    "owner": [".github/workflows/ci.yml"],
+    "why": "CI は単一の ci.yml に集約してある。docs ジョブと diagrams ジョブがこのファイルにある"
+  }
+}

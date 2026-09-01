@@ -22,6 +22,7 @@ async function fixture(options: { humanPermissions?: string[]; model?: Parameter
     }, {
       store: createAuthorizationStore(documents), vertex,
       clock: { now: () => Date.parse('2026-03-01T00:00:00Z') },
+      modelVersion: 'gemini-2.5-flash', taxonomyVersion: 'v1',
       recordStep: (step) => steps.push(step),
       publishActivity: async (event) => { activity.push(event); },
     }),
@@ -33,9 +34,9 @@ describe('the decision pipeline', () => {
     const harness = await fixture();
     await harness.run();
     expect(harness.steps).toEqual([
-      'validate', 'work_definition', 'infer', 'sanitize', 'taxonomy_filter', 'save_proposal',
+      'validate', 'work_definition', 'infer', 'sanitize', 'taxonomy_filter',
       'merge_characteristics', 'load_policy_inputs', 'policy_engine', 'security_profile',
-      'save_decision', 'activity_event', 'respond',
+      'save_proposal', 'save_decision', 'activity_event', 'respond',
     ]);
   });
 
@@ -105,11 +106,12 @@ describe('the decision pipeline', () => {
     expect(definitions[0]!.data.operations).toEqual(['read_events']);
   });
 
-  it('publishes one activity event carrying the decision', async () => {
+  it('publishes the two decision events, capability first', async () => {
     const harness = await fixture();
     await harness.run();
-    expect(harness.activity).toHaveLength(1);
-    expect(harness.activity[0]).toMatchObject({ event_type: 'AUTHORIZATION_DECIDED', phase: 'authorization' });
+    expect(harness.activity.map((event) => (event.detail as { event_type: string }).event_type))
+      .toEqual(['CAPABILITY_DECIDED', 'ISOLATION_DECIDED']);
+    expect(harness.activity[0]).toMatchObject({ phase: 'authorization', outcome: 'info', agent_id: null });
   });
 
   it('keeps the taxonomy list stable', () => {

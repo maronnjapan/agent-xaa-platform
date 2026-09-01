@@ -80,8 +80,8 @@ RULE-15 と RULE-30 に対応し、docs の Cloud SQL 前提を DEC-IAC-09 の F
 
 **完了条件**
 - [ ] `apps/authorization/test/schema-separation.test.ts` が `work-definition.schema.json` の全プロパティ名に対し `/(capability|tool|endpoint|scope|url|method)/i` が1件も一致しないことを assert して green。
-- [ ] `apps/authorization/test/isolation-level.test.ts` が `isolation_level: "partial"` を含む Security Profile で Ajv が 400 相当の検証失敗を返し、同じ値でストアの書き込み関数が例外を投げて Firestore への書き込みが0回であることを assert して green。
-- [ ] `grep -rn "collection('" apps/authorization/src | grep -v store/collections.ts` の結果が0件。
+- [x] `apps/authorization/test/isolation-level.test.ts` が `isolation_level: "partial"` を含む Security Profile で Ajv が 400 相当の検証失敗を返し、同じ値でストアの書き込み関数が例外を投げて Firestore への書き込みが0回であることを assert して green。
+- [x] `grep -rn "collection('" apps/authorization/src | grep -v store/collections.ts` の結果が0件。
 - [ ] `pnpm --filter @xaa/authorization test schema-separation isolation-level` が green。
 
 ---
@@ -133,8 +133,8 @@ RULE-10 と DEC-SCOPE-05 に対応する。
 - 保存順序は proposal を先、decision を後にする。decision の保存に失敗した場合は API を 500 とし、`effective_capabilities` を含む応答を返さない。
 
 **完了条件**
-- [ ] `apps/authorization/test/proposal-decision-separation.test.ts` が、AI が Taxonomy 外の `slack.channel.admin` を提案したケースで `ai_proposals` には当該値が残り、API 応答の `effective_capabilities` には現れないことを assert して green。
-- [ ] `grep -rn "proposal-store" apps/authorization/src/routes` の結果が0件。
+- [x] `apps/authorization/test/proposal-decision-separation.test.ts` が、AI が Taxonomy 外の `slack.channel.admin` を提案したケースで `ai_proposals` には当該値が残り、API 応答の `effective_capabilities` には現れないことを assert して green。
+- [x] `grep -rn "proposal-store" apps/authorization/src/routes` の結果が0件。
 - [ ] decision 保存を失敗させたテストで、API が 500 を返し `effective_capabilities` を含まない応答本文になることを assert して green。
 
 ---
@@ -612,9 +612,9 @@ docs 03 §6 の「Policy ID と Decision Reason を監査用に残す」を実�
 - 書き込みは Firestore の `batch` で1回にまとめる。Capability ごとに個別コミットしない。
 
 **完了条件**
-- [ ] `apps/authorization/test/policy-decision-store.test.ts` が、decisions API を1回呼んだ後に `policy_decisions` の行数が Proposed 件数と一致することを assert して green。
-- [ ] `reason_code` に `'because it looked risky'` を渡すと例外が投げられ、`policy_decisions` への書き込みが0件になることを assert するテストが green。
-- [ ] `REASON_TO_VIOLATION` の全キーが `REASON_CODES` を網羅し、値が `VIOLATION_CODES` か `null` であることを assert するテストが green。
+- [x] `apps/authorization/test/policy-decision-store.test.ts` が、decisions API を1回呼んだ後に `policy_decisions` の行数が Proposed 件数と一致することを assert して green。
+- [x] `reason_code` に `'because it looked risky'` を渡すと例外が投げられ、`policy_decisions` への書き込みが0件になることを assert するテストが green。
+- [x] `REASON_TO_VIOLATION` の全キーが `REASON_CODES` を網羅し、値が `VIOLATION_CODES` か `null` であることを assert するテストが green。
 
 ---
 
@@ -664,8 +664,8 @@ RULE-38 と docs 09 §2 の収集項目に対応する。
 - ログ出力は推論1回につき1行にする。プロンプト全文とレスポンス全文を出さない。
 
 **完了条件**
-- [ ] `apps/authorization/test/ai-log.test.ts` が推論1回に対し7項目すべてが出力されることを assert して green。
-- [ ] ログ全体の文字列に Work Definition の `description` 本文が含まれないことを assert するテストが green。
+- [x] `apps/authorization/test/ai-log.test.ts` が推論1回に対し7項目すべてが出力されることを assert して green。
+- [x] ログ全体の文字列に Work Definition の `description` 本文が含まれないことを assert するテストが green。
 - [ ] 推論1回に対し `event === 'authorization.ai_inference'` の行がちょうど1件であることを assert するテストが green。
 
 ---
@@ -689,9 +689,9 @@ docs 09 §2 の Policy Engine 行に対応する。
 - 検知 SQL（DEC-SEC-01）が使えるよう、フィールド名をこの1か所で固定し、他アプリと重複する名前（`decision_id` など）の意味を変えない。
 
 **完了条件**
-- [ ] `apps/authorization/test/policy-log.test.ts` が、1件 ALLOW と1件 DENY を含む判定に対し DENY 側の行に `violation_code` が付くことを assert して green。
+- [x] `apps/authorization/test/policy-log.test.ts` が、1件 ALLOW と1件 DENY を含む判定に対し DENY 側の行に `violation_code` が付くことを assert して green。
 - [ ] 判定1回に対し `authorization.policy_decision` が1行、`authorization.capability_decision` が Proposed 件数分出ることを assert するテストが green。
-- [ ] ALLOW 行の `violation_code` が `null` であることを assert するテストが green。
+- [x] ALLOW 行の `violation_code` が `null` であることを assert するテストが green。
 
 ---
 
@@ -716,8 +716,8 @@ RULE-55 に従い、Security Detection 向けの詳細ログとは別系統で�
 
 **完了条件**
 - [ ] `e2e/test/authorization/events-authorization.spec.ts` が、1件却下を含む判定に対し `message` に却下された Capability 名と理由が現れ、`detail.denied` が1要素であることを assert して green。
-- [ ] ISOLATION_DECIDED の `message` に `isolation_level` と `risk_score` の値が含まれることを assert するテストが green。
-- [ ] `denied` が0件の判定でも CAPABILITY_DECIDED が1件発行されることを assert するテストが green。
+- [x] ISOLATION_DECIDED の `message` に `isolation_level` と `risk_score` の値が含まれることを assert するテストが green。
+- [x] `denied` が0件の判定でも CAPABILITY_DECIDED が1件発行されることを assert するテストが green。
 - [ ] publish を失敗させたテストで API が 200 を返し、warning ログが1件出ることを assert して green。
 
 ---
@@ -742,10 +742,10 @@ at-least-once 配信のため、同一 `changed_at` の重複配信を冪等に�
 - 応答は常に 204。失敗時のみ 500 を返し Pub/Sub に再配信させる。エラー時に部分的な書き込みを残さないよう、Agent 単位で処理を独立させる。
 
 **完了条件**
-- [ ] `apps/authorization/test/permission-change.test.ts` が、再評価時に Vertex AI クライアントの spy 呼び出しが0回であることを assert して green。
-- [ ] 対象ユーザーの ACTIVE と EXPIRING の Agent だけが列挙され、他ユーザーと `EXPIRED` の Agent が0件であることを assert するテストが green。
-- [ ] 同一メッセージを2回配信して2回目が 204 で打ち切られ、Policy Engine の spy 呼び出し回数が1回分に留まることを assert するテストが green。
-- [ ] `apps/authorization/test/re-evaluate.test.ts` が、Policy Engine の呼び出し回数が対象 ACTIVE Agent 数と一致することを assert して green。
+- [x] `apps/authorization/test/permission-change.test.ts` が、再評価時に Vertex AI クライアントの spy 呼び出しが0回であることを assert して green。
+- [x] 対象ユーザーの ACTIVE と EXPIRING の Agent だけが列挙され、他ユーザーと `EXPIRED` の Agent が0件であることを assert するテストが green。
+- [x] 同一メッセージを2回配信して2回目が 204 で打ち切られ、Policy Engine の spy 呼び出し回数が1回分に留まることを assert するテストが green。
+- [x] `apps/authorization/test/re-evaluate.test.ts` が、Policy Engine の呼び出し回数が対象 ACTIVE Agent 数と一致することを assert して green。
 
 ---
 
@@ -769,10 +769,10 @@ RULE-13 と RULE-14 を、既存 Agent の権限を更新する経路を作ら�
 - 再評価の結果は新しい decision レコードとして保存し、旧 decision を書き換えない。
 
 **完了条件**
-- [ ] `apps/authorization/test/reevaluate-branch.test.ts` の4ケース（`unchanged` / `shrunk` / `expanded` / `mixed`）が期待どおりに分岐して green。
-- [ ] `expanded` のケースで Lifecycle Manager クライアントの spy 呼び出しが0回であることを assert して green。
-- [ ] `mixed` のケースで Re-Provisioning へ渡す Effective Capability に拡大分が含まれないことを assert して green。
-- [ ] `grep -rn "updateEffectiveCapabilities\|patchAgentCapabilities" apps/authorization/src` の結果が0件。
+- [x] `apps/authorization/test/reevaluate-branch.test.ts` の4ケース（`unchanged` / `shrunk` / `expanded` / `mixed`）が期待どおりに分岐して green。
+- [x] `expanded` のケースで Lifecycle Manager クライアントの spy 呼び出しが0回であることを assert して green。
+- [x] `mixed` のケースで Re-Provisioning へ渡す Effective Capability に拡大分が含まれないことを assert して green。
+- [x] `grep -rn "updateEffectiveCapabilities\|patchAgentCapabilities" apps/authorization/src` の結果が0件。
 
 ---
 
@@ -875,7 +875,7 @@ RULE-12 と specs 5.2 の「risk_score に関わらず無条件で full_isolatio
 - 縮小と拡大を1つの spec ファイル内で順に実行する。順序依存を避けるため、各ケースの前に Firestore エミュレータのデータを初期化する。
 
 **完了条件**
-- [ ] `e2e/test/authorization/permission-shrink.spec.ts` の縮小ケースで `reprovision` が1回呼ばれ、新 decision の `effective_capabilities` が縮小後の Human Permission の部分集合であることを assert して green。
-- [ ] 拡大ケースで `reprovision` の呼び出しが0回、既存 Agent の `effective_capabilities` が変化しないことを assert して green。
+- [x] `e2e/test/authorization/permission-shrink.spec.ts` の縮小ケースで `reprovision` が1回呼ばれ、新 decision の `effective_capabilities` が縮小後の Human Permission の部分集合であることを assert して green。
+- [x] 拡大ケースで `reprovision` の呼び出しが0回、既存 Agent の `effective_capabilities` が変化しないことを assert して green。
 - [ ] 両ケースを通じて Vertex AI クライアントの spy 呼び出しが0回であることを assert して green。
-- [ ] 拡大ケースで `PERMISSION_CHANGE_IGNORED` の Activity Event が1件発行されることを assert して green。
+- [x] 拡大ケースで `PERMISSION_CHANGE_IGNORED` の Activity Event が1件発行されることを assert して green。

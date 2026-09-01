@@ -7,6 +7,7 @@ export const COLLECTIONS = {
   IDJAG_ISSUANCE: 'idjag_issuance',
   DEDICATED_RESOURCES: 'dedicated_resources',
   PROVISIONING_TRANSACTIONS: 'provisioning_transactions',
+  PROVISIONING_CODES: 'provisioning_codes',
   CATALOG_CONNECTORS: 'catalog_connectors',
   CATALOG_TOOLS: 'catalog_tools',
   CAPABILITY_TAXONOMY: 'capability_taxonomy',

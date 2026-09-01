@@ -17,19 +17,22 @@ export function createInternalClients(input: {
 }): AgentOpClient & ResourceAsClient & BridgeClient & ProvisionerClient {
   const send = input.send ?? ((url, init) => globalThis.fetch(url, init));
 
-  const post = async (baseUrl: string, path: string, body?: unknown): Promise<Response> => {
+  const request = async (baseUrl: string, path: string, method: string, body?: unknown): Promise<Response> => {
     const url = new URL(path, baseUrl).toString();
     const token = await input.identityToken?.(new URL(url).origin);
     return send(url, {
-      method: 'POST',
+      method,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(body ?? {}),
+      ...(method === 'DELETE' ? {} : { body: JSON.stringify(body ?? {}) }),
       signal: AbortSignal.timeout(input.timeoutMs ?? 10_000),
     });
   };
+
+  const post = (baseUrl: string, path: string, body?: unknown): Promise<Response> =>
+    request(baseUrl, path, 'POST', body);
 
   return {
     async disableIssuance({ baseUrl, agentId }) {
@@ -51,11 +54,17 @@ export function createInternalClients(input: {
       // sending the person's id would invite a resource to widen the scope.
       return (await post(baseUrl, '/internal/revoke-by-actor', { actor_sub: actorSub })).status;
     },
-    async disableBinding({ baseUrl, bindingId }) {
-      return (await post(baseUrl, `/internal/agent-bindings/${encodeURIComponent(bindingId)}/disable`)).status;
+    // Bindings are addressed by agent, not by binding: the Bridge disables and deletes
+    // all of an agent's bindings at once, and `/internal/agent-bindings/...` — the path
+    // this used to call — is a route it has never served (00b §4).
+    async disableBindings({ baseUrl, agentId }) {
+      return (await post(baseUrl, `/bindings/${encodeURIComponent(agentId)}/disable`)).status;
+    },
+    async deleteBindings({ baseUrl, agentId }) {
+      return (await request(baseUrl, `/bindings/${encodeURIComponent(agentId)}`, 'DELETE')).status;
     },
     async revokeUpstream({ baseUrl, connectionId }) {
-      return (await post(baseUrl, `/internal/connections/${encodeURIComponent(connectionId)}/revoke-upstream`)).status;
+      return (await post(baseUrl, `/connections/${encodeURIComponent(connectionId)}/revoke-upstream`)).status;
     },
     async reprovision({ baseUrl, body }) {
       const response = await post(baseUrl, '/internal/provisioning/reprovision', body);

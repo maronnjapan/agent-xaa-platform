@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { controlPlaneAuth, type ControlPlaneVariables } from '@xaa/control-plane-auth';
+import { controlPlaneAuth, createProtocolValidationEmitter, type ControlPlaneVariables } from '@xaa/control-plane-auth';
 import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
 import type { DocumentStore } from '@xaa/gcp';
 import { createLogger, type Logger } from '@xaa/logging';
@@ -9,6 +9,7 @@ import { createDecisionRoute } from './routes/decisions.js';
 import { createPermissionChangedRoute } from './routes/permission-changed.js';
 import type { VertexClient } from './ai/authorization-ai.js';
 import type { DecideDeps, DecisionStep } from './pipeline/decide.js';
+import type { ReprovisionClient } from './reevaluate/reprovision-client.js';
 
 type Env = { Variables: ControlPlaneVariables };
 
@@ -22,8 +23,8 @@ export interface AuthorizationDeps {
   clock?: { now(): number };
   publishActivity?: (event: Record<string, unknown>) => Promise<void>;
   recordStep?: (step: DecisionStep) => void;
-  /** Called when a permission change requires Lifecycle to re-provision. */
-  requestReprovision?: (agentId: string, reason: string) => Promise<void>;
+  /** Called when a permission change narrows what an agent may do (RULE-14). */
+  requestReprovision?: ReprovisionClient;
 }
 
 /**
@@ -38,11 +39,14 @@ function createApp(deps: AuthorizationDeps): Hono {
   const logger = deps.logger ?? createLogger('authorization', 'policy_engine');
   const store = createAuthorizationStore(deps.documents);
   const clock = deps.clock ?? { now: () => Date.now() };
+  const publish = deps.publishActivity;
 
   const decideDeps: DecideDeps & { maxLifetimeHours: number } = {
-    store, vertex: deps.vertex, clock,
+    store, vertex: deps.vertex, clock, logger,
+    modelVersion: deps.config.vertexModel,
+    taxonomyVersion: deps.config.taxonomyVersion,
     maxLifetimeHours: Math.floor(deps.config.agentMaxLifetimeSeconds / 3600),
-    ...(deps.publishActivity ? { publishActivity: deps.publishActivity } : {}),
+    ...(publish ? { publishActivity: async (event) => { await publish({ ...event }); } } : {}),
     ...(deps.recordStep ? { recordStep: deps.recordStep } : {}),
     onWarning: (warning) => logger.warning('authz_ai.warning', logContext(), { ...warning }),
   };
@@ -62,6 +66,8 @@ function createApp(deps: AuthorizationDeps): Hono {
     // The proof's htu is built from the app's own public base URL, never from the
     // Host header, so a forwarded request cannot choose what the proof must match.
     expectedHtu: (request) => `${deps.config.authzPublicBaseUrl}${new URL(request.url).pathname}`,
+    // The eight refusals are evidence, and evidence nobody writes down is not evidence.
+    protocolValidation: createProtocolValidationEmitter({ logger, path: 'authorization:/api' }),
   });
 
   const decisions = createDecisionRoute(decideDeps);
@@ -76,6 +82,7 @@ function createApp(deps: AuthorizationDeps): Hono {
   // token), so the human-facing DPoP chain does not apply here.
   app.route('/internal/events/human-permission-changed', createPermissionChangedRoute({
     store, logger, clock,
+    ...(publish ? { publish: async (event) => { await publish({ ...event }); } } : {}),
     ...(deps.requestReprovision ? { requestReprovision: deps.requestReprovision } : {}),
   }));
 

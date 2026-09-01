@@ -1,22 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1490" height="1010" viewBox="-10 10 1490 1010">
 <rect x="-10" y="10" width="1490" height="1010" fill="#ffffff"/>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#000000"/></marker></defs>
-<rect x="180" y="30" width="1000" height="820" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
-<text x="186.0" y="45.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">agent-platform-prod</text>
+<rect x="180" y="30" width="1000" height="800" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
+<text x="186.0" y="45.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">agent-xaa-platform (single GCP Project)</text>
 <rect x="200" y="70" width="960" height="120" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
 <text x="206.0" y="85.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Control Plane</text>
 <rect x="200" y="250" width="380" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
 <text x="206.0" y="265.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Agent OP / same issuer as Human IdP</text>
 <rect x="220" y="570" width="500" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
 <text x="226.0" y="585.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Data / Keys</text>
-<rect x="240" y="705" width="560" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
+<rect x="240" y="705" width="760" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
 <text x="246.0" y="720.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Telemetry</text>
-<rect x="180" y="890" width="1000" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
-<text x="186.0" y="905.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">agent-security-prod</text>
-<rect x="1240" y="250" width="220" height="130" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
+<rect x="1240" y="250" width="220" height="130" fill="none" stroke="#000000" stroke-dasharray="2 3"/>
 <text x="1246.0" y="265.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Google</text>
-<rect x="1240" y="420" width="220" height="130" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
-<text x="1246.0" y="435.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Native XAA Resource</text>
+<text x="1246.0" y="278.0" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" fill="#000000">only when enable_google_bridge=true</text>
+<rect x="1240" y="420" width="220" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
+<text x="1246.0" y="435.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Document Resource</text>
+<rect x="1240" y="560" width="220" height="110" fill="none" stroke="#000000" stroke-dasharray="6 4"/>
+<text x="1246.0" y="575.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#000000" font-weight="bold">Finance Resource</text>
 <path d="M 70.0 150.0 L 70.0 280.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="53.5" y="207.0" width="33.0" height="13" fill="#ffffff"/>
 <text x="70.0" y="217.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">login</text>
@@ -32,7 +33,7 @@
 <path d="M 780.0 165.0 L 780.0 275.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="763.5" y="212.0" width="33.0" height="13" fill="#ffffff"/>
 <text x="780.0" y="222.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">start</text>
-<path d="M 830.0 105.0 L 830.0 85.0 L 1130.0 85.0 L 1129.9 285.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 830.0 105.0 L 830.0 85.0 L 1130.0 85.0 L 1129.9 285.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
 <rect x="958.1" y="77.0" width="43.8" height="13" fill="#ffffff"/>
 <text x="980.0" y="87.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">binding</text>
 <path d="M 1010.0 165.0 L 1010.0 245.0 L 850.0 245.0 L 849.9 275.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
@@ -44,29 +45,35 @@
 <path d="M 200.0 349.0 L 165.0 349.0 L 165.0 325.0 L 130.0 325.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="144.4" y="341.0" width="76.2" height="13" fill="#ffffff"/>
 <text x="182.5" y="351.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">subject_token</text>
-<path d="M 910.0 315.0 L 960.0 315.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 910.0 315.0 L 960.0 315.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
 <rect x="915.8" y="307.0" width="38.4" height="13" fill="#ffffff"/>
 <text x="935.0" y="317.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">ID-JAG</text>
-<path d="M 1140.0 301.8 L 1260.0 302.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 1140.0 301.8 L 1260.0 302.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
 <rect x="1161.9" y="293.9" width="76.2" height="13" fill="#ffffff"/>
 <text x="1200.0" y="303.9" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Refresh Token</text>
-<path d="M 884.0 355.0 L 884.0 400.0 L 1200.0 400.0 L 1200.0 347.0 L 1260.0 347.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 884.0 355.0 L 884.0 400.0 L 1200.0 400.0 L 1200.0 347.0 L 1260.0 347.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
 <rect x="1006.6" y="392.0" width="70.8" height="13" fill="#ffffff"/>
 <text x="1042.0" y="402.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Access Token</text>
-<path d="M 735.8 355.0 L 736.0 472.0 L 1260.0 472.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
-<rect x="978.8" y="464.0" width="38.4" height="13" fill="#ffffff"/>
-<text x="998.0" y="474.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">ID-JAG</text>
-<path d="M 821.6 355.0 L 822.0 517.0 L 1260.0 517.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
-<rect x="1005.6" y="509.0" width="70.8" height="13" fill="#ffffff"/>
-<text x="1041.0" y="519.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Access Token</text>
+<path d="M 735.8 355.0 L 736.0 463.0 L 1260.0 463.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="978.8" y="455.0" width="38.4" height="13" fill="#ffffff"/>
+<text x="998.0" y="465.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">ID-JAG</text>
+<path d="M 821.6 355.0 L 822.0 503.0 L 1260.0 503.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="1005.6" y="495.0" width="70.8" height="13" fill="#ffffff"/>
+<text x="1041.0" y="505.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Access Token</text>
+<path d="M 702.0 355.0 L 702.0 603.0 L 1260.0 603.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="961.8" y="595.0" width="38.4" height="13" fill="#ffffff"/>
+<text x="981.0" y="605.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">ID-JAG</text>
+<path d="M 858.0 355.0 L 858.0 643.0 L 1260.0 643.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="1023.6" y="635.0" width="70.8" height="13" fill="#ffffff"/>
+<text x="1059.0" y="645.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Access Token</text>
 <path d="M 500.2 360.0 L 504.0 610.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="488.3" y="477.0" width="27.6" height="13" fill="#ffffff"/>
 <text x="502.1" y="487.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">sign</text>
 <path d="M 300.0 760.0 L 420.0 760.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
 <path d="M 456.0 760.0 L 560.0 760.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
-<path d="M 260.0 760.0 L 215.0 760.0 L 215.0 868.0 L 660.0 868.0 L 680.0 920.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
-<rect x="412.9" y="860.0" width="49.2" height="13" fill="#ffffff"/>
-<text x="437.5" y="870.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Log Sink</text>
+<path d="M 280.0 779.0 L 280.0 800.0 L 910.0 800.0 L 910.0 780.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="570.4" y="792.0" width="49.2" height="13" fill="#ffffff"/>
+<text x="595.0" y="802.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Log Sink</text>
 <g fill="none" stroke="#000000" stroke-width="1.4"><circle cx="70.0" cy="98" r="7" fill="#ffffff"/><path d="M 70.0 105 L 70.0 128 M 58.0 114 L 82.0 114 M 70.0 128 L 59.0 145 M 70.0 128 L 81.0 145"/></g>
 <text x="70.0" y="162.0" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#000000">Human User</text>
 <rect x="10" y="280" width="120" height="50" fill="#ffffff" stroke="#000000"/>
@@ -75,10 +82,14 @@
 <text x="1350.0" y="306.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Google OAuth AS</text>
 <rect x="1260" y="330" width="180" height="34" fill="#ffffff" stroke="#000000"/>
 <text x="1350.0" y="351.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Google API</text>
-<rect x="1260" y="455" width="180" height="34" fill="#ffffff" stroke="#000000"/>
-<text x="1350.0" y="476.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Resource AS</text>
-<rect x="1260" y="500" width="180" height="34" fill="#ffffff" stroke="#000000"/>
-<text x="1350.0" y="521.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Resource API</text>
+<rect x="1260" y="448" width="180" height="30" fill="#ffffff" stroke="#000000"/>
+<text x="1350.0" y="467.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Resource AS</text>
+<rect x="1260" y="488" width="180" height="30" fill="#ffffff" stroke="#000000"/>
+<text x="1350.0" y="507.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Resource API</text>
+<rect x="1260" y="588" width="180" height="30" fill="#ffffff" stroke="#000000"/>
+<text x="1350.0" y="607.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Resource AS</text>
+<rect x="1260" y="628" width="180" height="30" fill="#ffffff" stroke="#000000"/>
+<text x="1350.0" y="647.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Resource API</text>
 <rect x="220" y="105" width="200" height="60" fill="#ffffff" stroke="#000000"/>
 <image x="226" y="111" width="18" height="18" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjM2NS40NjQ5OTY3NzA0MjQ5MyIgaGVpZ2h0PSIzNzkuMjIyOTk0NDYzNTc3OTUiIHZpZXdCb3g9IjAgMCA5Ni42OTU5OTkxNDU1MDc4MSAxMDAuMzM1OTk4NTM1MTU2MjUiPiYjeGE7PHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiNhZWNiZmE7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjkuNzk0IDEwMC4zMzZMNDYuOTIgNTAuMTY4aDQ5Ljc3NnpNMCA5OS42NzFsMTIuOTc2LTQ5LjUwMkgyOS4yMkwxNi44OTcgOTIuMDU0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOS43OTQgMEw0Ni45MiA1MC4xNjhoNDkuNzc2ek0wIC42NjZsMTIuOTc2IDQ5LjUwMkgyOS4yMkwxNi44OTcgOC4yODN6Ii8+JiN4YTs8L3N2Zz4="/>
 <text x="327.0" y="139.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Automation App</text>
@@ -95,18 +106,17 @@
 <rect x="220" y="285" width="160" height="60" fill="#ffffff" stroke="#000000"/>
 <image x="226" y="291" width="18" height="18" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjM2NS40NjQ5OTY3NzA0MjQ5MyIgaGVpZ2h0PSIzNzkuMjIyOTk0NDYzNTc3OTUiIHZpZXdCb3g9IjAgMCA5Ni42OTU5OTkxNDU1MDc4MSAxMDAuMzM1OTk4NTM1MTU2MjUiPiYjeGE7PHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiNhZWNiZmE7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjkuNzk0IDEwMC4zMzZMNDYuOTIgNTAuMTY4aDQ5Ljc3NnpNMCA5OS42NzFsMTIuOTc2LTQ5LjUwMkgyOS4yMkwxNi44OTcgOTIuMDU0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOS43OTQgMEw0Ni45MiA1MC4xNjhoNDkuNzc2ek0wIC42NjZsMTIuOTc2IDQ5LjUwMkgyOS4yMkwxNi44OTcgOC4yODN6Ii8+JiN4YTs8L3N2Zz4="/>
 <text x="307.0" y="319.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Shared Agent OP</text>
-<rect x="400" y="285" width="160" height="60" fill="#ffffff" stroke="#000000"/>
-<image x="406" y="291" width="18" height="18" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjM2NS40NjQ5OTY3NzA0MjQ5MyIgaGVpZ2h0PSIzNzkuMjIyOTk0NDYzNTc3OTUiIHZpZXdCb3g9IjAgMCA5Ni42OTU5OTkxNDU1MDc4MSAxMDAuMzM1OTk4NTM1MTU2MjUiPiYjeGE7PHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiNhZWNiZmE7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjkuNzk0IDEwMC4zMzZMNDYuOTIgNTAuMTY4aDQ5Ljc3NnpNMCA5OS42NzFsMTIuOTc2LTQ5LjUwMkgyOS4yMkwxNi44OTcgOTIuMDU0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOS43OTQgMEw0Ni45MiA1MC4xNjhoNDkuNzc2ek0wIC42NjZsMTIuOTc2IDQ5LjUwMkgyOS4yMkwxNi44OTcgOC4yODN6Ii8+JiN4YTs8L3N2Zz4="/>
-<text x="487.0" y="319.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Dedicated Agent OP</text>
+<rect x="400" y="275" width="160" height="80" fill="#ffffff" stroke="#000000"/>
+<image x="406" y="281" width="18" height="18" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjM2NS40NjQ5OTY3NzA0MjQ5MyIgaGVpZ2h0PSIzNzkuMjIyOTk0NDYzNTc3OTUiIHZpZXdCb3g9IjAgMCA5Ni42OTU5OTkxNDU1MDc4MSAxMDAuMzM1OTk4NTM1MTU2MjUiPiYjeGE7PHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiNhZWNiZmE7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjkuNzk0IDEwMC4zMzZMNDYuOTIgNTAuMTY4aDQ5Ljc3NnpNMCA5OS42NzFsMTIuOTc2LTQ5LjUwMkgyOS4yMkwxNi44OTcgOTIuMDU0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOS43OTQgMEw0Ni45MiA1MC4xNjhoNDkuNzc2ek0wIC42NjZsMTIuOTc2IDQ5LjUwMkgyOS4yMkwxNi44OTcgOC4yODN6Ii8+JiN4YTs8L3N2Zz4="/>
+<text x="487.0" y="313.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Dedicated OP xN</text>
+<text x="487.0" y="329.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">created and destroyed at run time</text>
 <rect x="650" y="275" width="260" height="80" fill="#ffffff" stroke="#000000"/>
 <image x="656" y="281" width="18" height="18" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjM2NS40NjQ5OTY3NzA0MjQ5MyIgaGVpZ2h0PSIzNzkuMjIyOTk0NDYzNTc3OTUiIHZpZXdCb3g9IjAgMCA5Ni42OTU5OTkxNDU1MDc4MSAxMDAuMzM1OTk4NTM1MTU2MjUiPiYjeGE7PHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiNhZWNiZmE7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjkuNzk0IDEwMC4zMzZMNDYuOTIgNTAuMTY4aDQ5Ljc3NnpNMCA5OS42NzFsMTIuOTc2LTQ5LjUwMkgyOS4yMkwxNi44OTcgOTIuMDU0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOS43OTQgMEw0Ni45MiA1MC4xNjhoNDkuNzc2ek0wIC42NjZsMTIuOTc2IDQ5LjUwMkgyOS4yMkwxNi44OTcgOC4yODN6Ii8+JiN4YTs8L3N2Zz4="/>
 <text x="787.0" y="313.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Agent Runtime</text>
 <text x="787.0" y="329.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Cloud Run Job / 1 Agent = 1 Execution</text>
-<rect x="960" y="285" width="180" height="60" fill="#ffffff" stroke="#000000"/>
+<rect x="960" y="285" width="180" height="60" fill="#ffffff" stroke="#000000" stroke-dasharray="4 3"/>
 <image x="966" y="291" width="18" height="18" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjM2NS40NjQ5OTY3NzA0MjQ5MyIgaGVpZ2h0PSIzNzkuMjIyOTk0NDYzNTc3OTUiIHZpZXdCb3g9IjAgMCA5Ni42OTU5OTkxNDU1MDc4MSAxMDAuMzM1OTk4NTM1MTU2MjUiPiYjeGE7PHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiNhZWNiZmE7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjkuNzk0IDEwMC4zMzZMNDYuOTIgNTAuMTY4aDQ5Ljc3NnpNMCA5OS42NzFsMTIuOTc2LTQ5LjUwMkgyOS4yMkwxNi44OTcgOTIuMDU0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOS43OTQgMEw0Ni45MiA1MC4xNjhoNDkuNzc2ek0wIC42NjZsMTIuOTc2IDQ5LjUwMkgyOS4yMkwxNi44OTcgOC4yODN6Ii8+JiN4YTs8L3N2Zz4="/>
 <text x="1057.0" y="319.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Google Bridge</text>
-<image x="255" y="610" width="30" height="40" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjE0LjY1OTk5OTg0NzQxMjExIiBoZWlnaHQ9IjIwIiB2aWV3Qm94PSIwIDAgMTQuNjU5OTk5ODQ3NDEyMTEgMjAiPiYjeGE7CTxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+JiN4YTsJLnN0MHtmaWxsOiM0Mjg1ZjQ7fSYjeGE7CS5zdDF7ZmlsbDojNjY5ZGY2O30mI3hhOwkuc3Qye2ZpbGw6I2FlY2JmYTt9JiN4YTsJPC9zdHlsZT4mI3hhOwk8c3R5bGU+JiN4YTsJCS5Ee2ZpbGwtcnVsZTpldmVub2RkfSYjeGE7CTwvc3R5bGU+JiN4YTsJPHBhdGggZD0iTTcuMzMgMTUuMzV2LTMuMDFMMCA4LjQ0djMuMDF6bTAgNC42NXYtMy4wMUwwIDEzLjA5djMuMDF6IiBjbGFzcz0ic3QyIEQiLz4mI3hhOwk8cGF0aCBkPSJNMTQuNjYgOC40NGwtNy4zMyAzLjl2My4wMWw3LjMzLTMuOXptMCA0LjY1bC03LjMzIDMuOVYyMGw3LjMzLTMuOXoiIGNsYXNzPSJzdDEgRCIvPiYjeGE7CTxwYXRoIGQ9Ik03LjMzIDB2My4wMWw3LjMzIDMuOVYzLjl6IiBjbGFzcz0ic3QwIEQiLz4mI3hhOwk8cGF0aCBkPSJNMCA2LjkxbDcuMzMtMy45VjBMMCAzLjl6IiBjbGFzcz0iRCBzdDEiLz4mI3hhOwk8cGF0aCBkPSJNNy4zMyAxMC43OVY3Ljc3TDAgMy44N3YzLjAyeiIgY2xhc3M9IkQgc3QyIi8+JiN4YTsJPHBhdGggZD0iTTE0LjY2IDMuODdsLTcuMzMgMy45djMuMDJsNy4zMy0zLjl6IiBjbGFzcz0iRCBzdDEiLz4mI3hhOzwvc3ZnPg=="/>
-<text x="270.0" y="661.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Cloud SQL</text>
 <image x="373" y="610" width="34" height="40" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjMyMy45MDU2MTAzOTg2NzUxNSIgaGVpZ2h0PSIzNzYuNDIyMjk0OTYzNjg0MDciIHZpZXdCb3g9Ii0wLjA5NzAwMDAwMjg2MTAyMjk1IDAuMjg3OTk5OTg3NjAyMjMzOSA4NS42OTk5OTY5NDgyNDIxOSA5OS41OTUwMDEyMjA3MDMxMiI+JiN4YTs8c3R5bGUgdHlwZT0idGV4dC9jc3MiPiYjeGE7CS5zdDB7ZmlsbDojYWVjYmZhO30mI3hhOwkuc3Qxe2ZpbGw6IzY2OWRmNjt9JiN4YTsJLnN0MntmaWxsOiM0Mjg1ZjQ7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNLS4wOTcgNzUuODE1VjU1Ljg3NGw0Mi44NS0yMC4xODN2MTkuMDd6bTAtMzUuNDAzVjIwLjQ3MUw0Mi43NTMuMjg4djE5LjA3eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik04NS42MDMgNzUuODE1VjU1Ljg3NGwtNDIuODUtMjAuMTgzdjE5LjA3em0wLTM1LjQwM1YyMC40NzFMNDIuNzUzLjI4OHYxOS4wN3oiLz4mI3hhOwk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNNDIuNzUzIDgwLjMxNGwxNi4yMTctNy41MjUgMjEuMDg0IDkuNzE3LTM3LjMwMSAxNy4zNzd6Ii8+JiN4YTs8L3N2Zz4="/>
 <text x="390.0" y="661.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">Firestore</text>
 <image x="484" y="610" width="32" height="40" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjMxMC43NzU2MDY1NDM4NjAyNSIgaGVpZ2h0PSIzNzcuOTUzMDI4ODM1NTI1NDYiIHZpZXdCb3g9Ii0wLjE0MDAwMDAwMDU5NjA0NjQ1IC0wLjQ2NzAwMDAwNzYyOTM5NDUzIDgyLjIyNTk5NzkyNDgwNDY5IDEwMC4wMDAwMDc2MjkzOTQ1MyI+JiN4YTs8c3R5bGUgdHlwZT0idGV4dC9jc3MiPiYjeGE7CS5zdDB7ZmlsbDojNDI4NWY0O30mI3hhOwkuc3Qxe2ZpbGw6IzY2OWRmNjt9JiN4YTsJLnN0MntmaWxsOiNmZmY7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNNDAuOTczLS40NjdsNDEuMTEzIDE3LjQ5M3YyOS42NTRjMCAyNy40MTgtMjQuNjA4IDUwLjgzNi00MS4xMTMgNTIuODUzeiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik00MC45NzMtLjQ2N0wtLjE0IDE3LjAyNXYyOS42NTRjMCAyNy40MTggMjQuNjA4IDUwLjgzNiA0MS4xMTMgNTIuODUzeiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik00MS4yNTMgMTYuNjA1Yy05LjU4NCAwLTE3LjQ0NSA3Ljg2Mi0xNy40NDUgMTcuNDQ1IDAgOC4wODQgNS41OTQgMTQuOTQyIDEzLjA5NiAxNi44OTF2OS40ODhoLTkuODY5djguNzAxaDkuODY5djUuMzc3aC02LjMxNXY4LjcwMWg2LjMxNXYyLjE5N2g4LjcwMVY1MC45NDFDNTMuMTA2IDQ4Ljk5MiA1OC43IDQyLjEzNCA1OC43IDM0LjA1YzAtOS41ODQtNy44NjMtMTcuNDQ1LTE3LjQ0Ny0xNy40NDV6bTAgOC42OTlBOC42OCA4LjY4IDAgMCAxIDUwIDM0LjA1YTguNjggOC42OCAwIDAgMS04Ljc0OCA4Ljc0NiA4LjY4IDguNjggMCAwIDEtOC43NDYtOC43NDYgOC42OCA4LjY4IDAgMCAxIDguNzQ2LTguNzQ2eiIvPiYjeGE7PC9zdmc+"/>
@@ -122,6 +132,6 @@
 <rect x="560" y="735" width="200" height="50" fill="#ffffff" stroke="#000000"/>
 <image x="566" y="741" width="18" height="18" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjM2NS40NjQ5OTY3NzA0MjQ5MyIgaGVpZ2h0PSIzNzkuMjIyOTk0NDYzNTc3OTUiIHZpZXdCb3g9IjAgMCA5Ni42OTU5OTkxNDU1MDc4MSAxMDAuMzM1OTk4NTM1MTU2MjUiPiYjeGE7PHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiNhZWNiZmE7fSYjeGE7PC9zdHlsZT4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjkuNzk0IDEwMC4zMzZMNDYuOTIgNTAuMTY4aDQ5Ljc3NnpNMCA5OS42NzFsMTIuOTc2LTQ5LjUwMkgyOS4yMkwxNi44OTcgOTIuMDU0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOS43OTQgMEw0Ni45MiA1MC4xNjhoNDkuNzc2ek0wIC42NjZsMTIuOTc2IDQ5LjUwMkgyOS4yMkwxNi44OTcgOC4yODN6Ii8+JiN4YTs8L3N2Zz4="/>
 <text x="667.0" y="764.0" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#000000">Security Detection</text>
-<image x="660" y="920" width="40" height="40" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjIwLjAwMTA0NTIyNzA1MDc4IiBoZWlnaHQ9IjIwLjAwMTA0NTIyNzA1MDc4IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHZpZXdCb3g9IjAgMCAyMC4wMDEwNDUyMjcwNTA3OCAyMC4wMDEwNDUyMjcwNTA3OCI+JiN4YTsJPHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6I2FlY2JmYTt9JiN4YTsJLnN0MXtmaWxsOiM2NjlkZjY7fSYjeGE7CS5zdDJ7ZmlsbDojNDI4NWY0O30mI3hhOwk8L3N0eWxlPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik00LjczIDguODN2Mi42M2E0LjkxIDQuOTEgMCAwIDAgMS43MSAxLjc0VjguODN6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MSIgZD0iTTcuODkgNi40MXY3LjUzQTcuNjIgNy42MiAwIDAgMCA5IDE0YTggOCAwIDAgMCAxIDBWNi40MXoiLz4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTEuNjQgOS44NnYzLjI5YTUgNSAwIDAgMCAxLjctMS44MlY5Ljg2eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0xNS43NCAxNC4zMmwtMS40MiAxLjQyYS40Mi40MiAwIDAgMCAwIC42bDMuNTQgMy41NGEuNDIuNDIgMCAwIDAgLjU5IDBsMS40My0xLjQzYS40Mi40MiAwIDAgMCAwLS41OWwtMy41NC0zLjU0YS40Mi40MiAwIDAgMC0uNiAwIi8+JiN4YTsJPHBhdGggY2xhc3M9InN0MSIgZD0iTTkgMGE5IDkgMCAxIDAgMCAxOEE5IDkgMCAxIDAgOSAwbTAgMTUuNjlhNi42OCA2LjY4IDAgMCAxIC4wMDctMTMuMzYgNi42OCA2LjY4IDAgMCAxIDQuNzI3IDExLjQwM0E2LjY4IDYuNjggMCAwIDEgOSAxNS42OSIvPiYjeGE7PC9zdmc+"/>
-<text x="680.0" y="971.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">BigQuery</text>
+<image x="890" y="740" width="40" height="40" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjIwLjAwMTA0NTIyNzA1MDc4IiBoZWlnaHQ9IjIwLjAwMTA0NTIyNzA1MDc4IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHZpZXdCb3g9IjAgMCAyMC4wMDEwNDUyMjcwNTA3OCAyMC4wMDEwNDUyMjcwNTA3OCI+JiN4YTsJPHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6I2FlY2JmYTt9JiN4YTsJLnN0MXtmaWxsOiM2NjlkZjY7fSYjeGE7CS5zdDJ7ZmlsbDojNDI4NWY0O30mI3hhOwk8L3N0eWxlPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik00LjczIDguODN2Mi42M2E0LjkxIDQuOTEgMCAwIDAgMS43MSAxLjc0VjguODN6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MSIgZD0iTTcuODkgNi40MXY3LjUzQTcuNjIgNy42MiAwIDAgMCA5IDE0YTggOCAwIDAgMCAxIDBWNi40MXoiLz4mI3hhOwk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTEuNjQgOS44NnYzLjI5YTUgNSAwIDAgMCAxLjctMS44MlY5Ljg2eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0xNS43NCAxNC4zMmwtMS40MiAxLjQyYS40Mi40MiAwIDAgMCAwIC42bDMuNTQgMy41NGEuNDIuNDIgMCAwIDAgLjU5IDBsMS40My0xLjQzYS40Mi40MiAwIDAgMCAwLS41OWwtMy41NC0zLjU0YS40Mi40MiAwIDAgMC0uNiAwIi8+JiN4YTsJPHBhdGggY2xhc3M9InN0MSIgZD0iTTkgMGE5IDkgMCAxIDAgMCAxOEE5IDkgMCAxIDAgOSAwbTAgMTUuNjlhNi42OCA2LjY4IDAgMCAxIC4wMDctMTMuMzYgNi42OCA2LjY4IDAgMCAxIDQuNzI3IDExLjQwM0E2LjY4IDYuNjggMCAwIDEgOSAxNS42OSIvPiYjeGE7PC9zdmc+"/>
+<text x="910.0" y="791.0" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#000000">BigQuery (security_audit)</text>
 </svg>
