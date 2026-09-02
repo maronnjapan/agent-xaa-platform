@@ -1,9 +1,13 @@
 import type { Context } from 'hono';
-import { emitProtocolValidation as emitProtocolValidationLog } from '@xaa/contracts';
+import { CONTROL_PLANE_VALIDATION_CODES, emitProtocolValidation as emitProtocolValidationLog } from '@xaa/contracts';
 import type { Logger } from '@xaa/logging';
 
-export const PROTOCOL_VALIDATIONS = ['invalid_signature', 'expired_token', 'audience_mismatch', 'invalid_scope', 'invalid_dpop_proof', 'replayed_dpop_proof', 'dpop_key_binding_mismatch', 'human_subject_mismatch'] as const;
-export type ProtocolValidation = (typeof PROTOCOL_VALIDATIONS)[number];
+/**
+ * The eight checks, named once (T-SEC-12). The table lives in `@xaa/contracts` so the
+ * guard and the detection side cannot drift into two lists of eight.
+ */
+export const PROTOCOL_VALIDATIONS = CONTROL_PLANE_VALIDATION_CODES;
+export type ProtocolValidation = (typeof CONTROL_PLANE_VALIDATION_CODES)[number];
 export type ProtocolValidationEmitter = (event: { validation: ProtocolValidation; outcome: 'allowed' | 'denied'; error: string; human_subject: string | null; trace_id: string; timestamp: string }) => void;
 
 export function emitProtocolValidation(emitter: ProtocolValidationEmitter | undefined, context: Context, validation: ProtocolValidation, outcome: 'allowed' | 'denied', error: string): void {

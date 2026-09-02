@@ -704,6 +704,9 @@ importers:
       '@xaa/contracts':
         specifier: workspace:*
         version: link:../packages/xaa-contracts
+      '@xaa/control-plane-auth':
+        specifier: workspace:*
+        version: link:../packages/xaa-control-plane-auth
       '@xaa/crypto':
         specifier: workspace:*
         version: link:../packages/xaa-crypto

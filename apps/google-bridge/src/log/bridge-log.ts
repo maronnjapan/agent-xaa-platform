@@ -1,4 +1,5 @@
 import type { LogContext, Logger } from '@xaa/logging';
+import { emitProtocolValidation as emitValidation } from '@xaa/contracts';
 import type { BridgeProtocolValidation } from '../errors.js';
 
 export const BRIDGE_LOG_FIELDS = [
@@ -52,13 +53,31 @@ export function emitBridgeTokenLog(
   logger.info('bridge_token_exchange', context, output);
 }
 
+/**
+ * The Bridge's refusals, on the platform's one protocol-validation event.
+ *
+ * It delegates rather than writing its own line: the event name lives in
+ * `@xaa/contracts` so there is exactly one producer, and the eight required fields are
+ * filled here so a Bridge refusal reads the same as a Control Plane one on the detection
+ * side (T-SEC-11).
+ */
 export function emitProtocolValidation(
   logger: Logger,
   context: LogContext,
   validation: BridgeProtocolValidation,
   fields: Record<string, unknown> = {},
+  now: () => number = () => Date.now(),
 ): void {
-  logger.warning('protocol_validation', context, { validation, ...fields });
+  emitValidation(logger, context, {
+    code: validation,
+    outcome: 'fail',
+    validation_name: validation,
+    human_subject: context.human_subject,
+    agent_id: context.agent_id,
+    occurred_at: new Date(now()).toISOString(),
+    path: 'google-bridge:/token',
+    trace_id: context.trace_id,
+  }, fields);
 }
 
 /** The callback face logs what happened, never the values that made it happen. */

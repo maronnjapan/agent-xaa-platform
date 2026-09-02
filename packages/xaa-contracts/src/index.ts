@@ -26,6 +26,7 @@ export * from './log-constants.js';
 export * from './modes.js';
 export * from './oauth-errors.js';
 export * from './protocol-violation.js';
+export * from './validation-hooks.js';
 export * from './schema/index.js';
 export * from './redirect-guard.js';
 export * from './runtime-names.js';

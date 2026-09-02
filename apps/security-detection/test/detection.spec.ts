@@ -437,6 +437,16 @@ describe('risk scoring', () => {
     expect(Object.keys(SCORING).sort()).toEqual([...SCORE_FACTORS].sort());
   });
 
+  /**
+   * The same check under the name DEV-14 cites: the audit dataset shares a project with
+   * everything else, so what keeps the scoring model honest is that its weights are a
+   * reviewed file rather than a value somebody can add to.
+   */
+  it('has thirteen factors, matching the config exactly', () => {
+    expect(SCORE_FACTORS).toHaveLength(13);
+    expect(Object.keys(SCORING).sort()).toEqual([...SCORE_FACTORS].sort());
+  });
+
   it('total is clamped to 100', () => {
     // Three factors whose caps add up to 145 on their own, and no singleton among them.
     const codes = [

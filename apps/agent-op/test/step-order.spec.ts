@@ -7,8 +7,10 @@ import { ActorTokenReplayStore } from '../src/idjag/actor-token-replay.js';
 import { resolveKeyBinding } from '../src/keys/dedicated-key.js';
 import { createTrace } from '../src/log/token-exchange-log.js';
 import { toXaaConfig } from '../src/store/xaa-config-repository.js';
+import { generateEs256KeyPair } from '@xaa/crypto';
 import {
-  actorToken, baseConfig, clientAssertion, createFixture, DOCS_API_RESOURCE, DOCS_AS_ISSUER, ISSUER, subjectToken,
+  actorToken, baseConfig, clientAssertion, createFixture, DOCS_API_RESOURCE, DOCS_AS_ISSUER,
+  exchange, ISSUER, subjectToken,
 } from './helpers.js';
 
 describe('issuance pipeline', () => {
@@ -45,6 +47,23 @@ describe('issuance pipeline', () => {
     expect(response.issued_token_type).toBe('urn:ietf:params:oauth:token-type:id-jag');
     expect(observed).toEqual([...STEP_NAMES]);
     expect(STEP_NAMES).toHaveLength(13);
+  });
+
+  /**
+   * The order is the answer. Client authentication runs before anything reads the
+   * request body, so a caller who broke both learns that it was not authenticated and
+   * nothing about which of the tokens the endpoint would have disliked.
+   */
+  it('returns invalid_client when client auth and subject token both broken', async () => {
+    const fixture = await createFixture();
+    const response = await exchange(fixture, {
+      assertion: await clientAssertion(fixture, { keyPair: await generateEs256KeyPair() }),
+      form: { subject_token: 'not-a-token' },
+    });
+    expect(response.status).toBe(401);
+    expect((await response.json() as { error: string }).error).toBe('invalid_client');
+    // The pipeline never ran, so no step was recorded and no exchange line was written.
+    expect(fixture.exchangeLogs).toHaveLength(0);
   });
 
   it('imports neither processIdJagIssuanceRequest nor createIdJagJwt', async () => {

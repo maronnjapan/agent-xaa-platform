@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compile, SchemaValidationError } from '@xaa/contracts';
+import { compile, PROTOCOL_VALIDATION_EVENT, SchemaValidationError } from '@xaa/contracts';
 import { authorizationDecisionResponseSchema, DECISION_RESPONSE_KEYS, ROUTES } from '../src/routes/index.js';
 import { loadConfig } from '../src/config.js';
 import { createAuthzHarness, testConfig } from './helpers.js';
@@ -57,7 +57,7 @@ describe('route surface', () => {
  * was ever refused (T-SEC-12).
  */
 describe('a refusal leaves a record', () => {
-  it('writes one protocol_validation line when the token does not verify', async () => {
+  it('writes one validation line when the token does not verify', async () => {
     const harness = await createAuthzHarness();
 
     const response = await harness.fetch('/api/work-requests', {
@@ -68,7 +68,7 @@ describe('a refusal leaves a record', () => {
 
     expect(response.status).toBe(401);
     const lines = harness.logs.map((line) => JSON.parse(line) as { event: string; fields: Record<string, unknown> });
-    const validations = lines.filter((line) => line.event === 'protocol_validation');
+    const validations = lines.filter((line) => line.event === PROTOCOL_VALIDATION_EVENT);
     expect(validations).toHaveLength(1);
     // `code` is redacted by name; `validation` is the value the detector reads.
     expect(validations[0]!.fields.validation).toBe('invalid_signature');

@@ -14,6 +14,10 @@ export const IDENTIFIER_FIELD_NAMES = [
   'agent_id', 'op_agent_id', 'human_subject', 'subject_token_sub', 'idjag_sub',
   'trace_id', 'request_id', 'span_id', 'grant_id', 'document_id', 'payment_id',
   'idp_connection_id', 'connection_id', 'binding_id', 'transaction_id', 'decision_id',
+  // `<app>:<route template>` (T-SEC-12). A long template crosses the entropy threshold
+  // and was blanked, which left the detection side unable to say where a refusal
+  // happened. It names a route, never a value.
+  'path', 'validation_name', 'resource', 'requested_resource', 'target_resource', 'audience', 'requested_audience',
   'issued_jti', 'task_id', 'execution_id', 'work_definition_hash', 'fingerprint',
 ] as const;
 

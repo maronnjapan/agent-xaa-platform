@@ -66,6 +66,19 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:e2e
+      # T-SEC-10. On a deployed run this pulls what the sink actually received into one
+      # file, which `no-raw-secret.spec.ts` scans; with no BigQuery reachable it writes
+      # an empty file, and the spec falls back to the lines the run captured in process.
+      - name: Collect the logs the sink received
+        if: always()
+        run: |
+          mkdir -p e2e/artifacts
+          node --experimental-strip-types scripts/collect-logs.ts || touch e2e/artifacts/logs.jsonl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-logs
+          path: e2e/artifacts/logs.jsonl
   # The registers that describe the repository: which requirement each task answers,
   # which rules the platform deliberately does not keep, and what the terms mean. They
   # are checked on every change because a stale register is read as if it were current.

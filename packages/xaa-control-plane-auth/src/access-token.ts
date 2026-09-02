@@ -41,7 +41,14 @@ export function accessTokenMiddleware(options: AccessTokenOptions): MiddlewareHa
         : await verifyCompactJws(token, { publicKey, allowedTyp: ['at+jwt'] });
       const payload = verified.payload;
       const now = Math.floor((options.now?.() ?? Date.now()) / 1000);
-      if (payload.iss !== options.issuer || typeof payload.exp !== 'number' || payload.exp < now - 60 || (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || payload.nbf > now + 60)) || payload.nonce !== undefined || payload.at_hash !== undefined) throw new Error('invalid token');
+      // A token that verified and has simply run out is reported as what it is. Folding
+      // it into `invalid_signature` would make an ordinary session ending look like a
+      // forgery attempt, and the detection side counts the two differently (T-SEC-12).
+      if (typeof payload.exp === 'number' && payload.exp < now - 60) {
+        emitProtocolValidation(options.protocolValidation, context, 'expired_token', 'denied', 'invalid_token');
+        return fail('invalid_token', 401);
+      }
+      if (payload.iss !== options.issuer || typeof payload.exp !== 'number' || (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || payload.nbf > now + 60)) || payload.nonce !== undefined || payload.at_hash !== undefined) throw new Error('invalid token');
       if (!audienceIncludes(payload.aud, options.audience)) {
         emitProtocolValidation(options.protocolValidation, context, 'audience_mismatch', 'denied', 'invalid_audience');
         return fail('invalid_audience', 401);

@@ -13,6 +13,7 @@
     "@xaa/authorization": "workspace:*",
     "@xaa/automation-app": "workspace:*",
     "@xaa/contracts": "workspace:*",
+    "@xaa/control-plane-auth": "workspace:*",
     "@xaa/crypto": "workspace:*",
     "@xaa/gcp": "workspace:*",
     "@xaa/google-bridge": "workspace:*",

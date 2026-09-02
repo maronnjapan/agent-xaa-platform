@@ -4,7 +4,9 @@
 # anything, which is what makes it the right home for the minimum detection set: the
 # rules engine can be wrong or absent and these still answer.
 locals {
-  audit_views = ["delegation_mismatch", "signing_key_misuse", "cross_agent_access", "dpop_replay"]
+  # The four of DEC-SEC-01, plus the refresh-token reuse extraction T-SEC-14 adds. All
+  # five return the same six columns, so the set can grow without the readers changing.
+  audit_views = ["delegation_mismatch", "signing_key_misuse", "cross_agent_access", "dpop_replay", "refresh_token_reuse"]
 }
 
 resource "google_bigquery_table" "audit_view" {

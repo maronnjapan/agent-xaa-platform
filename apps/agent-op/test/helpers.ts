@@ -85,6 +85,8 @@ export async function createFixture(options: {
   config?: Partial<AgentOpConfig>;
   registration?: Partial<AgentRegistration>;
   xaaConfig?: Partial<{ allowed_audiences: string[]; resources: string[]; scopes: string[]; trusted_resource_as: string[] }>;
+  /** Replaces the ledger writer, so a test can make the issuance ledger unwritable. */
+  writeLedger?: (line: string) => void;
 } = {}): Promise<Fixture> {
   const agentId = options.registration?.agent_id ?? newAgentId();
   const agentKeyPair = await generateEs256KeyPair();
@@ -143,7 +145,7 @@ export async function createFixture(options: {
     revision: 'agent-op-00001-abc',
     now: () => clock,
     writeExchangeLog: (line) => { exchangeLogs.push(line); },
-    writeLedger: (line) => { ledgerLogs.push(line); },
+    writeLedger: options.writeLedger ?? ((line) => { ledgerLogs.push(line); }),
     writeConnectionLog: (line) => { connectionLogs.push(line); },
     humanIdpFetch: (async () => humanIdpResponses.shift() ?? new Response('{}', { status: 400 })) as unknown as typeof fetch,
     automationAppUrl: 'https://automation-app.test',
