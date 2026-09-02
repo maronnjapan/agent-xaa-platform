@@ -12,6 +12,10 @@ export const IDENTIFIER_FIELD_NAMES = [
   'jti', 'idjag_jti', 'actor_token_jti', 'kid', 'idjag_kid', 'received_kid',
   'jkt', 'cnf_jkt', 'issued_jkt', 'act_sub', 'idjag_act_sub', 'actor_token_sub',
   'agent_id', 'op_agent_id', 'human_subject', 'subject_token_sub', 'idjag_sub',
+  // RULE-46's two subjects of an approval. They are the same kind of value as
+  // `human_subject` and `act_sub`; redacting them would leave the approval audit
+  // line unable to answer who approved the payment (REQ-09-012).
+  'approved_by', 'approved_by_agent',
   'trace_id', 'request_id', 'span_id', 'grant_id', 'document_id', 'payment_id',
   'idp_connection_id', 'connection_id', 'binding_id', 'transaction_id', 'decision_id',
   'issued_jti', 'task_id', 'execution_id', 'work_definition_hash', 'fingerprint',

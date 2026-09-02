@@ -4,13 +4,25 @@ import {
   type IdJagAssertionPayload, type IdJagTrustedIdentityProvider,
 } from '@maronn-openid-connect/experimental/id-jag';
 import type { TokenClientInfo } from '@maronn-openid-connect/core';
-import { decodeJwsUnverified, jwkThumbprint, verifyDpopProof, type JtiStore } from '@xaa/crypto';
+import { decodeJwsUnverified, jwkThumbprint, verifyDpopProof, XaaCryptoError, type JtiStore } from '@xaa/crypto';
 
 /** A 403 the library's IdJagError cannot express (it is always 400). */
 export class ResourceAsError extends Error {
   constructor(readonly status: number, readonly code: string) {
     super(code);
     this.name = 'ResourceAsError';
+  }
+}
+
+/**
+ * An `invalid_grant` from the confirmation binding. The caller sees one answer for
+ * every way possession can fail, while the log keeps the PROTOCOL_VIOLATION code the
+ * detection pipeline needs: a replayed proof and a mismatched key are the same
+ * refusal on the wire and two different findings in the audit trail.
+ */
+export class ClientBindingError extends IdJagError {
+  constructor(readonly validationName: 'replayed_dpop_proof' | 'dpop_key_binding_mismatch') {
+    super('invalid_grant', 'The assertion is missing cnf.jkt');
   }
 }
 
@@ -92,10 +104,12 @@ export async function redeemIdJag(input: RedeemInput): Promise<RedeemResult> {
   const outside = scope.find((value) => !input.registeredScopes.includes(value));
   if (outside !== undefined) throw new IdJagError('invalid_scope', 'The requested scope is not registered for this resource');
 
-  step('isolation');
+  // The isolation gate belongs to finance alone (T-RES-19). The documents pipeline
+  // has no such step at all, rather than a step that always says yes.
   const isolationLevel = typeof raw.isolation_level === 'string' ? raw.isolation_level : undefined;
-  if (input.requireIsolationLevel !== undefined && isolationLevel !== input.requireIsolationLevel) {
-    throw new ResourceAsError(403, 'insufficient_isolation');
+  if (input.requireIsolationLevel !== undefined) {
+    step('isolation');
+    if (isolationLevel !== input.requireIsolationLevel) throw new ResourceAsError(403, 'insufficient_isolation');
   }
 
   step('revocation');
@@ -127,9 +141,9 @@ export async function bindClientByCnf(options: {
 }): Promise<string> {
   const cnf = options.payload.cnf;
   if (!cnf || typeof cnf !== 'object' || typeof (cnf as Record<string, unknown>).jkt !== 'string') {
-    throw new IdJagError('invalid_grant', 'The assertion is missing cnf.jkt');
+    throw new ClientBindingError('dpop_key_binding_mismatch');
   }
-  if (!options.dpopHeader) throw new IdJagError('invalid_grant', 'The assertion is missing cnf.jkt');
+  if (!options.dpopHeader) throw new ClientBindingError('dpop_key_binding_mismatch');
   try {
     const verified = await verifyDpopProof(options.dpopHeader, {
       method: 'POST', url: options.tokenEndpoint, jtiStore: options.jtiStore,
@@ -137,14 +151,15 @@ export async function bindClientByCnf(options: {
     });
     const expected = (cnf as Record<string, unknown>).jkt as string;
     if (await jwkThumbprint(verified.publicJwk) !== expected) {
-      throw new IdJagError('invalid_grant', 'The assertion is missing cnf.jkt');
+      throw new ClientBindingError('dpop_key_binding_mismatch');
     }
     return expected;
   } catch (error) {
     if (error instanceof IdJagError) throw error;
     // Any failure to establish possession of the bound key is one answer: a
     // malformed proof, a replayed jti and a mismatched thumbprint are all
-    // indistinguishable to the caller.
-    throw new IdJagError('invalid_grant', 'The assertion is missing cnf.jkt');
+    // indistinguishable to the caller. Only the recorded validation_name differs.
+    const replayed = error instanceof XaaCryptoError && error.code === 'replayed_dpop_proof';
+    throw new ClientBindingError(replayed ? 'replayed_dpop_proof' : 'dpop_key_binding_mismatch');
   }
 }

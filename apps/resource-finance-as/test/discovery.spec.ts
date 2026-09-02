@@ -22,7 +22,9 @@ describe('Resource AS discovery', () => {
   });
 
   it('serves healthz without authentication', async () => {
-    expect(await (await (await createTestAs()).fetch('/healthz')).json()).toEqual({ status: 'ok' });
+    const response = await (await createTestAs()).fetch('/healthz');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ok' });
   });
 
   it('signs with an RS256 key whose kid carries the resource prefix', async () => {

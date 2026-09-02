@@ -5,6 +5,7 @@ import { createRevocationLedger } from '@xaa/resource-guard';
 import type { ResourceAsDeps } from './app.js';
 import { loadResourceAsEnv } from './config/env.js';
 import { ensureSigningKey, localSigningKey, type Envelope, type ObjectStore } from './keys/self-bootstrap.js';
+import { createResourceAsStores } from './store/backend.js';
 
 export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): Promise<ResourceAsDeps & { port: number }> {
   const configuration = loadResourceAsEnv(env);
@@ -22,10 +23,16 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
       kidPrefix: configuration.jwksKeyPrefix,
     });
 
+  // DEC-IAC-09 / T-RES-02: the generated provider's stores live in Firestore, so a
+  // token issued by one Cloud Run instance is known to every other one.
+  const { stores, storeAccessToken } = createResourceAsStores(firestore);
+
   return {
     port: configuration.port,
     env: configuration,
     signingKey,
+    stores,
+    storeAccessToken,
     jtiStore: new FirestoreJtiStore(firestore),
     isActorRevoked: (actorUrn) => ledger.isActorRevoked(actorUrn),
     ...(env.REQUIRE_ISOLATION_LEVEL ? { requireIsolationLevel: env.REQUIRE_ISOLATION_LEVEL } : {}),

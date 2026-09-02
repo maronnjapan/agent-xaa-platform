@@ -5,7 +5,7 @@ import {
 import { IdJagError } from '@maronn-openid-connect/experimental/id-jag';
 import { TOOL_IDS } from '@xaa/contracts';
 import {
-  inspectAssertion, logIdJagRedemption, redeemIdJag, ResourceAsError,
+  ClientBindingError, inspectAssertion, logIdJagRedemption, redeemIdJag, ResourceAsError,
   type IdJagRedemptionLog, type RedeemStep,
 } from '@xaa/resource-guard';
 import type { Context } from 'hono';
@@ -89,6 +89,7 @@ export async function redeemHandler(context: Context, params: Record<string, str
       ...(result.isolationLevel ? { isolation_level: result.isolationLevel } : {}),
       ...(narrowConstraints(result.constraints) ? { xaa_constraints: narrowConstraints(result.constraints) } : {}),
     };
+    deps.recordStep?.('issue_token');
     const accessToken = await createJwtAccessTokenIssuer().issue({
       payload, privateKey: deps.signingKey.privateKey, keyId: deps.signingKey.kid,
     });
@@ -119,6 +120,7 @@ export async function redeemHandler(context: Context, params: Record<string, str
     context.header('Pragma', 'no-cache');
     return context.json(mapped.body, mapped.status);
   } finally {
+    deps.recordStep?.('log');
     logIdJagRedemption(deps.logger, logContext, entry);
   }
 }
@@ -140,10 +142,11 @@ function toError(error: unknown): { status: 400 | 403; body: { error: string; er
     return { status: 403, body: { error: error.code, error_description: 'The agent is not sufficiently isolated' }, validationName: error.code };
   }
   if (error instanceof IdJagError) {
-    const replayed = error.errorDescription.includes('cnf.jkt');
     return {
       status: 400, body: { error: error.code, error_description: error.errorDescription },
-      validationName: replayed ? 'dpop_key_binding_mismatch' : error.code,
+      // A confirmation-binding failure names which PROTOCOL_VIOLATION code it was;
+      // every other IdJagError is named by its own OAuth error code.
+      validationName: error instanceof ClientBindingError ? error.validationName : error.code,
     };
   }
   return { status: 400, body: { error: 'invalid_request', error_description: 'The request could not be processed' }, validationName: 'invalid_request' };

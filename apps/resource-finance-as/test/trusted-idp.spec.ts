@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTrustedIdpResolver, filterIdJagKeys } from '../src/config/trusted-idp.js';
 import { loadResourceAsEnv } from '../src/config/env.js';
-import { asEnv } from './helpers.js';
+import { asEnv, createRedeemableAs } from './helpers.js';
 
 const jwks = {
   keys: [
@@ -41,6 +41,20 @@ describe('trusted identity provider', () => {
     clock += 300_001;
     await resolver();
     expect(calls).toBe(2);
+  });
+
+  it('refuses an ID-JAG signed with a key outside the ID-JAG prefixes', async () => {
+    // The key really is in the published set, under the Human IdP's SSO prefix.
+    // Filtering it out is what stops an SSO key from standing in for an Agent OP key.
+    const chain = await createRedeemableAs({}, {}, 'idp-abcdefgh');
+    const response = await chain.redeem();
+    expect(response.status).toBe(400);
+    expect((await response.json() as { error: string }).error).toBe('invalid_grant');
+  });
+
+  it('refuses an ID-JAG signed with this AS\'s own key prefix', async () => {
+    const chain = await createRedeemableAs({}, {}, 'fin-as-12345678');
+    expect((await (await chain.redeem()).json() as { error: string }).error).toBe('invalid_grant');
   });
 
   it('refuses to start without the trusted issuer configured', () => {

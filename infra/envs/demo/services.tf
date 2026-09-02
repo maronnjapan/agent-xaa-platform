@@ -194,6 +194,10 @@ locals {
       SIGNING_KEY_KMS_KEY  = data.terraform_remote_state.shared.outputs.kms_keys.resource_finance_as
       JWKS_BUCKET          = local.jwks_bucket
       JWKS_KEY_PREFIX      = "fin-as"
+      # T-RES-19: the redemption gate, the twin of the one on resource-finance-api.
+      # Without it the Authorization Server would hand a standard agent a token that
+      # the API then refuses, which is the check happening once instead of twice.
+      REQUIRE_ISOLATION_LEVEL = "full_isolation"
     }
     "resource-finance-api" = {
       PUBLIC_BASE_URL             = local.run_url["resource-finance-api"]

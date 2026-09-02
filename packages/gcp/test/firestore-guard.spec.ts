@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertAgentOwnership, assertPath } from '../src/index.js';
+import { assertAgentOwnership, assertPath, FirestoreGuardError } from '../src/index.js';
 
 describe('Firestore path guard', () => {
   // Authorization does read catalog_tools: REQ-03-021 has it resolve the
@@ -19,6 +19,19 @@ describe('Firestore path guard', () => {
     expect(() => assertPath('provisioner', 'read', 'catalog_tools/x')).not.toThrow();
     expect(() => assertPath('provisioner', 'write', 'catalog_tools/x')).toThrow();
     expect(() => assertPath('seed', 'write', 'catalog_tools/x')).not.toThrow();
+  });
+  // T-RES-02: each Resource server is confined to its own collections. A documents
+  // identifier reaching the payments collection is the case that must never work.
+  it('denies a Resource AS reaching another resource\'s data with path_not_allowed', () => {
+    expect(() => assertPath('resource-docs-as', 'read', 'payments/pay_x')).toThrow(FirestoreGuardError);
+    try {
+      assertPath('resource-docs-as', 'read', 'payments/pay_x');
+      expect.unreachable();
+    } catch (error) {
+      expect((error as FirestoreGuardError).code).toBe('path_not_allowed');
+    }
+    expect(() => assertPath('resource-docs-as', 'write', 'oidc_resource_finance_as/x')).toThrow();
+    expect(() => assertPath('resource-docs-as', 'write', 'oidc_resource_docs_as/x')).not.toThrow();
   });
   it('denies cross-agent path from runtime', () => expect(() => assertAgentOwnership('agent-aaaaaaaaaaaaaaaaaaaaaaaaaa', 'agent-bbbbbbbbbbbbbbbbbbbbbbbbbb')).toThrow());
 });

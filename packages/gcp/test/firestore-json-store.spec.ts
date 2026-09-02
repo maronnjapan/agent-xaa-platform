@@ -8,10 +8,19 @@ async function backend(collection: string) {
 }
 
 describe('Firestore JsonStoreBackend', () => {
-  it('get put delete round trip', async () => {
+  it('put stores a value the next get returns', async () => {
     const store = await backend('oidc_human_idp');
     await store.put('transaction:one', { subject: 'user-1' });
     expect(await store.get('transaction:one')).toEqual({ subject: 'user-1' });
+  });
+
+  it('get answers null for a key that was never written', async () => {
+    expect(await (await backend('oidc_human_idp')).get('transaction:absent')).toBeNull();
+  });
+
+  it('delete removes the entry', async () => {
+    const store = await backend('oidc_human_idp');
+    await store.put('transaction:one', { subject: 'user-1' });
     await store.delete('transaction:one');
     expect(await store.get('transaction:one')).toBeNull();
   });

@@ -24,11 +24,17 @@ export interface ResourceProtectionOptions {
   publicBaseUrl?: string;
 }
 
-function unauthorized(): Response {
+/**
+ * REQ-08-044 asks for a Bearer challenge, RFC 9449 for a DPoP one; both are sent, as
+ * two headers rather than one joined value. `error` names the reason in the body — a
+ * revoked actor is `token_revoked` (T-RES-22) — while the challenges stay
+ * `invalid_token`, which is the only code RFC 6750 defines for this case.
+ */
+function unauthorized(error: 'invalid_token' | 'token_revoked' = 'invalid_token'): Response {
   const headers = new Headers({ 'Content-Type': 'application/json' });
   headers.append('WWW-Authenticate', 'DPoP error="invalid_token"');
   headers.append('WWW-Authenticate', 'Bearer error="invalid_token"');
-  return new Response(JSON.stringify({ error: 'invalid_token' }), { status: 401, headers });
+  return new Response(JSON.stringify({ error }), { status: 401, headers });
 }
 
 export function createResourceProtection(options: ResourceProtectionOptions): MiddlewareHandler<Env> {
@@ -54,7 +60,8 @@ export function createResourceProtection(options: ResourceProtectionOptions): Mi
       const cnf = payload.cnf;
       if (typeof payload.sub !== 'string' || !act || typeof act !== 'object' || typeof (act as Record<string, unknown>).sub !== 'string' || !cnf || typeof cnf !== 'object' || typeof (cnf as Record<string, unknown>).jkt !== 'string') return unauthorized();
       const actorUrn = (act as Record<string, unknown>).sub as string;
-      if (!actorUrn.startsWith(AGENT_URN_PREFIX) || await options.isRevokedActor?.(actorUrn)) return unauthorized();
+      if (!actorUrn.startsWith(AGENT_URN_PREFIX)) return unauthorized();
+      if (await options.isRevokedActor?.(actorUrn)) return unauthorized('token_revoked');
       const proof = context.req.header('DPoP');
       if (!proof || proof.includes(',')) return unauthorized();
       const requestUrl = new URL(context.req.path, options.publicBaseUrl ?? options.resourceUri).toString();

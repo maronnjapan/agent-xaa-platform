@@ -3,6 +3,7 @@ import { createLogger, type Logger } from '@xaa/logging';
 import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
 import type { SigningKeyProvider } from '@maronn-openid-connect/core';
 import { applyOidc } from './oidc/apply.js';
+import type { ProviderStores } from './oidc/store.js';
 import { redeemDepsMiddleware } from './idjag/redeem.js';
 import { createTrustedIdpResolver } from './config/trusted-idp.js';
 import { createAsClientResolver } from './config/clients.js';
@@ -15,6 +16,10 @@ export interface ResourceAsDeps {
   env?: ResourceAsEnv;
   signingKey: SigningKeyMaterial;
   jtiStore?: JtiStore;
+  /** The generated provider's stores. Production passes the Firestore-backed set. */
+  stores?: ProviderStores;
+  /** Writes the issued Access Token's metadata to the same set. */
+  storeAccessToken?: (token: string, info: Record<string, unknown>) => Promise<void>;
   fetchImpl?: typeof fetch;
   isActorRevoked?: (actorUrn: string) => Promise<boolean>;
   logger?: Logger;
@@ -46,6 +51,7 @@ function createApp(deps: ResourceAsDeps): Hono {
     jtiStore: deps.jtiStore ?? new InMemoryJtiStore(deps.now),
     ...(deps.isActorRevoked ? { isActorRevoked: deps.isActorRevoked } : {}),
     signingKey: { privateKey: deps.signingKey.privateKey, kid: deps.signingKey.kid },
+    ...(deps.storeAccessToken ? { storeAccessToken: deps.storeAccessToken } : {}),
     logger,
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.recordStep ? { recordStep: deps.recordStep } : {}),
@@ -79,6 +85,9 @@ function createApp(deps: ResourceAsDeps): Hono {
     signingKeyProvider: provider,
     clientResolver,
     tokenClientResolver: clientResolver,
+    // Without this the generated provider keeps its process-local default stores, and
+    // an Access Token issued by one Cloud Run instance is unknown to the next one.
+    ...(deps.stores ? { storage: deps.stores } : {}),
   });
   return app as unknown as Hono;
 }
