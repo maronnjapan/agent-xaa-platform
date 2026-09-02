@@ -6,7 +6,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-roots=(apps/automation-app/client/src apps/automation-app/public)
+# Every directory that ends up in the browser. `src/client` is the esbuild entry point
+# and `client/src` the modules it pulls in; scanning only one of them leaves the other
+# free to import the SDK this control exists to keep out (T-IAC-44).
+roots=(apps/automation-app/src/client apps/automation-app/client/src apps/automation-app/public)
 for root in "${roots[@]}"; do
   [[ -d "$root" ]] || { echo "missing scan root: $root" >&2; exit 1; }
 done
