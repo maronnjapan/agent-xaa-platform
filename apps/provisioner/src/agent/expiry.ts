@@ -7,6 +7,18 @@
 export const HARD_CAP_SECONDS = 86_400;
 
 /**
+ * RFC 3339 in UTC, to the second.
+ *
+ * The same string is compared in four places — the registration, the IdP connection,
+ * the job environment and the completion log — and second precision is the coarsest
+ * any of them has. Carrying milliseconds would make two values that mean the same
+ * instant differ as strings, and the comparison is a string comparison.
+ */
+export function toRfc3339Seconds(epochMillis: number): string {
+  return `${new Date(Math.floor(epochMillis / 1000) * 1000).toISOString().slice(0, 19)}Z`;
+}
+
+/**
  * DEC-IAC-16. One variable decides the lifetime of everything about an agent, so the
  * job timeout, the registration, the IdP connection and the grant cap cannot disagree.
  *
@@ -20,8 +32,8 @@ export function computeExpiresAt(input: {
   const requested = Math.max(1, Math.floor(input.requestedLifetimeHours)) * 3600;
   const lifetimeSeconds = Math.min(requested, input.agentMaxLifetimeSeconds, HARD_CAP_SECONDS);
   return {
-    createdAt: new Date(input.now).toISOString(),
-    expiresAt: new Date(input.now + lifetimeSeconds * 1000).toISOString(),
+    createdAt: toRfc3339Seconds(input.now),
+    expiresAt: toRfc3339Seconds(Math.floor(input.now / 1000) * 1000 + lifetimeSeconds * 1000),
     lifetimeSeconds,
   };
 }

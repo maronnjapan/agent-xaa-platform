@@ -41,6 +41,13 @@ function createApp(deps: ProvisionerAppDeps): Hono {
     protocolValidation: createProtocolValidationEmitter({ logger, path: 'provisioner:/provisioning' }),
   });
 
+  // Answered before the token check, and deliberately so: the caller here is a
+  // browser that followed a consent redirect by hand, and it holds no Access Token at
+  // all. `405 Allow: POST` tells it what the route is; a 401 would send someone
+  // hunting for a credential that was never the problem. The reply says nothing about
+  // whether the transaction exists (T-PROV-17).
+  app.get('/provisioning/:transaction_id/resume', (context) => context.body(null, 405, { Allow: 'POST' }));
+
   // One registration: Hono's `/provisioning/*` also matches `/provisioning`, and a
   // second pass would consume the DPoP jti again and answer replay to a first call.
   app.use('/provisioning/*', protect);

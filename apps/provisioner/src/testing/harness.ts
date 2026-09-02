@@ -9,6 +9,7 @@ import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore
 import { createLogger } from '@xaa/logging';
 import { readFileSync, readdirSync } from 'node:fs';
 import { parse } from 'yaml';
+import { PLATFORM_CLIENT_ID } from '@xaa/contracts';
 import type { ActivityEvent, CatalogConnector, CatalogTool, IsolationLevel } from '@xaa/contracts';
 import createApp, { type ProvisionerAppDeps } from '../app.js';
 import { createTransactionStore } from '../transaction/store.js';
@@ -145,10 +146,25 @@ export async function createProvisionerHarness(options: {
   const now = options.now ?? (() => Date.now());
 
   const { createDedicatedResources } = await import('../dedicated.js');
+  const agentOp: ProvisionerAppDeps['agentOp'] = {
+    async createIdpConnection() {
+      return {
+        status: options.idpConnectionStatus ?? 'READY',
+        // The one registered client, from the constant that owns it (RULE-50): a
+        // literal here would be a second place the id is written down.
+        consentUrl: `${HUMAN_IDP_ISSUER}/authorize?client_id=${PLATFORM_CLIENT_ID}&scope=openid+offline_access`,
+      };
+    },
+    async verifyIdpConnection() { return { status: options.verifyStatus ?? 'READY' }; },
+    async revokeIdpConnection(idpConnectionId) { revokedConnections.push(idpConnectionId); },
+  };
+
   const deps: ProvisionerAppDeps = {
     config: { ...testConfig, ...options.config },
     documents,
-    transactions: createTransactionStore(documents, now),
+    transactions: createTransactionStore(documents, now, {
+      revokeIdpConnection: (idpConnectionId) => agentOp.revokeIdpConnection!(idpConnectionId),
+    }),
     jobs: {
       async runJob(input) { jobRuns.push(input); return { executionName: `${input.jobName}/executions/exec-1` }; },
     },
@@ -163,16 +179,7 @@ export async function createProvisionerHarness(options: {
     fetchImpl: (async () => Response.json({
       keys: [{ ...(options.idpPublicJwk ?? {}), kid: 'idp-testkey', alg: 'RS256', use: 'sig' }],
     })) as unknown as typeof fetch,
-    agentOp: {
-      async createIdpConnection() {
-        return {
-          status: options.idpConnectionStatus ?? 'READY',
-          consentUrl: `${HUMAN_IDP_ISSUER}/authorize?client_id=agent-platform&scope=openid+offline_access`,
-        };
-      },
-      async verifyIdpConnection() { return { status: options.verifyStatus ?? 'READY' }; },
-      async revokeIdpConnection(idpConnectionId) { revokedConnections.push(idpConnectionId); },
-    },
+    agentOp,
     createDedicated: (input): Promise<DedicatedResult> => createDedicatedResources({
       admin, ledger: input.ledger, agentId: input.agentId,
       projectId: 'xaa-test', region: 'asia-northeast1',
@@ -187,7 +194,7 @@ export async function createProvisionerHarness(options: {
         'projects/xaa-test/locations/asia-northeast1/services/resource-finance-as',
       ],
       provisionerMember: 'serviceAccount:sa-provisioner@xaa-test.iam.gserviceaccount.com',
-      agentPlatformClientSecret: 'projects/xaa-test/secrets/human-idp-agent-platform-client-secret',
+      agentPlatformClientSecret: `projects/xaa-test/secrets/human-idp-${PLATFORM_CLIENT_ID}-client-secret`,
       taskTimeoutSeconds: input.taskTimeoutSeconds,
       now, sleep: async () => undefined,
     }),

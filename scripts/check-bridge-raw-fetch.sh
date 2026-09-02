@@ -5,17 +5,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-status=0
-while IFS= read -r file; do
-  case "$file" in
-    apps/google-bridge/src/http/outbound.ts) continue ;;
-  esac
-  if ! node scripts/checks/code-grep.mjs 'globalThis\.fetch|[^.a-zA-Z]fetch\(' "$file" >&2; then
-    status=1
-  fi
-done < <(find apps/google-bridge/src -type f -name '*.ts')
+# One pass over the directory rather than one Node process per file: the check runs
+# from a unit test with a five-second budget, and the process starts spend most of it.
+# code-grep walks directories itself and strips comments first, so what is checked is
+# unchanged — prose about `fetch(` is still not a call to it.
+hits=$(node scripts/checks/code-grep.mjs 'globalThis\.fetch|[^.a-zA-Z]fetch\(' apps/google-bridge/src || true)
+hits=$(printf '%s' "$hits" | grep -v '^apps/google-bridge/src/http/outbound\.ts:' || true)
 
-if [ "$status" -ne 0 ]; then
+if [ -n "$hits" ]; then
+  echo "$hits" >&2
   echo "the Bridge sends HTTP only through http/outbound.ts" >&2
   exit 1
 fi

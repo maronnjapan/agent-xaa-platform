@@ -59,6 +59,13 @@ export interface StartAgentOpOptions {
   /** One Firestore across several apps, for a test that spans them. */
   shared?: ReturnType<typeof createFirestoreDouble>;
   automationAppUrl?: string;
+  /**
+   * Mounts `/internal/idp-connections` by giving the app a caller verifier and the
+   * Provisioner's service account. Left off by default: the route only exists in a
+   * deployment where Terraform granted the Provisioner run.invoker, and a test that
+   * did not ask for it should not be able to reach it either.
+   */
+  provisionerServiceAccount?: string;
 }
 
 export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentOpHarness> {
@@ -137,6 +144,18 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
     ...(options.humanIdpFetch ? { humanIdpFetch: options.humanIdpFetch } : {}),
     // Where the callback sends the browser back to, as Terraform injects it.
     automationAppUrl: options.automationAppUrl ?? 'https://automation-app.test',
+    ...(options.provisionerServiceAccount
+      ? {
+          provisionerServiceAccount: options.provisionerServiceAccount,
+          // Cloud Run verifies the Google-signed ID Token at the edge; what the app
+          // adds is the email check, and that is the part worth exercising here.
+          serviceIdentity: {
+            async verify(authorization: string | undefined) {
+              return authorization?.startsWith('Bearer ') ? options.provisionerServiceAccount! : null;
+            },
+          },
+        }
+      : {}),
   };
 
   const app = createAgentOp(deps);

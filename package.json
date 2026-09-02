@@ -22,6 +22,7 @@
     "gen:design-rules": "node scripts/gen-design-rules.mjs",
     "gen:diagrams": "python3 docs/diagrams/generate.py",
     "lint": "eslint . && node scripts/check-deps.mjs",
+    "lint:rules": "bash scripts/check-no-hardcoded-endpoint.sh && bash scripts/check-risk-level-usage.sh && bash scripts/check-no-private-key-persist.sh && bash scripts/check-no-token-endpoint-call.sh && bash scripts/check-no-dcr.sh",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:e2e": "vitest --project e2e run",
     "test:integration": "vitest --project integration run --passWithNoTests",

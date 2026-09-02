@@ -126,6 +126,7 @@ jobs:
       - run: bash scripts/check-bridge-raw-fetch.sh
       - run: bash scripts/check-bridge-no-refresh-token.sh
       - run: bash scripts/check-security-outbound.sh
+      - run: pnpm lint:rules
       - run: for check in scripts/checks/*.sh; do bash "$check"; done
   check-oidc-patches:
     runs-on: ubuntu-latest
