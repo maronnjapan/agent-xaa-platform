@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createLocalEs256Signer, generateEs256KeyPair, type Es256Signer } from '@xaa/crypto';
 import { signIdJag, ID_JAG_TYP } from '../src/idjag/sign-id-jag.js';
 import { attachCnf } from '../src/idjag/attach-cnf.js';
-import { createFixture, decodeHeader, exchange } from './helpers.js';
+import { createFixture, decodeHeader, decodePayload, exchange } from './helpers.js';
 
 const claims = { iss: 'https://human-idp.test', sub: 'user-1', aud: 'https://docs-as.test', jti: 'j1', exp: 2, iat: 1 };
 
@@ -12,16 +12,26 @@ async function signer(): Promise<Es256Signer> {
 }
 
 describe('ID-JAG signing', () => {
-  it('takes no typ or alg parameter', () => {
+  it('signIdJag signature has no typ or alg parameter', () => {
     expect(signIdJag.length).toBe(2);
     // @ts-expect-error a third argument would reopen what the key may sign
     void (() => signIdJag(claims, undefined as never, 'JWT'));
   });
 
-  it('always emits typ oauth-id-jag+jwt', async () => {
+  it('header.typ is always oauth-id-jag+jwt', async () => {
     const token = await signIdJag({ ...claims, cnf: { jkt: 'thumb' } }, await signer());
     expect(decodeHeader(token).typ).toBe(ID_JAG_TYP);
     expect(decodeHeader(token).alg).toBe('ES256');
+  });
+
+  it('always includes cnf.jkt', async () => {
+    const claimsWithCnf = attachCnf(claims as never, 'thumb-1');
+    expect(claimsWithCnf.cnf).toEqual({ jkt: 'thumb-1' });
+    // And on the path that actually issues: no branch reaches signIdJag without it.
+    const fixture = await createFixture();
+    const body = await (await exchange(fixture)).json() as { access_token: string };
+    expect((decodePayload(body.access_token).cnf as { jkt: string }).jkt).toEqual(expect.any(String));
+    expect((decodePayload(body.access_token).cnf as { jkt: string }).jkt).not.toBe('');
   });
 
   it('never signs without cnf', async () => {

@@ -3,6 +3,11 @@ import { createTrace, emitTokenExchangeLog } from '../src/log/token-exchange-log
 import { buildLedgerRecord, emitIssuanceLedger, LEDGER_FIELDS } from '../src/log/issuance-ledger.js';
 import { createFixture, exchange, subjectToken } from './helpers.js';
 
+/** docs 09 §2: the fixed shape, on the rejected path as much as the issued one. */
+const EXCHANGE_FIELDS = ['op_runtime_id', 'op_kind', 'requested_audience', 'requested_resource', 'requested_scope',
+  'subject_token_iss', 'subject_token_aud', 'subject_token_sub', 'actor_token_sub', 'actor_token_jti',
+  'delegation_check', 'dpop_result', 'issued_id_jag', 'agent_expiry_check', 'error_code'];
+
 describe('token exchange log', () => {
   it('emits exactly one record per request', async () => {
     const fixture = await createFixture();
@@ -11,11 +16,7 @@ describe('token exchange log', () => {
     expect(fixture.exchangeLogs).toHaveLength(2);
   });
 
-  it('emits all fourteen fields on success and on a RULE-49 violation', async () => {
-    const fields = ['op_runtime_id', 'op_kind', 'requested_audience', 'requested_resource', 'requested_scope',
-      'subject_token_iss', 'subject_token_aud', 'subject_token_sub', 'actor_token_sub', 'actor_token_jti',
-      'delegation_check', 'dpop_result', 'issued_id_jag', 'agent_expiry_check', 'error_code'];
-
+  it('success emits all 14 fields', async () => {
     const ok = await createFixture();
     await exchange(ok);
     const line = JSON.parse(ok.exchangeLogs[0]!) as Record<string, unknown>;
@@ -24,12 +25,15 @@ describe('token exchange log', () => {
     expect(line.log_source).toBe('agent_op');
     expect(line.event).toBe('token_exchange');
     const success = line.fields as Record<string, unknown>;
-    for (const field of fields) expect(Object.keys(success)).toContain(field);
+    for (const field of EXCHANGE_FIELDS) expect(Object.keys(success)).toContain(field);
+    expect(success.error_code).toBeNull();
+  });
 
+  it('RULE-49 violation emits all 14 fields with delegation_check=false', async () => {
     const bad = await createFixture({ registration: { human_subject: 'user-B' } });
     await exchange(bad, { form: { subject_token: await subjectToken(bad, { sub: 'user-A' }) } });
     const failure = (JSON.parse(bad.exchangeLogs[0]!) as { fields: Record<string, unknown> }).fields;
-    for (const field of fields) expect(Object.keys(failure)).toContain(field);
+    for (const field of EXCHANGE_FIELDS) expect(Object.keys(failure)).toContain(field);
     expect(failure.delegation_check).toBe(false);
     expect(failure.error_code).toBe('invalid_grant');
   });
@@ -40,7 +44,7 @@ describe('token exchange log', () => {
     expect(() => emitTokenExchangeLog(trace, () => undefined)).toThrow(/compact JWS/);
   });
 
-  it('contains no compact JWS on any path', async () => {
+  it('no log line contains a compact JWS', async () => {
     const fixture = await createFixture();
     await exchange(fixture);
     await exchange(fixture, { form: { audience: 'https://elsewhere.test' } });

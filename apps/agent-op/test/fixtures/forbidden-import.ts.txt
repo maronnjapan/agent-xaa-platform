@@ -1,0 +1,9 @@
+// Not a source file: the .ts.txt suffix keeps it out of `eslint .` and out of tsc.
+// boundary.spec.ts copies it to a .ts path inside apps/agent-op and expects that lint
+// run to fail, so the no-restricted-imports rule cannot go inert unnoticed (T-OP-03).
+import { evaluateRules } from '@platform/security/rules';
+import { VertexAI } from '@google-cloud/vertexai';
+
+export function decide(): unknown {
+  return evaluateRules(new VertexAI({ project: 'p' }));
+}

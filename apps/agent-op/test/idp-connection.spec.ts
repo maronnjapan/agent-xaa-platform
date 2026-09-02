@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createKmsEnvelopeCipher, refreshTokenFingerprint } from '../src/idp-connection/crypto.js';
 import { IdpConnectionView } from '../src/idp-connection/repository.js';
 import type { IdpConnection } from '../src/store/types.js';
+import { createFixture } from './helpers.js';
 
 /** Reversible stand-in that mirrors KMS' AAD binding. */
 const kmsDouble = {
@@ -58,5 +59,30 @@ describe('IdP connection record', () => {
     const fingerprint = await refreshTokenFingerprint('rt-1');
     expect(fingerprint).toHaveLength(64);
     expect(fingerprint).not.toContain('rt-1');
+  });
+
+  /**
+   * DEC-IAC-16: the connection lives exactly as long as the agent does. The value is
+   * carried across from the registration, never computed here, so no arithmetic in
+   * Agent OP can outlive the agent.
+   */
+  it('expires_at equals the registration expires_at', async () => {
+    const fixture = await createFixture({ config: { mode: 'callback' } });
+    await fixture.documents.set('bridge_consent_states', 'state-1', {
+      transaction_id: 'txn-1',
+      agent_id: fixture.agentId,
+      human_subject: fixture.registration.human_subject,
+      code_verifier: 'verifier-1',
+      idp_connection_id: fixture.registration.idp_connection_id,
+      // What the Provisioner passes to /internal/idp-connections: the registration's own value.
+      expires_at: fixture.registration.expires_at,
+      used: false,
+    });
+    await fixture.documents.set('provisioning_transactions', 'txn-1', { status: 'WAITING_IDP_CONSENT' });
+    fixture.humanIdpResponses.push(Response.json({ refresh_token: 'rt-1' }));
+
+    expect((await fixture.fetch('/xaa/callback?code=authz-code&state=state-1')).status).toBe(302);
+    const stored = await fixture.documents.get<IdpConnection>('idp_connections', fixture.registration.idp_connection_id);
+    expect(stored!.expires_at).toBe(fixture.registration.expires_at);
   });
 });

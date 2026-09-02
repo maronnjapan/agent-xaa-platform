@@ -55,11 +55,16 @@ export interface IssuanceInput {
   recordStep?: (step: StepName) => void;
 }
 
+/**
+ * The single platform client. It is confidential, but it authenticates with a
+ * client_assertion_jwt (DEC-ID-11), which the library's tokenEndpointAuthMethod enum
+ * cannot name; leaving that field unset is what `authorizeIdJagIssuanceClient` reads
+ * as "not a public client", which is the property that matters here.
+ */
 const CLIENT: TokenClientInfo = {
   clientId: PLATFORM_CLIENT_ID,
-  clientType: 'confidential',
   grantTypes: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:token-exchange'],
-} as unknown as TokenClientInfo;
+};
 
 export async function runIdJagIssuance(input: IssuanceInput): Promise<IdJagIssuanceResponse> {
   const step = (name: StepName) => input.recordStep?.(name);

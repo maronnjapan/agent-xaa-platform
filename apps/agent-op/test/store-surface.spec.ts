@@ -14,7 +14,7 @@ describe('Agent OP persistence surface', () => {
     expect(Object.keys(store()).sort()).toEqual(['idpConnections', 'issuerProfiles', 'registrations', 'xaaConfigs']);
   });
 
-  it('agents, xaa config and issuer profile repositories expose no write method', () => {
+  it('agents / xaa_configs / issuer_profiles repositories expose no write method', () => {
     const readOnly = [store().registrations, store().xaaConfigs, store().issuerProfiles];
     for (const repository of readOnly) {
       const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(repository));

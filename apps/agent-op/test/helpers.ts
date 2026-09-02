@@ -13,6 +13,8 @@ import type { ActivityEvent } from '../src/log/protocol-violation-event.js';
 
 export const ISSUER = 'https://human-idp.test';
 export const AGENT_OP_BASE = 'https://shared-agent-op.test';
+export const LIFECYCLE_SA = 'sa-lifecycle@xaa-test.iam.gserviceaccount.com';
+export const PROVISIONER_SA = 'sa-provisioner@xaa-test.iam.gserviceaccount.com';
 export const DOCS_AS_ISSUER = 'https://resource-docs-as.test';
 export const DOCS_API_RESOURCE = 'https://resource-docs-api.test';
 export const HUMAN_SUBJECT = 'user-1';
@@ -79,6 +81,8 @@ export interface Fixture {
   now(): number;
   setNow(value: number): void;
   humanIdpResponses: Response[];
+  /** What the route actually sent to Human IdP, headers lower-cased. */
+  humanIdpRequests: Array<{ url: string; headers: Record<string, string>; body: string }>;
 }
 
 export async function createFixture(options: {
@@ -129,6 +133,7 @@ export async function createFixture(options: {
   const ledgerLogs: string[] = [];
   const connectionLogs: string[] = [];
   const humanIdpResponses: Response[] = [];
+  const humanIdpRequests: Fixture['humanIdpRequests'] = [];
 
   const deps: AgentOpAppDeps = {
     config: baseConfig(options.config),
@@ -145,8 +150,21 @@ export async function createFixture(options: {
     writeExchangeLog: (line) => { exchangeLogs.push(line); },
     writeLedger: (line) => { ledgerLogs.push(line); },
     writeConnectionLog: (line) => { connectionLogs.push(line); },
-    humanIdpFetch: (async () => humanIdpResponses.shift() ?? new Response('{}', { status: 400 })) as unknown as typeof fetch,
+    humanIdpFetch: (async (url: string, init: RequestInit) => {
+      const headers: Record<string, string> = {};
+      for (const [key, value] of Object.entries((init?.headers ?? {}) as Record<string, string>)) {
+        headers[key.toLowerCase()] = value;
+      }
+      humanIdpRequests.push({ url: String(url), headers, body: String(init?.body ?? '') });
+      return humanIdpResponses.shift() ?? new Response('{}', { status: 400 });
+    }) as unknown as typeof fetch,
     automationAppUrl: 'https://automation-app.test',
+    // Stands in for the Cloud Run ID Token check: the bearer value is the caller's
+    // service account email, so a test can present the wrong identity as easily as
+    // the right one.
+    serviceIdentity: { async verify(authorization) { return authorization?.match(/^Bearer (.+)$/)?.[1] ?? null; } },
+    lifecycleServiceAccount: LIFECYCLE_SA,
+    provisionerServiceAccount: PROVISIONER_SA,
   };
 
   const app = createApp(deps);
@@ -157,6 +175,7 @@ export async function createFixture(options: {
     now: () => clock,
     setNow: (value) => { clock = value; },
     humanIdpResponses,
+    humanIdpRequests,
   };
 }
 

@@ -17,23 +17,30 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['apps/agent-op/**/*.ts', 'apps/agent-runtime/**/*.ts'],
-    rules: {
-      'no-restricted-imports': ['error', {
-        paths: [
-          '@platform/security/rules',
-          '@platform/security/correlation',
-          '@platform/security/scoring',
-          '@platform/security/ai',
-        ],
-      }],
-    },
-  },
-  {
     files: ['apps/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', {
         paths: ['@xaa/crypto/dist/verifiers-internal'],
+      }],
+    },
+  },
+  // RULE-20 / REQ-09-038: Agent OP decides nothing, so it never loads a model client or
+  // a Security Detection module. This block comes after the apps-wide one on purpose:
+  // flat config replaces a rule's options rather than merging them, so the narrower
+  // list has to restate the platform-wide entry or it would silently drop it.
+  {
+    files: ['apps/agent-op/**/*.ts', 'apps/agent-runtime/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: [
+          '@google-cloud/aiplatform',
+          '@google-cloud/vertexai',
+          '@platform/security/rules',
+          '@platform/security/correlation',
+          '@platform/security/scoring',
+          '@platform/security/ai',
+          '@xaa/crypto/dist/verifiers-internal',
+        ],
       }],
     },
   },

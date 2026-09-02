@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createDpopProof } from '@xaa/crypto';
 import { CLIENT_ASSERTION_TYPE } from '@xaa/contracts';
-import { AGENT_OP_BASE, clientAssertion, createFixture, fakeEnvelope, type Fixture } from './helpers.js';
+import {
+  AGENT_OP_BASE, clientAssertion, createFixture, fakeEnvelope, LIFECYCLE_SA, PROVISIONER_SA, type Fixture,
+} from './helpers.js';
 
 const PATH = '/xaa/subject-token';
 
@@ -44,6 +46,24 @@ describe('POST /xaa/subject-token', () => {
     expect(Object.keys(body).sort()).toEqual(['expires_in', 'subject_token', 'subject_token_type']);
     expect(body.subject_token).toBe('header.payload.sig');
     expect(body.subject_token_type).toBe('urn:ietf:params:oauth:token-type:id_token');
+  });
+
+  it('response JSON has no refresh_token key', async () => {
+    const fixture = await createFixture();
+    await seedConnection(fixture);
+    fixture.humanIdpResponses.push(Response.json({ id_token: 'a.b.c', refresh_token: 'rt-new', expires_in: 3600 }));
+    const body = await (await call(fixture)).json() as Record<string, unknown>;
+    expect(Object.keys(body)).not.toContain('refresh_token');
+    expect(JSON.stringify(body)).not.toContain('rt-new');
+  });
+
+  it('response JSON has no access_token key', async () => {
+    const fixture = await createFixture();
+    await seedConnection(fixture);
+    fixture.humanIdpResponses.push(Response.json({ id_token: 'a.b.c', access_token: 'at-1', expires_in: 3600 }));
+    const body = await (await call(fixture)).json() as Record<string, unknown>;
+    expect(Object.keys(body)).not.toContain('access_token');
+    expect(JSON.stringify(body)).not.toContain('at-1');
   });
 
   it('rotates the stored refresh token when a new one comes back', async () => {
@@ -140,5 +160,91 @@ describe('refresh token reuse detection', () => {
     const response = await call(fixture);
     expect(response.status).toBe(400);
     expect(fixture.events.filter((event) => event.detail.violation_code === 'refresh_token_reuse')).toHaveLength(0);
+  });
+});
+
+const revoke = (fixture: Fixture, caller: string) => fixture.fetch('/internal/revoke-connection', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${caller}` },
+  body: JSON.stringify({ agent_id: fixture.agentId }),
+});
+
+describe('POST /internal/revoke-connection', () => {
+  /**
+   * Giving up on the local state because the remote is unavailable would leave a
+   * usable credential behind, so the connection is marked REVOKED either way and the
+   * failure is what the log records.
+   */
+  it('marks connection REVOKED even when human-idp revoke fails', async () => {
+    const fixture = await createFixture();
+    await seedConnection(fixture);
+    fixture.humanIdpResponses.push(new Response('nope', { status: 500 }));
+    const response = await revoke(fixture, LIFECYCLE_SA);
+    // The caller is told the revocation did not land, so Cleanup retries instead of
+    // reporting success; the platform still stops spending the token either way.
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ error: 'revoke_failed', revoke_result: 'failed' });
+    const stored = await fixture.documents.get<{ status: string; encrypted_refresh_token?: string }>('idp_connections', fixture.registration.idp_connection_id);
+    expect(stored!.status).toBe('REVOKED');
+    // And the ciphertext is kept, because a retry has nothing to send without it.
+    expect(stored!.encrypted_refresh_token).toBeDefined();
+    expect((JSON.parse(fixture.connectionLogs[0]!) as { fields: { revoke_result: string } }).fields.revoke_result).toBe('failed');
+  });
+
+  /**
+   * `agent-platform` is confidential: with only `client_id` in the body, Human IdP
+   * answers 401 invalid_client, and this route used to read that as a revocation that
+   * had happened.
+   */
+  it('authenticates to human-idp as the confidential agent-platform client', async () => {
+    const fixture = await createFixture();
+    await seedConnection(fixture);
+    fixture.humanIdpResponses.push(new Response(null, { status: 200 }));
+    expect((await revoke(fixture, LIFECYCLE_SA)).status).toBe(200);
+
+    const expected = `Basic ${Buffer.from('agent-platform:test-agent-platform-secret').toString('base64')}`;
+    expect(fixture.humanIdpRequests).toHaveLength(1);
+    expect(fixture.humanIdpRequests[0]!.headers.authorization).toBe(expected);
+    expect(fixture.humanIdpRequests[0]!.body).toContain('token_type_hint=refresh_token');
+  });
+
+  it('drops encrypted_refresh_token once human-idp has taken it back', async () => {
+    const fixture = await createFixture();
+    await seedConnection(fixture);
+    fixture.humanIdpResponses.push(new Response(null, { status: 200 }));
+    expect((await revoke(fixture, LIFECYCLE_SA)).status).toBe(200);
+
+    const stored = await fixture.documents.get<Record<string, unknown>>('idp_connections', fixture.registration.idp_connection_id);
+    expect(stored!.status).toBe('REVOKED');
+    expect(Object.keys(stored!)).not.toContain('encrypted_refresh_token');
+    expect(JSON.stringify(stored)).not.toContain('rt-original');
+  });
+
+  it('rejects /internal/revoke-connection from a non sa-lifecycle identity', async () => {
+    const fixture = await createFixture();
+    await seedConnection(fixture);
+    for (const caller of [PROVISIONER_SA, 'sa-agent-runtime@xaa-test.iam.gserviceaccount.com']) {
+      const response = await revoke(fixture, caller);
+      expect(response.status, caller).toBe(403);
+      expect(await response.json()).toEqual({ error: 'invalid_client' });
+    }
+    const untouched = await fixture.documents.get<{ status: string }>('idp_connections', fixture.registration.idp_connection_id);
+    expect(untouched!.status).toBe('ACTIVE');
+    expect(fixture.connectionLogs).toHaveLength(0);
+  });
+
+  it('no log line contains the refresh token string', async () => {
+    const fixture = await createFixture();
+    await seedConnection(fixture);
+    // Rotation, then a revoke: both paths decrypt the token, and neither may write it.
+    fixture.humanIdpResponses.push(Response.json({ id_token: 'a.b.c', refresh_token: 'rt-new' }));
+    await call(fixture);
+    fixture.humanIdpResponses.push(new Response(null, { status: 200 }));
+    await revoke(fixture, LIFECYCLE_SA);
+
+    const lines = [...fixture.connectionLogs, ...fixture.exchangeLogs, ...fixture.ledgerLogs].join('\n');
+    expect(lines).not.toContain('rt-original');
+    expect(lines).not.toContain('rt-new');
+    expect(fixture.connectionLogs.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -29,7 +29,12 @@ async function quarantine(agentOp: AgentOpHarness): Promise<void> {
 }
 
 describe('quarantine stops issuance', () => {
-  it('no ID-JAG is issued once the registration is quarantined', async () => {
+  /**
+   * The registration is read from Firestore on every request — REGISTRATION_CACHE_TTL
+   * is the ten-second ceiling on staleness and nothing caches in front of it — so the
+   * refusal is immediate and still stands once that window has passed.
+   */
+  it('no ID-JAG is issued 10 seconds after quarantine', async () => {
     const token = await subjectToken();
     const agentOp = await startAgentOp({ idpPublicJwk: await idpPublicJwk() });
     expect((await requestIdJag(agentOp, { subjectToken: token })).status).toBe(200);
@@ -39,6 +44,12 @@ describe('quarantine stops issuance', () => {
     const response = await requestIdJag(agentOp, { subjectToken: token });
     expect(response.status).toBe(400);
     expect((await response.json() as { error: string }).error).toBe('invalid_grant');
+
+    // A second, independent request: there is no cache to expire, so no moment after
+    // the ten-second ceiling can behave differently from this one.
+    const afterTtl = await requestIdJag(agentOp, { subjectToken: token, actorJti: 'after-cache-ttl' });
+    expect(afterTtl.status).toBe(400);
+    expect((await afterTtl.json() as { error: string }).error).toBe('invalid_grant');
   });
 
   it('reports the state in the exchange log as not_active', async () => {
