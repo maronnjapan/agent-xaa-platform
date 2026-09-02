@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { documentCreateSchema, compile } from '@xaa/contracts';
+import { documentInternalWriteSchema, compile } from '@xaa/contracts';
 import { buildDailyReport } from '../src/reports/daily-report.js';
-import { startAutomationApp } from './helpers.js';
+import { startAutomationApp, SUBJECT } from './helpers.js';
 
 const DOCS = 'https://resource-docs-api.test';
 
-const assertCreate: (value: unknown) => asserts value is unknown = compile(documentCreateSchema);
+// This is the write the Automation App's own service identity makes (T-APP-05),
+// not the XAA-protected `docs.write` create — the receiving schema is the internal
+// writer's, which is what the request body actually has to satisfy.
+const assertCreate: (value: unknown) => asserts value is unknown = compile(documentInternalWriteSchema);
 
 function listing(types: readonly string[]): Response {
   return new Response(JSON.stringify({
@@ -56,7 +59,11 @@ describe('the daily report', () => {
     expect(write?.url).toBe(`${DOCS}/documents`);
     // The receiving schema is the one this body has to satisfy, so the test uses it
     // rather than a copy of the field names.
-    expect(() => assertCreate(JSON.parse(String(write?.init.body)))).not.toThrow();
+    const writeBody = JSON.parse(String(write?.init.body)) as { human_subject: string };
+    expect(() => assertCreate(writeBody)).not.toThrow();
+    // There is no Access Token `sub` on this call for the Resource Server to take an
+    // owner from, so the request names the person itself (T-APP-05).
+    expect(writeBody.human_subject).toBe(SUBJECT);
     expect((write?.init.headers as Record<string, string>).Authorization)
       .toBe(`Bearer id-token-for-${DOCS}`);
   });

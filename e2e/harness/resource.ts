@@ -36,6 +36,8 @@ export interface StartResourceOptions {
   trustedIdpIssuer: string;
   absoluteMaxAmount?: number;
   lifecycleServiceAccount?: string;
+  /** T-APP-05, docs only: the caller `createInternalDocumentWriter` accepts. */
+  automationAppServiceAccount?: string;
 }
 
 const KID_PREFIX = { docs: 'docs-as', finance: 'fin-as' } as const;
@@ -90,7 +92,7 @@ export async function startResource(options: StartResourceOptions): Promise<Reso
     revocationLedger: ledger,
   };
   const apiApplication = options.kind === 'docs'
-    ? createDocsApi(shared)
+    ? createDocsApi({ ...shared, ...(options.automationAppServiceAccount ? { automationAppServiceAccount: options.automationAppServiceAccount } : {}) })
     : createFinanceApi({ ...shared, absoluteMaxAmount: options.absoluteMaxAmount ?? 1_000_000 });
 
   return {

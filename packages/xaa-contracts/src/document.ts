@@ -53,6 +53,27 @@ export const documentCreateSchema = {
   },
 } as const;
 
+/**
+ * T-APP-05. The body the Automation App's internal daily-report writer sends. The
+ * caller here is a Cloud Run service identity, not a delegated agent, so there is
+ * no Access Token `sub` to take the owner from — `human_subject` names it instead.
+ * `type` is fixed to the literal `daily_report`: this schema is what makes that the
+ * only kind of document this path can ever create.
+ */
+export const documentInternalWriteSchema = {
+  $id: 'document-internal-write',
+  type: 'object',
+  additionalProperties: false,
+  required: ['human_subject', 'type', 'title', 'body', 'occurred_at'],
+  properties: {
+    human_subject: { type: 'string', minLength: 1 },
+    type: { const: 'daily_report' },
+    title: { type: 'string', minLength: 1, maxLength: 200 },
+    body: { type: 'string', maxLength: 20_000 },
+    occurred_at: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
 /** Only the title and the body may change, and only against the version held. */
 export const documentPatchSchema = {
   $id: 'document-patch',

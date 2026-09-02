@@ -4,6 +4,8 @@ import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore
 import createAutomationApp from '@xaa/automation-app/app';
 import type { AutomationAppConfig } from '@xaa/automation-app/src/config';
 import { createSessionStore } from '@xaa/automation-app/src/auth/session-store';
+import type { WorkSignalSource } from '@xaa/automation-app/src/signals/work-signal-source';
+import type { Generate } from '@xaa/automation-app/src/automation/suggestions';
 import type { Fetcher } from './oauth-flow.js';
 
 export const AUTOMATION_APP_BASE = 'https://automation-app.test';
@@ -48,6 +50,14 @@ export async function startAutomationAppHarness(options: {
   humanSubject?: string;
   shared?: ReturnType<typeof createFirestoreDouble>;
   upstream?: (url: string, init: RequestInit) => Response | Promise<Response>;
+  /** The Automation App's own Cloud Run service identity, for calls made before any
+   *  agent exists to delegate through (T-APP-04, T-APP-05). */
+  identityTokenProvider?: (audience: string) => Promise<string>;
+  /** Overrides the default Document RS signal source, e.g. to hand a scenario a
+   *  work log directly rather than reproducing its read path over HTTP. */
+  signals?: WorkSignalSource;
+  /** Stands in for Vertex AI, the way `apps/automation-app/test/helpers.ts` does. */
+  generate?: Generate;
 } = {}): Promise<AutomationHarness> {
   const humanSubject = options.humanSubject ?? 'testuser';
   const firestore = options.shared ?? createFirestoreDouble();
@@ -92,6 +102,9 @@ export async function startAutomationAppHarness(options: {
     verifyIdToken: async (token) =>
       JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString('utf8')) as Record<string, unknown>,
     auditWrite: (line) => auditLines.push(line),
+    ...(options.identityTokenProvider ? { identityTokenProvider: options.identityTokenProvider } : {}),
+    ...(options.signals ? { signals: options.signals } : {}),
+    ...(options.generate ? { generate: options.generate } : {}),
     fetchImpl: (async (url: string | URL | Request, init: RequestInit = {}) => {
       const target = String(url);
       upstream.push({ url: target, init });

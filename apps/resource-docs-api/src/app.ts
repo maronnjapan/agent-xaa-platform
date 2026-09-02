@@ -4,7 +4,7 @@ import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
 import { createLogger, type Logger } from '@xaa/logging';
 import type { DocumentStore } from '@xaa/gcp';
 import {
-  createInternalRevokeRoute, createResourceProtection, createRevocationLedger, logApiAccess,
+  createInternalDocumentWriter, createInternalRevokeRoute, createResourceProtection, createRevocationLedger, logApiAccess,
   type RevocationLedger, type ServiceIdentityVerifier, type XaaResourceContext,
 } from '@xaa/resource-guard';
 import { createDocumentRepository } from './store/documents.js';
@@ -23,6 +23,8 @@ export interface DocsApiDeps {
   now?: () => number;
   serviceIdentity?: ServiceIdentityVerifier;
   lifecycleServiceAccount?: string;
+  /** T-APP-05: the only other caller ever let past `serviceIdentity`. */
+  automationAppServiceAccount?: string;
   /** Injectable so a caller and this app agree on one ledger instance. */
   revocationLedger?: RevocationLedger;
 }
@@ -51,6 +53,22 @@ function createApp(deps: DocsApiDeps): Hono {
   // One registration only: Hono's `/documents/*` also matches `/documents`, and a second
   // pass would consume the DPoP jti a second time and answer replay to a first call.
   app.use('/documents/*', accessLog(deps, logger));
+  // T-APP-05: the Automation App writes the daily report before any agent exists to
+  // delegate through, so it calls in with its own Cloud Run service identity rather
+  // than a DPoP-bound XAA Access Token. This middleware only ever answers a `POST`
+  // at the exact `/documents` path with `type: 'daily_report'` from the configured
+  // service account; every other request — including any GET — falls through
+  // untouched to `protect` below, which is where the XAA protection stays intact.
+  if (deps.serviceIdentity && deps.automationAppServiceAccount) {
+    app.use('/documents/*', createInternalDocumentWriter({
+      verifier: deps.serviceIdentity,
+      automationAppServiceAccount: deps.automationAppServiceAccount,
+      create: (input) => repository.create({
+        ownerSubject: input.humanSubject, type: 'daily_report',
+        title: input.title, body: input.body, occurredAt: input.occurredAt,
+      }),
+    }));
+  }
   const protect = createResourceProtection({
     asIssuer: deps.asIssuer,
     resourceUri: deps.resourceUri,
