@@ -14,7 +14,9 @@ export const AI_BOUNDARY_FORBIDDEN_IMPORTS = [
 export default tseslint.config(
   // apps/*/src/oidc is committed generator output (DEC-APP-04); check-oidc-patches.mjs
   // pins it to the baseline, so it is not linted as hand-written code.
-  { ignores: ['apps/automation-app/public/**', '**/dist/**', '**/node_modules/**', 'generated-baseline/**', 'apps/*/src/oidc/**'] },
+  // .claude/worktrees holds agent worktrees (full checkouts with their own tsconfig roots)
+  // while Claude Code works on the repository; they are not this checkout's sources.
+  { ignores: ['apps/automation-app/public/**', '**/dist/**', '**/node_modules/**', 'generated-baseline/**', 'apps/*/src/oidc/**', '.claude/**'] },
   {
     languageOptions: {
       globals: {

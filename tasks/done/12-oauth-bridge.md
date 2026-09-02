@@ -543,10 +543,10 @@ stub-saas-op は maronn の CLI 生成物を使い、stub-saas-api は Bearer �
 
 **対象要件** REQ-01-024
 **前提タスク** なし
-**成果物** `apps/stub-saas-op/src/oidc/`（`maronn-oidc generate hono` の生成物）, `apps/stub-saas-op/src/index.ts`, `generated-baseline/stub-saas-op/`, `apps/stub-saas-api/src/index.ts`, `apps/stub-saas-api/src/routes/calendar.ts`, `apps/stub-saas-api/test/calendar.spec.ts`, `apps/stub-saas-op/test/refresh-rotation.spec.ts`
+**成果物** `apps/stub-saas-op/src/index.ts`（手書きの最小 OP。`apps/stub-saas-op/src/oidc/` と `generated-baseline/stub-saas-op/` は作らず、CLI 生成物を使わない。理由は DEC-ID-01 の注記）, `apps/stub-saas-api/src/index.ts`, `apps/stub-saas-api/src/routes/calendar.ts`, `apps/stub-saas-api/test/calendar.spec.ts`, `apps/stub-saas-op/test/refresh-rotation.spec.ts`
 
 **実装方針**
-- stub-saas-op は DEC-ID-01 に従い `maronn-oidc generate hono` の生成物をコミットし、無改変版を `generated-baseline/stub-saas-op/` に置く。手編集は `// XAA-PATCH:REQ-01-024 begin` / `end` で囲む（DEC-APP-04）。
+- stub-saas-op は当初 DEC-ID-01 に従い `maronn-oidc generate hono` の生成物を使う計画だったが、実装では約140行の手書き Hono アプリにした。テスト専用のフィクスチャであって本 platform が運用する OP ではなく、認証画面なしの `/authorize` や HMAC トークンなど stub 固有の挙動を XAA-PATCH で生成物へ載せる価値が無いためである（DEC-ID-01 の注記）。`scripts/check-oidc-patches.mjs` の対象からも外す。
 - 提供するエンドポイントは `/authorize`、`/token`、`/userinfo`、`/.well-known/openid-configuration` の4本。`/authorize` は認証画面を出さず、固定の external subject `stub-user-001` で即座に認可コードを発行する。Consent 画面のクリック操作を E2E に持ち込まない。
 - `/token` は `authorization_code`（PKCE 必須、`code_challenge_method=S256` 以外を拒否）と `refresh_token` の2つの grant を受ける。`client_secret` の一致検証を行う。
 - Refresh Token の rotation は環境変数 `STUB_ROTATE_REFRESH_TOKEN`（`always` | `never`、既定 `never`）で切り替える。`always` のとき `/token` の応答へ新しい `refresh_token` を含める。

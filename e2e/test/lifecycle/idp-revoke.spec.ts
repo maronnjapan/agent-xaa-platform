@@ -91,8 +91,19 @@ describe('revoking one agent connection', () => {
     // A's connection is closed on this side: the row survives for the audit, marked
     // REVOKED, and the OP was the one that spent the token — the Lifecycle Manager only
     // named the agent.
-    const closed = await opA.documents.get<{ status: string }>('idp_connections', connectionA);
+    const closed = await opA.documents.get<{ status: string; encrypted_refresh_token?: unknown }>('idp_connections', connectionA);
     expect(closed!.status).toBe('REVOKED');
+    // Human IdP accepted the token back, so the OP dropped the ciphertext: a REVOKED row
+    // that still carried it would be a credential nobody can use but anybody could find.
+    expect(closed!.encrypted_refresh_token).toBeUndefined();
+
+    // A's refresh token is dead at the IdP itself, not only marked so on this side.
+    const refreshA = await tokenRequest({
+      fetch: idp.fetch, ...PLATFORM_CLIENT, issuer: HUMAN_IDP_ISSUER,
+      form: { grant_type: 'refresh_token', refresh_token: agentA.refreshToken, client_id: PLATFORM_CLIENT.clientId },
+    });
+    expect(refreshA.status).toBe(400);
+    expect((await refreshA.json() as { error: string }).error).toBe('invalid_grant');
 
     // B's is untouched: one connection was named, not the person.
     const refreshB = await tokenRequest({

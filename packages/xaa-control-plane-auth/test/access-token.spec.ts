@@ -12,7 +12,7 @@ describe('access token middleware', () => {
     app.post('/protected', (context) => context.json(context.get('accessToken')));
     return app.request('/protected', { method: 'POST', headers: { Authorization: `DPoP ${token}` } });
   }
-  it('rejects a tampered payload (401)', async () => {
+  it('rejects tampered signature (401)', async () => {
     // The payload segment is altered rather than the signature's last character:
     // that character only carries padding bits, so changing it can leave the
     // decoded signature identical and the test would pass or fail by luck.

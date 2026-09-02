@@ -18,6 +18,7 @@ docs のルールから外れる判断には、外れたルール番号を「逸
 
 ## Identity と認証プロトコル
 - DEC-ID-01 OP は4系統。human-idp / resource-docs-as / resource-finance-as / stub-saas-op は `maronn-oidc generate hono` の生成物をコミットして使う。agent-op だけは生成物をデプロイ経路に載せず、`@maronn-openid-connect/experimental/id-jag` の export 済みステップ関数を直接組み替えた素の Hono アプリにする。生成物は generated-baseline/agent-op-reference/ に参照用として置く。
+  - 注記（実装時の変更）: stub-saas-op は生成物を使わず、約140行の手書き Hono アプリ（apps/stub-saas-op/src/index.ts）にした。テスト専用のフィクスチャで本 platform が運用する OP ではないため、生成物とベースライン（generated-baseline/stub-saas-op/）を持たず、scripts/check-oidc-patches.mjs の比較対象からも外す（T-BRIDGE-19）。生成物を使う OP は human-idp / resource-docs-as / resource-finance-as の3系統になる。
 - DEC-ID-02 core / experimental / cli へ機能追加も fork もパッチも行わない。バージョンは exact 指定でピン留めし、破壊的変更は packages/xaa-contracts の契約テストで検知する。
 - DEC-ID-03 Human IdP と Agent OP に同一の ISSUER 文字列を与える。Human IdP だけが /authorize /token /userinfo /logout /.well-known/openid-configuration を提供し、Agent OP は /xaa/token /xaa/callback /xaa/subject-token /internal/* のみを提供する。Agent OP に discovery ルートを持たせない。
 - DEC-ID-04 issuer_profile 変数を direct(既定) / loadbalancer の2値にする。direct では External Application Load Balancer / Cloud Armor / 静的IP / マネージド証明書を1つも作らず、issuer = human-idp の Cloud Run URL、jwks_uri = JWKS バケットの公開オブジェクト URL、/xaa/token は agent-op の別ホストにする。ID-JAG の `iss` が Human IdP の issuer 識別子である点は両プロファイルで保つ。

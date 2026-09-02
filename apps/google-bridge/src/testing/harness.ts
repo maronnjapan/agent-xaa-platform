@@ -28,6 +28,7 @@ export const SA = {
 
 /** The scope name lives in the shared identifier table (00b), not in this fixture. */
 export const CALENDAR_READ = RESOURCE_SCOPES.find((scope) => scope.startsWith('calendar.'))!;
+export const GMAIL_SEND = RESOURCE_SCOPES.find((scope) => scope.startsWith('gmail.') && scope.endsWith('.send'))!;
 
 export const STUB_CONNECTOR: ConnectorDefinition = {
   connector_id: 'stub-saas',
@@ -235,7 +236,7 @@ export async function seedConnection(harness: BridgeHarness, options: {
     connection_id: id, connector_id: STUB_CONNECTOR.connector_id, human_subject: humanSubject,
     external_subject: 'stub-user-001',
     encrypted_refresh_token: new Uint8Array([1, ...new TextEncoder().encode('stub-refresh')]),
-    granted_scopes: options.grantedScopes ?? [CALENDAR_READ, 'gmail.send'],
+    granted_scopes: options.grantedScopes ?? [CALENDAR_READ, GMAIL_SEND],
     status: options.status ?? 'ACTIVE',
     created_at: '2026-01-01T00:00:00.000Z',
     expires_at: options.expiresAt ?? new Date(Date.now() + 86_400_000).toISOString(),
