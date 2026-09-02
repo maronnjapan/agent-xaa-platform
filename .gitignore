@@ -10,3 +10,4 @@ node_modules/
 dist/
 *.tsbuildinfo
 .local/
+e2e/artifacts/

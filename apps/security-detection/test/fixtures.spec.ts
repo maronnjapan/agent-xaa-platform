@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFile, readdir } from 'node:fs/promises';
-import { LOG_SOURCES } from '@xaa/logging';
+import { LOG_SOURCES, expectNoRawToken } from '@xaa/logging';
 import { CLASS_UID, normalizeEntries } from '../src/normalize/index.js';
 
 const fixtureDir = new URL('./fixtures/logs/', import.meta.url);
@@ -32,6 +32,21 @@ describe('the ten log source fixtures', () => {
     expect(result.events).toHaveLength(LOG_SOURCES.length);
     expect(result.events.map((event) => event.class_uid).sort((left, right) => left - right))
       .toEqual([...LOG_SOURCES].map((source) => CLASS_UID[source]).sort((left, right) => left - right));
+  });
+
+  /**
+   * T-SEC-05. The five Identity rows carry the values a token was built from — issuer,
+   * subject, jti, kid, thumbprint — and never the token. `eyJ` is what a compact JWS
+   * always starts with, so one prefix check over every value is the whole property.
+   */
+  it('carries no value that begins with eyJ in any identity log line', async () => {
+    const identity = ['human_idp', 'agent_op', 'agent_op_idp_connection', 'google_bridge', 'native_resource_as'];
+    for (const source of identity) {
+      const entry = await load(source);
+      expect(() => expectNoRawToken(entry, source)).not.toThrow();
+      const values = Object.values(entry.fields as Record<string, unknown>);
+      expect(values.filter((value) => typeof value === 'string' && value.startsWith('eyJ'))).toEqual([]);
+    }
   });
 
   it('reads the resource API refusal status the producer writes', async () => {

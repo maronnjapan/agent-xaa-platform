@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
-import { completionCodeId } from '@xaa/contracts';
+import { completionCodeId, PROTOCOL_VALIDATION_EVENT } from '@xaa/contracts';
 import { createLogger } from '@xaa/logging';
 import { createTransactionStore } from '../src/transaction/store.js';
 import { reserveFullIsolationSlot } from '../src/capacity.js';
@@ -140,7 +140,7 @@ describe('a code redeemed twice', () => {
     expect(await codes.consume(input)).toEqual({ ok: false, status: 400, error: 'code_already_used' });
 
     const events = lines.map((line) => JSON.parse(line) as { event: string; fields: Record<string, unknown> })
-      .filter((entry) => entry.event === 'protocol_validation');
+      .filter((entry) => entry.event === PROTOCOL_VALIDATION_EVENT);
     expect(events).toHaveLength(1);
     expect(events[0]!.fields).toMatchObject({ validation: 'code_already_used', outcome: 'fail', validation_name: 'one_time_code' });
     expect(JSON.stringify(events)).not.toContain(code);
@@ -154,7 +154,7 @@ describe('a code redeemed twice', () => {
     const codes = createCompletionCodes(documents, () => Date.now(), logger);
     const code = await codes.issue({ transaction_id: 'txn-1', human_subject: 'testuser', issuer_kind: 'idp' });
     await codes.consume({ code, transaction_id: 'txn-1', human_subject: 'testuser' });
-    expect(lines.join('\n')).not.toContain('protocol_validation');
+    expect(lines.join('\n')).not.toContain(PROTOCOL_VALIDATION_EVENT);
   });
 });
 

@@ -9,9 +9,13 @@
   "include": [
     "test/**/*.ts",
     "harness/**/*.ts",
+    "src/**/*.ts",
     "support/**/*.ts"
   ],
   "references": [
+    {
+      "path": "../packages/xaa-control-plane-auth"
+    },
     {
       "path": "../apps/human-idp"
     },

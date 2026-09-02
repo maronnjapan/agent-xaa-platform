@@ -9,7 +9,7 @@ const taskRoot = 'tasks/done';
 const files = readdirSync(taskRoot).filter((name) => name.endsWith('.md')).sort();
 const repoPath = /^(?:\.github|apps|demo-scenarios|docs|e2e|generated-baseline|infra|packages|scripts|security-rules|tests)\//;
 // A live-only condition has to say which repository script observes it after deploy.
-const observerPath = /`((?:infra\/tests|scripts)\/[^`\s（）]+)`/g;
+const observerPath = /`((?:infra\/tests|scripts|\.github\/workflows)\/[^`\s（）]+|Makefile)`/g;
 
 const artifactMap = JSON.parse(readFileSync('tasks/artifact-map.json', 'utf8'));
 

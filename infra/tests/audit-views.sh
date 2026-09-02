@@ -21,11 +21,18 @@ for file in infra/envs/shared/sql/*.sql; do
   done
 done
 
+# The four of DEC-SEC-01 plus refresh_token_reuse (T-SEC-14).
 count=$(ls infra/envs/shared/sql/*.sql | wc -l)
-if [ "$count" -ne 4 ]; then
-  echo "expected four saved detections, found $count" >&2
+if [ "$count" -ne 5 ]; then
+  echo "expected five saved detections, found $count" >&2
   status=1
 fi
+for view in delegation_mismatch signing_key_misuse cross_agent_access dpop_replay refresh_token_reuse; do
+  if ! grep -q "\"$view\"" infra/envs/shared/audit-views.tf; then
+    echo "$view is not declared as a view" >&2
+    status=1
+  fi
+done
 
-[ "$status" -eq 0 ] && echo "ok: four saved detections, same six columns"
+[ "$status" -eq 0 ] && echo "ok: five saved detections, same six columns"
 exit "$status"

@@ -7,7 +7,7 @@ import { mintIdJag, redeemForAccessToken, startResource, type ResourceHarness } 
 
 /** REQ-09-011: the twelve fields every redemption must carry, allowed or denied. */
 const REDEMPTION_FIELDS = [
-  'idjag_iss', 'idjag_sub', 'idjag_act_sub', 'idjag_client_id', 'idjag_jti', 'idjag_kid', 'idjag_typ',
+  'idjag_iss', 'idjag_sub', 'idjag_act_sub', 'idjag_client_id', 'idjag_jti', 'received_kid', 'received_typ',
   'audience', 'resource', 'scope', 'cnf_jkt_match', 'token_issued',
 ];
 
@@ -47,8 +47,8 @@ describe('the documents Authorization Server logs every redemption', () => {
 
     const entry = redemptions(docs).at(-1)!;
     for (const field of REDEMPTION_FIELDS) expect(Object.keys(entry.fields)).toContain(field);
-    expect(entry.fields.idjag_typ).toBe('oauth-id-jag+jwt');
-    expect(entry.fields.idjag_kid).toBe('op-shared-1');
+    expect(entry.fields.received_typ).toBe('oauth-id-jag+jwt');
+    expect(entry.fields.received_kid).toBe('op-shared-1');
     expect(entry.fields.idjag_act_sub).toBe(`urn:xaa:agent:${agentOp.agentId}`);
     expect(entry.fields.cnf_jkt_match).toBe(true);
     expect(entry.fields.token_issued).toBe(true);
@@ -84,8 +84,8 @@ describe('the documents Authorization Server logs every redemption', () => {
 
     const entry = redemptions(docs).at(-1)!;
     expect(entry.fields.idjag_jti).not.toBeNull();
-    expect(entry.fields.idjag_kid).not.toBeNull();
-    expect(entry.fields.idjag_typ).not.toBeNull();
+    expect(entry.fields.received_kid).not.toBeNull();
+    expect(entry.fields.received_typ).not.toBeNull();
   });
 
   it('keeps the assertion and the issued token out of the log', async () => {

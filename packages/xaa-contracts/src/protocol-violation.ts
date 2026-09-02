@@ -73,16 +73,35 @@ export const protocolValidationEventSchema = {
 } as const;
 
 /**
+ * The event name, in one place.
+ *
+ * Applications and their tests refer to this rather than to the literal, so
+ * `grep protocol_validation` over `apps/` finds nothing: there is exactly one producer,
+ * and it is here.
+ */
+export const PROTOCOL_VALIDATION_EVENT = 'protocol_validation';
+
+/**
  * The single emission point. Every application calls this and never invents its own
  * event name, so `grep protocol_validation` finds exactly one producer.
+ *
+ * `fields` carries whatever the refusing service knows beyond the event itself — the
+ * caller it refused, the scope it would not grant. They travel beside the event rather
+ * than inside it, because the event's schema is `additionalProperties: false` on
+ * purpose: nothing may add a key to the shape the detection side parses.
  */
-export function emitProtocolValidation(logger: Logger, ctx: LogContext, event: ProtocolValidationEvent): void {
+export function emitProtocolValidation(
+  logger: Logger,
+  ctx: LogContext,
+  event: ProtocolValidationEvent,
+  fields: Record<string, unknown> = {},
+): void {
   // `validation` carries the same value as `code`, and it has to: `code` is on the
   // logger's deny list because an OAuth authorization code arrives under that name, so
   // the redactor blanks it before the line is written. Security Detection classifies a
   // refusal by this value, and a blanked one is an unmapped code — a violation that
   // reaches the pipeline having lost the only thing that says what it was.
-  logger.warning('protocol_validation', ctx, { ...event, validation: event.code });
+  logger.warning(PROTOCOL_VALIDATION_EVENT, ctx, { ...fields, ...event, validation: event.code });
 }
 
 /** Human-readable names, used by the Activity Event message (REQ-11-018). */

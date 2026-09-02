@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   const json = JSON.stringify(records, null, 2);
   await writeFile(output, `${json}\n`, 'utf8');
   if (/"eyJ[A-Za-z0-9_-]+/.test(json)) throw new Error('JWT-like plaintext was found in Firestore');
-  console.log(`dump-firestore: wrote ${output}; JWT-like values=0`);
+  process.stdout.write(`dump-firestore: wrote ${output}; JWT-like values=0\n`);
 }
 
 await main();

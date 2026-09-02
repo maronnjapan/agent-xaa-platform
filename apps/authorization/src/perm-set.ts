@@ -51,7 +51,7 @@ export function drainPermissionChangeQueueForTesting(): PermissionChangeMessage[
  * Returns the process exit code.
  */
 export async function permSet(argv: string[], deps: PermSetDeps): Promise<number> {
-  const report = deps.error ?? ((line: string) => { console.error(line); });
+  const report = deps.error ?? ((line: string) => { process.stderr.write(`${line}\n`); });
   const [humanSubject, capabilityId, action] = argv;
   if (argv.length !== 3 || !humanSubject || !capabilityId || !action) {
     report(USAGE);

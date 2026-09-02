@@ -25,6 +25,6 @@ export async function publishJwks(bucketName: string, storage = new Storage()): 
     entries.push({ jwk: parsed, updated: Date.parse(metadata.updated ?? '1970-01-01') });
   }
   const merged = mergeJwksEntries(entries);
-  console.log(JSON.stringify({ skipped: merged.skipped, published: merged.keys.length }));
+  process.stdout.write(`${JSON.stringify({ skipped: merged.skipped, published: merged.keys.length })}\n`);
   await bucket.file('jwks.json').save(JSON.stringify({ keys: merged.keys }), { contentType: 'application/json' });
 }
