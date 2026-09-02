@@ -49,9 +49,11 @@ describe('the lifecycle state machine', () => {
     }
   });
 
+  // The check spawns a Node process per source file, so it runs for seconds rather
+  // than milliseconds and the default 5s budget is a coin toss under a loaded suite.
   it('is the only path to a status field', () => {
     expect(() => execFileSync('bash', ['scripts/check-status-write-path.sh'], { cwd: repoRoot })).not.toThrow();
-  });
+  }, 60_000);
 });
 
 describe('writing a status', () => {

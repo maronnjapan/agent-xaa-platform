@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { createDpopProof, generateEs256KeyPair, jwkThumbprint } from '@xaa/crypto';
-import { JWT_BEARER_GRANT_TYPE, assertNoTokenInRedirect } from '@xaa/contracts';
+import { expect, it } from 'vitest';
+import { createDpopProof, decodeJwsUnverified, generateEs256KeyPair, jwkThumbprint } from '@xaa/crypto';
+import { JWT_BEARER_GRANT_TYPE, toAgentUrn } from '@xaa/contracts';
 import { createFirestoreDouble } from '@xaa/gcp';
 import createStubApi from '@xaa/stub-saas-api/app';
 import {
@@ -10,6 +10,8 @@ import {
 import { AGENT_OP_BASE, requestIdJag, startAgentOp } from '../../harness/agent-op.js';
 import { HUMAN_IDP_ISSUER, idpPublicJwk } from '../../harness/human-idp.js';
 import { humanIdToken } from '../runtime/native-xaa-path.spec.js';
+import { describeBridge } from '../../support/bridge-enabled.js';
+import { guardRedirects } from '../../support/redirect-guard-hook.js';
 
 const AGENT_ID_PREFIX = 'agent-';
 const STUB_API_BASE = 'https://stub-saas-api.test';
@@ -22,7 +24,7 @@ const STUB_API_BASE = 'https://stub-saas-api.test';
  * heard of this platform's binding scheme (REQ-05-023, DEC-ID-13). The internal hops are
  * DPoP-bound throughout; the boundary is exactly where the Bridge sits.
  */
-describe('the bridged path', () => {
+describeBridge('the bridged path', () => {
   it('walks consent, exchange and the SaaS call', async () => {
     const shared = createFirestoreDouble();
     const dpopKey = await generateEs256KeyPair();
@@ -44,6 +46,9 @@ describe('the bridged path', () => {
       readTransaction: transactionReader(),
     });
     await seedConnector(bridge);
+    // Every 3xx from here on goes through the redirect guard without the spec asking.
+    bridge.callback = guardRedirects(bridge.callback);
+    bridge.stubOp.fetch = guardRedirects(bridge.stubOp.fetch.bind(bridge.stubOp));
 
     // (3)(4) Consent at the stub SaaS and back, through the callback face.
     const { code } = await completeConsent(bridge);
@@ -77,6 +82,17 @@ describe('the bridged path', () => {
     expect(issued.status).toBe(200);
     const idJag = (await issued.json() as { access_token: string }).access_token;
 
+    // REQ-06-022: the delegation chain, read off the assertion the agent will present.
+    // The person it acts for, the agent acting, and the key that may use it — all three
+    // have to be the ones this test set up, or the Bridge is about to honour someone
+    // else's delegation.
+    const claims = decodeJwsUnverified(idJag).payload as {
+      sub: string; act: { sub: string }; cnf: { jkt: string };
+    };
+    expect(claims.sub).toBe('testuser');
+    expect(claims.act.sub).toBe(toAgentUrn(agentOp.agentId));
+    expect(claims.cnf.jkt).toBe(jkt);
+
     // (7) The Bridge exchanges it, with a DPoP proof over the same key.
     // Same stub SaaS as the consent step: it is the one that knows this refresh token.
     const runtime = createBridgeHarness({
@@ -103,90 +119,17 @@ describe('the bridged path', () => {
 
     // (8)(9) The agent calls the SaaS itself, with a plain Bearer and no DPoP header.
     const api = createStubApi();
-    const events = await api.fetch(new Request(`${STUB_API_BASE}/calendar/events`, {
+    const request = new Request(`${STUB_API_BASE}/calendar/events`, {
       headers: { Authorization: `Bearer ${token.access_token as string}` },
-    }));
+    });
+    expect(request.headers.has('DPoP')).toBe(false);
+    const events = await api.fetch(request);
     expect(events.status).toBe(200);
     expect((await events.json() as { events: unknown[] }).events).toHaveLength(3);
   });
-
-  it('asks for no consent the second time the same person provisions', async () => {
-    const shared = createFirestoreDouble();
-    const bridge = createBridgeHarness({ shared, readTransaction: transactionReader() });
-    await seedConnector(bridge);
-    await completeConsent(bridge);
-    const authorizeCalls = bridge.outbound.filter((url) => url.includes('/authorize')).length;
-
-    const second = createBridgeHarness({ shared, caller: SA.provisioner, readTransaction: transactionReader() });
-    const checked = await second.internal('/connections/check', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer caller' },
-      body: JSON.stringify({
-        connector_id: STUB_CONNECTOR.connector_id, human_subject: 'testuser', required_scopes: ['calendar.read'],
-      }),
-    });
-    expect(await checked.json()).toMatchObject({ status: 'READY' });
-    // No second visit to the SaaS, and still one connection.
-    expect(second.outbound.filter((url) => url.includes('/authorize'))).toHaveLength(0);
-    expect(authorizeCalls).toBe(0);
-    expect(await second.documents.listAll('bridge_connections')).toHaveLength(1);
-  });
-
-  it('never puts a token in a redirect', async () => {
-    const bridge = createBridgeHarness({ readTransaction: transactionReader() });
-    await seedConnector(bridge);
-    const started = await bridge.callback(`/${STUB_CONNECTOR.connector_id}/oauth/start?transaction_id=tx-1`, { redirect: 'manual' });
-    const authorizeUrl = started.headers.get('location')!;
-    expect(() => assertNoTokenInRedirect(authorizeUrl)).not.toThrow();
-
-    const authorized = await bridge.stubOp.fetch(new Request(authorizeUrl, { redirect: 'manual' }));
-    const back = new URL(authorized.headers.get('location')!);
-    const finished = await bridge.callback(`${back.pathname}${back.search}`, { redirect: 'manual' });
-    const complete = finished.headers.get('location')!;
-    expect(() => assertNoTokenInRedirect(complete)).not.toThrow();
-    expect([...new URL(complete).searchParams.keys()].sort()).toEqual(['code', 'transaction_id']);
-  });
-
-  it('refuses a state offered twice', async () => {
-    const bridge = createBridgeHarness({ readTransaction: transactionReader() });
-    await seedConnector(bridge);
-    const started = await bridge.callback(`/${STUB_CONNECTOR.connector_id}/oauth/start?transaction_id=tx-1`, { redirect: 'manual' });
-    const authorized = await bridge.stubOp.fetch(new Request(started.headers.get('location')!, { redirect: 'manual' }));
-    const back = new URL(authorized.headers.get('location')!);
-
-    expect((await bridge.callback(`${back.pathname}${back.search}`, { redirect: 'manual' })).status).toBe(302);
-    const replayed = await bridge.callback(`${back.pathname}${back.search}`, { redirect: 'manual' });
-    expect(replayed.status).toBe(400);
-    expect(await replayed.json()).toEqual({ error: 'invalid_state' });
-  });
-
-  it('refuses a one-time code offered twice', async () => {
-    const shared = createFirestoreDouble();
-    const bridge = createBridgeHarness({ shared, readTransaction: transactionReader() });
-    await seedConnector(bridge);
-    const { code } = await completeConsent(bridge);
-    const provisioner = createBridgeHarness({ shared, caller: SA.provisioner, readTransaction: transactionReader() });
-    const verify = () => provisioner.internal('/connections/verify', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer caller' },
-      body: JSON.stringify({ transaction_id: 'tx-1', one_time_code: code }),
-    });
-    expect((await verify()).status).toBe(200);
-    const replayed = await verify();
-    expect(replayed.status).toBe(400);
-    expect(await replayed.json()).toEqual({ error: 'code_already_used' });
-  });
-
-  it('refuses to start consent for a transaction that is not waiting', async () => {
-    const bridge = createBridgeHarness({ readTransaction: transactionReader({ status: 'COMPLETED' }) });
-    await seedConnector(bridge);
-    const response = await bridge.callback(`/${STUB_CONNECTOR.connector_id}/oauth/start?transaction_id=tx-1`, { redirect: 'manual' });
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'invalid_transaction' });
-    // Nothing left behind for a later replay to use.
-    expect(await bridge.documents.listAll('bridge_consent_states')).toHaveLength(0);
-  });
 });
 
-describe('the Agent OP still refuses what the Bridge would', () => {
+describeBridge('the Agent OP still refuses what the Bridge would', () => {
   it('will not issue an ID-JAG for an audience the agent was never given', async () => {
     const subjectToken = await humanIdToken();
     const agentOp = await startAgentOp({

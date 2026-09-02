@@ -18,7 +18,7 @@ export interface ConnectorDefinition {
  *
  * docs 06 §1 says other OAuth SaaS are added "the same way". That is only true if
  * adding one is a Firestore row — so this schema is the whole of what a connector is,
- * and the word `google` appears nowhere in the Bridge's source.
+ * and no vendor's name appears anywhere in the Bridge's source.
  *
  * `resource_uris` is not in the docs' field list but has to exist: `/token` carries no
  * connector id in its path, so the ID-JAG's `resource` claim is the only thing that

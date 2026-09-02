@@ -455,8 +455,18 @@ export function createCallbackApp(deps: BridgeDeps): Hono {
   return app;
 }
 
+/**
+ * DEC-APP-07's entry point, and the only place the two faces are chosen between.
+ *
+ * An unset or unknown `BRIDGE_FACE` throws rather than falling back. A default would
+ * mean a misconfigured deployment starts anyway and serves the wrong half — the
+ * browser-facing service answering `/token`, or the token service reachable from a
+ * browser — and neither failure announces itself.
+ */
 function createApp(deps: BridgeDeps): Hono {
-  return deps.config.face === 'internal' ? createInternalApp(deps) : createCallbackApp(deps);
+  if (deps.config.face === 'internal') return createInternalApp(deps);
+  if (deps.config.face === 'callback') return createCallbackApp(deps);
+  throw new Error('BRIDGE_FACE must be internal or callback');
 }
 
 export default createApp;

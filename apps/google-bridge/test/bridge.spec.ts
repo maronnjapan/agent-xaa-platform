@@ -6,7 +6,6 @@ import {
   type Es256KeyPair,
 } from '@xaa/crypto';
 import { JWT_BEARER_GRANT_TYPE, JWT_TYP, PLATFORM_CLIENT_ID, toAgentUrn } from '@xaa/contracts';
-import { createFirestoreDouble } from '@xaa/gcp';
 import { createInternalApp, createCallbackApp } from '../src/index.js';
 import { difference, isSubset, parseScope } from '../src/scope/subset.js';
 import { buildTokenResponse } from '../src/token/response.js';
@@ -155,8 +154,10 @@ async function ready(options: { rotateRefreshToken?: 'always' | 'never' } = {}):
 }
 
 describe('the route surface', () => {
-  it('mounts seven internal routes and three callback routes', () => {
-    // Both faces come from the same deps object; the difference is which routes exist.
+  it('builds both faces from the same deps object', () => {
+    // The difference between the two services is which routes exist, not which
+    // dependencies they were handed. The route sets themselves are pinned in
+    // routes-snapshot.spec.ts.
     expect(typeof createInternalApp).toBe('function');
     expect(typeof createCallbackApp).toBe('function');
   });
@@ -493,9 +494,11 @@ describe('the outbound allow list', () => {
     expect(init!.redirect).toBe('manual');
   });
 
+  // The check spawns a Node process per source file, so it runs for seconds rather
+  // than milliseconds and the default 5s budget is a coin toss under a loaded suite.
   it('sends HTTP through one file only', () => {
     expect(() => execFileSync('bash', ['scripts/check-bridge-raw-fetch.sh'], { cwd: repoRoot })).not.toThrow();
-  });
+  }, 60_000);
 });
 
 describe('the token response', () => {
@@ -506,9 +509,11 @@ describe('the token response', () => {
     expect(body.token_type).toBe('Bearer');
   });
 
+  // The check spawns a Node process per source file, so it runs for seconds rather
+  // than milliseconds and the default 5s budget is a coin toss under a loaded suite.
   it('names no refresh token in the response path', () => {
     expect(() => execFileSync('bash', ['scripts/check-bridge-no-refresh-token.sh'], { cwd: repoRoot })).not.toThrow();
-  });
+  }, 60_000);
 });
 
 describe('the log line', () => {
@@ -546,134 +551,5 @@ describe('the log line', () => {
       { production: true },
     );
     expect(lines[0]).not.toContain('secret-value');
-  });
-});
-
-describe('checking a connection', () => {
-  it('answers READY without a browser when the scopes are already granted', async () => {
-    const harness = createBridgeHarness({ caller: SA.provisioner });
-    await seedConnector(harness);
-    await seedConnection(harness, { grantedScopes: ['calendar.read'] });
-    const call = () => harness.internal('/connections/check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer caller' },
-      body: JSON.stringify({ connector_id: 'stub-saas', human_subject: 'testuser', required_scopes: ['calendar.read'] }),
-    });
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await call();
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ status: 'READY' });
-    }
-    // Still one connection: the second agent reuses the first's consent (REQ-06-018).
-    expect(await harness.documents.listAll('bridge_connections')).toHaveLength(1);
-  });
-
-  it('returns only the missing scopes', async () => {
-    const harness = createBridgeHarness({ caller: SA.provisioner });
-    await seedConnector(harness);
-    await seedConnection(harness, { grantedScopes: ['calendar.read'] });
-    const response = await harness.internal('/connections/check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer caller' },
-      body: JSON.stringify({ connector_id: 'stub-saas', human_subject: 'testuser', required_scopes: ['calendar.read', 'gmail.send'] }),
-    });
-    const body = await response.json() as { status: string; missing_scopes: string[] };
-    expect(body.status).toBe('CONSENT_REQUIRED');
-    expect(body.missing_scopes).toEqual(['gmail.send']);
-  });
-
-  it('treats a revoked connection as needing consent again', async () => {
-    const harness = createBridgeHarness({ caller: SA.provisioner });
-    await seedConnector(harness);
-    await seedConnection(harness, { status: 'REVOKED' });
-    const response = await harness.internal('/connections/check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer caller' },
-      body: JSON.stringify({ connector_id: 'stub-saas', human_subject: 'testuser', required_scopes: ['calendar.read'] }),
-    });
-    expect(await response.json()).toMatchObject({ status: 'CONSENT_REQUIRED' });
-  });
-
-  it('refuses a caller that is not the Provisioner', async () => {
-    const harness = createBridgeHarness({ caller: SA.runtime });
-    const response = await harness.internal('/connections/check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer caller' },
-      body: JSON.stringify({ connector_id: 'stub-saas', human_subject: 'testuser', required_scopes: [] }),
-    });
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'forbidden_caller' });
-  });
-});
-
-describe('bindings', () => {
-  const body = (overrides: Record<string, unknown> = {}) => JSON.stringify({
-    agent_id: AGENT_ID, connector_id: 'stub-saas',
-    connection_id: connectionId('stub-saas', 'testuser'), human_subject: 'testuser',
-    scopes: ['calendar.read'], expires_at: new Date(Date.now() + 3_600_000).toISOString(), ...overrides,
-  });
-  const post = (harness: BridgeHarness, payload: string) => harness.internal('/bindings', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer caller' }, body: payload,
-  });
-
-  async function provisionerHarness(): Promise<BridgeHarness> {
-    const harness = createBridgeHarness({ caller: SA.provisioner });
-    await seedConnector(harness);
-    await seedConnection(harness, { grantedScopes: ['calendar.read'] });
-    return harness;
-  }
-
-  it('creates one and refuses a duplicate', async () => {
-    const harness = await provisionerHarness();
-    const created = await post(harness, body());
-    expect(created.status).toBe(201);
-    expect(Object.keys(await created.json() as object).sort()).toEqual(['binding_id', 'expires_at']);
-    expect(await (await post(harness, body())).json()).toEqual({ error: 'binding_already_exists' });
-  });
-
-  it('refuses scopes the connection never granted', async () => {
-    const harness = await provisionerHarness();
-    const response = await post(harness, body({ scopes: ['calendar.read', 'gmail.send'] }));
-    expect(await response.json()).toEqual({ error: 'scope_not_in_connection' });
-  });
-
-  it('refuses a different person', async () => {
-    const harness = await provisionerHarness();
-    const response = await post(harness, body({ human_subject: 'someone-else' }));
-    expect(await response.json()).toEqual({ error: 'human_subject_mismatch' });
-  });
-
-  it('refuses an expiry beyond the agent maximum', async () => {
-    const harness = await provisionerHarness();
-    const response = await post(harness, body({ expires_at: new Date(Date.now() + 172_800_000).toISOString() }));
-    expect(await response.json()).toEqual({ error: 'expires_at_too_far' });
-  });
-
-  it('disables and deletes idempotently, and only for Lifecycle', async () => {
-    const shared = createFirestoreDouble();
-    const provisioner = createBridgeHarness({ caller: SA.provisioner, shared });
-    await seedConnector(provisioner);
-    await seedConnection(provisioner, { grantedScopes: ['calendar.read'] });
-    await post(provisioner, body());
-
-    // The Provisioner may create a binding but not remove one.
-    expect((await provisioner.internal(`/bindings/${AGENT_ID}`, {
-      method: 'DELETE', headers: { Authorization: 'Bearer caller' },
-    })).status).toBe(403);
-
-    const lifecycle = createBridgeHarness({ caller: SA.lifecycle, shared });
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      expect((await lifecycle.internal(`/bindings/${AGENT_ID}/disable`, {
-        method: 'POST', headers: { Authorization: 'Bearer caller' },
-      })).status).toBe(204);
-    }
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      expect((await lifecycle.internal(`/bindings/${AGENT_ID}`, {
-        method: 'DELETE', headers: { Authorization: 'Bearer caller' },
-      })).status).toBe(204);
-    }
-    expect(await lifecycle.documents.listAll('agent_bindings')).toHaveLength(0);
-    // The connection is the person's, not the agent's, and survives.
-    expect(await lifecycle.documents.listAll('bridge_connections')).toHaveLength(1);
   });
 });

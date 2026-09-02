@@ -1,11 +1,18 @@
-import { InMemoryJtiStore } from '@xaa/crypto';
+import type { Hono } from 'hono';
+import {
+  InMemoryJtiStore, createDpopProof, createLocalEs256Signer, generateEs256KeyPair, jwkThumbprint,
+  signCompactJws, type Es256KeyPair,
+} from '@xaa/crypto';
 import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
 import { createLogger } from '@xaa/logging';
 import createStubOp from '@xaa/stub-saas-op/app';
 import { createCallbackApp, createInternalApp, type BridgeDeps } from '../index.js';
 import type { BridgeConfig } from '../config.js';
-import { RESOURCE_SCOPES } from '@xaa/contracts';
+import {
+  JWT_BEARER_GRANT_TYPE, JWT_TYP, PLATFORM_CLIENT_ID, RESOURCE_SCOPES, toAgentUrn,
+} from '@xaa/contracts';
 import type { ConnectorDefinition } from '../connectors/types.js';
+import { connectionId } from '../store/connection.js';
 
 export const INTERNAL_BASE = 'https://google-bridge.test';
 export const CALLBACK_BASE = 'https://google-bridge-callback.test';
@@ -62,6 +69,13 @@ export interface BridgeHarness {
   logs: string[];
   outbound: string[];
   stubOp: ReturnType<typeof createStubOp>;
+  /**
+   * The two apps themselves, so a test can read the route table rather than probe it
+   * one path at a time. Which routes exist is the part of the split that has to stay
+   * fixed (T-BRIDGE-01), and a snapshot of `app.routes` is the only way to notice a
+   * route someone added to the browser-facing face by accident.
+   */
+  routes: { internal: string[]; callback: string[] };
 }
 
 /**
@@ -126,9 +140,21 @@ export function createBridgeHarness(options: {
 
   return {
     documents, seedStore, logs, outbound, stubOp,
+    routes: { internal: routeList(internalApp), callback: routeList(callbackApp) },
     internal: async (path, init) => internalApp.fetch(new Request(new URL(path, INTERNAL_BASE), init)),
     callback: async (path, init) => callbackApp.fetch(new Request(new URL(path, CALLBACK_BASE), init)),
   };
+}
+
+/**
+ * `method path`, sorted and deduplicated.
+ *
+ * Hono lists a route once per handler, so a route with a caller-authz middleware in
+ * front of it appears twice. What has to be fixed is the set of reachable paths, not
+ * how many functions each one runs through.
+ */
+function routeList(app: Hono): string[] {
+  return [...new Set(app.routes.map((route) => `${route.method} ${route.path}`))].sort();
 }
 
 export async function seedConnector(harness: BridgeHarness, overrides: Partial<ConnectorDefinition> = {}): Promise<void> {
@@ -178,4 +204,164 @@ export function transactionReader(options: {
     human_subject: options.humanSubject ?? 'testuser',
     required_scopes: options.scopes ?? [CALENDAR_READ],
   });
+}
+
+export const AGENT_ID = 'agent-abcdefghijklmnopqrstuvwxyz';
+export const RESOURCE = STUB_CONNECTOR.resource_uris[0]!;
+
+/**
+ * A connection row that looks exactly like one the callback face wrote.
+ *
+ * Tests about refusal — an expired binding, a revoked connection, a caller with the
+ * wrong service account — never reach the SaaS, so they do not need a refresh token the
+ * stub would honour. Tests that do reach it use `completeConsent` instead.
+ */
+export async function seedConnection(harness: BridgeHarness, options: {
+  grantedScopes?: string[];
+  status?: string;
+  expiresAt?: string;
+  humanSubject?: string;
+} = {}): Promise<string> {
+  const humanSubject = options.humanSubject ?? 'testuser';
+  const id = connectionId(STUB_CONNECTOR.connector_id, humanSubject);
+  await harness.documents.set('bridge_connections', id, {
+    connection_id: id, connector_id: STUB_CONNECTOR.connector_id, human_subject: humanSubject,
+    external_subject: 'stub-user-001',
+    encrypted_refresh_token: new Uint8Array([1, ...new TextEncoder().encode('stub-refresh')]),
+    granted_scopes: options.grantedScopes ?? [CALENDAR_READ, 'gmail.send'],
+    status: options.status ?? 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    expires_at: options.expiresAt ?? new Date(Date.now() + 86_400_000).toISOString(),
+  });
+  return id;
+}
+
+export async function seedBinding(harness: BridgeHarness, options: {
+  agentId?: string;
+  scopes?: string[];
+  status?: string;
+  expiresAt?: string;
+  humanSubject?: string;
+} = {}): Promise<string> {
+  const agentId = options.agentId ?? AGENT_ID;
+  const id = `${agentId}:${STUB_CONNECTOR.connector_id}`;
+  await harness.documents.set('agent_bindings', id, {
+    binding_id: id, agent_id: agentId, connector_id: STUB_CONNECTOR.connector_id,
+    connection_id: connectionId(STUB_CONNECTOR.connector_id, options.humanSubject ?? 'testuser'),
+    human_subject: options.humanSubject ?? 'testuser',
+    scopes: options.scopes ?? [CALENDAR_READ],
+    status: options.status ?? 'ACTIVE',
+    created_at: '2026-01-01T00:00:00.000Z',
+    expires_at: options.expiresAt ?? new Date(Date.now() + 3_600_000).toISOString(),
+  });
+  return id;
+}
+
+/**
+ * `POST /token` exactly as the Agent Runtime sends it: form-encoded, an invoker token
+ * for the service, and a DPoP proof over the same key the ID-JAG names.
+ */
+export async function exchangeToken(harness: BridgeHarness, options: {
+  idJag: string;
+  dpopKey?: Es256KeyPair;
+  omitProof?: boolean;
+  proof?: string;
+  scope?: string;
+  grantType?: string;
+}): Promise<Response> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    Authorization: 'Bearer caller-token',
+  };
+  if (!options.omitProof) {
+    headers.DPoP = options.proof ?? await createDpopProof({
+      method: 'POST', url: `${INTERNAL_BASE}/token`,
+      keyPair: options.dpopKey ?? await generateEs256KeyPair(),
+    });
+  }
+  return harness.internal('/token', {
+    method: 'POST', headers,
+    body: new URLSearchParams({
+      grant_type: options.grantType ?? JWT_BEARER_GRANT_TYPE,
+      assertion: options.idJag,
+      ...(options.scope === undefined ? {} : { scope: options.scope }),
+    }).toString(),
+  });
+}
+
+/**
+ * A Bridge with a connection the stub SaaS will actually honour.
+ *
+ * The consent runs for real, so the refresh grant that follows exercises the Bridge
+ * rather than a fabricated row: a hand-written refresh token would make every grant
+ * fail for a reason unrelated to whatever the test is about.
+ */
+export async function readyBridge(options: {
+  rotateRefreshToken?: 'always' | 'never';
+  bindingScopes?: string[];
+} = {}): Promise<{ harness: BridgeHarness; issuer: IdJagIssuer; dpopKey: Es256KeyPair }> {
+  const issuer = await createIdJagIssuer();
+  const dpopKey = await generateEs256KeyPair();
+  const harness = createBridgeHarness({
+    jwks: issuer.jwks, readTransaction: transactionReader(),
+    ...(options.rotateRefreshToken ? { rotateRefreshToken: options.rotateRefreshToken } : {}),
+  });
+  await seedConnector(harness);
+  await completeConsent(harness);
+  await seedBinding(harness, options.bindingScopes ? { scopes: options.bindingScopes } : {});
+  return { harness, issuer, dpopKey };
+}
+
+export interface IdJagIssuer {
+  jwks: { keys: Array<Record<string, unknown>> };
+  mint(options?: {
+    dpopKey?: Es256KeyPair;
+    scope?: string;
+    resource?: string;
+    audience?: string;
+    subject?: string;
+    actSub?: string;
+    typ?: string;
+    omitCnf?: boolean;
+    issuer?: string;
+    agentId?: string;
+  }): Promise<string>;
+}
+
+/**
+ * The Agent OP's half of the exchange, reduced to what the Bridge verifies.
+ *
+ * The assertion is signed for real with a key the Bridge only ever sees through the
+ * published key set, so a test that changes one claim changes the same bytes an agent
+ * would send. Nothing here stands in for the verification itself.
+ */
+export async function createIdJagIssuer(): Promise<IdJagIssuer> {
+  const key = await generateEs256KeyPair();
+  const kid = 'op-shared-1';
+  return {
+    jwks: { keys: [{ ...key.publicJwk, kid, alg: 'ES256', use: 'sig' }] },
+    async mint(options = {}) {
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const payload: Record<string, unknown> = {
+        iss: options.issuer ?? SHARED_ISSUER,
+        sub: options.subject ?? 'testuser',
+        aud: options.audience ?? INTERNAL_BASE,
+        client_id: PLATFORM_CLIENT_ID,
+        jti: `idjag-${Math.random().toString(36).slice(2)}`,
+        iat: issuedAt,
+        exp: issuedAt + 300,
+        scope: options.scope ?? CALENDAR_READ,
+        resource: options.resource ?? RESOURCE,
+        act: { sub: options.actSub ?? toAgentUrn(options.agentId ?? AGENT_ID) },
+      };
+      if (!options.omitCnf) {
+        payload.cnf = { jkt: await jwkThumbprint((options.dpopKey ?? await generateEs256KeyPair()).publicJwk) };
+      }
+      return signCompactJws({
+        header: { alg: 'ES256', typ: options.typ ?? JWT_TYP.ID_JAG, kid },
+        payload,
+        signer: createLocalEs256Signer({ privateKey: key.privateKey, kid }),
+      });
+    },
+  };
 }
