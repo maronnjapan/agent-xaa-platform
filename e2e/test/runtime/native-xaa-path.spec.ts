@@ -125,9 +125,12 @@ describe('the native XAA path, end to end', () => {
 
   it('runs the redemption steps in the fixed order', async () => {
     const { docs } = await walkNativeXaa();
+    // The documents pipeline has no isolation step at all — that gate belongs to
+    // finance alone (T-RES-19) — and it ends with the two steps that mint and record
+    // the token, so a check can never land after issuance (T-RES-06).
     expect(docs.redeemSteps).toEqual([
       'authorize_client', 'parse_params', 'verify_assertion', 'bind_cnf',
-      'resolve_scope', 'registered_scope', 'isolation', 'revocation',
+      'resolve_scope', 'registered_scope', 'revocation', 'issue_token', 'log',
     ]);
   });
 

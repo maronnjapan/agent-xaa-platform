@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { AGENT_URN_PREFIX } from '@xaa/contracts';
 import type { XaaResourceContext } from '@xaa/resource-guard';
+import type { LogContext, Logger } from '@xaa/logging';
 import { InvalidState, type createPaymentRepository } from '../store/payments.js';
+import { logApproval } from '../log/approval-log.js';
 
 type Env = { Variables: { xaa: XaaResourceContext } };
 
@@ -12,7 +14,10 @@ export const PAYMENT_OPERATIONS = {
   list: 'payment.list', get: 'payment.get', approve: 'payment.approve',
 } as const;
 
-export function createPaymentRoutes(repository: ReturnType<typeof createPaymentRepository>): Hono<Env> {
+export function createPaymentRoutes(
+  repository: ReturnType<typeof createPaymentRepository>,
+  logger: Logger,
+): Hono<Env> {
   const app = new Hono<Env>();
 
   app.get('/', async (context) => {
@@ -40,6 +45,20 @@ export function createPaymentRoutes(repository: ReturnType<typeof createPaymentR
         approvedByAgent: `${AGENT_URN_PREFIX}${xaa.agentId}`,
       });
       if (result.outcome === 'not_found') return context.json({ error: 'not_found' }, 404);
+      // RULE-46: the audit line carries both subjects and the amount, on the repeated
+      // approval as much as the first one.
+      const logContext: LogContext = {
+        request_id: '', trace_id: context.req.header('X-Cloud-Trace-Context')?.split('/')[0] ?? '',
+        agent_id: xaa.agentId, human_subject: xaa.humanSubject,
+      };
+      logApproval(logger, logContext, {
+        payment_id: result.payment.payment_id,
+        amount: result.payment.amount,
+        status: result.payment.status,
+        result: result.outcome,
+        approved_by: result.payment.approved_by!,
+        approved_by_agent: result.payment.approved_by_agent!,
+      });
       // The five keys are the same on both outcomes, and the subjects on an
       // already-approved payment are the ones recorded the first time.
       return context.json({

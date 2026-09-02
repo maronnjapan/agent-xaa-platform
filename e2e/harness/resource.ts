@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, webcrypto } from 'node:crypto';
 import {
-  createDpopProof, createLocalEs256Signer, InMemoryJtiStore,
+  createDpopProof, createLocalEs256Signer, encodeBase64Url, InMemoryJtiStore,
   signCompactJws, type Es256KeyPair,
 } from '@xaa/crypto';
 import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
@@ -14,6 +14,7 @@ import { generateLocalSigningJwk, localSigningKey } from '@xaa/resource-docs-as/
 import type { ResourceAsEnv } from '@xaa/resource-docs-as/src/config/env';
 import type { Fetcher } from './oauth-flow.js';
 import { DOCS_AS_ISSUER, DOCS_API_RESOURCE, FINANCE_AS_ISSUER, FINANCE_API_RESOURCE } from './agent-op.js';
+import { HUMAN_IDP_ISSUER } from './human-idp.js';
 
 export { DOCS_AS_ISSUER, DOCS_API_RESOURCE, FINANCE_AS_ISSUER, FINANCE_API_RESOURCE };
 
@@ -27,6 +28,10 @@ export interface ResourceHarness {
   logs: string[];
   redeemSteps: RedeemStep[];
   ledger: ReturnType<typeof createRevocationLedger>;
+  /** The AS's own RS256 key, so a test can forge a token this API would accept. */
+  signingKey: Awaited<ReturnType<typeof localSigningKey>>;
+  /** Everything the AS wrote to its own log, for the redemption-log assertions. */
+  asLogs: string[];
 }
 
 export interface StartResourceOptions {
@@ -39,6 +44,9 @@ export interface StartResourceOptions {
 }
 
 const KID_PREFIX = { docs: 'docs-as', finance: 'fin-as' } as const;
+
+/** The agent a directly minted assertion acts for, in the 00b agent_id shape. */
+export const MINTED_ACTOR_URN = 'urn:xaa:agent:agent-abcdefghijklmnopqrstuvwxyz';
 
 export async function startResource(options: StartResourceOptions): Promise<ResourceHarness> {
   const asIssuer = options.kind === 'docs' ? DOCS_AS_ISSUER : FINANCE_AS_ISSUER;
@@ -97,7 +105,71 @@ export async function startResource(options: StartResourceOptions): Promise<Reso
     as: async (path, init) => asApp.fetch(new Request(new URL(path, asIssuer), init)),
     api: async (path, init) => apiApplication.fetch(new Request(new URL(path, resourceUri), init)),
     documents, seedStore, asIssuer, resourceUri, logs, redeemSteps, ledger,
+    signingKey, asLogs: logs,
   };
+}
+
+export interface MintIdJagOptions {
+  /** The key published under `op-shared-1` in the AS's trusted set. */
+  keyPair: Es256KeyPair;
+  audience: string;
+  resource: string;
+  jkt?: string | null;
+  kid?: string;
+  issuer?: string;
+  subject?: string;
+  clientId?: string;
+  actorUrn?: string | null;
+  scope?: string;
+  isolationLevel?: string;
+  constraints?: Record<string, unknown>;
+  expiresIn?: number;
+  embedJwk?: boolean;
+}
+
+/**
+ * An ID-JAG minted directly, for the cases the real Agent OP cannot produce: a wrong
+ * `client_id`, a `jwk` header, a missing `cnf`. Every positive path still goes
+ * through the Agent OP's own `/xaa/token`.
+ */
+export async function mintIdJag(options: MintIdJagOptions): Promise<string> {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const kid = options.kid ?? 'op-shared-1';
+  const header: Record<string, unknown> = { alg: 'ES256', typ: 'oauth-id-jag+jwt', kid };
+  if (options.embedJwk) header.jwk = options.keyPair.publicJwk;
+  return signForTest(options.keyPair, header, {
+    iss: options.issuer ?? HUMAN_IDP_ISSUER,
+    sub: options.subject ?? 'testuser',
+    aud: options.audience,
+    client_id: options.clientId ?? 'agent-platform',
+    jti: `idjag-${randomUUID()}`,
+    iat: issuedAt,
+    exp: issuedAt + (options.expiresIn ?? 300),
+    scope: options.scope ?? 'docs.read docs.write',
+    resource: options.resource,
+    ...(options.actorUrn === null ? {} : { act: { sub: options.actorUrn ?? MINTED_ACTOR_URN } }),
+    ...(options.jkt === null ? {} : { cnf: { jkt: options.jkt! } }),
+    ...(options.isolationLevel ? { isolation_level: options.isolationLevel } : {}),
+    ...(options.constraints ? { constraints: options.constraints } : {}),
+  });
+}
+
+/**
+ * A token signed by the AS's real key with claims of the test's choosing. It is the
+ * only way to reach the guard's own checks (`typ`, `aud`, `act`) from outside: the
+ * Authorization Server never mints a token shaped this way.
+ */
+export async function forgeAccessToken(harness: ResourceHarness, payload: Record<string, unknown>, header: Record<string, unknown> = {}): Promise<string> {
+  const encodedHeader = encodeBase64Url(JSON.stringify({
+    alg: 'RS256', typ: 'at+jwt', kid: harness.signingKey.kid, ...header,
+  }));
+  const encodedPayload = encodeBase64Url(JSON.stringify(payload));
+  const signature = await webcrypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    harness.signingKey.privateKey,
+    new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
+  );
+  return `${encodedHeader}.${encodedPayload}.${encodeBase64Url(new Uint8Array(signature))}`;
 }
 
 /** Redeems an ID-JAG for an Access Token, presenting the proof the grant is bound to. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { createLogger } from '@xaa/logging';
-import { createRevocationLedger } from '@xaa/resource-guard';
+import { createRevocationLedger, revocationDocumentId } from '@xaa/resource-guard';
 import createApp from '../src/app.js';
 
 const LIFECYCLE_SA = 'sa-lifecycle@xaa-test.iam.gserviceaccount.com';
@@ -20,7 +20,7 @@ function app(lines: string[] = []) {
     revocationLedger: ledger,
   });
   return {
-    ledger,
+    ledger, documents,
     call: (body: unknown, caller = LIFECYCLE_SA) => application.fetch(new Request('https://resource-docs-api.test/internal/revoke-by-actor', {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${caller}` },
       body: JSON.stringify(body),
@@ -46,10 +46,15 @@ describe('POST /internal/revoke-by-actor', () => {
     expect(await ledger.isActorRevoked(ACTOR)).toBe(true);
   });
 
-  it('is idempotent across two calls', async () => {
-    const { call } = app();
+  it('is idempotent across two calls and never moves revoked_at', async () => {
+    const { call, documents } = app();
     expect((await call({ act_sub: ACTOR })).status).toBe(200);
+    const first = await documents.get<{ revoked_at: string }>('revoked_actors', revocationDocumentId(ACTOR));
     expect((await call({ act_sub: ACTOR })).status).toBe(200);
+    const second = await documents.get<{ revoked_at: string }>('revoked_actors', revocationDocumentId(ACTOR));
+    // A repeated Cleanup call must not push the cut-off forward: a token issued
+    // between the two calls has to stay revoked.
+    expect(second!.revoked_at).toBe(first!.revoked_at);
   });
 
   it('answers 200 for an actor it has never seen', async () => {

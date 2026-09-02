@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { PLATFORM_ENDPOINT_KEYS, type PlatformEndpoints } from '@xaa/contracts';
+import { demoPayments } from '../src/index.js';
 import { resolveSeedPlaceholders } from '../src/resolve.js';
 import { validateSeed, type ConnectorSeed, type ToolSeed } from '../src/validate.js';
 
@@ -70,5 +71,39 @@ describe('the catalogue in infra/seed', () => {
     expect(connectors).toHaveLength(3);
     expect(tools).toHaveLength(8);
     expect(() => validateSeed(connectors, tools)).not.toThrow();
+  });
+});
+
+/**
+ * T-RES-16. The demo payments are the only rows the Finance API cannot create for
+ * itself, so a broken file here is a demo with nothing to approve.
+ */
+describe('the demo payments in infra/seed', () => {
+  const rows = parse(readFileSync(`${seedRoot}payments-demo.yaml`, 'utf8')) as unknown;
+
+  it('turns every row into a pending_approval payment', () => {
+    const payments = demoPayments(rows, '2026-01-05T09:00:00.000Z');
+    expect(payments.length).toBeGreaterThan(0);
+    for (const payment of payments) {
+      expect(payment.status).toBe('pending_approval');
+      expect(payment.payment_id).toMatch(/^pay_[0-9a-f-]{36}$/);
+      expect(payment.approved_by).toBeNull();
+      expect(payment.approved_by_agent).toBeNull();
+      expect(payment.approved_at).toBeNull();
+    }
+  });
+
+  it('mints the same ids on a second run so re-seeding does not pile up rows', () => {
+    const first = demoPayments(rows).map((payment) => payment.payment_id);
+    const second = demoPayments(rows).map((payment) => payment.payment_id);
+    expect(second).toEqual(first);
+    expect(new Set(first).size).toBe(first.length);
+  });
+
+  it('refuses a row that tries to set its own approver', () => {
+    expect(() => demoPayments([{
+      requester_subject: 'testuser', amount: 1, currency: 'JPY', counterparty: 'c', memo: 'm',
+      approved_by: 'someone',
+    }])).toThrow();
   });
 });

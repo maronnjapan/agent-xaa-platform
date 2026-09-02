@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { DOCS_SCOPES } from '@xaa/contracts';
+import { DOCS_SCOPES, TOOL_IDS } from '@xaa/contracts';
 import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
 import { createLogger, type Logger } from '@xaa/logging';
 import type { DocumentStore } from '@xaa/gcp';
@@ -80,8 +80,10 @@ function accessLog(deps: DocsApiDeps, logger: Logger) {
       request_id: '', trace_id: context.req.header('X-Cloud-Trace-Context')?.split('/')[0] ?? '',
       agent_id: xaa?.agentId ?? null, human_subject: xaa?.humanSubject ?? null,
     }, {
-      // The tool id is recorded for correlation only; it never influences a decision.
-      tool_id: context.req.header('X-XAA-Tool-Id') ?? 'unknown',
+      // The tool id is recorded for correlation only; it never influences a decision,
+      // and a value the Tool Catalog does not know is recorded as `unknown` rather
+      // than echoed, so the log column stays a closed set.
+      tool_id: knownToolId(context.req.header('X-XAA-Tool-Id')),
       operation, method, resource: deps.resourceUri,
       status: context.res.status,
       outcome: context.res.status < 400 ? 'success' : `error:${errorCodeOf(context.res.status)}`,
@@ -90,6 +92,10 @@ function accessLog(deps: DocsApiDeps, logger: Logger) {
       agent_id: xaa?.agentId ?? null,
     });
   };
+}
+
+function knownToolId(value: string | undefined): string {
+  return value !== undefined && (TOOL_IDS as readonly string[]).includes(value) ? value : 'unknown';
 }
 
 function errorCodeOf(status: number): string {

@@ -1,5 +1,9 @@
 import { Storage } from '@google-cloud/storage';
-import { COLLECTIONS, compile, platformEndpointsSchema, type PlatformEndpoints } from '@xaa/contracts';
+import { createHash } from 'node:crypto';
+import {
+  COLLECTIONS, compile, paymentSchema, paymentSeedSchema, platformEndpointsSchema,
+  type PlatformEndpoints, type StoredPayment,
+} from '@xaa/contracts';
 import { getFirestore } from '@xaa/gcp';
 import { parse } from 'yaml';
 import { resolveSeedPlaceholders } from './resolve.js';
@@ -52,9 +56,45 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
   for (const entry of (records.get('policies/delegatable.yaml') as Array<{ capability_id: string }> ?? [])) writes.push([COLLECTIONS.DELEGATABLE_PERMISSIONS, entry.capability_id, entry]);
   for (const entry of (records.get('policies/organization.yaml') as Array<{ policy_id: string }> ?? [])) writes.push([COLLECTIONS.ORGANIZATION_POLICIES, entry.policy_id, entry]);
   for (const entry of (records.get('policies/risk.yaml') as Array<{ policy_id: string }> ?? [])) writes.push([COLLECTIONS.RISK_POLICIES, entry.policy_id, entry]);
+  for (const payment of demoPayments(records.get('payments-demo.yaml'))) writes.push([COLLECTIONS.PAYMENTS, payment.payment_id, payment]);
   for (let offset = 0; offset < writes.length; offset += 400) {
     const batch = firestore.batch();
     for (const [collection, id, value] of writes.slice(offset, offset + 400)) batch.set(firestore.collection(collection).doc(id), value as Record<string, unknown>);
     await batch.commit();
   }
+}
+
+const assertPaymentSeed: (value: unknown) => void = compile(paymentSeedSchema);
+const assertPayment: (value: unknown) => asserts value is StoredPayment = compile<StoredPayment>(paymentSchema);
+
+/**
+ * The demo payments an agent is meant to approve (T-RES-16). `payments` is not in the
+ * purge list, so the id has to be stable: it is derived from the row's own content,
+ * which makes a re-seed rewrite the same documents instead of adding new ones.
+ *
+ * The three approval fields are written as null here and only ever filled by the
+ * approval path — the seed input schema does not even carry them.
+ */
+export function demoPayments(rows: unknown, createdAt = new Date().toISOString()): StoredPayment[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    assertPaymentSeed(row);
+    const payment = {
+      payment_id: demoPaymentId(row as Record<string, unknown>),
+      ...(row as Record<string, unknown>),
+      status: 'pending_approval',
+      approved_by: null,
+      approved_by_agent: null,
+      approved_at: null,
+      created_at: createdAt,
+    };
+    assertPayment(payment);
+    return payment;
+  });
+}
+
+/** A UUID-shaped id derived from the row, so `pay_` + 36 chars stays satisfied. */
+function demoPaymentId(row: Record<string, unknown>): string {
+  const digest = createHash('sha256').update(JSON.stringify(row)).digest('hex');
+  return `pay_${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
 }

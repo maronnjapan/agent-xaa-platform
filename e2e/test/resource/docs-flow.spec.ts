@@ -127,10 +127,33 @@ describe('Document API', () => {
     expect(docs.logs.join('\n')).not.toContain(accessToken);
   });
 
+  it('lets a docs.read token read but not update', async () => {
+    const writer0 = await writer();
+    const documentId = await seedDocument(writer0.docs, 'testuser');
+    // A second agent against the same Resource, holding the read scope alone.
+    const reader = await writer('docs.read');
+    expect((await callResource(writer0.docs, {
+      method: 'GET', path: `/documents/${documentId}`, accessToken: writer0.accessToken, keyPair: writer0.keyPair,
+    })).status).toBe(200);
+
+    const readerDocument = await seedDocument(reader.docs, 'testuser');
+    expect((await callResource(reader.docs, {
+      method: 'GET', path: `/documents/${readerDocument}`, accessToken: reader.accessToken, keyPair: reader.keyPair,
+    })).status).toBe(200);
+    const patched = await callResource(reader.docs, {
+      method: 'PATCH', path: `/documents/${readerDocument}`, accessToken: reader.accessToken, keyPair: reader.keyPair,
+      body: { version: 1, title: 'changed' },
+    });
+    expect(patched.status).toBe(403);
+    expect((await patched.json() as { error: string }).error).toBe('insufficient_scope');
+  });
+
   it('records an unregistered tool id as unknown without changing the answer', async () => {
     const { docs, accessToken, keyPair } = await writer();
     await seedDocument(docs, 'testuser');
-    const response = await callResource(docs, { method: 'GET', path: '/documents', accessToken, keyPair });
+    const response = await callResource(docs, {
+      method: 'GET', path: '/documents', accessToken, keyPair, toolId: 'internal.document.exfiltrate',
+    });
     expect(response.status).toBe(200);
     const entry = docs.logs.map((line) => JSON.parse(line) as { event: string; fields: { tool_id: string } })
       .filter((line) => line.event === 'resource_api.access').at(-1);

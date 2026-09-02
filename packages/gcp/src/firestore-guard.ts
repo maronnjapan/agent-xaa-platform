@@ -3,6 +3,9 @@ import matrix from './access-matrix.json' with { type: 'json' };
 export type FirestoreAccessMode = 'read' | 'write' | 'delete';
 
 export class FirestoreGuardError extends Error {
+  /** The one refusal this guard can make; callers and logs name it by this code. */
+  readonly code = 'path_not_allowed';
+
   constructor(public readonly app: string, public readonly mode: FirestoreAccessMode, public readonly path: string) {
     super(`Firestore access denied: ${app} ${mode} ${path}`);
     this.name = 'FirestoreGuardError';

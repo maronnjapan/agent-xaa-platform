@@ -1,0 +1,21 @@
+# T-RES-16. The Finance Resource API has no create endpoint (specs §5.2 lists list,
+# get and approve), so the payments a demo approves have to arrive here.
+#
+# Each row is the seed shape: no payment_id, no status and no approval fields. The Job
+# mints a stable id from the row's own content, so re-seeding rewrites the same three
+# documents back to `pending_approval` rather than piling up new ones.
+- requester_subject: testuser
+  amount: 120000
+  currency: JPY
+  counterparty: ACME 株式会社
+  memo: 2026年1月分 クラウド利用料
+- requester_subject: testuser
+  amount: 48000
+  currency: JPY
+  counterparty: 北山デザイン事務所
+  memo: ロゴ制作の委託費
+- requester_subject: testuser
+  amount: 2400000
+  currency: JPY
+  counterparty: 大宮システム
+  memo: 基幹システム保守 年額
