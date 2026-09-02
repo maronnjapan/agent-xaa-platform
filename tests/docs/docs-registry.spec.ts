@@ -74,7 +74,7 @@ describe('the deviation registry', () => {
 
   it('fails strict mode when a test name does not exist', async () => {
     const original = await readDoc('deviations.md');
-    const broken = original.replace('rejects htm mismatch', 'a test nobody wrote');
+    const broken = original.replace('rejects htu mismatch', 'a test nobody wrote');
     await writeTemporarily('docs/deviations.md', broken, () => {
       expect(() => run('scripts/check-deviations.mjs', '--strict')).toThrow();
     });
