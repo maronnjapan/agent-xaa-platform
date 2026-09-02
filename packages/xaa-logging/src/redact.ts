@@ -9,7 +9,7 @@ export const DENY_FIELD_NAMES = [
  * them. Knowing a jti or a thumbprint grants nothing on its own.
  */
 export const IDENTIFIER_FIELD_NAMES = [
-  'jti', 'idjag_jti', 'actor_token_jti', 'kid', 'idjag_kid', 'received_kid',
+  'jti', 'idjag_jti', 'actor_token_jti', 'kid', 'received_kid',
   'jkt', 'cnf_jkt', 'issued_jkt', 'act_sub', 'idjag_act_sub', 'actor_token_sub',
   'agent_id', 'op_agent_id', 'human_subject', 'subject_token_sub', 'idjag_sub',
   'trace_id', 'request_id', 'span_id', 'grant_id', 'document_id', 'payment_id',

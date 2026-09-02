@@ -5,4 +5,5 @@ export * from './events/identity.js';
 export * from './fingerprint.js';
 export * from './logger.js';
 export * from './redact.js';
+export * from './testing/expect-log-fields.js';
 export * from './types.js';

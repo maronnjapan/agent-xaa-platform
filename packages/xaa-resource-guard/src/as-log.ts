@@ -2,7 +2,7 @@ import { decodeJwsUnverified } from '@xaa/crypto';
 import type { LogContext, Logger } from '@xaa/logging';
 
 export const AS_LOG_FIELDS = [
-  'idjag_iss', 'idjag_sub', 'idjag_act_sub', 'idjag_client_id', 'idjag_jti', 'idjag_kid', 'idjag_typ',
+  'idjag_iss', 'idjag_sub', 'idjag_act_sub', 'idjag_client_id', 'idjag_jti', 'received_kid', 'received_typ',
   'audience', 'resource', 'scope', 'cnf_jkt_match', 'token_issued',
 ] as const;
 
@@ -12,8 +12,8 @@ export interface IdJagRedemptionLog {
   idjag_act_sub: string | null;
   idjag_client_id: string | null;
   idjag_jti: string | null;
-  idjag_kid: string | null;
-  idjag_typ: string | null;
+  received_kid: string | null;
+  received_typ: string | null;
   audience: string | null;
   resource: string | null;
   scope: string | null;
@@ -32,9 +32,9 @@ export interface IdJagRedemptionLog {
  * The assertion, the issued Access Token and the DPoP proof are never logged; the
  * thumbprint is a public value and may be.
  */
-export function inspectAssertion(assertion: string | undefined): Pick<IdJagRedemptionLog, 'idjag_jti' | 'idjag_kid' | 'idjag_typ' | 'idjag_iss' | 'idjag_sub' | 'idjag_act_sub' | 'idjag_client_id' | 'audience' | 'resource'> {
+export function inspectAssertion(assertion: string | undefined): Pick<IdJagRedemptionLog, 'idjag_jti' | 'received_kid' | 'received_typ' | 'idjag_iss' | 'idjag_sub' | 'idjag_act_sub' | 'idjag_client_id' | 'audience' | 'resource'> {
   const empty = {
-    idjag_jti: null, idjag_kid: null, idjag_typ: null, idjag_iss: null, idjag_sub: null,
+    idjag_jti: null, received_kid: null, received_typ: null, idjag_iss: null, idjag_sub: null,
     idjag_act_sub: null, idjag_client_id: null, audience: null, resource: null,
   };
   if (!assertion) return empty;
@@ -44,8 +44,8 @@ export function inspectAssertion(assertion: string | undefined): Pick<IdJagRedem
     const asString = (value: unknown) => (typeof value === 'string' ? value : null);
     return {
       idjag_jti: asString(payload.jti),
-      idjag_kid: asString(header.kid),
-      idjag_typ: asString(header.typ),
+      received_kid: asString(header.kid),
+      received_typ: asString(header.typ),
       idjag_iss: asString(payload.iss),
       idjag_sub: asString(payload.sub),
       idjag_act_sub: asString(actor?.sub),

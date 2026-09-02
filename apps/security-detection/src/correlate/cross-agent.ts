@@ -29,8 +29,9 @@ export function correlateCrossAgent(input: {
   const consumed: string[] = [];
 
   for (const [key, group] of groupByWindow(isolation, (hit) => hit.human_subject, (hit) => hit.occurred_at)) {
-    const agents = new Set(group.map((hit) => hit.agent_id));
     // One agent's isolation hit stays where it is; it needs no wider story.
+    if (group.length < 2) continue;
+    const agents = new Set(group.flatMap(involvedAgents));
     if (agents.size < 2) continue;
     const { windowStart, windowEnd, subject } = parseWindowKey(key);
     findings.push(finding({
@@ -58,6 +59,20 @@ export function correlateCrossAgent(input: {
   }
 
   return { findings, consumed };
+}
+
+/**
+ * Every agent a hit is about, not only the one that produced the line.
+ *
+ * docs 09 §5.3 describes the case this exists for: Agent A reaching the dedicated OPs of
+ * B, C and D. All four hits carry `agent_id = A`, so counting only the producer would see
+ * one agent and call four lateral movements four separate anomalies — which is precisely
+ * the shape the design says a single agent's log cannot show.
+ */
+function involvedAgents(hit: RuleHit): string[] {
+  const observed = hit.detail.observed;
+  const foreign = typeof observed === 'string' && observed.startsWith('agent-') ? [observed] : [];
+  return [hit.agent_id, ...foreign];
 }
 
 function finding(input: {

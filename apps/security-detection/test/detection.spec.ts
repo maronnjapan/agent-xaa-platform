@@ -20,7 +20,10 @@ import { needsHumanReview } from '../src/response/review.js';
 import { fallbackResponse, parseAiOutput } from '../src/ai/output.js';
 import { AiInputTooLarge, AI_INPUT_KEYS, buildAiInput, AI_INPUT_LIMIT_BYTES } from '../src/ai/input.js';
 import { createInProcessBus, startPullLoop } from '../src/ingest/subscriber.js';
-import { AGENT_ID, OTHER_AGENT_ID, baselineFor, createSecurityHarness, logEntry } from '../src/testing/harness.js';
+import {
+  AGENT_ID, DOCUMENT_READ, DOCUMENT_TOOLS, FINANCE_RESOURCE, OTHER_AGENT_ID,
+  baselineFor, createSecurityHarness, logEntry,
+} from '../src/testing/harness.js';
 
 const converterDir = new URL('../src/normalize/converters', import.meta.url).pathname;
 
@@ -44,7 +47,7 @@ describe('normalization', () => {
     }
   });
 
-  it('tells a missing key apart from a null value', () => {
+  it('rejects entry missing agent_id key', () => {
     const missing = { ...logEntry() } as Record<string, unknown>;
     delete missing.agent_id;
     expect(normalizeEntries([missing]).counters.schema_violation_total).toBe(1);
@@ -54,7 +57,7 @@ describe('normalization', () => {
     expect(nulled.counters.schema_violation_total).toBe(0);
   });
 
-  it('keeps an unmapped source under its own class and passes it no further', () => {
+  it('routes unknown log source to unmapped', () => {
     const result = normalizeEntries([logEntry({ log_source: 'automation_app' as never })]);
     expect(result.events).toHaveLength(0);
     expect(result.unmapped).toHaveLength(1);
@@ -88,7 +91,7 @@ describe('the pipeline', () => {
    * type checker over a file that tries it: a green `tsc` here would mean the branded
    * batch types had quietly become interchangeable again.
    */
-  it('fails to compile a run that skips a stage', async () => {
+  it('type fixture fails to compile', async () => {
     const project = new URL('./type-fixtures/tsconfig.json', import.meta.url).pathname;
     const failure = await promisify(execFile)('npx', ['tsc', '--noEmit', '-p', project], {
       cwd: new URL('../../..', import.meta.url).pathname,
@@ -148,14 +151,70 @@ describe('rule detection', () => {
     expect(over.hits.some((hit) => hit.rule_id === 'token.token_request.medium')).toBe(true);
   });
 
+  /**
+   * The five Token metrics, each measured against the same ID-JAG ceiling.
+   *
+   * `max × 5` is the MEDIUM line and `max × 20` the HIGH one, and the rule fires above a
+   * line rather than on it: an agent working exactly at its ceiling is at its limit, not
+   * over it, and a detector that fired there would fire on every busy agent.
+   */
+  const METRIC_ENTRY: Readonly<Record<string, Parameters<typeof logEntry>[0]>> = {
+    token_request: { log_source: 'agent_op', app: 'agent-op' },
+    id_jag_issued: { log_source: 'agent_op', app: 'agent-op', fields: { result: 'issued' } },
+    google_refresh_failure: { log_source: 'google_bridge', app: 'google-bridge', fields: { token_issue_result: 'error' } },
+    subject_token_refetch: { log_source: 'agent_op', app: 'agent-op', fields: { grant_type: 'subject_token' } },
+    auth_failure: { severity: 'WARNING' },
+  };
+
+  function levelFor(metric: string, count: number): string | null {
+    const entries = Array.from({ length: count }, () => logEntry(METRIC_ENTRY[metric]!));
+    const { hits } = detectRuleHits({ events: normalizeEntries(entries).events, violations: [], baselines });
+    return hits.find((hit) => hit.rule_id.startsWith(`token.${metric}.`))?.level ?? null;
+  }
+
+  it('medium at 100 with max 20', () => {
+    expect(baselineFor().expected_rate.id_jag.max).toBe(20);
+    expect(THRESHOLDS.token!.medium_multiplier).toBe(5);
+    // 20 × 5 = 100 is the line itself, so it is not yet a hit.
+    expect(levelFor('token_request', 100)).toBeNull();
+    expect(levelFor('token_request', 101)).toBe('MEDIUM');
+  });
+
+  it('high at 400 with max 20', () => {
+    expect(THRESHOLDS.token!.high_multiplier).toBe(20);
+    expect(levelFor('token_request', 400)).toBe('MEDIUM');
+    expect(levelFor('token_request', 401)).toBe('HIGH');
+  });
+
+  it('no hit at 99', () => expect(levelFor('token_request', 99)).toBeNull());
+
+  it('covers five metrics', () => {
+    const cases = (THRESHOLDS.token!.metrics ?? []).flatMap((metric) => [
+      { metric, count: 99, level: null },
+      { metric, count: 101, level: 'MEDIUM' },
+      { metric, count: 401, level: 'HIGH' },
+    ]);
+    expect(cases).toHaveLength(15);
+    for (const testCase of cases) {
+      expect(levelFor(testCase.metric, testCase.count), `${testCase.metric} at ${testCase.count}`)
+        .toBe(testCase.level);
+    }
+  });
+
   it('emits no hit and counts the gap when a baseline is missing', () => {
     const result = detectRuleHits({ events: events(500), violations: [], baselines: new Map() });
     expect(result.hits).toHaveLength(0);
     expect(result.counters.baseline_missing_total).toBe(1);
   });
 
-  it('lists five token metrics and maps every rule id to a factor', () => {
+  it('thresholds file lists five token metrics', () => {
     expect(THRESHOLDS.token!.metrics).toHaveLength(5);
+    expect(THRESHOLDS.token!.metrics).toEqual([
+      'token_request', 'id_jag_issued', 'google_refresh_failure', 'subject_token_refetch', 'auth_failure',
+    ]);
+  });
+
+  it('every rule id maps to a factor', () => {
     for (const ruleId of allRuleIds()) expect(factorFor(ruleId)).not.toBeNull();
   });
 });
@@ -187,36 +246,76 @@ describe('the agent baseline', () => {
 describe('baseline deviation', () => {
   const baseline = baselineFor();
 
-  it('names six kinds and finds each of them', () => {
+  /**
+   * Twelve cases: each of the six kinds once where it must fire and once where the same
+   * shape of event must not. A positive-only table passes for a function that returns
+   * every kind for every event.
+   */
+  const CASES: Array<{ kind: string; hits: boolean; entry: Parameters<typeof logEntry>[0]; capabilities?: Record<string, string> }> = [
+    { kind: 'unexpected_tool', hits: true, entry: { log_source: 'agent_runtime', fields: { tool_id: 'internal.finance.payment.approve' } } },
+    { kind: 'unexpected_tool', hits: false, entry: { log_source: 'agent_runtime', fields: { tool_id: DOCUMENT_TOOLS[0] } } },
+    {
+      kind: 'capability_mismatch', hits: true,
+      entry: { log_source: 'agent_runtime', fields: { tool_id: DOCUMENT_TOOLS[0] } },
+      capabilities: { [DOCUMENT_TOOLS[0]!]: 'document.write' },
+    },
+    {
+      kind: 'capability_mismatch', hits: false,
+      entry: { log_source: 'agent_runtime', fields: { tool_id: DOCUMENT_TOOLS[0] } },
+      capabilities: { [DOCUMENT_TOOLS[0]!]: DOCUMENT_READ },
+    },
+    { kind: 'unexpected_resource', hits: true, entry: { log_source: 'resource_api', fields: { resource: FINANCE_RESOURCE } } },
+    { kind: 'unexpected_resource', hits: false, entry: { log_source: 'resource_api', fields: { resource: 'https://resource-docs-api.test' } } },
+    { kind: 'foreign_dedicated_op_access', hits: true, entry: { fields: { op_agent_id: OTHER_AGENT_ID } } },
+    { kind: 'foreign_dedicated_op_access', hits: false, entry: { fields: { op_agent_id: AGENT_ID } } },
+    { kind: 'access_after_expiry', hits: true, entry: { timestamp: '2026-06-01T00:00:00.000Z' } },
+    { kind: 'access_after_expiry', hits: false, entry: { timestamp: '2026-01-01T12:00:00.000Z' } },
+    // rate_exceeded needs a count rather than a shape, so its two cases are built below.
+    { kind: 'rate_exceeded', hits: false, entry: {} },
+  ];
+
+  const kindsOf = (entry: Parameters<typeof logEntry>[0], capabilities?: Record<string, string>) =>
+    detectDeviations({
+      baseline,
+      events: normalizeEntries([logEntry(entry)]).events,
+      ...(capabilities ? { toolCapabilities: capabilities } : {}),
+    }).map((deviation) => deviation.kind);
+
+  it('six kinds have positive and negative cases', () => {
     expect(DEVIATION_KINDS).toHaveLength(6);
+    const overCeiling = Array.from({ length: baseline.expected_rate.id_jag.max + 1 }, () => logEntry());
+    const rateCase = {
+      kind: 'rate_exceeded', hits: true,
+      kinds: detectDeviations({ baseline, events: normalizeEntries(overCeiling).events }).map((deviation) => deviation.kind),
+    };
+    const table = [
+      ...CASES.map((testCase) => ({ ...testCase, kinds: kindsOf(testCase.entry, testCase.capabilities) })),
+      rateCase,
+    ];
+    expect(table).toHaveLength(12);
+    for (const testCase of table) {
+      expect(testCase.kinds.includes(testCase.kind), `${testCase.kind} expected ${testCase.hits}`).toBe(testCase.hits);
+    }
+    expect(new Set(table.map((testCase) => testCase.kind))).toEqual(new Set(DEVIATION_KINDS));
+  });
 
-    const unexpectedTool = detectDeviations({
-      baseline,
-      events: normalizeEntries([logEntry({
-        log_source: 'agent_runtime', fields: { tool_id: 'internal.finance.payment.approve' },
-      })]).events,
-    });
-    expect(unexpectedTool.some((deviation) => deviation.kind === 'unexpected_tool')).toBe(true);
+  it('id-jag 500 against max 20 is rate_exceeded', () => {
+    // docs 09 §5.4: five hundred ID-JAGs in a window where twenty is the ceiling.
+    expect(baseline.expected_rate.id_jag.max).toBe(20);
+    const events = normalizeEntries(Array.from({ length: 500 }, () => logEntry())).events;
+    const rate = detectDeviations({ baseline, events }).find((deviation) => deviation.kind === 'rate_exceeded');
+    expect(rate).toBeTruthy();
+    expect(rate!.observed).toEqual({ metric: 'id_jag', count: 500 });
+    expect(rate!.expected).toBe(20);
+  });
 
-    // Known tool, capability the agent does not hold: the tool id alone would miss it.
-    const mismatch = detectDeviations({
-      baseline,
-      events: normalizeEntries([logEntry({ log_source: 'agent_runtime', fields: { tool_id: 'internal.document.list' } })]).events,
-      toolCapabilities: { 'internal.document.list': 'document.write' },
-    });
-    expect(mismatch.some((deviation) => deviation.kind === 'capability_mismatch')).toBe(true);
-
-    const foreign = detectDeviations({
-      baseline,
-      events: normalizeEntries([logEntry({ fields: { op_agent_id: OTHER_AGENT_ID } })]).events,
-    });
-    expect(foreign.some((deviation) => deviation.kind === 'foreign_dedicated_op_access')).toBe(true);
-
-    const afterExpiry = detectDeviations({
-      baseline,
-      events: normalizeEntries([logEntry({ timestamp: '2026-06-01T00:00:00.000Z' })]).events,
-    });
-    expect(afterExpiry.some((deviation) => deviation.kind === 'access_after_expiry')).toBe(true);
+  it('capability mismatch detected even when tool id is expected', () => {
+    const tool = DOCUMENT_TOOLS[0]!;
+    // The tool is in `expected_tools`, so nothing about its id is wrong.
+    expect(baseline.expected_tools).toContain(tool);
+    const kinds = kindsOf({ log_source: 'agent_runtime', fields: { tool_id: tool } }, { [tool]: 'finance.payment.approve' });
+    expect(kinds).toContain('capability_mismatch');
+    expect(kinds).not.toContain('unexpected_tool');
   });
 
   it('compares the rate against the ceiling itself, with no multiplier', () => {
@@ -247,7 +346,28 @@ describe('correlation', () => {
     trace_id: 'trace-1', related_events: ['trace-1'], detail: {}, ...overrides,
   });
 
-  it('gives the same finding id for the same window and subject', () => {
+  /**
+   * docs 09 §5.3, verbatim: four things Agent A did between 10:00 and 10:03. Separately
+   * each is arguable; together they are the example the design calls a compromise.
+   */
+  it('docs example becomes one finding', () => {
+    const at = (minute: number) => `2026-01-01T10:0${minute}:00.000Z`;
+    const findings = correlate({
+      hits: [
+        hit({ rule_id: 'authorization.unknown_audience', category: 'authorization', occurred_at: at(0), trace_id: 'e1', related_events: ['e1'] }),
+        hit({ rule_id: 'isolation.dedicated_op_mismatch', category: 'isolation', occurred_at: at(1), trace_id: 'e2', related_events: ['e2'] }),
+        hit({ rule_id: 'token.id_jag_issued.high', category: 'token', occurred_at: at(2), trace_id: 'e3', related_events: ['e3'] }),
+        hit({ rule_id: 'authorization.status_error.high', category: 'authorization', occurred_at: at(3), trace_id: 'e4', related_events: ['e4'] }),
+      ],
+      violations: [],
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.agent_id).toBe(AGENT_ID);
+    expect(findings[0]!.related_events).toEqual(['e1', 'e2', 'e3', 'e4']);
+    expect(findings[0]!.finding_type).toBe('potential_agent_compromise');
+  });
+
+  it('finding id is stable across runs', () => {
     const first = correlate({ hits: [hit()], violations: [], now: () => 1 });
     const second = correlate({ hits: [hit()], violations: [], now: () => 999_999 });
     expect(first[0]!.finding_id).toBe(second[0]!.finding_id);
@@ -292,7 +412,7 @@ describe('correlation', () => {
     expect(findings.some((finding) => finding.finding_type === 'platform_wide_isolation_breach')).toBe(true);
   });
 
-  it('sorts related events by time', () => {
+  it('related events are sorted by occurred_at', () => {
     const findings = correlate({
       hits: [
         hit({ occurred_at: '2026-01-01T12:05:00.000Z', trace_id: 'later', related_events: ['later'] }),
@@ -312,19 +432,29 @@ describe('risk scoring', () => {
     review_status: 'none', created_at: '2026-01-01T12:10:00.000Z',
   });
 
-  it('has thirteen factors, matching the config exactly', () => {
+  it('scoring json keys match thirteen factors', () => {
     expect(SCORE_FACTORS).toHaveLength(13);
     expect(Object.keys(SCORING).sort()).toEqual([...SCORE_FACTORS].sort());
   });
 
-  it('clamps to 100 and is deterministic', () => {
-    const codes = Array.from({ length: 40 }, (_unused, index) => `authorization.unknown_audience.${index}`);
-    expect(computeScore({ finding: finding(codes) })).toBeLessThanOrEqual(100);
+  it('total is clamped to 100', () => {
+    // Three factors whose caps add up to 145 on their own, and no singleton among them.
+    const codes = [
+      ...Array.from({ length: 10 }, (_unused, index) => `authorization.unknown_audience.${index}`),
+      ...Array.from({ length: 10 }, (_unused, index) => `isolation.dedicated_op_mismatch.${index}`),
+      ...Array.from({ length: 10 }, (_unused, index) => `tool.not_provisioned.${index}`),
+    ];
+    expect(SCORING.authorization_violation.cap + SCORING.isolation_boundary_violation.cap
+      + SCORING.privilege_escalation_attempt.cap).toBeGreaterThan(100);
+    expect(computeScore({ finding: finding(codes) })).toBe(100);
+  });
+
+  it('same input yields same score', () => {
     expect(computeScore({ finding: finding(['tool.unauthorized_tool.high']) }))
       .toBe(computeScore({ finding: finding(['tool.unauthorized_tool.high']) }));
   });
 
-  it('adds a premium for the finance resource only', () => {
+  it('resource sensitivity applies to finance only', () => {
     const docs = computeScore({
       finding: finding(['tool.unauthorized_tool.high']),
       financeResourceUrl: 'https://resource-finance-api.test',
@@ -366,18 +496,21 @@ describe('risk levels', () => {
 });
 
 describe('dispatch', () => {
-  const finding = (level: 'LOW' | 'HIGH'): SecurityFinding => ({
+  /** The two scores either side of the LOW / MEDIUM line, 29 and 30 (T-SEC-17). */
+  const finding = (level: 'LOW' | 'MEDIUM'): SecurityFinding => ({
     finding_id: `f_${level}`, finding_type: 'anomalous_agent_activity', agent_id: AGENT_ID,
     human_subject: 'testuser', window_start: '2026-01-01T12:00:00.000Z', window_end: '2026-01-01T12:10:00.000Z',
-    related_events: [], contributing_codes: [], risk_score: level === 'LOW' ? 20 : 70,
+    related_events: [], contributing_codes: [], risk_score: level === 'LOW' ? 29 : 30,
     risk_level: level, review_status: 'none', created_at: '2026-01-01T12:10:00.000Z',
   });
 
-  it('stores a LOW finding and calls no model', async () => {
+  it('score 29 stores only', async () => {
     const counters: DispatchCounters = { low_events_total: 0, unmapped_code_total: 0 };
     let analyzed = 0;
     let stored = 0;
     let normalized = 0;
+    // 29 is the last LOW score: one below the line where a finding starts to exist.
+    expect(finding('LOW').risk_score).toBe(29);
     await dispatch({ __stage: 'scored', findings: [finding('LOW')], events: [] }, {
       analyze: async () => { analyzed += 1; },
       storeFinding: async () => { stored += 1; },
@@ -389,11 +522,13 @@ describe('dispatch', () => {
     expect(counters.low_events_total).toBe(1);
   });
 
-  it('writes a finding and calls the model from MEDIUM up', async () => {
+  it('score 30 creates finding', async () => {
     const counters: DispatchCounters = { low_events_total: 0, unmapped_code_total: 0 };
     let analyzed = 0;
     let stored = 0;
-    await dispatch({ __stage: 'scored', findings: [finding('HIGH')], events: [] }, {
+    // 30 is the first MEDIUM score, and the first that produces a row.
+    expect(finding('MEDIUM').risk_score).toBe(30);
+    await dispatch({ __stage: 'scored', findings: [finding('MEDIUM')], events: [] }, {
       analyze: async () => { analyzed += 1; },
       storeFinding: async () => { stored += 1; },
       storeNormalized: async () => undefined,
@@ -451,7 +586,7 @@ describe('the AI boundary', () => {
     })).toThrow(AiInputTooLarge);
   });
 
-  it('returns null for anything it cannot use, and never throws', () => {
+  it('returns null for non json / missing aspect / confidence out of range', () => {
     expect(parseAiOutput('not json')).toBeNull();
     expect(parseAiOutput(JSON.stringify({ deviation: {}, judgement: {}, impact: {} }))).toBeNull();
     expect(parseAiOutput(JSON.stringify({
@@ -462,7 +597,7 @@ describe('the AI boundary', () => {
     }))).toBeNull();
   });
 
-  it('accepts a well-formed four-aspect answer', () => {
+  it('accepts valid four-aspect output', () => {
     const output = parseAiOutput(JSON.stringify({
       deviation: { from_normal: 'a', capability_consistency: 'b' },
       judgement: { compromise_likelihood: 'a', false_positive_likelihood: 'b', causality: 'c' },
