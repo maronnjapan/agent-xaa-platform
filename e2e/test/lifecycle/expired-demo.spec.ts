@@ -7,7 +7,7 @@ import { emitLifecycleEvent, eventTypeFor } from '@xaa/lifecycle-manager/src/eve
 import { createLifecycleHarness, seedDomain } from '@xaa/lifecycle-manager/src/testing/harness';
 import { requestIdJag, startAgentOp } from '../../harness/agent-op.js';
 import { idpPublicJwk } from '../../harness/human-idp.js';
-import { humanIdToken } from '../runtime/native-xaa-path.spec.js';
+import { humanSubjectToken, requestSubjectToken } from './harness.js';
 
 const logger = createLogger('lifecycle-manager', 'provisioner', () => {});
 const logContext = { request_id: 'demo', trace_id: 'demo', agent_id: null, human_subject: null };
@@ -26,8 +26,8 @@ const MINUTE = 60_000;
  * a test nobody runs.
  */
 describe('a three minute agent, after four minutes', () => {
-  it('is refused at the Agent OP once its registration has expired', async () => {
-    const subjectToken = await humanIdToken();
+  it('token exchange fails with invalid_grant after expiry', async () => {
+    const subjectToken = await humanSubjectToken();
     const expiresAt = new Date(Date.now() + 3 * MINUTE).toISOString();
     const agentOp = await startAgentOp({ idpPublicJwk: await idpPublicJwk(), expiresAt });
 
@@ -43,6 +43,34 @@ describe('a three minute agent, after four minutes', () => {
     const response = await requestIdJag(expired, { subjectToken });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'invalid_grant' });
+  });
+
+  /**
+   * The second of the three layers demo D-3 shows. The registration and the connection
+   * expire independently: even an agent whose registration somehow survived could not
+   * fetch a fresh subject token, because the connection it would spend has its own
+   * deadline and the OP checks it before touching the stored credential.
+   */
+  it('subject-token retrieval fails after the idp connection expires', async () => {
+    const agentOp = await startAgentOp({ idpPublicJwk: await idpPublicJwk() });
+    const connectionId = `idpconn-${agentOp.agentId}`;
+    const connection = {
+      idp_connection_id: connectionId, agent_id: agentOp.agentId, human_subject: 'testuser',
+      encrypted_refresh_token: Buffer.from(`${agentOp.agentId}::refresh-token`, 'utf8').toString('base64'),
+      granted_scopes: ['openid', 'offline_access'], status: 'ACTIVE',
+      created_at: new Date(Date.now() - 2 * MINUTE).toISOString(),
+      expires_at: new Date(Date.now() - MINUTE).toISOString(),
+    };
+    await agentOp.documents.set('idp_connections', connectionId, connection);
+
+    const response = await requestSubjectToken(agentOp);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'invalid_grant' });
+    // The refusal came from the connection's own expiry, before anything was decrypted
+    // or sent: the reissue never started.
+    expect(JSON.parse(agentOp.connectionLogs.at(-1)!).fields).toMatchObject({
+      idp_connection_id: connectionId, subject_token_reissue: 'n/a',
+    });
   });
 
   it('passes ACTIVE, EXPIRING, EXPIRED and DESTROYED in order', async () => {

@@ -16,6 +16,7 @@ import { quarantine } from './quarantine.js';
 import { sweep, type SweepDeps } from './sweep.js';
 import { emitLifecycleEvent, eventTypeFor } from './events.js';
 import { loadDomain } from './domain.js';
+import { agentOpUrlFor } from './clients/op-target.js';
 import { reprovision } from './reprovision.js';
 import type { ProvisionerClient } from './clients/types.js';
 
@@ -162,6 +163,7 @@ function createApp(deps: LifecycleDeps): Hono<Env> {
         await quarantine({
           documents: deps.documents, clients: deps.clients, agentId,
           bridgeBindingIds: domain.bridge_binding_ids,
+          opBaseUrl: agentOpUrlFor(domain, deps.clients),
           ...(body.severity ? { severity: body.severity } : {}), now: now(),
         });
         return context.json({ from: domain.status, to: 'QUARANTINED' }, 202);

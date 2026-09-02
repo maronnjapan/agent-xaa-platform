@@ -1,4 +1,5 @@
 import type { CleanupContext } from '../../clients/types.js';
+import { agentOpUrlFor } from '../../clients/op-target.js';
 
 /**
  * step6. Revokes the Agent Client Credential.
@@ -13,7 +14,7 @@ import type { CleanupContext } from '../../clients/types.js';
  */
 export async function clientCredentialRevoke(context: CleanupContext): Promise<'succeeded' | 'skipped'> {
   const status = await context.clients.agentOp.revokeClientCredential({
-    baseUrl: context.clients.endpoints.agentOpUrl,
+    baseUrl: agentOpUrlFor(context.domain, context.clients),
     agentId: context.domain.agent_id,
   });
   if (status === 404) return 'skipped';

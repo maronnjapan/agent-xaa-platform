@@ -35,6 +35,7 @@ export interface AgentOpHarness {
   events: ActivityEvent[];
   exchangeLogs: string[];
   ledgerLogs: string[];
+  connectionLogs: string[];
   opPublicJwk: JsonWebKey;
   now(): number;
 }
@@ -59,6 +60,12 @@ export interface StartAgentOpOptions {
   /** One Firestore across several apps, for a test that spans them. */
   shared?: ReturnType<typeof createFirestoreDouble>;
   automationAppUrl?: string;
+  /**
+   * Mounts the `/internal/*` routes, which exist only when a caller identity can be
+   * verified. Off by default: most tests speak the public protocol, and a route that is
+   * present but unauthenticated would be a worse double than no route at all.
+   */
+  internalCallers?: { lifecycle?: string; provisioner?: string; verify(authorization: string | undefined): Promise<string | null> };
 }
 
 export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentOpHarness> {
@@ -94,6 +101,7 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
   const events: ActivityEvent[] = [];
   const exchangeLogs: string[] = [];
   const ledgerLogs: string[] = [];
+  const connectionLogs: string[] = [];
 
   const deps: AgentOpAppDeps = {
     config: {
@@ -134,7 +142,17 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
     now,
     writeExchangeLog: (line) => { exchangeLogs.push(line); },
     writeLedger: (line) => { ledgerLogs.push(line); },
+    // Captured rather than printed, like the other two: a suite run should not be
+    // buried under one service's structured logs.
+    writeConnectionLog: (line) => { connectionLogs.push(line); },
     ...(options.humanIdpFetch ? { humanIdpFetch: options.humanIdpFetch } : {}),
+    ...(options.internalCallers
+      ? {
+          serviceIdentity: { verify: options.internalCallers.verify },
+          ...(options.internalCallers.lifecycle ? { lifecycleServiceAccount: options.internalCallers.lifecycle } : {}),
+          ...(options.internalCallers.provisioner ? { provisionerServiceAccount: options.internalCallers.provisioner } : {}),
+        }
+      : {}),
     // Where the callback sends the browser back to, as Terraform injects it.
     automationAppUrl: options.automationAppUrl ?? 'https://automation-app.test',
   };
@@ -142,7 +160,7 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
   const app = createAgentOp(deps);
   return {
     fetch: async (path, init) => app.fetch(new Request(new URL(path, AGENT_OP_BASE), init)),
-    documents, lifecycleStore, agentId, agentKeyPair, dpopKeyPair, events, exchangeLogs, ledgerLogs,
+    documents, lifecycleStore, agentId, agentKeyPair, dpopKeyPair, events, exchangeLogs, ledgerLogs, connectionLogs,
     opPublicJwk: { ...opKeyPair.publicJwk, kid: 'op-shared-1', alg: 'ES256', use: 'sig' } as JsonWebKey,
     now,
   };

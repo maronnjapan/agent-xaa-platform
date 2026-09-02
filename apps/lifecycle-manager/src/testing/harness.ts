@@ -19,7 +19,9 @@ export const testConfig: LifecycleConfig = {
   pubsubMode: 'inproc', storeMode: 'emulator',
 };
 
-export interface RecordedCall { target: string; argument: string }
+/** `baseUrl` is recorded separately so an assertion can name the host without
+ *  every existing assertion on `argument` having to know about it. */
+export interface RecordedCall { target: string; argument: string; baseUrl?: string }
 
 /**
  * Every outbound effect, recorded rather than performed.
@@ -34,8 +36,8 @@ export function recordingClients(options: {
   statusFor?: Record<string, number>;
 } = {}): CleanupClients & { calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
-  const record = (target: string, argument: string): void => {
-    calls.push({ target, argument });
+  const record = (target: string, argument: string, baseUrl?: string): void => {
+    calls.push({ target, argument, ...(baseUrl === undefined ? {} : { baseUrl }) });
     if (options.failAt === target) throw new Error(`${target} failed`);
   };
   const status = (target: string): number => options.statusFor?.[target] ?? 200;
@@ -55,10 +57,10 @@ export function recordingClients(options: {
     },
     jwks: { async deleteKey(name) { record('deleteKey', name); } },
     agentOp: {
-      async disableIssuance({ agentId }) { record('disableIssuance', agentId); return status('disableIssuance'); },
-      async revokeIdpConnection({ connectionId }) { record('revokeIdpConnection', connectionId); return status('revokeIdpConnection'); },
-      async revokeClientCredential({ agentId }) { record('revokeClientCredential', agentId); return status('revokeClientCredential'); },
-      async deleteRegistration({ agentId }) { record('deleteRegistration', agentId); return status('deleteRegistration'); },
+      async disableIssuance({ agentId, baseUrl }) { record('disableIssuance', agentId, baseUrl); return status('disableIssuance'); },
+      async revokeIdpConnection({ connectionId, baseUrl }) { record('revokeIdpConnection', connectionId, baseUrl); return status('revokeIdpConnection'); },
+      async revokeClientCredential({ agentId, baseUrl }) { record('revokeClientCredential', agentId, baseUrl); return status('revokeClientCredential'); },
+      async deleteRegistration({ agentId, baseUrl }) { record('deleteRegistration', agentId, baseUrl); return status('deleteRegistration'); },
     },
     resourceAs: {
       async revokeByActor({ baseUrl, actorSub }) { record('revokeByActor', `${baseUrl}|${actorSub}`); return status(`revokeByActor:${baseUrl}`); },

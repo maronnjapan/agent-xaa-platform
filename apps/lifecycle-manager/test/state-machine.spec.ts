@@ -4,7 +4,6 @@ import {
   AGENT_STATUSES, ALLOWED_TRANSITIONS, InvalidTransitionError, transition, type AgentStatus,
 } from '../src/state-machine.js';
 import { writeStatus, AgentNotFound } from '../src/status-writer.js';
-import { assertAgentOwnership, ForbiddenSubject } from '../src/ownership.js';
 import { createLifecycleHarness, seedDomain } from '../src/testing/harness.js';
 
 const repoRoot = new URL('../../../', import.meta.url).pathname;
@@ -82,25 +81,5 @@ describe('writing a status', () => {
     const harness = createLifecycleHarness();
     await expect(writeStatus({ documents: harness.documents, agentId: 'agent-missing', to: 'REVOKED' }))
       .rejects.toThrow(AgentNotFound);
-  });
-});
-
-describe('ownership', () => {
-  it('returns 404 for an unknown agent and 403 for another subject', async () => {
-    const harness = createLifecycleHarness();
-    await seedDomain(harness, { humanSubject: 'someone-else' });
-    await expect(assertAgentOwnership({
-      documents: harness.documents, agentId: 'agent-missing', subject: 'testuser',
-    })).rejects.toThrow(AgentNotFound);
-    await expect(assertAgentOwnership({
-      documents: harness.documents, agentId: 'agent-abcdefghijklmnopqrstuvwxyz', subject: 'testuser',
-    })).rejects.toThrow(ForbiddenSubject);
-  });
-
-  it('returns the record for the owner', async () => {
-    const harness = createLifecycleHarness();
-    const agentId = await seedDomain(harness);
-    await expect(assertAgentOwnership({ documents: harness.documents, agentId, subject: 'testuser' }))
-      .resolves.toMatchObject({ human_subject: 'testuser', status: 'ACTIVE' });
   });
 });

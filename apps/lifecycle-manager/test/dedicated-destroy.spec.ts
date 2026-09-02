@@ -65,17 +65,38 @@ describe('destroying the dedicated resources', () => {
     }
   });
 
-  it('is idempotent on a second run', async () => {
+  /**
+   * A resource that is already gone is not a failure. The sweep re-runs cleanup until
+   * every step is done, so a NOT_FOUND has to count as success and get its `deleted_at`
+   * — otherwise a resource somebody removed by hand would keep the agent short of
+   * DESTROYED for ever.
+   */
+  it('treats NOT_FOUND as success and is idempotent on second run', async () => {
     const shared = (await import('@xaa/gcp')).createFirestoreDouble();
     const first = createLifecycleHarness({ shared });
+    // Everything in the ledger was already deleted out from under us.
+    first.clients.cloudRun.deleteJob = async () => 'not_found';
+    first.clients.cloudRun.deleteService = async () => 'not_found';
+    first.clients.kms.destroyCryptoKeyVersion = async () => 'not_found';
+    first.clients.iam.removeBinding = async () => 'not_found';
+    first.clients.iam.deleteServiceAccount = async () => 'not_found';
     const agentId = await seedDomain(first, { isolationLevel: 'full_isolation' });
     await seedLedger(first, FULL_LEDGER);
-    await cleanupAgent(agentId, 'EXPIRED', deps(first));
+
+    const outcome = await cleanupAgent(agentId, 'EXPIRED', deps(first));
+    expect(outcome.status).toBe('DESTROYED');
+    for (const step of ['dedicated_destroy', 'dedicated_sa_delete']) {
+      expect(outcome.results.find((entry) => entry.step === step)!.status).toBe('succeeded');
+    }
 
     // Every element is now marked deleted, so a fresh run has nothing to delete.
     const record = await first.documents.get<DedicatedResourceRecord>('dedicated_resources', agentId);
     expect(record!.status).toBe('RELEASED');
     expect(deletionOrder(record!)).toEqual([]);
+
+    const second = createLifecycleHarness({ shared });
+    await cleanupAgent(agentId, 'EXPIRED', deps(second));
+    expect(second.clients.calls.filter((entry) => entry.target.startsWith('delete'))).toHaveLength(0);
   });
 
   it('refuses to delete a terraform-managed name', async () => {

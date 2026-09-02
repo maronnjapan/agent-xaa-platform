@@ -19,6 +19,8 @@ export async function quarantine(input: {
   clients: CleanupClients;
   agentId: string;
   bridgeBindingIds: readonly string[];
+  /** The agent's own OP for a full-isolation agent; the shared one when omitted. */
+  opBaseUrl?: string;
   severity?: 'CRITICAL';
   now?: number;
 }): Promise<void> {
@@ -28,7 +30,7 @@ export async function quarantine(input: {
     ...(input.now === undefined ? {} : { now: input.now }),
   });
   await input.clients.agentOp.disableIssuance({
-    baseUrl: input.clients.endpoints.agentOpUrl, agentId: input.agentId,
+    baseUrl: input.opBaseUrl ?? input.clients.endpoints.agentOpUrl, agentId: input.agentId,
   });
   const bridgeUrl = input.clients.endpoints.bridgeUrl;
   if (bridgeUrl && input.bridgeBindingIds.length > 0) {

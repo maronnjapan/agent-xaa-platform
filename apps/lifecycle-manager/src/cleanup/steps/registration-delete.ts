@@ -1,4 +1,5 @@
 import type { CleanupContext } from '../../clients/types.js';
+import { agentOpUrlFor } from '../../clients/op-target.js';
 
 /**
  * step10. Removes the registration and the static XAA config from the OP, then the
@@ -9,7 +10,7 @@ import type { CleanupContext } from '../../clients/types.js';
  */
 export async function registrationDelete(context: CleanupContext): Promise<'succeeded' | 'skipped'> {
   const status = await context.clients.agentOp.deleteRegistration({
-    baseUrl: context.clients.endpoints.agentOpUrl,
+    baseUrl: agentOpUrlFor(context.domain, context.clients),
     agentId: context.domain.agent_id,
   });
   if (status >= 500 || status === 0) throw new Error('registration_delete_failed');
