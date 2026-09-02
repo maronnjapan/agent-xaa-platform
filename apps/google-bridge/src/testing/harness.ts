@@ -94,6 +94,8 @@ export function createBridgeHarness(options: {
   shared?: ReturnType<typeof createFirestoreDouble>;
   /** Share one stub across harnesses: it remembers the tokens it issued. */
   stubOp?: ReturnType<typeof createStubOp>;
+  /** Answer the SaaS token endpoint with this status instead of running the stub. */
+  saasTokenStatus?: number;
 } = {}): BridgeHarness {
   const firestore = options.shared ?? createFirestoreDouble();
   const documents = createFirestoreDocumentStore(firestore, 'google-bridge');
@@ -122,6 +124,11 @@ export function createBridgeHarness(options: {
       outbound.push(url);
       const target = new URL(url);
       if (target.origin === STUB_OP_BASE) {
+        // A SaaS that is having a bad day rather than one that has revoked anything:
+        // the difference decides whether the connection is written off or left alone.
+        if (options.saasTokenStatus !== undefined && target.pathname === '/token') {
+          return new Response('{}', { status: options.saasTokenStatus });
+        }
         return stubOp.fetch(new Request(url, init));
       }
       if (target.host === 'storage.test') {
@@ -299,17 +306,27 @@ export async function exchangeToken(harness: BridgeHarness, options: {
 export async function readyBridge(options: {
   rotateRefreshToken?: 'always' | 'never';
   bindingScopes?: string[];
+  /** Applied after consent, so the connection exists before the SaaS starts failing. */
+  saasTokenStatus?: number;
 } = {}): Promise<{ harness: BridgeHarness; issuer: IdJagIssuer; dpopKey: Es256KeyPair }> {
   const issuer = await createIdJagIssuer();
   const dpopKey = await generateEs256KeyPair();
+  const shared = createFirestoreDouble();
   const harness = createBridgeHarness({
-    jwks: issuer.jwks, readTransaction: transactionReader(),
+    shared, jwks: issuer.jwks, readTransaction: transactionReader(),
     ...(options.rotateRefreshToken ? { rotateRefreshToken: options.rotateRefreshToken } : {}),
   });
   await seedConnector(harness);
   await completeConsent(harness);
   await seedBinding(harness, options.bindingScopes ? { scopes: options.bindingScopes } : {});
-  return { harness, issuer, dpopKey };
+  if (options.saasTokenStatus === undefined) return { harness, issuer, dpopKey };
+
+  // The same store and the same stub, with a token endpoint that now fails.
+  const failing = createBridgeHarness({
+    shared, jwks: issuer.jwks, readTransaction: transactionReader(),
+    stubOp: harness.stubOp, saasTokenStatus: options.saasTokenStatus,
+  });
+  return { harness: failing, issuer, dpopKey };
 }
 
 export interface IdJagIssuer {

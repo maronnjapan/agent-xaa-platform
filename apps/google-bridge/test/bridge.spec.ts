@@ -13,7 +13,7 @@ import { allowedHostsFor, createBridgeFetch, OutboundNotAllowedError } from '../
 import { connectionId } from '../src/store/connection.js';
 import { BRIDGE_LOG_FIELDS } from '../src/log/bridge-log.js';
 import {
-  completeConsent, createBridgeHarness, seedConnector, transactionReader,
+  completeConsent, createBridgeHarness, exchangeToken, readyBridge, seedConnector, transactionReader,
   INTERNAL_BASE, SA, SHARED_ISSUER, STUB_CONNECTOR, type BridgeHarness,
 } from '../src/testing/harness.js';
 
@@ -397,18 +397,32 @@ describe('resolving the binding', () => {
     expect(await response.json()).toEqual({ error: 'invalid_grant' });
   });
 
-  it('records one expired_bridge_connection per expiry refusal', async () => {
-    const dpopKey = await generateEs256KeyPair();
-    const harness = createBridgeHarness({ jwks: await jwks() });
-    await seedConnector(harness);
-    await seedConnection(harness);
-    await seedBinding(harness, { expiresAt: '2020-01-01T00:00:00.000Z' });
-    await exchange(harness, { idJag: await mintIdJag({ dpopKey }), dpopKey });
-    const events = harness.logs
-      .map((line) => JSON.parse(line) as { fields: { validation?: string } })
-      .filter((entry) => entry.fields.validation === 'expired_bridge_connection');
-    expect(events).toHaveLength(1);
-  });
+  const expiryCases: Array<[string, (harness: BridgeHarness) => Promise<void>]> = [
+    ['expired binding', async (harness) => {
+      await seedConnection(harness);
+      await seedBinding(harness, { expiresAt: '2020-01-01T00:00:00.000Z' });
+    }],
+    ['expired connection', async (harness) => {
+      await seedConnection(harness, { expiresAt: '2020-01-01T00:00:00.000Z' });
+      await seedBinding(harness);
+    }],
+  ];
+
+  for (const [label, seed] of expiryCases) {
+    it(`records one expired_bridge_connection for an ${label}`, async () => {
+      const dpopKey = await generateEs256KeyPair();
+      const harness = createBridgeHarness({ jwks: await jwks() });
+      await seedConnector(harness);
+      await seed(harness);
+      await exchange(harness, { idJag: await mintIdJag({ dpopKey }), dpopKey });
+      const events = harness.logs
+        .map((line) => JSON.parse(line) as { fields: { validation?: string } })
+        .filter((entry) => entry.fields.validation === 'expired_bridge_connection');
+      // Exactly one. A duplicate would make a single expired row look like a campaign
+      // against the platform, which is how a detection rule ends up firing on nothing.
+      expect(events).toHaveLength(1);
+    });
+  }
 });
 
 describe('scope containment', () => {
@@ -441,6 +455,14 @@ describe('scope containment', () => {
     expect(await response.json()).toEqual({ error: 'invalid_scope' });
   });
 
+  it('refuses an omitted scope when the ID-JAG grants none either', async () => {
+    const { harness, dpopKey } = await ready();
+    // Omitting the parameter falls back to the ID-JAG's scope, and falling back to
+    // nothing is still nothing: absence has never meant "everything" here.
+    const response = await exchange(harness, { idJag: await mintIdJag({ dpopKey, scope: '' }), dpopKey });
+    expect(await response.json()).toEqual({ error: 'invalid_scope' });
+  });
+
   it('is indifferent to order and duplication', () => {
     const a = parseScope('calendar.read gmail.send calendar.read');
     const b = parseScope('gmail.send calendar.read');
@@ -459,6 +481,19 @@ describe('the refresh grant', () => {
     const after = await harness.documents.get<{ encrypted_refresh_token: Uint8Array }>('bridge_connections', id);
     // The rotated token replaced the old one in place; no second copy anywhere.
     expect([...after!.encrypted_refresh_token]).not.toEqual([...before!.encrypted_refresh_token]);
+  });
+
+  it('leaves the connection ACTIVE and answers 502 when the SaaS returns 500', async () => {
+    const { harness, issuer, dpopKey } = await readyBridge({ saasTokenStatus: 500 });
+    const response = await exchangeToken(harness, { idJag: await issuer.mint({ dpopKey }), dpopKey });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: 'invalid_grant' });
+    const connection = await harness.documents.get<{ status: string }>(
+      'bridge_connections', connectionId(STUB_CONNECTOR.connector_id, 'testuser'),
+    );
+    // A SaaS having a bad minute is not a person withdrawing consent, and writing the
+    // connection off would force that person through the browser again for nothing.
+    expect(connection!.status).toBe('ACTIVE');
   });
 
   it('marks the connection revoked when the SaaS says invalid_grant', async () => {
