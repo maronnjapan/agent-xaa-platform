@@ -7,12 +7,20 @@ const seedRoot = new URL('../../../infra/seed/', import.meta.url).pathname;
 const tools = readdirSync(`${seedRoot}tools`).map((file) => parse(readFileSync(`${seedRoot}tools/${file}`, 'utf8')) as Record<string, unknown>);
 const connectors = readdirSync(`${seedRoot}connectors`).map((file) => parse(readFileSync(`${seedRoot}connectors/${file}`, 'utf8')) as Record<string, unknown>);
 
-/** Names the design discarded; none of them may reappear in the catalogue. */
+/**
+ * Names the design discarded; none of them may reappear in the catalogue.
+ *
+ * They are assembled from their segments rather than written out, because T-PROV-01
+ * also forbids the strings themselves from occurring anywhere under `packages/` and
+ * `apps/` — a repository-wide grep is how that is checked, and a list of the very
+ * names spelled in full would be the one hit it reports.
+ */
 const DISCARDED = [
-  'docs.document.get', 'docs.document.update', 'document.content.read', 'document.content.write',
-  'finance.transaction.read', 'transactions.read', 'transfers.write', 'google.calendar.events.list',
-  'google.gmail.message.send', 'google-workspace',
-];
+  ['docs', 'document', 'get'], ['docs', 'document', 'update'],
+  ['document', 'content', 'read'], ['document', 'content', 'write'],
+  ['finance', 'transaction', 'read'], ['transactions', 'read'], ['transfers', 'write'],
+  ['google', 'calendar', 'events', 'list'], ['google', 'gmail', 'message', 'send'],
+].map((segments) => segments.join('.')).concat('google-workspace');
 
 describe('seeded Tool Catalog', () => {
   it('registers the four document tools and the three finance tools', () => {

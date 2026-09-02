@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { compile, type IsolationLevel } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
+import { deleteAgentManifest, deleteAgentRegistration } from '../agent/registration.js';
+import type { DedicatedResourceRecord } from '../dedicated-ledger.js';
 import { isTerminal, transition, TRANSACTION_STATUSES, TRANSACTION_TTL_SECONDS, type TransactionStatus } from './state.js';
 
 export interface ProvisioningTransaction {
@@ -58,9 +60,48 @@ export interface TransactionStore {
   nextSequence(transactionId: string): Promise<number>;
 }
 
-export function createTransactionStore(documents: DocumentStore, now: () => number = () => Date.now()): TransactionStore {
+/**
+ * What abandoning a transaction has to undo outside this collection. The revoke is a
+ * call to the Agent OP, which is the only service that holds the refresh token behind
+ * a connection (RULE-51), so the store is handed the call rather than making it.
+ */
+export interface AbandonEffects {
+  revokeIdpConnection?(idpConnectionId: string): Promise<void>;
+}
+
+export function createTransactionStore(
+  documents: DocumentStore,
+  now: () => number = () => Date.now(),
+  effects: AbandonEffects = {},
+): TransactionStore {
   const load = async (transactionId: string) =>
     documents.get<ProvisioningTransaction>('provisioning_transactions', transactionId);
+
+  /**
+   * Undoes what the abandoned attempt had built, in the reverse of the order it was
+   * built in: the credential's public half first, then the connection it was to act
+   * through, then the isolation slot it was holding.
+   *
+   * The slot goes back to free only when the ledger lists nothing: a run that already
+   * created GCP resources keeps its slot until Lifecycle has deleted them, because the
+   * service-account quota the cap protects is not released before that (DEC-IAC-23).
+   */
+  const release = async (transaction: ProvisioningTransaction): Promise<void> => {
+    const agentId = transaction.agent_id;
+    if (!agentId) return;
+    // Through the registration module, which owns every write to an agent document
+    // (00b §3): a second writer here is how the two start disagreeing.
+    await deleteAgentManifest(documents, agentId).catch(() => undefined);
+    await deleteAgentRegistration(documents, agentId).catch(() => undefined);
+    await effects.revokeIdpConnection?.(`idpconn-${agentId}`).catch(() => undefined);
+    if (transaction.isolation_level !== 'full_isolation') return;
+    const ledger = await documents.get<DedicatedResourceRecord>('dedicated_resources', agentId);
+    if (!ledger || ledger.status === 'RELEASED' || ledger.status === 'FAILED') return;
+    const outstanding = ledger.created.some((entry) => !entry.deleted_at);
+    await documents.update('dedicated_resources', agentId, outstanding
+      ? { status: 'FAILED', last_error: 'the provisioning transaction was abandoned' }
+      : { status: 'RELEASED' });
+  };
 
   return {
     async create(input) {
@@ -102,6 +143,9 @@ export function createTransactionStore(documents: DocumentStore, now: () => numb
       if (isTerminal(current.status)) return current;
       const next: ProvisioningTransaction = { ...current, status: transition(current.status, 'ABANDONED') };
       await documents.update('provisioning_transactions', transactionId, { status: next.status });
+      // Written before the release so a crash in the middle leaves the transaction
+      // terminal: a second sweep then finds it abandoned and undoes nothing twice.
+      await release(current);
       return next;
     },
 

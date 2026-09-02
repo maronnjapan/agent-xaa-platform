@@ -70,6 +70,12 @@ export interface StartAgentOpOptions {
    * present but unauthenticated would be a worse double than no route at all.
    */
   internalCallers?: { lifecycle?: string; provisioner?: string; verify(authorization: string | undefined): Promise<string | null> };
+  /**
+   * Mounts `/internal/idp-connections` by giving the app a caller verifier and the
+   * Provisioner's service account; a shorthand for internalCallers when only the
+   * Provisioner's identity matters to the test.
+   */
+  provisionerServiceAccount?: string;
 }
 
 export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentOpHarness> {
@@ -164,6 +170,18 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
           serviceIdentity: { verify: options.internalCallers.verify },
           ...(options.internalCallers.lifecycle ? { lifecycleServiceAccount: options.internalCallers.lifecycle } : {}),
           ...(options.internalCallers.provisioner ? { provisionerServiceAccount: options.internalCallers.provisioner } : {}),
+        }
+      : {}),
+    ...(options.provisionerServiceAccount
+      ? {
+          provisionerServiceAccount: options.provisionerServiceAccount,
+          // Cloud Run verifies the Google-signed ID Token at the edge; what the app
+          // adds is the email check, and that is the part worth exercising here.
+          serviceIdentity: {
+            async verify(authorization: string | undefined) {
+              return authorization?.startsWith('Bearer ') ? options.provisionerServiceAccount! : null;
+            },
+          },
         }
       : {}),
   };

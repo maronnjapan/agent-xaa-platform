@@ -7,15 +7,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 status=0
-while IFS= read -r file; do
-  case "$file" in
-    apps/security-detection/src/server.ts) continue ;;
-    apps/security-detection/src/testing/*) continue ;;
-  esac
-  if ! node scripts/checks/code-grep.mjs 'globalThis\.fetch|httpClient\(' "$file" >&2; then
-    status=1
-  fi
-done < <(find apps/security-detection/src -type f -name '*.ts')
+# One pass over the directory rather than one Node process per file: the check runs
+# from a unit test with a five-second budget, and the process starts spend most of it.
+# code-grep walks directories itself and strips comments first, so what is checked is
+# unchanged.
+outbound=$(node scripts/checks/code-grep.mjs 'globalThis\.fetch|httpClient\(' apps/security-detection/src || true)
+outbound=$(printf '%s' "$outbound" \
+  | grep -v '^apps/security-detection/src/server\.ts:' \
+  | grep -v '^apps/security-detection/src/testing/' || true)
+if [ -n "$outbound" ]; then
+  echo "$outbound" >&2
+  status=1
+fi
 
 # The one place a request leaves this service, and the one destination it may name.
 if ! grep -q 'LIFECYCLE_MANAGER_URL' apps/security-detection/src/server.ts; then

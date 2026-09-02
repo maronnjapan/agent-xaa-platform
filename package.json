@@ -26,6 +26,7 @@
     "generate:baseline": "bash scripts/regenerate-oidc.sh",
     "lint": "eslint . && node scripts/check-deps.mjs",
     "perm:set": "node apps/authorization/dist/perm-set-cli.js",
+    "lint:rules": "bash scripts/check-no-hardcoded-endpoint.sh && bash scripts/check-risk-level-usage.sh && bash scripts/check-no-private-key-persist.sh && bash scripts/check-no-token-endpoint-call.sh && bash scripts/check-no-dcr.sh",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:e2e": "vitest --project e2e run",
     "test:integration": "vitest --project integration run --passWithNoTests",

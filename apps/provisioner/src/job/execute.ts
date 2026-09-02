@@ -1,5 +1,5 @@
 import { assertRuntimeEnv, RUNTIME_ENV_KEYS, type RuntimeEnvOverrides } from '@xaa/contracts';
-import { sha256Base64Url } from '@xaa/crypto';
+import { sha256Hex } from '@xaa/crypto';
 import type { DocumentStore } from '@xaa/gcp';
 import { setJobExecutionName } from '../agent/registration.js';
 
@@ -33,8 +33,11 @@ export async function startAgentExecution(options: {
 
   const env: Record<string, string> = {
     ...options.overrides,
-    // The digest lets the Runtime confirm the manifest reached it unmodified.
-    TOOL_MANIFEST_SHA256: await sha256Base64Url(options.overrides.TOOL_MANIFEST),
+    // The digest lets the Runtime confirm the manifest reached it unmodified. Hex,
+    // because that is what the Runtime's own check computes and compares against
+    // (`apps/agent-runtime/src/manifest/load.ts`): the same bytes in another encoding
+    // is a mismatch, and the Runtime refuses to start rather than run unverified.
+    TOOL_MANIFEST_SHA256: await sha256Hex(options.overrides.TOOL_MANIFEST),
   };
   assertRuntimeEnv(env);
 

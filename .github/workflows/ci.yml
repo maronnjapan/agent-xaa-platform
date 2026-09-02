@@ -135,6 +135,7 @@ jobs:
       - run: bash scripts/check-bridge-raw-fetch.sh
       - run: bash scripts/check-bridge-no-refresh-token.sh
       - run: bash scripts/check-security-outbound.sh
+      - run: pnpm lint:rules
       - run: for check in scripts/checks/*.sh; do bash "$check"; done
   # The committed generator output is what check-oidc-patches diffs the hand-written
   # OIDC sources against, so it has to be the CLI's output for the pinned version and

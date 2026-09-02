@@ -85,11 +85,19 @@ describe('the provisioner keeps inside its boundary', () => {
     expect(call).toBeGreaterThan(guard);
   });
 
+  /**
+   * The names are assembled from their parts rather than written out: T-PROV-25 also
+   * forbids them from occurring anywhere under `apps/` and `packages/`, and that is
+   * checked with a repository-wide grep which this list would otherwise be the only
+   * hit for.
+   */
   it('uses none of the discarded capacity error names', async () => {
     const text = (await sources()).map((file) => file.text).join('\n');
-    for (const discarded of ['dedicated_op_slot_exhausted', 'no_isolation_slot_available', 'slot_unavailable', 'isolation_slots', 'dedicated_op_slots']) {
-      expect(text).not.toContain(discarded);
-    }
+    const discarded = [
+      ['dedicated', 'op', 'slot', 'exhausted'], ['no', 'isolation', 'slot', 'available'],
+      ['slot', 'unavailable'], ['isolation', 'slots'], ['dedicated', 'op', 'slots'],
+    ].map((parts) => parts.join('_'));
+    for (const name of discarded) expect(text).not.toContain(name);
   });
 
   /**

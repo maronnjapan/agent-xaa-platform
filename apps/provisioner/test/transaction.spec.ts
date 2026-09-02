@@ -3,6 +3,8 @@ import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { completionCodeId } from '@xaa/contracts';
 import { createLogger } from '@xaa/logging';
 import { createTransactionStore } from '../src/transaction/store.js';
+import { reserveFullIsolationSlot } from '../src/capacity.js';
+import type { DedicatedResourceRecord } from '../src/dedicated-ledger.js';
 import { InvalidTransactionTransition, isTerminal, transition, TRANSACTION_TTL_SECONDS } from '../src/transaction/state.js';
 import { createCompletionCodes, COMPLETION_CODE_TTL_SECONDS } from '../src/transaction/one-time-code.js';
 
@@ -20,6 +22,7 @@ const seed = {
 describe('provisioning transaction state', () => {
   it('refuses to resurrect a finished transaction', () => {
     expect(() => transition('COMPLETED', 'PROVISIONING')).toThrow(InvalidTransactionTransition);
+    expect(() => transition('COMPLETED', 'PROVISIONING')).toThrow(/^invalid_transaction_transition/);
     expect(() => transition('FAILED', 'PROVISIONING')).toThrow(InvalidTransactionTransition);
     expect(() => transition('ABANDONED', 'CREATED')).toThrow(InvalidTransactionTransition);
   });
@@ -152,5 +155,103 @@ describe('a code redeemed twice', () => {
     const code = await codes.issue({ transaction_id: 'txn-1', human_subject: 'testuser', issuer_kind: 'idp' });
     await codes.consume({ code, transaction_id: 'txn-1', human_subject: 'testuser' });
     expect(lines.join('\n')).not.toContain('protocol_validation');
+  });
+});
+
+/**
+ * docs 07 §3.2. A consent that never came back leaves a transaction holding things:
+ * the public half of an agent's credential, a connection the Agent OP made, and — for
+ * FULL_ISOLATION — a slot out of a hard GCP quota.
+ *
+ * `abandon` is what the Lifecycle sweep calls to give them back, in the reverse of the
+ * order they were taken. It is idempotent because a sweep is retried: a second pass
+ * over the same transaction must not revoke a connection twice or hand back a slot
+ * that has since been given to someone else.
+ */
+describe('abandoning a transaction that timed out', () => {
+  const AGENT_ID = 'agent-abcdefghijklmnopqrstuvwxyz';
+  const seedFor = (agentId: string, isolationLevel: 'standard' | 'full_isolation' = 'standard') => ({
+    ...seed, agent_id: agentId, isolation_level: isolationLevel,
+  });
+
+  function abandoning(now: () => number = () => Date.now()) {
+    const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'provisioner');
+    const revoked: string[] = [];
+    const transactions = createTransactionStore(documents, now, {
+      revokeIdpConnection: async (idpConnectionId) => { revoked.push(idpConnectionId); },
+    });
+    return { documents, transactions, revoked };
+  }
+
+  it('marks it ABANDONED, revokes the connection once and frees the slot', async () => {
+    let clock = Date.parse('2026-03-01T00:00:00Z');
+    const { documents, transactions, revoked } = abandoning(() => clock);
+    const created = await transactions.create(seedFor(AGENT_ID, 'full_isolation'));
+    await documents.set('dedicated_resources', AGENT_ID, {
+      agent_id: AGENT_ID, status: 'CREATING', created: [],
+      created_at: created.created_at, expires_at: created.expires_at, last_error: null,
+    } satisfies DedicatedResourceRecord);
+    await documents.set('dedicated_resources', '_slots', { holders: [AGENT_ID] });
+
+    // Past the half hour: the consent is not coming.
+    clock += (TRANSACTION_TTL_SECONDS + 60) * 1000;
+    const abandoned = await transactions.abandon(created.transaction_id);
+
+    expect(abandoned!.status).toBe('ABANDONED');
+    expect(revoked).toEqual([`idpconn-${AGENT_ID}`]);
+    // Nothing was built under the slot, so it goes straight back rather than waiting
+    // for a cleanup that would have nothing to delete.
+    expect((await documents.get<DedicatedResourceRecord>('dedicated_resources', AGENT_ID))!.status).toBe('RELEASED');
+    const capacity = await reserveFullIsolationSlot({
+      documents, agentId: 'agent-bbbbbbbbbbbbbbbbbbbbbbbbbb', capacity: 1,
+      expiresAt: created.expires_at, now: () => clock,
+    });
+    expect(capacity.allowed).toBe(true);
+  });
+
+  it('deletes the credential and the manifest it had written', async () => {
+    const { documents, transactions } = abandoning();
+    const created = await transactions.create(seedFor(AGENT_ID));
+    await documents.set('agents', `${AGENT_ID}__meta`, { agent_id: AGENT_ID });
+    await documents.set('agents', `${AGENT_ID}__manifest`, { agent_id: AGENT_ID });
+
+    await transactions.abandon(created.transaction_id);
+
+    expect(await documents.get('agents', `${AGENT_ID}__meta`)).toBeUndefined();
+    expect(await documents.get('agents', `${AGENT_ID}__manifest`)).toBeUndefined();
+  });
+
+  it('changes nothing on a second call', async () => {
+    const { documents, transactions, revoked } = abandoning();
+    const created = await transactions.create(seedFor(AGENT_ID, 'full_isolation'));
+    await documents.set('dedicated_resources', AGENT_ID, {
+      agent_id: AGENT_ID, status: 'CREATING',
+      created: [{
+        kind: 'service_account', name: 'projects/p/serviceAccounts/sa-op-abcdefghijkl@p.test',
+        created_at: created.created_at, deleted_at: null,
+      }],
+      created_at: created.created_at, expires_at: created.expires_at, last_error: null,
+    } satisfies DedicatedResourceRecord);
+
+    await transactions.abandon(created.transaction_id);
+    const afterFirst = await documents.get<DedicatedResourceRecord>('dedicated_resources', AGENT_ID);
+    // A resource exists, so the slot is not free yet: Lifecycle deletes it, and the
+    // GCP quota it occupies is not returned before that (DEC-IAC-23).
+    expect(afterFirst!.status).toBe('FAILED');
+
+    await transactions.abandon(created.transaction_id);
+    expect(await documents.get('dedicated_resources', AGENT_ID)).toEqual(afterFirst);
+    expect(revoked).toHaveLength(1);
+  });
+
+  it('leaves a completed transaction alone', async () => {
+    const { transactions, revoked } = abandoning();
+    const created = await transactions.create(seedFor(AGENT_ID));
+    await transactions.advance(created.transaction_id, 'PROVISIONING');
+    await transactions.advance(created.transaction_id, 'COMPLETED');
+
+    const result = await transactions.abandon(created.transaction_id);
+    expect(result!.status).toBe('COMPLETED');
+    expect(revoked).toEqual([]);
   });
 });

@@ -110,6 +110,34 @@ export async function deleteAgentManifest(documents: DocumentStore, agentId: str
 }
 
 /**
+ * RULE-29 / RULE-13. What a registration says about an agent's authority is decided
+ * once, at creation, and never edited: docs 07 §5 replaces an agent rather than
+ * amending one, because an amended registration is a delegation the person consented
+ * to in a form that no longer exists.
+ *
+ * Two fields move after creation, and both are bookkeeping rather than authority: the
+ * status the agent has reached, and the name of the execution running it. Everything
+ * else — the audiences, the resources, the scopes, the expiry, the subject, the key —
+ * is refused here rather than left to reviewers to notice.
+ */
+export const MUTABLE_REGISTRATION_FIELDS = ['status', 'job_execution_name'] as const;
+
+export class ForbiddenRegistrationWrite extends Error {
+  constructor(readonly field: string) { super('forbidden_registration_write'); }
+}
+
+export async function updateRegistrationFields(
+  documents: DocumentStore, agentId: string, patch: Record<string, unknown>,
+): Promise<void> {
+  for (const field of Object.keys(patch)) {
+    if (!(MUTABLE_REGISTRATION_FIELDS as readonly string[]).includes(field)) {
+      throw new ForbiddenRegistrationWrite(field);
+    }
+  }
+  await documents.update('agents', `${agentId}__meta`, patch);
+}
+
+/**
  * The one write that turns a registration into a running agent. It lives here rather
  * than at the call site because every write to `agents/{agent_id}/meta` belongs to this
  * module (00b §3), and a second writer is how two of them start disagreeing.
@@ -117,14 +145,14 @@ export async function deleteAgentManifest(documents: DocumentStore, agentId: str
 export async function setJobExecutionName(
   documents: DocumentStore, agentId: string, executionName: string,
 ): Promise<void> {
-  await documents.update('agents', `${agentId}__meta`, { job_execution_name: executionName });
+  await updateRegistrationFields(documents, agentId, { job_execution_name: executionName });
 }
 
 /** Provisioner writes exactly these three; anything else belongs to Lifecycle. */
 export async function setProvisioningStatus(
   documents: DocumentStore, agentId: string, status: 'CREATED' | 'PROVISIONING' | 'ACTIVE',
 ): Promise<void> {
-  await documents.update('agents', `${agentId}__meta`, { status });
+  await updateRegistrationFields(documents, agentId, { status });
 }
 
 export async function deleteAgentRegistration(documents: DocumentStore, agentId: string): Promise<void> {

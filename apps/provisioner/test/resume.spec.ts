@@ -18,11 +18,11 @@ beforeAll(async () => {
   dpopKeyPair = await generateEs256KeyPair();
 });
 
-async function accessToken(): Promise<string> {
+async function accessToken(subject = 'testuser'): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'at+jwt', kid: 'idp-testkey' };
   const payload = {
-    iss: HUMAN_IDP_ISSUER, sub: 'testuser', aud: ['agent-provisioner', `${HUMAN_IDP_ISSUER}/userinfo`],
+    iss: HUMAN_IDP_ISSUER, sub: subject, aud: ['agent-provisioner', `${HUMAN_IDP_ISSUER}/userinfo`],
     exp: now + 300, iat: now, nbf: now, jti: `at-${Math.random().toString(36).slice(2)}`,
     scope: 'openid agent:provision', client_id: 'automation-app',
     cnf: { jkt: await jwkThumbprint(dpopKeyPair.publicJwk) },
@@ -33,8 +33,8 @@ async function accessToken(): Promise<string> {
   return `${signingInput}.${Buffer.from(signature).toString('base64url')}`;
 }
 
-async function resume(target: ProvisionerHarness, transactionId: string, code: string): Promise<Response> {
-  const token = await accessToken();
+async function resume(target: ProvisionerHarness, transactionId: string, code: string, subject = 'testuser'): Promise<Response> {
+  const token = await accessToken(subject);
   const path = `/provisioning/${transactionId}/resume`;
   return target.fetch(path, {
     method: 'POST',
@@ -84,5 +84,52 @@ describe('resuming after a consent', () => {
     const response = await resume(target, transactionId, code);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ status: 'RESUMABLE', pending_step: 'verify_idp_connection' });
+  });
+
+  /**
+   * The subject is checked before the code is consumed. A caller who is not the person
+   * the code was minted for must not be able to burn it by trying: the code is
+   * single-use, so a refusal that spent it would let anyone deny the rightful owner
+   * their own resume by presenting the code first.
+   */
+  it('refuses another person and leaves the code unspent', async () => {
+    const target = await createProvisionerHarness({ idpPublicJwk: publicJwk, verifyStatus: 'READY' });
+    const transactionId = await pausedTransaction(target);
+    const codes = createCompletionCodes(target.documents, () => Date.now());
+    const code = await codes.issue({ transaction_id: transactionId, human_subject: 'testuser', issuer_kind: 'idp' });
+
+    const refused = await resume(target, transactionId, code, 'someone-else');
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ error: 'code_owner_mismatch' });
+
+    const stored = await target.documents.listAll<{ used_at: string | null }>('provisioning_codes');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.data.used_at).toBe(null);
+    // And the rightful owner can still use it.
+    expect((await resume(target, transactionId, code)).status).toBe(200);
+    expect((await target.documents.listAll<{ used_at: string | null }>('provisioning_codes'))[0]!.data.used_at)
+      .not.toBe(null);
+  });
+
+  it('answers a browser landing on the resume url with 405 and Allow: POST', async () => {
+    const target = await createProvisionerHarness({ idpPublicJwk: publicJwk });
+    const transactionId = await pausedTransaction(target);
+    // Registered on purpose rather than left to fall through to a 404: the person is
+    // arriving from a consent screen, and a 404 would read as "your consent was lost".
+    const response = await target.fetch(`/provisioning/${transactionId}/resume`, { method: 'GET' });
+    expect(response.status).toBe(405);
+    expect(response.headers.get('Allow')).toBe('POST');
+  });
+
+  it('refuses to resume a transaction that already ended', async () => {
+    const target = await createProvisionerHarness({ idpPublicJwk: publicJwk, verifyStatus: 'READY' });
+    const transactionId = await pausedTransaction(target);
+    const codes = createCompletionCodes(target.documents, () => Date.now());
+    const code = await codes.issue({ transaction_id: transactionId, human_subject: 'testuser', issuer_kind: 'idp' });
+    await target.deps.transactions.advance(transactionId, 'FAILED', { pending_step: 'idp_consent' });
+
+    const response = await resume(target, transactionId, code);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'transaction_not_resumable' });
   });
 });

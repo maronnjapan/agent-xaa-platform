@@ -7,6 +7,7 @@ import { assertRuntimeName, publishActivityEvent } from '@xaa/contracts';
 import { createFirestoreDocumentStore, createIdentityTokenProvider, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
+import { createAgentOpClient } from './agent/idp-connection.js';
 import { createTransactionStore } from './transaction/store.js';
 import { createDedicatedResources, type GcpAdmin } from './dedicated.js';
 import type { ProvisionerConfig } from './deps.js';
@@ -45,23 +46,16 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   const admin = createGcpAdmin(env);
   const identityToken = createIdentityTokenProvider();
 
-  const callAgentOp = async (path: string, body?: unknown): Promise<Response> => {
-    const url = new URL(path, config.sharedAgentOpUrl).toString();
-    const token = await identityToken(new URL(url).origin);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) throw new Error(`agent OP call failed: ${response.status}`);
-    return response;
-  };
+  const agentOp = createAgentOpClient({ baseUrl: config.sharedAgentOpUrl, identityToken });
 
   return {
     config,
     documents,
-    transactions: createTransactionStore(documents),
+    // Abandoning a transaction gives back the connection it had asked for, so the
+    // store is handed the same client the provisioning steps use (T-PROV-13).
+    transactions: createTransactionStore(documents, () => Date.now(), {
+      revokeIdpConnection: (idpConnectionId) => agentOp.revokeIdpConnection!(idpConnectionId),
+    }),
     jobs: {
       async runJob(input) {
         const [operation] = await new JobsClient().runJob({
@@ -76,19 +70,7 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
     // The shared publisher validates against the canonical schema before it sends. A
     // raw topic write here would put events on the stream the subscriber then drops.
     publishActivity: publishActivityEvent,
-    agentOp: {
-      async createIdpConnection(input) {
-        const response = await callAgentOp('/internal/idp-connections', input);
-        return response.json() as Promise<{ status: 'READY' | 'CONSENT_REQUIRED'; consentUrl: string }>;
-      },
-      async verifyIdpConnection(idpConnectionId) {
-        const response = await callAgentOp(`/internal/idp-connections/${encodeURIComponent(idpConnectionId)}/verify`);
-        return response.json() as Promise<{ status: string }>;
-      },
-      async revokeIdpConnection(idpConnectionId) {
-        await callAgentOp(`/internal/idp-connections/${encodeURIComponent(idpConnectionId)}/revoke`);
-      },
-    },
+    agentOp,
     createDedicated: (input) => createDedicatedResources({
       admin,
       ledger: input.ledger,
