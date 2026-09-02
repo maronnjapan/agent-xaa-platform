@@ -81,9 +81,15 @@ export async function startAutomationApp(options: {
   identityTokenProvider?: (audience: string) => Promise<string>;
   tokenAudience?: string | string[];
   tokenTyp?: string;
+  /** Extra claims on the session's own Access Token, to prove which ones are ignored. */
+  tokenClaims?: Record<string, unknown>;
+  /** The `aud` of the Authorization Platform token, to exercise a misrouted one. */
+  authorizationAudience?: string | string[];
   scope?: string;
   upstreamHandler?: (url: string, init: RequestInit) => Response | Promise<Response>;
   verifyAccessToken?: AutomationAppDeps['verifyAccessToken'];
+  /** Stands in for the Google OIDC check on `/internal/activity/push`. */
+  verifyPush?: AutomationAppDeps['verifyPush'];
   generate?: AutomationAppDeps['generate'];
   now?: () => number;
   shared?: ReturnType<typeof createFirestoreDouble>;
@@ -103,8 +109,13 @@ export async function startAutomationApp(options: {
         subject,
         ...(options.tokenAudience === undefined ? {} : { audience: options.tokenAudience }),
         ...(options.tokenTyp === undefined ? {} : { typ: options.tokenTyp }),
+        ...(options.tokenClaims === undefined ? {} : { extra: options.tokenClaims }),
       }),
-      'authorization-platform': await mintAccessToken({ subject, audience: 'authorization-platform', ...(options.scope ? { scope: options.scope } : {}) }),
+      'authorization-platform': await mintAccessToken({
+        subject,
+        audience: options.authorizationAudience ?? 'authorization-platform',
+        ...(options.scope ? { scope: options.scope } : {}),
+      }),
       'agent-provisioner': await mintAccessToken({ subject, audience: 'agent-provisioner' }),
       'lifecycle-manager': await mintAccessToken({ subject, audience: 'lifecycle-manager' }),
     },
@@ -121,6 +132,7 @@ export async function startAutomationApp(options: {
     verifyIdToken: async (token) => decodePayload(token),
     auditWrite: (line) => auditLines.push(line),
     ...(options.now ? { now: options.now } : {}),
+    ...(options.verifyPush ? { verifyPush: options.verifyPush } : {}),
     ...(options.generate ? { generate: options.generate } : {}),
     ...(options.identityTokenProvider ? { identityTokenProvider: options.identityTokenProvider } : {}),
     fetchImpl: (async (url: string | URL | Request, init: RequestInit = {}) => {

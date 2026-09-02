@@ -56,7 +56,14 @@ describe('the daily report', () => {
     expect(write?.url).toBe(`${DOCS}/documents`);
     // The receiving schema is the one this body has to satisfy, so the test uses it
     // rather than a copy of the field names.
-    expect(() => assertCreate(JSON.parse(String(write?.init.body)))).not.toThrow();
+    const created = JSON.parse(String(write?.init.body)) as { type: string; title: string; occurred_at: string };
+    expect(() => assertCreate(created)).not.toThrow();
+    // One document, of the one type a report is filed under: the timeline and the work
+    // signal source both find it again by `type=daily_report` and nothing else.
+    expect(created.type).toBe('daily_report');
+    expect(created.title).toBe('1月1日の日報');
+    expect(created.occurred_at).toBe('2026-01-01T23:59:59.000Z');
+    expect(harness.upstream.filter((call) => call.init.method === 'POST')).toHaveLength(1);
     expect((write?.init.headers as Record<string, string>).Authorization)
       .toBe(`Bearer id-token-for-${DOCS}`);
   });

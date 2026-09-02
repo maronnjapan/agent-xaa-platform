@@ -6,19 +6,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-status=0
+# Every file is handed to one `code-grep` run rather than one run each: the check is the
+# same, and a Node process per file made this take seconds.
+files=()
 while IFS= read -r file; do
   case "$file" in
     */status-writer.ts) continue ;;
     */testing/*) continue ;;
   esac
-  # code-grep exits 1 when it finds something, so a hit is the failure case.
-  if ! node scripts/checks/code-grep.mjs "(update|set)\(['\"]agents['\"].*status:" "$file" >&2; then
-    status=1
-  fi
+  files+=("$file")
 done < <(find apps/lifecycle-manager/src -type f -name '*.ts')
 
-if [ "$status" -ne 0 ]; then
+if [ ${#files[@]} -eq 0 ]; then
+  echo "no lifecycle sources to check" >&2
+  exit 1
+fi
+
+# code-grep exits 1 when it finds something, so a hit is the failure case.
+if ! node scripts/checks/code-grep.mjs "(update|set)\(['\"]agents['\"].*status:" "${files[@]}" >&2; then
   echo "an agent status is written only by status-writer.ts" >&2
   exit 1
 fi

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { LOGIN_SCOPE, buildAuthorizationRequest } from '../src/auth/oidc-login.js';
 import {
@@ -30,6 +31,21 @@ describe('the session record', () => {
     // the source check below enforces for the rest of the app.
     expect(() => execFileSync('bash', ['scripts/checks/no-offline-access-in-automation-app.sh'], { cwd: repoRoot })).not.toThrow();
   });
+
+  /**
+   * The compiler is what keeps the refresh token out, not a convention. This runs the
+   * type checker over a session literal that carries one: a green `tsc` here would mean
+   * `Session` had grown somewhere for it to live.
+   */
+  it('fails to compile a session that carries a refresh token', async () => {
+    const project = new URL('./type-fixtures/tsconfig.json', import.meta.url).pathname;
+    const failure = await promisify(execFile)('npx', ['tsc', '--noEmit', '-p', project], { cwd: repoRoot })
+      .then(() => null, (error: { code?: number; stdout?: string }) => error);
+    expect(failure).not.toBeNull();
+    expect(failure!.code).not.toBe(0);
+    expect(failure!.stdout).toContain('session-refresh-token.ts');
+    expect(failure!.stdout).toContain('refresh_token');
+  }, 60_000);
 
   it('round-trips through the store and can be destroyed', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'automation-app');
@@ -94,9 +110,32 @@ describe('resolving who is asking', () => {
     expect((await harness.fetch('/api/activity/tasks')).status).toBe(401);
   });
 
+  /**
+   * REQ-11-038. A token may say whatever it likes about roles; the answer is the same.
+   * The timeline is scoped by `sub` and nothing else, so there is no claim an operator
+   * could add to widen it — which is why no cross-user view exists to be misused.
+   */
   it('reads no role or group claim', async () => {
-    const admin = await mintAccessToken({ extra: { role: 'admin', groups: ['admins'], admin: true } });
-    expect(admin).toBeTruthy();
+    const shared = createFirestoreDouble();
+    const owner = await startAutomationApp({ shared, subject: 'user-A' });
+    await owner.documents.set('user_activity', 'ev-1', {
+      event_id: 'ev-1', trace_id: 'tr-1', human_subject: 'user-A', agent_id: null, task_id: 'task-1',
+      occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success',
+      title: 'x', message: 'y', detail: { event_type: 'TASK_COMPLETED' }, related_finding_id: null,
+      is_simulated: false, expire_at: '2026-01-08T00:00:00.000Z',
+    });
+
+    const plain = await startAutomationApp({ shared, subject: 'user-B' });
+    const claiming = await startAutomationApp({
+      shared, subject: 'user-B', tokenClaims: { role: 'admin', groups: ['admins'], admin: true },
+    });
+    const asPlain = await (await plain.fetch('/api/activity/tasks')).json();
+    const asAdmin = await (await claiming.fetch('/api/activity/tasks')).json();
+    expect(asAdmin).toEqual(asPlain);
+    expect(asAdmin).toEqual({ tasks: [] });
+    expect((await claiming.fetch('/api/activity/tasks/task-1')).status).toBe(404);
+
+    expect(await mintAccessToken({ extra: { role: 'admin' } })).toBeTruthy();
     expect(() => execFileSync('bash', ['scripts/checks/no-cross-user-route.sh'], { cwd: repoRoot })).not.toThrow();
   });
 });

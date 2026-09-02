@@ -45,6 +45,13 @@ export interface AutomationAppDeps {
   signals?: WorkSignalSource;
   generate?: Parameters<typeof suggestAutomations>[0]['generate'];
   pushAudience?: string;
+  /**
+   * Who the push endpoint believes. Production passes nothing and gets
+   * `verifyPushCaller`, which checks Google's OIDC token; a test supplies its own so
+   * the rest of the endpoint — decode, validate, write once — can be exercised without
+   * minting a Google-signed token.
+   */
+  verifyPush?: (input: { authorization: string | undefined; audience: string }) => Promise<unknown>;
   identityTokenProvider?: (audience: string) => Promise<string>;
 }
 
@@ -98,10 +105,13 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
    */
   app.post('/internal/activity/push', async (context) => {
     try {
-      await verifyPushCaller({
+      const verify = deps.verifyPush ?? ((input) => verifyPushCaller({
+        ...input,
+        ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      }));
+      await verify({
         authorization: context.req.header('authorization'),
         audience: deps.pushAudience ?? new URL(context.req.url).origin,
-        ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
       });
     } catch {
       return context.json({ error: 'unauthorized' }, 401);
