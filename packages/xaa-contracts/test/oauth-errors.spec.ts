@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IdJagError } from '@maronn-openid-connect/experimental/id-jag';
+import { IdJagError, type IdJagErrorCode } from '@maronn-openid-connect/experimental/id-jag';
 import { mapIdJagError, oauthErrorResponse, OAUTH_ERROR_CODES } from '../src/oauth-errors.js';
 
 describe('oauth error responses', () => {
@@ -17,8 +17,14 @@ describe('oauth error responses', () => {
     expect(new Set(bodies).size).toBe(1);
   });
 
-  it('maps every IdJagError code to invalid_grant or invalid_scope', () => {
-    const codes = ['invalid_request', 'invalid_grant', 'unauthorized_client', 'invalid_scope', 'invalid_target'] as const;
+  it('maps all IdJagError codes to invalid_grant or invalid_scope', () => {
+    // Exhaustive by construction: a code added to IdJagErrorCode upstream makes this
+    // record a compile error before it can slip through unmapped.
+    const coverage: Record<IdJagErrorCode, true> = {
+      invalid_request: true, invalid_grant: true, unauthorized_client: true, invalid_scope: true, invalid_target: true,
+    };
+    const codes = Object.keys(coverage) as IdJagErrorCode[];
+    expect(codes).toHaveLength(5);
     for (const code of codes) {
       const mapped = mapIdJagError(new IdJagError(code, 'x'));
       expect(['invalid_grant', 'invalid_scope']).toContain(mapped.code);
