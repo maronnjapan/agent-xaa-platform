@@ -7,7 +7,7 @@ export interface HumanIdpAuditEvent {
   scope: string | null;
   auth_result: AuthResult;
   failure_code: string | null;
-  dpop_status: DpopStatusValue;
+  dpop_result: DpopStatusValue;
   source_ip: string | null;
   user_agent: string | null;
 }
@@ -73,7 +73,7 @@ export function createAuditHooks(write?: (line: string) => void): AuditHooks {
         scope: event.scope ?? null,
         auth_result: event.auth_result,
         failure_code: event.auth_result === 'success' ? null : event.failure_code ?? 'invalid_request',
-        dpop_status: event.dpop_status ?? dpopDefault,
+        dpop_result: event.dpop_result ?? dpopDefault,
         source_ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
         user_agent: request.headers.get('user-agent'),
       }, {

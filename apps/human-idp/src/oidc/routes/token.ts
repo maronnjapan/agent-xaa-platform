@@ -642,7 +642,7 @@ tokenApp.post('/', async (c) => {
     (c.get('auditHooks') as AuditHooks | undefined)?.token(
       {
         client_id: validatedRequest.clientId, audience: effectiveAudience, scope: validatedRequest.scope.join(' '),
-        auth_result: 'success', dpop_status: dpopBinding.jkt ? 'valid' : 'absent',
+        auth_result: 'success', dpop_result: dpopBinding.jkt ? 'valid' : 'absent',
       },
       c.req.raw, subject,
     );

@@ -63,10 +63,10 @@ export interface TestApp {
   stores: ProviderStores;
 }
 
-export async function createTestApp(overrides: Partial<HumanIdpEnv> = {}): Promise<TestApp> {
+export async function createTestApp(overrides: Partial<HumanIdpEnv> = {}, writeAuditLine?: (line: string) => void): Promise<TestApp> {
   const env = { ...testEnv, ...overrides };
   const stores = createJsonProviderStores(createMemoryBackend());
-  const app = createApp({ env, stores, jtiStore: new InMemoryJtiStore(), signingKeyProvider: await testSigningKeyProvider() });
+  const app = createApp({ env, stores, jtiStore: new InMemoryJtiStore(), signingKeyProvider: await testSigningKeyProvider(), ...(writeAuditLine ? { writeAuditLine } : {}) });
   return {
     fetch: (path, init) => app.fetch(new Request(new URL(path, env.issuer), init)),
     stores,

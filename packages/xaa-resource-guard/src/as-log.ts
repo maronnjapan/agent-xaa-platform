@@ -2,24 +2,26 @@ import { decodeJwsUnverified } from '@xaa/crypto';
 import type { LogContext, Logger } from '@xaa/logging';
 
 export const AS_LOG_FIELDS = [
-  'idjag_iss', 'idjag_sub', 'idjag_act_sub', 'idjag_client_id', 'idjag_jti', 'idjag_kid', 'idjag_typ',
-  'audience', 'resource', 'scope', 'cnf_jkt_match', 'token_issued',
+  'id_jag_iss', 'id_jag_sub', 'id_jag_act', 'id_jag_client_id', 'idjag_jti', 'received_kid', 'received_typ',
+  'audience', 'resource', 'scope', 'cnf_jkt', 'dpop_binding_result', 'token_issue_result',
 ] as const;
 
 export interface IdJagRedemptionLog {
-  idjag_iss: string | null;
-  idjag_sub: string | null;
-  idjag_act_sub: string | null;
-  idjag_client_id: string | null;
+  id_jag_iss: string | null;
+  id_jag_sub: string | null;
+  id_jag_act: string | null;
+  id_jag_client_id: string | null;
   idjag_jti: string | null;
-  idjag_kid: string | null;
-  idjag_typ: string | null;
+  received_kid: string | null;
+  received_typ: string | null;
   audience: string | null;
   resource: string | null;
   scope: string | null;
-  cnf_jkt_match: boolean | null;
-  token_issued: boolean;
-  authorization_decision: string;
+  /** The `cnf.jkt` thumbprint actually bound to the redeemed ID-JAG, once known. */
+  cnf_jkt: string | null;
+  dpop_binding_result: boolean | null;
+  token_issue_result: boolean;
+  authz_decision: string;
   validation_name: string | null;
 }
 
@@ -32,10 +34,10 @@ export interface IdJagRedemptionLog {
  * The assertion, the issued Access Token and the DPoP proof are never logged; the
  * thumbprint is a public value and may be.
  */
-export function inspectAssertion(assertion: string | undefined): Pick<IdJagRedemptionLog, 'idjag_jti' | 'idjag_kid' | 'idjag_typ' | 'idjag_iss' | 'idjag_sub' | 'idjag_act_sub' | 'idjag_client_id' | 'audience' | 'resource'> {
+export function inspectAssertion(assertion: string | undefined): Pick<IdJagRedemptionLog, 'idjag_jti' | 'received_kid' | 'received_typ' | 'id_jag_iss' | 'id_jag_sub' | 'id_jag_act' | 'id_jag_client_id' | 'audience' | 'resource'> {
   const empty = {
-    idjag_jti: null, idjag_kid: null, idjag_typ: null, idjag_iss: null, idjag_sub: null,
-    idjag_act_sub: null, idjag_client_id: null, audience: null, resource: null,
+    idjag_jti: null, received_kid: null, received_typ: null, id_jag_iss: null, id_jag_sub: null,
+    id_jag_act: null, id_jag_client_id: null, audience: null, resource: null,
   };
   if (!assertion) return empty;
   try {
@@ -44,12 +46,12 @@ export function inspectAssertion(assertion: string | undefined): Pick<IdJagRedem
     const asString = (value: unknown) => (typeof value === 'string' ? value : null);
     return {
       idjag_jti: asString(payload.jti),
-      idjag_kid: asString(header.kid),
-      idjag_typ: asString(header.typ),
-      idjag_iss: asString(payload.iss),
-      idjag_sub: asString(payload.sub),
-      idjag_act_sub: asString(actor?.sub),
-      idjag_client_id: asString(payload.client_id),
+      received_kid: asString(header.kid),
+      received_typ: asString(header.typ),
+      id_jag_iss: asString(payload.iss),
+      id_jag_sub: asString(payload.sub),
+      id_jag_act: asString(actor?.sub),
+      id_jag_client_id: asString(payload.client_id),
       audience: Array.isArray(payload.aud) ? payload.aud.join(' ') : asString(payload.aud),
       resource: Array.isArray(payload.resource) ? payload.resource.join(' ') : asString(payload.resource),
     };

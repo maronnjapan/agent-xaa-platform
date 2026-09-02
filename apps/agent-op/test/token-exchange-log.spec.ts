@@ -11,10 +11,10 @@ describe('token exchange log', () => {
     expect(fixture.exchangeLogs).toHaveLength(2);
   });
 
-  it('emits all fourteen fields on success and on a RULE-49 violation', async () => {
-    const fields = ['op_runtime_id', 'op_kind', 'requested_audience', 'requested_resource', 'requested_scope',
+  it('emits all seventeen fields on success and on a RULE-49 violation', async () => {
+    const fields = ['op_runtime_id', 'isolation_kind', 'requested_audience', 'requested_resource', 'requested_scope',
       'subject_token_iss', 'subject_token_aud', 'subject_token_sub', 'actor_token_sub', 'actor_token_jti',
-      'delegation_check', 'dpop_result', 'issued_id_jag', 'agent_expiry_check', 'error_code'];
+      'delegation_match', 'dpop_result', 'issued_jti', 'issued_kid', 'issued_jkt', 'expiry_check', 'error_code'];
 
     const ok = await createFixture();
     await exchange(ok);
@@ -30,7 +30,7 @@ describe('token exchange log', () => {
     await exchange(bad, { form: { subject_token: await subjectToken(bad, { sub: 'user-A' }) } });
     const failure = (JSON.parse(bad.exchangeLogs[0]!) as { fields: Record<string, unknown> }).fields;
     for (const field of fields) expect(Object.keys(failure)).toContain(field);
-    expect(failure.delegation_check).toBe(false);
+    expect(failure.delegation_match).toBe(false);
     expect(failure.error_code).toBe('invalid_grant');
   });
 

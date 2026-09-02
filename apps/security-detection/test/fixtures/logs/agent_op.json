@@ -3,12 +3,12 @@
   "request_id": "req-op-1", "trace_id": "b0f2a1c4-0000-4000-8000-000000000005",
   "agent_id": "agent-abcdefghijklmnopqrstuvwxyz", "human_subject": "testuser", "timestamp": "2026-01-01T12:00:04.000Z",
   "fields": {
-    "isolation_kind": "shared", "requested_audience": "https://resource-docs-as.test",
+    "op_runtime_id": "agent-op-00001-abc", "isolation_kind": "shared", "requested_audience": "https://resource-docs-as.test",
     "requested_resource": "https://resource-docs-api.test", "requested_scope": "docs.read",
     "subject_token_iss": "https://human-idp.test", "subject_token_aud": "agent-platform",
     "subject_token_sub": "testuser", "actor_token_sub": "urn:agent:agent-abcdefghijklmnopqrstuvwxyz",
-    "actor_token_jti": "atj-1", "delegation_check": "match", "dpop_result": "ok",
-    "issued_id_jag": true, "issued_jti": "jti-1", "agent_expiry_check": "active",
-    "error_code": null, "result": "issued", "grant_type": "token-exchange"
+    "actor_token_jti": "atj-1", "delegation_match": true, "dpop_result": "ok",
+    "issued_jti": "jti-1", "issued_kid": "op-shared-1", "issued_jkt": "v9uxeE3Bl-McvkIMOWo19cAn-bwSRjST9kSncra8zfY",
+    "expiry_check": "ok", "error_code": null, "result": "issued", "grant_type": "token-exchange"
   }
 }

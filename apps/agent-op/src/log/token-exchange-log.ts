@@ -1,14 +1,16 @@
 import { AGENT_URN_PREFIX } from '@xaa/contracts';
 import { createLogger } from '@xaa/logging';
 /**
- * docs 09 §2, the fourteen fields of a Token Exchange record.
+ * docs 09 §2, the seventeen fields of a Token Exchange record (`IDENTITY_EVENT_FIELDS`
+ * in `@xaa/logging` names them; `issued_id_jag` is flattened to its three scalar
+ * fields so the record has no nested object for a rule to reach into).
  *
  * Every field is a string, a boolean or a number. No field can hold a token: the
  * type itself is what keeps a compact JWS out of the log (RULE-38).
  */
 export interface TokenExchangeTrace {
   op_runtime_id: string;
-  op_kind: 'shared' | 'dedicated';
+  isolation_kind: 'shared' | 'dedicated';
   requested_audience: string | null;
   requested_resource: string | null;
   requested_scope: string | null;
@@ -17,17 +19,19 @@ export interface TokenExchangeTrace {
   subject_token_sub: string | null;
   actor_token_sub: string | null;
   actor_token_jti: string | null;
-  delegation_check: boolean | null;
+  delegation_match: boolean | null;
   dpop_result: string;
-  issued_id_jag: { jti: string; kid: string; cnf_jkt: string } | null;
-  agent_expiry_check: 'ok' | 'expired' | 'not_active' | null;
+  issued_jti: string | null;
+  issued_kid: string | null;
+  issued_jkt: string | null;
+  expiry_check: 'ok' | 'expired' | 'not_active' | null;
   error_code: string | null;
 }
 
 export function createTrace(options: { revision: string; kind: 'shared' | 'dedicated' }): TokenExchangeTrace {
   return {
     op_runtime_id: options.revision,
-    op_kind: options.kind,
+    isolation_kind: options.kind,
     requested_audience: null,
     requested_resource: null,
     requested_scope: null,
@@ -36,10 +40,12 @@ export function createTrace(options: { revision: string; kind: 'shared' | 'dedic
     subject_token_sub: null,
     actor_token_sub: null,
     actor_token_jti: null,
-    delegation_check: null,
+    delegation_match: null,
     dpop_result: 'ok',
-    issued_id_jag: null,
-    agent_expiry_check: null,
+    issued_jti: null,
+    issued_kid: null,
+    issued_jkt: null,
+    expiry_check: null,
     error_code: null,
   };
 }

@@ -48,9 +48,9 @@ export function createInternalRevokeRoute(deps: AgentOpDeps, verifier: ServiceId
     await store.idpConnections.update(connection.idp_connection_id, { status: 'REVOKED' });
     emitIdpConnectionLog({
       idp_connection_id: connection.idp_connection_id,
-      rotation_result: 'not_rotated',
-      reuse_detected: false,
-      subject_token_reissue: 'n/a',
+      refresh_rotation_result: 'not_rotated',
+      refresh_reuse_detected: false,
+      subject_token_refetch_result: 'n/a',
       revoke_result: revokeResult,
     }, deps.writeConnectionLog);
     return context.json({ revoked: true, revoke_result: revokeResult });

@@ -18,10 +18,10 @@ export function convert(entry: LogEntry): NormalizedEvent {
       agent_id: entry.agent_id,
     },
     api: {
-      operation: String(fields.id_jag_validation ?? entry.event),
+      operation: String(fields.id_jag_verify_result ?? entry.event),
       method: 'POST',
-      resource: String((fields.requested as { resource?: unknown } | undefined)?.resource ?? ''),
-      status: String(fields.token_issue_result ?? entry.severity),
+      resource: String(fields.requested_resource ?? ''),
+      status: String(fields.access_token_issue_result ?? entry.severity),
     },
     metadata: {
       correlation_uid: entry.trace_id || entry.request_id,

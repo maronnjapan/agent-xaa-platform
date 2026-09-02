@@ -2,8 +2,8 @@ import type { LogContext, Logger } from '@xaa/logging';
 import type { BridgeProtocolValidation } from '../errors.js';
 
 export const BRIDGE_LOG_FIELDS = [
-  'id_jag_issuer', 'id_jag_validation', 'connection_id', 'requested',
-  'binding_expiry_check', 'saas_refresh_result', 'token_issue_result',
+  'id_jag_iss', 'id_jag_verify_result', 'connection_id', 'requested_resource', 'requested_scope',
+  'agent_expiry_check', 'google_refresh_result', 'access_token_issue_result',
 ] as const;
 
 /** Never logged, whatever key they arrive under. */
@@ -12,13 +12,14 @@ export const ALWAYS_DROPPED = [
 ] as const;
 
 export interface BridgeTokenLog {
-  id_jag_issuer: string;
-  id_jag_validation: string;
+  id_jag_iss: string;
+  id_jag_verify_result: string;
   connection_id: string;
-  requested: { resource: string; scope: string };
-  binding_expiry_check: string;
-  saas_refresh_result: string;
-  token_issue_result: 'issued' | 'denied';
+  requested_resource: string;
+  requested_scope: string;
+  agent_expiry_check: string;
+  google_refresh_result: string;
+  access_token_issue_result: 'issued' | 'denied';
 }
 
 export class DisallowedLogField extends Error {}

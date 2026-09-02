@@ -91,9 +91,9 @@ export function createSubjectTokenRoute(deps: AgentOpDeps): Hono {
     } finally {
       emitIdpConnectionLog({
         idp_connection_id: connectionId,
-        rotation_result: rotationResult,
-        reuse_detected: reuseDetected,
-        subject_token_reissue: reissue,
+        refresh_rotation_result: rotationResult,
+        refresh_reuse_detected: reuseDetected,
+        subject_token_refetch_result: reissue,
         revoke_result: reuseDetected ? 'ok' : 'n/a',
       }, deps.writeConnectionLog);
     }

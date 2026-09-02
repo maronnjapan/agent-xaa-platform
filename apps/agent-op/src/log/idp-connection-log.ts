@@ -6,14 +6,14 @@ import { createLogger } from '@xaa/logging';
  */
 export interface IdpConnectionLogRecord {
   idp_connection_id: string;
-  rotation_result: 'rotated' | 'failed' | 'not_rotated';
-  reuse_detected: boolean;
-  subject_token_reissue: 'ok' | 'failed' | 'n/a';
+  refresh_rotation_result: 'rotated' | 'failed' | 'not_rotated';
+  refresh_reuse_detected: boolean;
+  subject_token_refetch_result: 'ok' | 'failed' | 'n/a';
   revoke_result: 'ok' | 'failed' | 'n/a';
 }
 
 export const IDP_CONNECTION_LOG_FIELDS = [
-  'idp_connection_id', 'rotation_result', 'reuse_detected', 'subject_token_reissue', 'revoke_result',
+  'idp_connection_id', 'refresh_rotation_result', 'refresh_reuse_detected', 'subject_token_refetch_result', 'revoke_result',
 ] as const;
 
 /**

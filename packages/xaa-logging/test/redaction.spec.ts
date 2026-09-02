@@ -31,4 +31,12 @@ describe('redaction keeps identifiers readable', () => {
     const record = { jti: 'VXJWbjj8qPNvjqw5WeZFKlSWzP2MDxvGtCLr36by-j8', cnf_jkt: 'v9uxeE3Bl-McvkIMOWo19cAn-bwSRjST9kSncra8zfY' };
     expect(redact(record)).toEqual(record);
   });
+
+  it('leaves the flattened Token Exchange identifiers readable (T-SEC-05)', () => {
+    // `issued_id_jag.cnf_jkt` flattened to a top-level `issued_jkt`: a real thumbprint
+    // is long and high-entropy, so without an identifier-list entry the generic
+    // heuristic would have redacted a field the detection SQL is meant to read.
+    const record = { issued_kid: 'op-shared-1', issued_jkt: 'v9uxeE3Bl-McvkIMOWo19cAn-bwSRjST9kSncra8zfY', id_jag_sub: 'user-1', id_jag_act: 'urn:agent:one' };
+    expect(redact(record)).toEqual(record);
+  });
 });
