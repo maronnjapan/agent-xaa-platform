@@ -46,12 +46,42 @@ export function dedicatedNames(agentId: string) {
   } as const;
 }
 
+/**
+ * DEC-IAC-25. The two labels every runtime-created resource carries.
+ *
+ * They exist for the sweep, not for the ledger: a Provisioner that died between
+ * creating a resource and recording it leaves nothing in `dedicated_resources`, and
+ * the label is then the only thing that says who the resource belonged to.
+ */
+export const RUNTIME_LABEL_KEY = 'xaa-managed';
+export const RUNTIME_LABEL_VALUE = 'runtime';
+export const RUNTIME_AGENT_LABEL_KEY = 'xaa-agent-id';
+
 /** DEC-IAC-25. Both labels, on everything, so the sweep can find it later. */
 export function runtimeLabels(agentId: string): Record<string, string> {
-  return { 'xaa-managed': 'runtime', 'xaa-agent-id': agentId };
+  return { [RUNTIME_LABEL_KEY]: RUNTIME_LABEL_VALUE, [RUNTIME_AGENT_LABEL_KEY]: agentId };
 }
 
 /** Service accounts carry no labels, so the same facts go into the description. */
 export function runtimeDescription(agentId: string): string {
-  return `xaa-managed=runtime agent=${agentId}`;
+  return `${RUNTIME_LABEL_KEY}=${RUNTIME_LABEL_VALUE} agent=${agentId}`;
+}
+
+/**
+ * The read side of the two writers above: which agent a resource belongs to, or null
+ * when it is not one of ours.
+ *
+ * Returning null rather than throwing is deliberate — these read a listing of a whole
+ * project, most of which is Terraform's, and a Terraform-managed service is not an
+ * error to encounter. It is simply not a candidate.
+ */
+export function runtimeLabelAgentId(labels: Readonly<Record<string, string>> | null | undefined): string | null {
+  if (labels?.[RUNTIME_LABEL_KEY] !== RUNTIME_LABEL_VALUE) return null;
+  return labels[RUNTIME_AGENT_LABEL_KEY] ?? null;
+}
+
+/** The same fact recovered from a service account's description. */
+export function runtimeDescriptionAgentId(description: string | null | undefined): string | null {
+  if (!description?.startsWith(`${RUNTIME_LABEL_KEY}=${RUNTIME_LABEL_VALUE} `)) return null;
+  return /(?:^|\s)agent=(\S+)/.exec(description)?.[1] ?? null;
 }

@@ -7,6 +7,7 @@ import { loadConfig } from './config.js';
 import { createInternalClients } from './clients/http.js';
 import { resolveEndpoints } from './endpoints.js';
 import { createLifecycleGcpClients } from './clients/gcp.js';
+import { createOrphanCollector } from './clients/orphans.js';
 import { createIdentityDisabledHandler, startIdentityDisabledSubscriber } from './subscribers/runner.js';
 import { createLogger } from '@xaa/logging';
 
@@ -47,6 +48,14 @@ const deps: LifecycleDeps = {
     audience: process.env.PUBLIC_BASE_URL ?? '',
     allowedCallers: (process.env.ALLOWED_CALLER_SAS ?? '').split(',').filter(Boolean),
   },
+  /**
+   * DEC-IAC-25, sweep stage (e). Without this the tick has no way to see a resource the
+   * Provisioner created and never managed to record, and the only thing that would ever
+   * collect it is an operator running scripts/purge-runtime-resources.sh by hand.
+   */
+  sweepExtras: createOrphanCollector({
+    projectId: config.projectId, region: config.region, clients: gcp,
+  }),
 };
 
 /**
