@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Characteristics, DelegatableEntry, OrganizationPolicy, RiskPolicy } from '@xaa/contracts';
 import { REASON_CODES, REASON_TO_VIOLATION, VIOLATION_CODES } from '@xaa/contracts';
 import { mergeCharacteristics } from '../src/policy/characteristics.js';
@@ -137,6 +137,27 @@ describe('risk policy', () => {
     const result = evaluateRiskPolicy({ ...base, financial_operation: true }, [], policies);
     expect(result.riskScore).toBe(40);
     expect(result.minIsolationLevel).toBe('full_isolation');
+  });
+
+  /**
+   * The rules are evaluated against what was already read, so the same characteristics
+   * always score the same. A rule that fetched anything would make the score depend on
+   * when it ran, and a decision would stop being reproducible from its record.
+   */
+  it('reads no database and asks no model', async () => {
+    const gcp = await import('@xaa/gcp');
+    const firestoreSpy = vi.spyOn(gcp, 'createFirestoreDocumentStore');
+    const fetchSpy = vi.fn();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    try {
+      evaluateRiskPolicy({ ...base, financial_operation: true, write_operation: true }, ['finance.payment.approve'], policies);
+    } finally {
+      globalThis.fetch = originalFetch;
+      firestoreSpy.mockRestore();
+    }
+    expect(firestoreSpy).toHaveBeenCalledTimes(0);
+    expect(fetchSpy).toHaveBeenCalledTimes(0);
   });
 });
 

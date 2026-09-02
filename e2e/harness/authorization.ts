@@ -1,12 +1,12 @@
-import { InMemoryJtiStore } from '@xaa/crypto';
+import { createDpopProof, generateEs256KeyPair, InMemoryJtiStore, type Es256KeyPair } from '@xaa/crypto';
 import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
 import { createLogger } from '@xaa/logging';
 import createAuthorization from '@xaa/authorization/app';
 import type { AuthorizationConfig } from '@xaa/authorization/src/config';
 import type { VertexClient } from '@xaa/authorization/src/ai/authorization-ai';
 import { createFakeVertex, seedAuthorizationData, type FakeModel } from '@xaa/authorization/src/testing/fixtures';
-import type { Fetcher } from './oauth-flow.js';
-import { HUMAN_IDP_ISSUER } from './human-idp.js';
+import { authorize, tokenRequest, type Fetcher } from './oauth-flow.js';
+import { AUTOMATION_REDIRECT_URI, HUMAN_IDP_ISSUER, startHumanIdp } from './human-idp.js';
 
 export const AUTHZ_BASE = 'https://authorization.test';
 
@@ -30,6 +30,8 @@ export async function startAuthorization(options: {
   model?: FakeModel;
   vertex?: VertexClient;
   shared?: ReturnType<typeof createFirestoreDouble>;
+  /** Makes every Activity publish fail, to show the decision survives it (RULE-55). */
+  failActivityPublish?: boolean;
 }): Promise<AuthorizationHarness> {
   const firestore = options.shared ?? createFirestoreDouble();
   const documents = createFirestoreDocumentStore(firestore, 'authorization');
@@ -59,7 +61,10 @@ export async function startAuthorization(options: {
     // fetches is that key.
     fetchImpl: (async () => Response.json({ keys: [{ ...options.idpPublicJwk, kid: 'idp-testkey', alg: 'RS256', use: 'sig' }] })) as unknown as typeof fetch,
     logger: createLogger('authorization', 'policy_engine', (line) => { logs.push(line); }),
-    publishActivity: async (event) => { activity.push(event); },
+    publishActivity: async (event) => {
+      if (options.failActivityPublish) throw new Error('topic unavailable');
+      activity.push(event);
+    },
     // Lifecycle Manager's side of the call is its own test's business; what this one
     // has to see is whether the ask happened at all, and with which capabilities.
     requestReprovision: async (request) => { reprovisions.push({ ...request }); },
@@ -69,4 +74,48 @@ export async function startAuthorization(options: {
     documents, provisionerStore, seedStore, logs, activity, reprovisions,
     fetch: async (path, init) => app.fetch(new Request(new URL(path, AUTHZ_BASE), init)),
   };
+}
+
+/**
+ * A real Access Token for the Authorization Platform, minted by Human IdP, with the
+ * key it is bound to. The specs that follow are about what the platform decides, so
+ * the login is done once here rather than in each of them.
+ */
+export async function controlPlaneGrant(scope = 'openid workdef:submit'): Promise<{ token: string; keyPair: Es256KeyPair }> {
+  const idp = await startHumanIdp();
+  const keyPair = await generateEs256KeyPair();
+  const result = await authorize({
+    fetch: idp.fetch, clientId: 'automation-app', redirectUri: AUTOMATION_REDIRECT_URI,
+    scope, issuer: HUMAN_IDP_ISSUER,
+  });
+  const response = await tokenRequest({
+    fetch: idp.fetch, clientId: 'automation-app', clientSecret: 'automation-secret', issuer: HUMAN_IDP_ISSUER,
+    dpop: { createProof: (method, url) => createDpopProof({ method, url, keyPair }) },
+    form: {
+      grant_type: 'authorization_code', code: result.code!, redirect_uri: AUTOMATION_REDIRECT_URI,
+      code_verifier: result.pkce.verifier, client_id: 'automation-app',
+    },
+  });
+  return { token: (await response.json() as { access_token: string }).access_token, keyPair };
+}
+
+/** One business work request, submitted the way Automation App submits it. */
+export async function submitWorkRequest(input: {
+  authz: AuthorizationHarness;
+  grant: { token: string; keyPair: Es256KeyPair };
+  body: unknown;
+  path?: string;
+}): Promise<Response> {
+  const path = input.path ?? '/v1/authorization/decisions';
+  return input.authz.fetch(path, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Authorization: `DPoP ${input.grant.token}`,
+      DPoP: await createDpopProof({
+        method: 'POST', url: `${AUTHZ_BASE}${path}`, keyPair: input.grant.keyPair, accessToken: input.grant.token,
+      }),
+    },
+    body: JSON.stringify(input.body),
+  });
 }

@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { PolicyEngineInput } from '@xaa/contracts';
 import { buildPrompt, PromptContainsTechnicalValue } from '../src/ai/prompt.js';
 import { DECISION_FIELDS, sanitizeAiOutput, TECHNICAL_FIELDS } from '../src/ai/output-guard.js';
 import { filterToTaxonomy } from '../src/ai/taxonomy-filter.js';
 import { inferCapabilities } from '../src/ai/authorization-ai.js';
+import { computeEffectiveCapabilities } from '../src/policy/effective.js';
+import { runDecision } from './helpers.js';
 
 const taxonomy = [
   { capability_id: 'calendar.event.read', description: '予定を読む' },
@@ -96,5 +99,51 @@ describe('taxonomy filter', () => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       expect(filterToTaxonomy(['calendar.event.read', 'x'], known)).toEqual(first);
     }
+  });
+});
+
+/**
+ * RULE-12. The model may describe the work; it may not decide how the work is
+ * contained. An `isolation_level` in its answer is dropped, and the level the agent
+ * actually runs under is derived from the characteristics by the Risk Policy — which
+ * is why a model that says "standard" over a financial operation changes nothing.
+ */
+describe('what the Policy Engine is given', () => {
+  it('ignores the level the model asked for and raises it from the characteristics', async () => {
+    const result = await runDecision({
+      humanPermissions: ['document.write'],
+      description: '支払を承認するために書類を更新する',
+      model: {
+        targetResources: ['document'],
+        raw: {
+          capabilities: ['document.write'],
+          characteristics: { financial_operation: true },
+          confidence: 0.9,
+          isolation_level: 'standard',
+        },
+      },
+    });
+
+    expect(result.record.effective_capabilities).toEqual(['document.write']);
+    expect(result.record.security_profile.isolation_level).toBe('full_isolation');
+    expect(result.record.security_profile.reasons).toContain('financial_operation');
+    // Nothing the model said about isolation reached the record.
+    expect(JSON.stringify(result.record.security_profile)).not.toContain('"standard"');
+  });
+
+  it('has no isolation_level to assign, at the type level', () => {
+    const input: PolicyEngineInput = {
+      proposed: [], characteristics: {
+        capability_risk: 'low', sensitive_resource: false, write_operation: false, admin_permission: false,
+        external_communication: false, financial_operation: false, personal_data_access: false,
+      },
+      humanPermissions: [], delegatableEntries: new Map(), organizationPolicies: [],
+      capabilityConnectors: {}, riskPolicies: [],
+      // @ts-expect-error the Policy Engine's input has no isolation_level field
+      isolation_level: 'standard',
+    };
+    // And nothing reads it either: the level in the output comes from the risk
+    // policies, which here are empty, not from the value attached to the input.
+    expect(computeEffectiveCapabilities(input).securityProfile.isolation_level).toBe('standard');
   });
 });

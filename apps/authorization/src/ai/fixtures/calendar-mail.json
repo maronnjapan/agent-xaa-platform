@@ -1,0 +1,7 @@
+{
+  "operations": ["fetch_events", "select_important", "send_summary"],
+  "targetResources": ["calendar", "mail"],
+  "capabilities": ["calendar.event.read", "calendar.event.write", "mail.message.send"],
+  "characteristics": { "external_communication": true },
+  "confidence": 0.9
+}

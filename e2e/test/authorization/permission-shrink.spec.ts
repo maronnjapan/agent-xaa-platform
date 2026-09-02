@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createDpopProof, generateEs256KeyPair, type Es256KeyPair } from '@xaa/crypto';
 import { createFirestoreDouble } from '@xaa/gcp';
+import { createFakeVertex } from '@xaa/authorization/src/testing/fixtures';
 import { authorize, tokenRequest } from '../../harness/oauth-flow.js';
 import { AUTOMATION_REDIRECT_URI, HUMAN_IDP_ISSUER, idpPublicJwk, startHumanIdp } from '../../harness/human-idp.js';
 import { AUTHZ_BASE, startAuthorization, type AuthorizationHarness } from '../../harness/authorization.js';
@@ -29,17 +30,20 @@ async function controlPlaneToken(): Promise<{ token: string; keyPair: Es256KeyPa
 }
 
 /** One agent, decided for and running, as the Provisioner would have left it. */
-async function runningAgent(permissions: string[]): Promise<{ authz: AuthorizationHarness; decisionId: string }> {
+async function runningAgent(permissions: string[]): Promise<{
+  authz: AuthorizationHarness; decisionId: string; vertex: { calls: number };
+}> {
   const shared = createFirestoreDouble();
+  // The proposal is what re-evaluation reads back, so the model has to name the
+  // capabilities whose loss this test is about. Counting its calls is how the test
+  // shows the re-evaluation asks it nothing (REQ-03-022).
+  const vertex = createFakeVertex({
+    operations: ['read_documents', 'write_document'],
+    targetResources: ['document'],
+    capabilities: ['document.read', 'document.write'],
+  });
   const authz = await startAuthorization({
-    idpPublicJwk: idpJwk, humanPermissions: permissions, shared,
-    // The proposal is what re-evaluation reads back, so it has to name the capabilities
-    // whose loss this test is about.
-    model: {
-      operations: ['read_documents', 'write_document'],
-      targetResources: ['document'],
-      capabilities: ['document.read', 'document.write'],
-    },
+    idpPublicJwk: idpJwk, humanPermissions: permissions, shared, vertex,
   });
   const grant = await controlPlaneToken();
   const path = '/v1/authorization/decisions';
@@ -59,7 +63,7 @@ async function runningAgent(permissions: string[]): Promise<{ authz: Authorizati
     agent_id: AGENT_ID, human_subject: 'testuser', status: 'ACTIVE',
     created_at: new Date().toISOString(),
   });
-  return { authz, decisionId };
+  return { authz, decisionId, vertex };
 }
 
 /** The permission table is the seed Job's to write; this is what a revocation looks like. */
@@ -80,8 +84,10 @@ async function deliver(authz: AuthorizationHarness, body: unknown): Promise<Resp
  */
 describe('a permission change reaches running agents', () => {
   it('asks for Re-Provisioning when the person loses a capability, with the AI untouched', async () => {
-    const { authz } = await runningAgent(['document.read', 'document.write']);
+    const { authz, vertex } = await runningAgent(['document.read', 'document.write']);
     await revoke(authz, 'document.write');
+    // Two calls were made to decide in the first place; the change must add none.
+    const callsBefore = vertex.calls;
 
     const response = await deliver(authz, {
       human_subject: 'testuser', changed_at: '2026-03-01T00:00:00.000Z',
@@ -89,6 +95,7 @@ describe('a permission change reaches running agents', () => {
     });
 
     expect(response.status).toBe(204);
+    expect(vertex.calls - callsBefore).toBe(0);
     expect(authz.reprovisions).toHaveLength(1);
     const asked = authz.reprovisions[0]!;
     expect(asked.agentId).toBe(AGENT_ID);
@@ -102,10 +109,11 @@ describe('a permission change reaches running agents', () => {
   });
 
   it('leaves a running agent alone when the person gains one, and says so once', async () => {
-    const { authz } = await runningAgent(['document.read']);
+    const { authz, vertex } = await runningAgent(['document.read']);
     await authz.seedStore.set('human_permissions', 'testuser__document.write', {
       human_subject: 'testuser', capability_id: 'document.write', granted_at: new Date().toISOString(),
     });
+    const callsBefore = vertex.calls;
 
     const response = await deliver(authz, {
       human_subject: 'testuser', changed_at: '2026-03-02T00:00:00.000Z',
@@ -113,6 +121,7 @@ describe('a permission change reaches running agents', () => {
     });
 
     expect(response.status).toBe(204);
+    expect(vertex.calls - callsBefore).toBe(0);
     expect(authz.reprovisions).toHaveLength(0);
     const ignored = authz.activity.filter((event) =>
       (event.detail as { event_type?: string } | undefined)?.event_type === 'PERMISSION_CHANGE_IGNORED');

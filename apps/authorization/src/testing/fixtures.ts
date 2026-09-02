@@ -11,7 +11,8 @@ import type { VertexClient } from '../ai/authorization-ai.js';
  * fixtures is how a test ends up proving something about data the deployment does not
  * have.
  */
-const seedRoot = new URL('../../../../infra/seed/', import.meta.url).pathname;
+const repositoryRoot = new URL('../../../../', import.meta.url).pathname;
+const seedRoot = `${repositoryRoot}infra/seed/`;
 
 function readYaml<T>(relativePath: string): T {
   return parse(readFileSync(`${seedRoot}${relativePath}`, 'utf8')) as T;
@@ -57,6 +58,15 @@ export async function seedAuthorizationData(documents: DocumentStore, humanPermi
   for (const policy of readYaml<Array<{ policy_id: string }>>('policies/risk.yaml')) {
     await seed.set('risk_policies', policy.policy_id, { ...policy });
   }
+}
+
+/**
+ * VERTEX_MODE=fake answers from `src/ai/fixtures/*.json` (T-AUTHZ-12). The path is
+ * resolved from the repository root so the same file works from `src` and from `dist`,
+ * whose depths differ and where JSON is not emitted.
+ */
+export function loadAiFixture(name: string): FakeModel {
+  return JSON.parse(readFileSync(`${repositoryRoot}apps/authorization/src/ai/fixtures/${name}.json`, 'utf8')) as FakeModel;
 }
 
 export interface FakeModel {

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { PLATFORM_ENDPOINT_KEYS, type PlatformEndpoints } from '@xaa/contracts';
 import { resolveSeedPlaceholders } from '../src/resolve.js';
-import { validateSeed, type ConnectorSeed, type ToolSeed } from '../src/validate.js';
+import { validateSeed, type CapabilitySeed, type ConnectorSeed, type HumanPermissionSeed, type ToolSeed } from '../src/validate.js';
 
 const seedRoot = new URL('../../../infra/seed/', import.meta.url).pathname;
 
@@ -70,5 +70,61 @@ describe('the catalogue in infra/seed', () => {
     expect(connectors).toHaveLength(3);
     expect(tools).toHaveLength(8);
     expect(() => validateSeed(connectors, tools)).not.toThrow();
+  });
+});
+
+/**
+ * REQ-03-019. The naming rule is what keeps vendor names and HTTP verbs out of the
+ * permission vocabulary; the Job refuses the whole file rather than writing part of it.
+ */
+describe('capability naming', () => {
+  const bad = parse(`
+- capability_id: google.calendar.read
+  resource: calendar
+- capability_id: document.GET
+  resource: document
+`) as CapabilitySeed[];
+
+  it('reports every violating capability_id, one per line', () => {
+    // The Job's entry point is a top-level await on runSeed, so this throw is what
+    // ends the Cloud Run Job with a non-zero exit code.
+    try {
+      validateSeed([], [], bad);
+      expect.unreachable();
+    } catch (error) {
+      const lines = (error as Error).message.split('\n').filter((line) => line.includes('capability_id'));
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toContain('google.calendar.read');
+      expect(lines[1]).toContain('document.GET');
+    }
+  });
+
+  it('accepts the taxonomy the deployment actually seeds', () => {
+    const taxonomy = parse(readFileSync(`${seedRoot}capabilities.yaml`, 'utf8')) as CapabilitySeed[];
+    expect(taxonomy).toHaveLength(8);
+    expect(() => validateSeed([], [], taxonomy)).not.toThrow();
+  });
+});
+
+/**
+ * REQ-03-010. The permission table is the ceiling on everything an agent can be
+ * granted, so the demo's two people have to arrive with it. The Job clears these
+ * collections before it writes; a taxonomy without matching grants would leave every
+ * decision intersecting with nothing.
+ */
+describe('the human permissions in infra/seed', () => {
+  const taxonomy = parse(readFileSync(`${seedRoot}capabilities.yaml`, 'utf8')) as CapabilitySeed[];
+  const grants = parse(readFileSync(`${seedRoot}human-permissions.yaml`, 'utf8')) as HumanPermissionSeed[];
+
+  it('grants eight rows, one document per subject and capability', () => {
+    expect(grants).toHaveLength(8);
+    const ids = grants.map((grant) => `${grant.human_subject}__${grant.capability_id}`);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('grants only capabilities the taxonomy defines', () => {
+    expect(() => validateSeed([], [], taxonomy, grants)).not.toThrow();
+    expect(() => validateSeed([], [], taxonomy, [{ human_subject: 'user-123', capability_id: 'slack.channel.admin' }]))
+      .toThrow(/slack.channel.admin/);
   });
 });
