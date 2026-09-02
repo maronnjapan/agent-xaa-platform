@@ -89,6 +89,14 @@ describe('three agents, one registered client', () => {
     const provisioner = await createProvisionerHarness({ idpPublicJwk: await idpPublicJwk() });
     const agentIds = await provisionThree(provisioner, await callerToken());
     expect(new Set(agentIds).size).toBe(3);
+    // Three agents, three executions, three distinct AGENT_ID values on one shared job
+    // (T-PROV-29): the identity is per execution, never per job definition.
+    expect(provisioner.jobRuns).toHaveLength(3);
+    const executionAgentIds = provisioner.jobRuns
+      .map((run) => run.env.find((entry) => entry.name === 'AGENT_ID')!.value);
+    expect(executionAgentIds).toEqual(agentIds);
+    expect(new Set(executionAgentIds).size).toBe(3);
+    expect(new Set(provisioner.jobRuns.map((run) => run.jobName)).size).toBe(1);
 
     const after = {
       humanIdp: [...createClientRegistry(humanIdpEnv).keys()].sort(),

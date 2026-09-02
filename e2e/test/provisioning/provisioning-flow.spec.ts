@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDpopProof, generateEs256KeyPair, jwkThumbprint, type Es256KeyPair } from '@xaa/crypto';
 import { audienceIncludes } from '@xaa/contracts';
+import { loadToolManifest } from '@xaa/agent-runtime/src/manifest/load';
 import { createProvisionerHarness, seedDecision, PROVISIONER_BASE } from '@xaa/provisioner/src/testing/harness';
 import { authorize, decodeJwtPayload, tokenRequest } from '../../harness/oauth-flow.js';
 import { AUTOMATION_REDIRECT_URI, HUMAN_IDP_ISSUER, idpPublicJwk, startHumanIdp } from '../../harness/human-idp.js';
@@ -155,6 +156,52 @@ describe('from login to a running agent', () => {
     // OP's own redirect in `consent-resume.spec.ts`. Building the URL here and then
     // checking its parameters would only test this test.
     expect(body.transaction_id).toMatch(/^txn_/);
+  });
+});
+
+/**
+ * REQ-04-012 / REQ-04-013. The three sets an agent is given, and the manifest it is
+ * given them for, have to describe the same reach.
+ *
+ * The Agent OP checks a request against the registration's audiences, resources and
+ * scopes; the Runtime calls what the manifest lists. If those two disagree, the agent
+ * either holds authority it cannot use or attempts calls the OP will refuse — and both
+ * failures appear only at the first tool call, long after provisioning said it worked.
+ * They are built once from one resolution, and this is where that is checked.
+ */
+describe('what the execution is handed', () => {
+  it('gives the Runtime a manifest it can restore, matching the registration exactly', async () => {
+    const provisionerToken = await boundToken({ audience: 'agent-provisioner', scope: 'openid agent:provision' });
+    const provisioner = await createProvisionerHarness({ idpPublicJwk: await idpPublicJwk() });
+    const decisionId = await seedDecision(provisioner, { capabilities: ['document.read', 'document.write'] });
+    const response = await send({
+      fetch: provisioner.fetch, base: PROVISIONER_BASE, path: '/provisioning',
+      token: provisionerToken.token, keyPair: provisionerToken.keyPair,
+      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 },
+    });
+    expect(response.status).toBe(201);
+    const created = await response.json() as { agent_id: string; allowed_tools: string[] };
+
+    const environment = Object.fromEntries(provisioner.jobRuns[0]!.env.map((entry) => [entry.name, entry.value]));
+    // Loaded through the Runtime's own loader, digest check included: what the
+    // Provisioner put on the execution is what the Runtime will accept, or this throws.
+    const manifest = loadToolManifest({
+      TOOL_MANIFEST: environment.TOOL_MANIFEST!, TOOL_MANIFEST_SHA256: environment.TOOL_MANIFEST_SHA256!,
+    });
+    expect(manifest.agent_id).toBe(created.agent_id);
+    expect(manifest.tools.map((tool) => tool.tool_id)).toEqual(created.allowed_tools);
+
+    const registration = (await provisioner.documents.get<{
+      allowed_audiences: string[]; resources: string[]; scopes: string[]; expires_at: string;
+    }>('agents', `${created.agent_id}__meta`))!;
+    const unique = (values: string[]) => [...new Set(values)].sort();
+    expect(registration.allowed_audiences).toEqual(unique(manifest.tools.map((tool) => tool.authorization.audience)));
+    expect(registration.resources).toEqual(unique(manifest.tools.map((tool) => tool.authorization.resource)));
+    expect(registration.scopes).toEqual(unique(manifest.tools.map((tool) => tool.authorization.scope)));
+    expect(manifest.expires_at).toBe(registration.expires_at);
+    // The four document tools, and a read-only agent would get two of them: the scopes
+    // follow the tools rather than the capability names.
+    expect(registration.scopes).toEqual(['docs.read', 'docs.write']);
   });
 });
 

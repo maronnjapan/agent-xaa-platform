@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { RETIRED_RUNTIME_ENV_KEYS, RUNTIME_ENV_KEYS, RUNTIME_STATIC_ENV_KEYS } from '@xaa/contracts';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { ExecutionAlreadyRunning, startAgentExecution } from '../src/job/execute.js';
@@ -78,6 +79,11 @@ describe('starting the execution that is the agent', () => {
     // The digest is added by the starter rather than by the caller, so the manifest the
     // Runtime checks is the one that was actually put on the execution.
     expect(names).toContain('TOOL_MANIFEST_SHA256');
+    const digest = runs[0]!.env.find((entry) => entry.name === 'TOOL_MANIFEST_SHA256')!.value;
+    // Lower-case hex over the raw string, which is what the Runtime's own check
+    // computes. The two used to disagree on encoding, and an execution that could not
+    // verify its manifest refuses to start — a failure with no visible cause.
+    expect(digest).toBe(createHash('sha256').update(OVERRIDES.TOOL_MANIFEST, 'utf8').digest('hex'));
     for (const key of [...RUNTIME_STATIC_ENV_KEYS, ...RETIRED_RUNTIME_ENV_KEYS]) expect(names).not.toContain(key);
   });
 

@@ -18,6 +18,20 @@ async function downloadJson(storage: Storage, uri: string): Promise<unknown> {
   return JSON.parse(content.toString('utf8'));
 }
 
+/**
+ * DEC-SCOPE-04. The Bridge is off by default, and a catalogue row for a connector
+ * nobody serves is worse than a missing one: the Provisioner would resolve
+ * `calendar.event.read` into a tool, put it in an agent's manifest, and the agent would
+ * discover at its first call that no Bridge exists. The row is left out rather than
+ * written and marked, because there is no field in the stored shape (00b §3) that would
+ * carry the distinction to every reader.
+ */
+export function withoutBridgedRows<T extends { connector_id: string }>(rows: T[], bridgeEnabled: boolean): T[] {
+  return bridgeEnabled ? rows : rows.filter((row) => row.connector_id !== BRIDGED_CONNECTOR_ID);
+}
+
+export const BRIDGED_CONNECTOR_ID = 'stub-saas-calendar';
+
 export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   if (!env.SEED_BUCKET || !env.PLATFORM_ENDPOINTS_URI) throw new Error('seed environment is incomplete');
   const storage = new Storage();
@@ -30,10 +44,13 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
     const [content] = await file.download();
     records.set(file.name.replace(/^seed\//, ''), parse(resolveSeedPlaceholders(content.toString('utf8'), endpoints)));
   }
-  const connectors = [...records].filter(([name]) => name.startsWith('connectors/')).map(([, value]) => value as ConnectorSeed)
-    .filter((entry) => env.ENABLE_GOOGLE_BRIDGE === 'true' || entry.connector_id !== 'stub-saas-calendar');
-  const tools = [...records].filter(([name]) => name.startsWith('tools/')).map(([, value]) => value as ToolSeed)
-    .filter((entry) => env.ENABLE_GOOGLE_BRIDGE === 'true' || entry.connector_id !== 'stub-saas-calendar');
+  const bridged = env.ENABLE_GOOGLE_BRIDGE === 'true';
+  const connectors = withoutBridgedRows(
+    [...records].filter(([name]) => name.startsWith('connectors/')).map(([, value]) => value as ConnectorSeed), bridged,
+  );
+  const tools = withoutBridgedRows(
+    [...records].filter(([name]) => name.startsWith('tools/')).map(([, value]) => value as ToolSeed), bridged,
+  );
   validateSeed(connectors, tools);
   const firestore = getFirestore({ signer: 'kms', vertex: 'live', pubsub: 'gcp', store: 'gcp' }, env);
   for (const collection of DATA_COLLECTIONS) {

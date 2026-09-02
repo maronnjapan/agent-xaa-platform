@@ -4,6 +4,7 @@ import { parse } from 'yaml';
 import { PLATFORM_ENDPOINT_KEYS, type PlatformEndpoints } from '@xaa/contracts';
 import { resolveSeedPlaceholders } from '../src/resolve.js';
 import { validateSeed, type ConnectorSeed, type ToolSeed } from '../src/validate.js';
+import { BRIDGED_CONNECTOR_ID, withoutBridgedRows } from '../src/index.js';
 
 const seedRoot = new URL('../../../infra/seed/', import.meta.url).pathname;
 
@@ -51,6 +52,62 @@ describe('seed validation', () => {
   it('rejects unknown resource_type', () => expect(() => validateSeed([{ ...connector, resource_type: 'unknown' as 'native_xaa' }], [tool])).toThrow(/resource_type/));
   it('rejects api.method FETCH', () => expect(() => validateSeed([connector], [{ ...tool, api: { ...tool.api, method: 'FETCH' } }])).toThrow(/api.method/));
   it('rejects path placeholder missing from parameters', () => expect(() => validateSeed([connector], [{ ...tool, parameters: {} }])).toThrow(/missing parameter id/));
+
+  /**
+   * The catalogue's capability names are the ones the Policy Engine decides in
+   * (DEC-SCOPE-03). A row naming an alias would give an agent a tool no decision can
+   * ever grant — and would do so silently, since nothing else reads that string.
+   */
+  it('refuses a row whose capability is not one of the settled names', () => {
+    expect(() => validateSeed([connector], [{ ...tool, required_capability: 'google.calendar.get' }]))
+      .toThrow(/invalid capability/);
+    expect(() => validateSeed([connector], [{ ...tool, required_capability: 'document.content.read'.replace('content', 'x') }]))
+      .toThrow(/unknown capability/);
+  });
+});
+
+/**
+ * The Job writes nothing until every row has resolved and validated. A partial
+ * catalogue is worse than an empty one: the Provisioner would resolve the tools that
+ * happened to be written and quietly leave an agent short of the rest.
+ */
+describe('an unresolved placeholder', () => {
+  it('stops the run before anything is written, naming what was not resolved', () => {
+    const source = 'audience: ${issuer:docs}\nresource: ${issuer:unknown_service}\n';
+    expect(() => resolveSeedPlaceholders(source, endpoints)).toThrow(/unresolved seed placeholders: issuer:unknown_service/);
+  });
+
+  it('resolves every placeholder the real catalogue uses', () => {
+    for (const kind of ['connectors', 'tools'] as const) {
+      expect(JSON.stringify(seeded(kind))).not.toContain('${');
+    }
+  });
+});
+
+/**
+ * DEC-SCOPE-04. With the Bridge off, the bridged connector and its tool are left out
+ * of Firestore entirely rather than written and marked: the stored shape has no field
+ * that would carry "present but unusable" to every reader of the catalogue (00b §3).
+ */
+describe('the bridged connector when the Bridge is off', () => {
+  const rows = () => [
+    ...(seeded('connectors') as ConnectorSeed[]),
+    ...(seeded('tools') as ToolSeed[]).map((entry) => ({ ...entry })),
+  ];
+
+  it('is written when the Bridge is on', () => {
+    const kept = withoutBridgedRows(rows(), true);
+    expect(kept.filter((row) => row.connector_id === BRIDGED_CONNECTOR_ID).length).toBeGreaterThan(0);
+    expect(kept).toHaveLength(rows().length);
+  });
+
+  it('is absent when the Bridge is off, and so is its tool', () => {
+    const kept = withoutBridgedRows(rows(), false);
+    expect(kept.filter((row) => row.connector_id === BRIDGED_CONNECTOR_ID)).toEqual([]);
+    expect(kept.map((row) => (row as ToolSeed).tool_id).filter(Boolean)).not.toContain('stub.calendar.events.list');
+    // The native connectors and their tools are untouched.
+    expect(kept).toHaveLength(rows().length - 2);
+  });
 });
 
 /**
