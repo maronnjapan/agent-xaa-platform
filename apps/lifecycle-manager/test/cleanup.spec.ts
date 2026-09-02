@@ -34,23 +34,52 @@ describe('the cleanup orchestrator', () => {
     expect(CLEANUP_STEP_IDS).toHaveLength(11);
   });
 
-  for (const [stepId, call] of Object.entries(CALL_FOR_STEP)) {
-    it(`continues after ${stepId} fails and does not reach DESTROYED`, async () => {
-      const harness = createLifecycleHarness({ clients: recordingClients({ failAt: call }) });
+  /**
+   * Every one of the eleven, one at a time.
+   *
+   * The failure is injected into the step itself rather than into a client double,
+   * because four of the steps make no outbound call at all and the property under test
+   * belongs to the orchestrator, not to any particular dependency: whichever step
+   * breaks, the other ten still run and the agent stays visibly REVOKED.
+   */
+  for (const stepId of CLEANUP_STEP_IDS) {
+    it(`continues after a failing step and does not reach DESTROYED [${stepId}]`, async () => {
+      const harness = createLifecycleHarness();
       const agentId = await seedDomain(harness);
-      const outcome = await cleanupAgent(agentId, 'EXPIRED', deps(harness));
+      const step = CLEANUP_STEPS.find((entry) => entry.id === stepId)!;
+      const original = step.run;
+      step.run = async () => { throw new Error(`${stepId} failed`); };
+      let outcome;
+      try {
+        outcome = await cleanupAgent(agentId, 'EXPIRED', deps(harness));
+      } finally {
+        step.run = original;
+      }
       expect(outcome.status).toBe('REVOKED');
-      const failed = outcome.results.filter((entry) => entry.status === 'failed');
+      const failed = outcome.results.filter((entry) => entry.status === 'failed').map((entry) => entry.step);
       // The audit step fails alongside it, and deliberately: it deletes the record the
       // retry will need, so it refuses to run while anything is outstanding.
-      expect(failed.map((entry) => entry.step).sort()).toEqual(['audit_persist', stepId].sort());
+      expect(failed.sort()).toEqual([...new Set(['audit_persist', stepId])].sort());
       // The other ten still ran: an agent must not keep a live credential because one
       // unrelated call was briefly unavailable.
-      expect(outcome.results).toHaveLength(11);
+      expect(outcome.results.map((entry) => entry.step)).toEqual([...CLEANUP_STEP_IDS]);
+      expect(outcome.results.every((entry) => entry.attempts === 1)).toBe(true);
       const meta = await harness.documents.get<{ status: string }>('agents', `${agentId}__meta`);
       expect(meta!.status).toBe('REVOKED');
     });
   }
+
+  it('keeps running the other steps when one client call throws', async () => {
+    for (const [stepId, call] of Object.entries(CALL_FOR_STEP)) {
+      const harness = createLifecycleHarness({ clients: recordingClients({ failAt: call }) });
+      const agentId = await seedDomain(harness);
+      const outcome = await cleanupAgent(agentId, 'EXPIRED', deps(harness));
+      expect(outcome.status).toBe('REVOKED');
+      expect(outcome.results.filter((entry) => entry.status === 'failed').map((entry) => entry.step).sort())
+        .toEqual(['audit_persist', stepId].sort());
+      expect(outcome.results).toHaveLength(11);
+    }
+  });
 
   it('reaches DESTROYED on the second call after the failure is fixed', async () => {
     const shared = (await import('@xaa/gcp')).createFirestoreDouble();

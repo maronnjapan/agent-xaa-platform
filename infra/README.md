@@ -18,6 +18,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 | `enable_deny_policy` | bool | `false` | 監査データ削除を拒否する IAM Deny Policy を有効にする |
 | `enable_google_bridge` | bool | `false` | Google Bridge の内部面と Callback 面を配備する |
 | `enable_lb_reservation` | bool | `false` | issuer 用の Global IP と証明書だけを予約する |
+| `expiring_window_seconds` | number | `60` | 期限の何秒前から Agent を EXPIRING にするかを決める |
 | `finance_absolute_max_amount` | number | `1000000` | Finance API が受理できる金額の絶対上限を決める |
 | `google_oauth_client_secret_value` | string or null | `null` | Google OAuth Client Secret の初期バージョンを任意で作る |
 | `image_tag` | string | なし | Cloud Run が参照する不変イメージタグを指定する |
@@ -32,7 +33,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 | `vertex_location` | string | `us-central1` | Vertex AI API のロケーションを指定する |
 | `vertex_model` | string | `gemini-2.5-flash` | 推論するモデル名をアプリへ注入する |
 
-検証プロファイルは `agent_max_lifetime_seconds = 3600`、`max_full_isolation_agents = 2`、`issuer_profile = "direct"`、`enable_google_bridge = false` を使う。
+検証プロファイルは `infra/envs/demo/terraform.tfvars.verify` にあり、`agent_max_lifetime_seconds = 3600`、`lifecycle_tick_cron = "*/5 * * * *"`、`expiring_window_seconds = 60`、`max_full_isolation_agents = 5`、`issuer_profile = "direct"`、`enable_google_bridge = false` を使う。
 
 ## 運用手順
 

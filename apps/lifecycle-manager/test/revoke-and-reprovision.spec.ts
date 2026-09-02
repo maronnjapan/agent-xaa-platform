@@ -38,6 +38,11 @@ describe('the capability guard', () => {
 });
 
 describe('reprovisioning', () => {
+  /**
+   * The replacement inherits the deadline, it does not get a new one. A permission
+   * change is not a reason to live longer, and recomputing the lifetime here would turn
+   * every shrink into a quiet extension — repeatable as often as someone edits a role.
+   */
   it('keeps expires_at from the old agent and asks for a new id', async () => {
     const shared = createFirestoreDouble();
     const harness = createLifecycleHarness({ shared });
@@ -57,7 +62,33 @@ describe('reprovisioning', () => {
     expect(body.inherited_expires_at).toBe(expiresAt);
     // Nothing recomputes the lifetime: a permission change must not extend an agent.
     expect(body).not.toHaveProperty('requested_lifetime_hours');
+    expect(body).not.toHaveProperty('expires_at');
+  });
+
+  /**
+   * A fresh identifier, allocated by the Provisioner. Reusing the old one would leave
+   * every log line, every issued token and every audit record about the destroyed agent
+   * pointing at its replacement, which is a different agent with different permissions.
+   */
+  it('allocates a new agent_id and never reuses the old one', async () => {
+    const shared = createFirestoreDouble();
+    const harness = createLifecycleHarness({ shared, newAgentId: 'agent-nnnnnnnnnnnnnnnnnnnnnnnnnn' });
+    const agentId = await seedDomain(harness, { expiresAt: new Date(Date.now() + HOUR).toISOString() });
+
+    const outcome = await reprovision({
+      agentId, newEffectiveCapabilities: ['document.read'], requiredCapabilities: ['document.read'],
+      workDefinitionId: 'wd_1', documents: harness.documents, cleanup: cleanupDeps(harness),
+      provisioner: harness.deps.provisioner, provisionerUrl: 'https://provisioner.test',
+    });
+
+    expect(outcome.new_agent_id).toBe('agent-nnnnnnnnnnnnnnnnnnnnnnnnnn');
+    expect(outcome.new_agent_id).not.toBe(agentId);
+    expect(outcome.old_agent_id).toBe(agentId);
+    // The id came back from the Provisioner; this service sent only the old one as
+    // provenance and never assembled a candidate of its own.
+    const body = harness.provisionerCalls[0]!;
     expect(body.previous_agent_id).toBe(agentId);
+    expect(Object.values(body)).not.toContain(outcome.new_agent_id);
   });
 
   it('destroys the old agent before asking for the new one', async () => {
@@ -101,6 +132,35 @@ describe('reprovisioning', () => {
     expect(await harness.documents.get('agents', `${agentId}__meta`)).toBeUndefined();
     const transaction = await harness.documents.get<{ status: string; failure_code: string }>('provisioning_transactions', 'tx-1');
     expect(transaction).toMatchObject({ status: 'FAILED', failure_code: 'capability_insufficient' });
+  });
+
+  /**
+   * The Authorization Platform's transaction is the record of the request, and it has to
+   * end somewhere. An abort marks it FAILED with the code and the specific capabilities
+   * that were missing, so the person is told what they lost rather than that "it did not
+   * work".
+   */
+  it('marks the transaction FAILED with capability_insufficient', async () => {
+    const harness = createLifecycleHarness();
+    const agentId = await seedDomain(harness, { expiresAt: new Date(Date.now() + HOUR).toISOString() });
+    await harness.documents.set('provisioning_transactions', 'tx-1', {
+      work_definition_id: 'wd_1', status: 'IN_PROGRESS', created_at: '2026-01-01T00:00:00.000Z',
+    });
+
+    const outcome = await reprovision({
+      agentId, newEffectiveCapabilities: ['document.read'],
+      requiredCapabilities: ['document.read', 'document.write', 'finance.payment.approve'],
+      workDefinitionId: 'wd_1', documents: harness.documents, cleanup: cleanupDeps(harness),
+      provisioner: harness.deps.provisioner, provisionerUrl: 'https://provisioner.test',
+    });
+
+    expect(outcome).toMatchObject({ result: 'aborted', reason_code: 'capability_insufficient' });
+    const transaction = await harness.documents.get<{
+      status: string; failure_code: string; missing_capabilities: string[];
+    }>('provisioning_transactions', 'tx-1');
+    expect(transaction!.status).toBe('FAILED');
+    expect(transaction!.failure_code).toBe('capability_insufficient');
+    expect([...transaction!.missing_capabilities].sort()).toEqual(['document.write', 'finance.payment.approve']);
   });
 
   it('returns reprovision_expired when the inherited expires_at is in the past', async () => {

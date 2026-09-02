@@ -1,4 +1,5 @@
 import type { CleanupContext } from '../../clients/types.js';
+import { agentOpUrlFor } from '../../clients/op-target.js';
 
 /**
  * step3. Hands the agent's refresh token back to the Human IdP.
@@ -15,7 +16,7 @@ export async function idpConnectionRevoke(context: CleanupContext): Promise<'suc
   const connectionId = context.domain.idp_connection_id;
   if (!connectionId) return 'skipped';
   const status = await context.clients.agentOp.revokeIdpConnection({
-    baseUrl: context.clients.endpoints.agentOpUrl,
+    baseUrl: agentOpUrlFor(context.domain, context.clients),
     agentId: context.domain.agent_id,
     connectionId,
   });

@@ -133,6 +133,7 @@ locals {
       ISSUER                     = local.platform_endpoints.issuer
       PUBLIC_BASE_URL            = local.run_url["lifecycle"]
       AGENT_MAX_LIFETIME_SECONDS = tostring(var.agent_max_lifetime_seconds)
+      EXPIRING_WINDOW_SECONDS    = tostring(var.expiring_window_seconds)
       ALLOWED_CALLER_SAS = join(",", [
         module.service_accounts["authorization"].email,
         module.service_accounts["security"].email,

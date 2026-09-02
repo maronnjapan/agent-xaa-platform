@@ -6,19 +6,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-status=0
+# Every file at once, in one process. Spawning node per file was the same check and
+# took seconds; the list is built here so the two exclusions stay visible.
+files=()
 while IFS= read -r file; do
   case "$file" in
     */status-writer.ts) continue ;;
     */testing/*) continue ;;
   esac
-  # code-grep exits 1 when it finds something, so a hit is the failure case.
-  if ! node scripts/checks/code-grep.mjs "(update|set)\(['\"]agents['\"].*status:" "$file" >&2; then
-    status=1
-  fi
-done < <(find apps/lifecycle-manager/src -type f -name '*.ts')
+  files+=("$file")
+done < <(find apps/lifecycle-manager/src -type f -name '*.ts' | sort)
 
-if [ "$status" -ne 0 ]; then
+# code-grep exits 1 when it finds something, so a hit is the failure case.
+if ! node scripts/checks/code-grep.mjs "(update|set)\(['\"]agents['\"].*status:" "${files[@]}" >&2; then
   echo "an agent status is written only by status-writer.ts" >&2
   exit 1
 fi

@@ -43,6 +43,34 @@ describe('the sweep', () => {
     expect(await harness.documents.get('agents', `${agentId}__meta`)).toBeUndefined();
   });
 
+  /**
+   * Cloud Scheduler will overlap two ticks eventually — a slow run and the next one on
+   * time. There is no lock around the sweep itself; the exclusion lives per agent, in
+   * cleanup's own compare-and-set, so overlapping ticks divide the work instead of one
+   * of them redoing it. Every outbound call must still happen exactly once.
+   */
+  it('two concurrent ticks call each cleanup step exactly once', async () => {
+    const now = Date.parse('2026-01-01T12:00:00.000Z');
+    const shared = createFirestoreDouble();
+    const harness = createLifecycleHarness({ shared, now: () => now });
+    const agentId = await seedDomain(harness, { expiresAt: new Date(now - HOUR).toISOString() });
+
+    const tick = (holder: string) => sweep({
+      documents: harness.documents, expiringWindowSeconds: 60, now: () => now,
+      cleanup: (id, reason) => cleanupAgent(id, reason, {
+        documents: harness.documents, clients: harness.clients, logger, logContext, now: () => now, holder,
+      }),
+    });
+    await Promise.all([tick('a'), tick('b')]);
+
+    for (const call of ['cancelExecution', 'disableIssuance', 'revokeIdpConnection', 'revokeClientCredential', 'deleteRegistration']) {
+      expect(harness.clients.calls.filter((entry) => entry.target === call)).toHaveLength(1);
+    }
+    // Two per step, one for each Resource AS, and not four.
+    expect(harness.clients.calls.filter((entry) => entry.target === 'revokeByActor')).toHaveLength(2);
+    expect(await harness.documents.get('agents', `${agentId}__meta`)).toBeUndefined();
+  });
+
   it('retries only failed steps and keeps the original reason', async () => {
     const shared = createFirestoreDouble();
     const failing = createLifecycleHarness({ shared, clients: recordingClients({ failAt: 'disableIssuance' }) });
@@ -75,7 +103,7 @@ describe('the sweep', () => {
     expect((await harness.documents.get<{ status: string }>('provisioning_transactions', 'tx-2'))!.status).toBe('WAITING_IDP_CONSENT');
   });
 
-  it('deletes a labelled resource whose agent no longer exists, and leaves the rest', async () => {
+  it('deletes a labelled resource whose agent no longer exists', async () => {
     const harness = createLifecycleHarness({
       labelled: [
         { name: 'dedicated-op-orphanabcdef', kind: 'cloud_run_service', agentId: 'agent-gonegonegonegonegonegone' },
@@ -90,6 +118,60 @@ describe('the sweep', () => {
     });
     expect(counters.orphans_deleted).toBe(1);
     expect(harness.deletedResources.map((resource) => resource.name)).toEqual(['dedicated-op-orphanabcdef']);
+  });
+
+  /**
+   * The stage exists to collect what nothing owns. An agent that is still running owns
+   * its resources, so a live one has to survive a sweep — otherwise the recovery path
+   * for a half-finished provisioning would delete working agents as it went.
+   */
+  it('leaves a labelled resource whose agent is still ACTIVE', async () => {
+    const agentId = 'agent-abcdefghijklmnopqrstuvwxyz';
+    const harness = createLifecycleHarness({
+      labelled: [{ name: 'dedicated-op-liveagentabc', kind: 'cloud_run_service', agentId }],
+    });
+    await seedDomain(harness, { agentId, expiresAt: new Date(Date.now() + HOUR).toISOString() });
+    const counters = await sweep({
+      documents: harness.documents, expiringWindowSeconds: 60, cleanup: cleanupFor(harness),
+      ...harness.deps.sweepExtras!,
+    });
+    expect((await harness.documents.get<{ status: string }>('agents', `${agentId}__meta`))!.status).toBe('ACTIVE');
+    expect(counters.orphans_deleted).toBe(0);
+    expect(harness.deletedResources).toEqual([]);
+  });
+
+  /**
+   * The candidate list is produced by asking for `xaa-managed=runtime` and nothing else.
+   * That label is what separates a resource this platform created at runtime from every
+   * Terraform-managed service in the same project, so an unlabelled resource is never
+   * even a candidate — and `assertRuntimeName` refuses it a second time if one ever were.
+   */
+  it('never deletes a resource without the xaa-managed label', async () => {
+    const inventory = [
+      { name: 'human-idp', labels: {} as Record<string, string>, kind: 'cloud_run_service' as const },
+      { name: 'dedicated-op-orphanabcdef', labels: { 'xaa-managed': 'runtime', 'xaa-agent-id': 'agent-gonegonegonegonegonegone' }, kind: 'cloud_run_service' as const },
+    ];
+    const offered: string[] = [];
+    const deleted: string[] = [];
+    const harness = createLifecycleHarness();
+    const counters = await sweep({
+      documents: harness.documents, expiringWindowSeconds: 60, cleanup: cleanupFor(harness),
+      // The sweep deletes only what its lister hands it, and the lister's whole
+      // contract is `xaa-managed=runtime`. The filter is written out here so the test
+      // can hold an unlabelled resource next to a labelled one and watch which of the
+      // two is ever offered.
+      listLabelledResources: async () => inventory
+        .filter((entry) => entry.labels['xaa-managed'] === 'runtime')
+        .map((entry) => {
+          offered.push(entry.name);
+          return { name: entry.name, kind: entry.kind, agentId: entry.labels['xaa-agent-id'] ?? null };
+        }),
+      deleteResource: async (resource) => { deleted.push(resource.name); },
+    });
+    expect(offered).toEqual(['dedicated-op-orphanabcdef']);
+    expect(deleted).toEqual(['dedicated-op-orphanabcdef']);
+    expect(deleted).not.toContain('human-idp');
+    expect(counters.orphans_deleted).toBe(1);
   });
 
   it('refuses to delete a labelled resource outside the runtime name space', async () => {
@@ -145,7 +227,7 @@ describe('the tick endpoint', () => {
 });
 
 describe('quarantine', () => {
-  it('disables issuance and bindings but never cancels the execution', async () => {
+  it('disables issuance and binding but never cancels the execution', async () => {
     const harness = createLifecycleHarness({ clients: recordingClients({ bridgeUrl: 'https://bridge.test' }) });
     const agentId = await seedDomain(harness, { bridgeBindingIds: ['bind-1'] });
     await quarantine({
@@ -198,6 +280,33 @@ describe('quarantine', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(harness.clients.calls.filter((entry) => entry.target === 'cancelExecution')).toHaveLength(1);
+  });
+
+  /**
+   * A transition the machine does not allow is a conflict with the agent's current
+   * state, not a broken request and not a server fault. 409 says so; letting the
+   * exception become a 500 would tell Security Detection to retry something that can
+   * never succeed.
+   */
+  it('returns 409 for a disallowed transition', async () => {
+    const harness = createLifecycleHarness();
+    const agentId = await seedDomain(harness, { status: 'QUARANTINED' });
+    // QUARANTINED never goes back to ACTIVE, whatever the caller says.
+    const backwards = await harness.fetch(`/internal/agents/${agentId}/transition`, {
+      method: 'POST', headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: 'ACTIVE', reason: 'QUARANTINE' }),
+    });
+    expect(backwards.status).toBe(409);
+    expect(await backwards.json()).toEqual({ error: 'invalid_transition' });
+
+    // And ACTIVE to QUARANTINED without the CRITICAL severity that opens it.
+    const second = createLifecycleHarness();
+    const other = await seedDomain(second);
+    const withoutSeverity = await second.fetch(`/internal/agents/${other}/transition`, {
+      method: 'POST', headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: 'QUARANTINED', reason: 'QUARANTINE' }),
+    });
+    expect(withoutSeverity.status).toBe(409);
   });
 
   it('rejects a transition body with an extra field', async () => {
@@ -256,17 +365,29 @@ describe('a disabled human identity', () => {
     expect((await harness.documents.get<{ status: string }>('provisioning_transactions', 'tx-1'))!.status).toBe('ABANDONED');
   });
 
-  it('acks and logs an invalid message without acting', async () => {
-    const lines: string[] = [];
+  /**
+   * A malformed event is logged and dropped, never nacked. Nacking would bring it
+   * straight back, and a message the schema rejects will be rejected again — an
+   * unbounded redelivery loop over one bad publish, with nothing to show for it.
+   */
+  it('acks and logs invalid messages without redelivery', async () => {
     const harness = createLifecycleHarness();
-    const result = await handleIdentityDisabled({
-      message: { human_subject: 'testuser' },
-      documents: harness.documents,
-      logger: createLogger('lifecycle-manager', 'provisioner', (line) => lines.push(line)),
-      logContext, cleanup: cleanupFor(harness) as never,
-    });
-    expect(result).toEqual({ revoked: [], failed: [], abandoned: 0 });
-    expect(lines.some((line) => line.includes('invalid_identity_disabled_event'))).toBe(true);
+    await seedDomain(harness, { expiresAt: new Date(Date.now() + HOUR).toISOString() });
+    for (const message of [{ human_subject: 'testuser' }, { disabled_at: '2026-01-01T00:00:00.000Z' }, { human_subject: 7 }]) {
+      const lines: string[] = [];
+      // Resolving rather than throwing is what makes the runner ack: the handler never
+      // signals a failure the transport would answer by sending the message again.
+      const result = await handleIdentityDisabled({
+        message: message as never,
+        documents: harness.documents,
+        logger: createLogger('lifecycle-manager', 'provisioner', (line) => lines.push(line)),
+        logContext, cleanup: cleanupFor(harness) as never,
+      });
+      expect(result).toEqual({ revoked: [], failed: [], abandoned: 0 });
+      expect(lines.some((line) => line.includes('invalid_identity_disabled_event'))).toBe(true);
+    }
+    // And nothing was acted on: no agent was touched by any of them.
+    expect(harness.clients.calls).toHaveLength(0);
   });
 });
 

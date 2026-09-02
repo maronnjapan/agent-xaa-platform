@@ -1,4 +1,5 @@
 import type { CleanupContext } from '../../clients/types.js';
+import { agentOpUrlFor } from '../../clients/op-target.js';
 
 /**
  * step2. Tells the agent's OP to stop issuing for it.
@@ -12,7 +13,7 @@ import type { CleanupContext } from '../../clients/types.js';
  */
 export async function issuanceDisable(context: CleanupContext): Promise<'succeeded' | 'skipped'> {
   const status = await context.clients.agentOp.disableIssuance({
-    baseUrl: context.clients.endpoints.agentOpUrl,
+    baseUrl: agentOpUrlFor(context.domain, context.clients),
     agentId: context.domain.agent_id,
   });
   if (status === 404) return 'skipped';
