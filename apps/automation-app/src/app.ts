@@ -214,7 +214,11 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
         },
         // `occurred_at` is what the report is about, so the Resource Server stores it
         // under the day it covers rather than the moment it was written.
+        // `human_subject` names the owner: this call carries the app's own service
+        // identity rather than a delegated agent's Access Token, so the Resource
+        // Server has no token `sub` to take an owner from (T-APP-05).
         body: JSON.stringify({
+          human_subject: context.get('humanSubject'),
           type: 'daily_report', title: report.title, body: report.body, occurred_at: body.to,
         }),
       },

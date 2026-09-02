@@ -3,6 +3,9 @@ locals {
     ["automation_app", "authorization"],
     ["automation_app", "provisioner"],
     ["automation_app", "lifecycle"],
+    # T-APP-05: the daily report write, authenticated by sa-automation-app's own
+    # Cloud Run identity (packages/xaa-resource-guard/src/internal-write.ts).
+    ["automation_app", "resource-docs-api"],
     ["authorization", "lifecycle"],
     ["provisioner", "shared-agent-op"],
     ["provisioner", "agent-op-callback"],

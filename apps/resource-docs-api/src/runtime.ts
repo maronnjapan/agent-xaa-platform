@@ -30,5 +30,6 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
       },
     },
     lifecycleServiceAccount: required(env, 'LIFECYCLE_SA_EMAIL'),
+    automationAppServiceAccount: required(env, 'AUTOMATION_APP_SA_EMAIL'),
   };
 }
