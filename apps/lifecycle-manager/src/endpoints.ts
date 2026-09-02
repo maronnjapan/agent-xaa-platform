@@ -11,9 +11,9 @@ export interface ResolvedEndpoints {
 /**
  * Where the other services are, read once from the deployment's endpoints.json.
  *
- * No URL is written in this app's source. A hard-coded `*.run.app` would be wrong in
- * every environment but the one it was written for, and would silently address the
- * wrong project rather than failing.
+ * No URL is written in this app's source. A hard-coded Cloud Run hostname would be
+ * wrong in every environment but the one it was written for, and would silently
+ * address the wrong project rather than failing.
  *
  * The Bridge may legitimately be absent: `enable_google_bridge=false` is the default,
  * and a missing URL there means "skip that step", not "misconfigured".

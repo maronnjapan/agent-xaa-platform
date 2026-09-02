@@ -6,7 +6,7 @@ import type { AgentRegistrationView, RuleContext } from '../src/rules/context.js
 import { normalizeEntries } from '../src/normalize/index.js';
 import { AGENT_ID, baselineFor, DOCUMENT_READ, logEntry } from '../src/testing/harness.js';
 
-const DOCS_AS = 'https://resource-docs-as-x.run.app';
+const DOCS_AS = 'https://resource-docs-as-x.example';
 const DOCS_RESOURCE = 'https://resource-docs-api.test';
 
 const REGISTRATION: AgentRegistrationView = {
