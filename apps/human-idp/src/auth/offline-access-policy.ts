@@ -15,8 +15,8 @@ export interface OfflineAccessDeps {
 
 /**
  * RULE-51 / docs 05 §4.1. core grants offline_access only under prompt=consent.
- * Provisioning the second and later agents must not re-show a consent screen, so a
- * recorded consent for `agent-platform` grants it too.
+ * Provisioning the second and every later agent must not re-show a consent screen,
+ * so a recorded consent for `agent-platform` grants it too.
  *
  * The callback is built per request because the decision needs the session cookie,
  * which core's callback signature does not carry.

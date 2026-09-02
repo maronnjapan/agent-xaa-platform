@@ -21,8 +21,8 @@ const TOKEN_SHAPE = /\beyJ[A-Za-z0-9_-]{8,}/;
 
 /**
  * docs 09 §2 (Human IdP row) and RULE-38. One JSON line on stdout; Cloud Logging
- * picks it up. `agent_id` is always null and never omitted: Human IdP does not know
- * about agents, and a missing key would break the shared correlation schema.
+ * picks it up. `agent_id` is always null and never omitted: Human IdP has no notion
+ * of an agent, and a missing key would break the shared correlation schema.
  *
  * Written from exactly three places: the end of /authorize, just before the /token
  * response, and just before the /revoke response.
@@ -39,7 +39,7 @@ export function emitHumanIdpAudit(
   createLogger('human-idp', 'human_idp', write).info('idp_authenticate', {
     request_id: '',
     trace_id: context.trace_id,
-    // Human IdP does not know about agents, and the key is present rather than omitted
+    // Human IdP has no notion of an agent, and the key is present rather than omitted
     // so the shared correlation schema still validates.
     agent_id: null,
     human_subject: context.human_subject,

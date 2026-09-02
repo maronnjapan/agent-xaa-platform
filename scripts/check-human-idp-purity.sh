@@ -24,8 +24,9 @@ fi
 
 # shellcheck disable=SC2086
 # `agent_id` survives only as the always-null column REQ-09-004 requires in every
-# log line, and in the comment that explains why it is always null.
-hits=$(grep -nE 'agent_id|agents/|isolation|capability|dedicated_op' $files \
+# log line, and in the comment that explains why it is always null. The identifier is
+# matched in both spellings: `agent_id` in data and JSON, `agentId` in TypeScript.
+hits=$(grep -nE 'agent_id|agentId|agents/|isolation|capability|dedicated_op' $files \
   | grep -v 'agent-platform' \
   | grep -v 'AGENT_OP_CALLBACK_URI' \
   | grep -vE 'agent_id: null' \

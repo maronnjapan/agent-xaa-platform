@@ -23,9 +23,14 @@ describe('human-idp Firestore backend', () => {
 
   it('list skips expired entries', async () => {
     let clock = 1_000_000;
-    const store = backend(() => clock);
+    const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'human-idp');
+    const store = createHumanIdpStoreBackend(documents, () => clock);
     await store.put('access-token:live', { n: 1 }, 60);
     await store.put('access-token:dead', { n: 2 }, 10);
+    // The TTL is written as `expire_at`. Firestore deletes it lazily, so the document
+    // is still there when the clock passes it and `list` has to drop it itself.
+    const stored = await documents.get<{ expire_at: unknown }>('idp_tokens', encodeURIComponent('access-token:dead'));
+    expect(documents.toMillis(stored!.expire_at)).toBe(clock + 10_000);
     clock += 30_000;
     expect((await store.list('access-token:')).map((entry) => entry.key)).toEqual(['access-token:live']);
     expect(await store.get('access-token:dead')).toBeNull();

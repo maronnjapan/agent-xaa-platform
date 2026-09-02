@@ -9,7 +9,7 @@ export const AGENT_PLATFORM_CLIENT_ID = 'agent-platform';
 
 /**
  * Two confidential clients, no more. RULE-50 / DEC-ID-22: an agent is never a
- * registered client; individual agents are identified by cnf.jkt, act and the audit
+ * registered client; one agent is told from another by cnf.jkt, act and the audit
  * log. `example-client` from the generator's defaults is deliberately absent.
  */
 export function createClientRegistry(env: HumanIdpEnv): ReadonlyMap<string, RegisteredClient> {

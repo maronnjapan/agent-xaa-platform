@@ -36,13 +36,16 @@ describe('revoke touches one agent only', () => {
     });
     expect(revoke.status).toBe(200);
 
+    // Agent OP re-acquires agent B's subject_token exactly this way (DEC-ID-19): a
+    // refresh grant as client_id=agent-platform, whose id_token is that subject_token.
     const refreshB = await tokenRequest({
       fetch: idp.fetch, ...CLIENT, issuer: HUMAN_IDP_ISSUER,
       form: { grant_type: 'refresh_token', refresh_token: agentB.tokens.refresh_token, client_id: 'agent-platform' },
     });
     expect(refreshB.status).toBe(200);
+    expect((await refreshB.json() as { id_token?: string }).id_token).toBeDefined();
 
-    // The browser session survives: a further prompt=none authorization does not
+    // The browser session survives: a further /authorize with prompt=none does not
     // bounce the human back to a login screen.
     const silent = await authorize({
       fetch: idp.fetch, clientId: 'agent-platform', redirectUri: AGENT_OP_CALLBACK_URI,

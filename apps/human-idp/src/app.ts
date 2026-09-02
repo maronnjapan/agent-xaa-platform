@@ -38,9 +38,9 @@ function createApp(deps: HumanIdpDeps = {}): Hono {
       resolved = { stores: deps.stores, jtiStore: deps.jtiStore };
       return resolved;
     }
-    const documents = createDocumentStore(env);
+    const documentStore = createDocumentStore(env);
     resolved = {
-      stores: deps.stores ?? createHumanIdpStores(documents).stores,
+      stores: deps.stores ?? createHumanIdpStores(documentStore).stores,
       jtiStore: deps.jtiStore ?? createJtiStore(env),
     };
     return resolved;
