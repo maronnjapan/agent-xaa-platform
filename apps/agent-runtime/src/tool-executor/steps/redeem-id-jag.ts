@@ -11,6 +11,13 @@ export interface RedeemedAccessToken {
   accessToken: ResourceAccessToken;
   expiresAt: number;
   idJagJti: string | undefined;
+  /**
+   * How the token is presented on the next hop. A Resource AS issues a DPoP-bound
+   * token and checks the proof; a SaaS reached over the Bridge issued its own Bearer
+   * token and knows nothing of this platform's keys (DEC-ID-13). The redeemer decides
+   * this, not the caller, so the header can never contradict what was issued.
+   */
+  binding: 'dpop' | 'bearer';
 }
 
 export type Redeemer = (input: {
@@ -69,6 +76,7 @@ export const redeemIdJag: Redeemer = async (input) => {
     expiresAt,
     // The jti identifies the grant in the logs; the assertion itself never appears there.
     idJagJti: readJti(input.idJag),
+    binding: 'dpop',
   };
 };
 

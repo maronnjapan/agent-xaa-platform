@@ -47,5 +47,10 @@ export const redeemViaBridge: Redeemer = async (input) => {
     };
   }
   const expiresAt = now + (typeof payload.expires_in === 'number' ? payload.expires_in : 300) * 1000;
-  return { accessToken: asResourceAccessToken(payload.access_token, 'bridge'), expiresAt, idJagJti: undefined };
+  return {
+    accessToken: asResourceAccessToken(payload.access_token, 'bridge'),
+    expiresAt,
+    idJagJti: undefined,
+    binding: 'bearer',
+  };
 };

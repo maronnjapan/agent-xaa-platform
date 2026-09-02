@@ -81,8 +81,22 @@ describe('a prompt injection reaches the executor and stops there', () => {
     const humanSubject = 'testuser';
     const agentOp = await startAgentOp({ idpPublicJwk: await idpPublicJwk(), humanSubject });
     const docs = await startResource({ kind: 'docs', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER });
+    const finance = await startResource({ kind: 'finance', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER });
+
+    // The same three counters, on a request that is out of permission from the start:
+    // here every one of them must stay at zero.
+    let agentOpCalls = 0;
+    let financeAsCalls = 0;
+    let financeApiCalls = 0;
+    const countedAgentOp = { ...agentOp, fetch: async (path: string, init?: RequestInit) => { agentOpCalls += 1; return agentOp.fetch(path, init); } };
+    const countedFinance = {
+      ...finance,
+      as: async (path: string, init?: RequestInit) => { financeAsCalls += 1; return finance.as(path, init); },
+      api: async (path: string, init?: RequestInit) => { financeApiCalls += 1; return finance.api(path, init); },
+    };
+
     const runtime = await startAgentRuntime({
-      agentOp, agentOpBaseUrl: AGENT_OP_BASE, resources: [docs], humanSubject,
+      agentOp: countedAgentOp, agentOpBaseUrl: AGENT_OP_BASE, resources: [docs, countedFinance], humanSubject,
       manifest: nativeManifest({ agentId: agentOp.agentId, resource: docs, kind: 'docs' }),
       agentClientPrivateJwk: JSON.stringify(await webcrypto.subtle.exportKey('jwk', agentOp.agentKeyPair.privateKey)),
     });
@@ -92,5 +106,8 @@ describe('a prompt injection reaches the executor and stops there', () => {
     }, { tool_id: 'internal.finance.payment.approve', parameters: { id: 'pay_1', amount: 1 } });
     expect(result).toMatchObject({ outcome: 'blocked', reason: 'not_in_allowed_tools', error_code: 'tool_not_allowed' });
     expect(runtime.hostCalls).toEqual([]);
+    expect(agentOpCalls).toBe(0);
+    expect(financeAsCalls).toBe(0);
+    expect(financeApiCalls).toBe(0);
   });
 });

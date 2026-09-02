@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { decodeJwsUnverified } from '@xaa/crypto';
+import { decodeJwsUnverified, sha256Base64Url } from '@xaa/crypto';
 import { ID_JAG_TOKEN_TYPE, JWT_BEARER_GRANT_TYPE, TOKEN_EXCHANGE_GRANT_TYPE } from '@xaa/contracts';
 import { executeTool } from '../src/tool-executor/index.js';
 import { TOOL_ERROR_CODES } from '../src/tool-executor/errors.js';
@@ -15,6 +15,8 @@ import { verifyConstraints } from '../src/tool-executor/steps/verify-constraints
 import { buildApiRequest } from '../src/tool-executor/steps/build-api-request.js';
 import { projectResponse } from '../src/tool-executor/steps/project-response.js';
 import { parseToolCall, isInvalidToolCall } from '../src/reasoning/parse-tool-call.js';
+import { asResourceAccessToken, buildResourceAuthorization } from '../src/http/resource-authorization.js';
+import { invokerAuthorizationHeader, type InvokerIdToken } from '../src/http/internal-invoker-token.js';
 import { AGENT_OP, DOCS_API, DOCS_AS, docsManifest, fakeIdToken, json, testContext, testHttp } from './helpers.js';
 
 const JWT_ANYWHERE = /eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/;
@@ -378,6 +380,10 @@ describe('step7, projecting the response', () => {
     const projected = projectResponse({ type: 'array', allowlist: ['title'] }, {
       items: [{ title: 'Sync', attendees: [{ email: 'a@example.com' }] }],
     });
+    // The allow list names `title` and nothing else, so `attendees[].email` — a field
+    // the calendar API really returns — is never copied into the projection.
+    const items = (projected as { items: Array<Record<string, unknown>> }).items;
+    expect(items[0]).not.toHaveProperty('attendees');
     expect(JSON.stringify(projected)).not.toContain('email');
     expect(projected).toEqual({ items: [{ title: 'Sync' }] });
   });
@@ -455,7 +461,7 @@ describe('the bridged path', () => {
     token_provider: bridge,
   };
 
-  it('calls the bridge exactly once and the saas api from the executor', async () => {
+  async function runBridged() {
     const context = await testContext({ manifest: { ...docsManifest(), tools: [bridged] } });
     const { http, calls } = testHttp(context, (url) => {
       if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
@@ -465,10 +471,28 @@ describe('the bridged path', () => {
     });
     const result = await executeTool({ context, http, logger: console as never, logContext: {} as never, stageWrite: () => {} },
       { tool_id: 'internal.document.list', parameters: {} });
+    return { result, calls };
+  }
+
+  it('calls bridge exactly once', async () => {
+    const { result, calls } = await runBridged();
     expect(result).toMatchObject({ outcome: 'success' });
-    expect(calls.filter((call) => call.url.startsWith(bridge))).toHaveLength(1);
-    // The SaaS call comes from the executor, not from the bridge acting as a proxy.
-    expect(calls.some((call) => call.url.startsWith(DOCS_API))).toBe(true);
+    const toBridge = calls.filter((call) => call.url.startsWith(bridge));
+    expect(toBridge).toHaveLength(1);
+    // One exchange, for a credential. The Bridge is never asked to run the business call.
+    expect(toBridge[0]!.url).toBe(`${bridge}/token`);
+  });
+
+  it('calls saas api from the executor with bearer', async () => {
+    const { calls } = await runBridged();
+    // The SaaS call comes from the executor, not from the bridge acting as a proxy:
+    // its URL is built from the manifest's api fields, never from the bridge's origin.
+    const saas = calls.find((call) => call.url.startsWith(DOCS_API));
+    expect(saas!.url).toBe(`${DOCS_API}/documents`);
+    const headers = saas!.init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer saas-token');
+    // DEC-ID-13: nothing outward-facing is DPoP-bound.
+    expect(headers).not.toHaveProperty('DPoP');
   });
 
   it('reports a bridge failure without switching to the native path', async () => {
@@ -482,6 +506,41 @@ describe('the bridged path', () => {
       { tool_id: 'internal.document.list', parameters: {} }))
       .toMatchObject({ error_code: 'bridge_error', status: 502 });
     expect(calls.filter((call) => call.url === `${DOCS_AS}/token`)).toHaveLength(0);
+  });
+});
+
+describe('the authorization header a resource sees', () => {
+  it('rejects plain string token', async () => {
+    const context = await testContext();
+    const request = { method: 'GET', url: `${DOCS_API}/documents` };
+    // @ts-expect-error a bare string is not a ResourceAccessToken: only the two
+    // response parsers can make one, so a Service Account ID Token cannot get here.
+    void (() => buildResourceAuthorization('metadata-server-id-token', request, context.dpop));
+    // And the brand is not reachable by hand either: the one producer demands to be
+    // told which parser it is speaking for.
+    const source = await readFile(new URL('../src/http/resource-authorization.ts', import.meta.url), 'utf8');
+    expect(source).toContain("source: 'resource-as' | 'bridge'");
+    expect(source.match(/as ResourceAccessToken/g)).toHaveLength(1);
+  });
+
+  it('rejects invoker id token', async () => {
+    const context = await testContext();
+    const invoker = 'invoker.id.token' as unknown as InvokerIdToken;
+    // @ts-expect-error an InvokerIdToken says "this service may be called", never who
+    // the agent acts for, so the resource builder does not accept one.
+    void (() => buildResourceAuthorization(invoker, { method: 'GET', url: `${DOCS_API}/x` }, context.dpop));
+    expect(invokerAuthorizationHeader(invoker)).toEqual({ 'X-Serverless-Authorization': 'Bearer invoker.id.token' });
+  });
+
+  it('proof includes ath of the access token', async () => {
+    const context = await testContext();
+    const token = asResourceAccessToken('access.token.value', 'resource-as');
+    const headers = await buildResourceAuthorization(token, { method: 'GET', url: `${DOCS_API}/documents` }, context.dpop);
+    expect(headers.Authorization).toBe('DPoP access.token.value');
+    const proof = decodeJwsUnverified(headers.DPoP).payload;
+    expect(proof.ath).toBe(await sha256Base64Url('access.token.value'));
+    expect(proof.htm).toBe('GET');
+    expect(proof.htu).toBe(`${DOCS_API}/documents`);
   });
 });
 

@@ -5,7 +5,7 @@ import { executeTool } from '@xaa/agent-runtime/src/tool-executor/index';
 import { decodeJwtPayload } from '../../harness/oauth-flow.js';
 import { AGENT_OP_BASE, FINANCE_API_RESOURCE, FINANCE_AS_ISSUER, startAgentOp } from '../../harness/agent-op.js';
 import { HUMAN_IDP_ISSUER, idpPublicJwk } from '../../harness/human-idp.js';
-import { seedPayment, startResource } from '../../harness/resource.js';
+import { redeemForAccessToken, seedPayment, startResource } from '../../harness/resource.js';
 import { nativeManifest, startAgentRuntime } from '../../harness/agent-runtime.js';
 import { humanIdToken } from './native-xaa-path.spec.js';
 
@@ -73,8 +73,18 @@ describe('the Runtime Flow, Finance side', () => {
       context: runtime.context, http: runtime.http, logger: runtime.logger,
       logContext: runtime.logContext, stageWrite: () => {},
     }, { tool_id: 'internal.finance.payment.list', parameters: {} });
-    // The refusal comes from the Resource AS, before an Access Token exists.
+    // The refusal comes from the Resource AS, before an Access Token exists. The
+    // executor reports the status and not the resource's wording (it does not retry
+    // on someone else's error text), so the reason is read from the AS itself, with
+    // the ID-JAG the exchange really produced.
     expect(result).toMatchObject({ outcome: 'failed', error_code: 'resource_as_error', status: 403 });
+    expect(runtime.context.tokens.get(`at:${finance.asIssuer}|${finance.resourceUri}|finance.tx.read`, Date.now()))
+      .toBeUndefined();
+
+    const idJag = runtime.context.tokens.get('idjag:internal.finance.payment.list', Date.now())!;
+    const refused = await redeemForAccessToken(finance, { idJag, keyPair: runtime.context.dpop });
+    expect(refused.status).toBe(403);
+    expect((await refused.json() as { error: string }).error).toBe('insufficient_isolation');
   });
 
   it('stops an over-limit approval before it reaches the resource', async () => {

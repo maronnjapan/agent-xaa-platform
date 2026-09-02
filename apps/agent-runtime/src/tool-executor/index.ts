@@ -1,7 +1,7 @@
 import type { LogContext, Logger } from '@xaa/logging';
 import type { ExecutionContext } from '../context/execution-context.js';
 import type { RuntimeHttpClient } from '../http/http-client.js';
-import { buildResourceAuthorization } from '../http/resource-authorization.js';
+import { buildExternalAuthorization, buildResourceAuthorization } from '../http/resource-authorization.js';
 import type { ToolCall } from '../reasoning/parse-tool-call.js';
 import { createStageLogger, newSpanId, type StageLogger } from '../telemetry/stage-log.js';
 import { fetchSubjectToken } from '../tokens/subject-token.js';
@@ -109,10 +109,15 @@ export async function executeTool(deps: ToolExecutorDeps, call: ToolCall): Promi
     stage.emit('resource_api', { tool_id: tool.tool_id, outcome: 'dropped_parameters', operation: request.droppedParameters.join(',') });
   }
   const startedAt = now();
+  // The redemption decided how the token is presented: DPoP-bound for a resource of
+  // this platform, a plain Bearer for a SaaS reached over the Bridge (DEC-ID-13).
+  const authorizationHeaders = redeemed.binding === 'bearer'
+    ? buildExternalAuthorization(redeemed.accessToken)
+    : await buildResourceAuthorization(redeemed.accessToken, { method: request.method, url: request.url }, deps.context.dpop, now);
   const response = await deps.http.send(request.url, {
     method: request.method,
     headers: {
-      ...(await buildResourceAuthorization(redeemed.accessToken, { method: request.method, url: request.url }, deps.context.dpop, now)),
+      ...authorizationHeaders,
       'Content-Type': 'application/json',
     },
     ...(request.body === undefined ? {} : { body: request.body }),
