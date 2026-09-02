@@ -6,6 +6,9 @@ import { BUSINESS_WORK_REQUEST_KEYS } from '../src/schemas/index.js';
 import { capabilitiesHash, assertStillApproved, CapabilitiesChanged, ApprovalRequired } from '../src/agent-definition/approval.js';
 import { SUGGESTION_FIELDS, suggestAutomations } from '../src/automation/suggestions.js';
 import { LifetimeInput } from '../src/ui/components/lifetime-input.js';
+import {
+  PRESENTED_CAPABILITIES, PRESENTED_CAPABILITIES_REORDERED, PRESENTED_CAPABILITIES_WIDENED,
+} from './fixtures/presented-capabilities.fixture.js';
 import { startAutomationApp } from './helpers.js';
 
 const definition = {
@@ -29,12 +32,16 @@ describe('the requested lifetime', () => {
 
   it('answers 400 with lifetime_out_of_range', async () => {
     const harness = await startAutomationApp();
-    const response = await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: 'x', requested_lifetime_hours: 25 }),
-    });
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'lifetime_out_of_range' });
+    // 25 is over the cap; 1.5 is not a whole hour; "3" is the string a form sends when
+    // nobody parsed it; 0 is no life at all. None of them is rounded into range.
+    for (const requested_lifetime_hours of [25, 1.5, '3', 0]) {
+      const response = await harness.fetch('/api/work-definitions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purpose: 'x', requested_lifetime_hours }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'lifetime_out_of_range' });
+    }
   });
 
   it('renders the configured default with the fixed bounds', async () => {
@@ -230,33 +237,47 @@ describe('the business work request', () => {
     expect(stored!.approved_at).toBeNull();
   });
 
+  /**
+   * A token addressed elsewhere is not sent, and the failure is local. Presenting an
+   * `aud=agent-provisioner` token to the Authorization Platform would be refused at the
+   * far end anyway; refusing it here means the mistake has a name at the place that
+   * made it, and the token never leaves this process (DEV-12).
+   */
   it('does not send when the session token is for a different audience', async () => {
-    const harness = await startAutomationApp({ scope: 'nothing:useful' });
-    const created = await (await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
-    })).json() as { work_definition_id: string };
-    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
-    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
-    expect(response.status).toBe(500);
-    expect(harness.upstream).toHaveLength(0);
+    for (const options of [{ authorizationAudience: 'agent-provisioner' }, { scope: 'nothing:useful' }]) {
+      const harness = await startAutomationApp(options);
+      const created = await (await harness.fetch('/api/work-definitions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
+      })).json() as { work_definition_id: string };
+      await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+      const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+      expect(response.status).toBe(500);
+      expect(harness.upstream).toHaveLength(0);
+    }
   });
 });
 
 describe('approval', () => {
   it('is order-independent', async () => {
     expect(await capabilitiesHash(['b', 'a'])).toBe(await capabilitiesHash(['a', 'b']));
+    // The same set the person was shown, listed in another order, is the same approval.
+    expect(await capabilitiesHash([...PRESENTED_CAPABILITIES_REORDERED]))
+      .toBe(await capabilitiesHash([...PRESENTED_CAPABILITIES]));
   });
 
   it('notices a capability that appeared after approval', async () => {
     const approved = {
       agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
-      presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+      presented_capabilities: [...PRESENTED_CAPABILITIES],
+      presented_capabilities_hash: await capabilitiesHash([...PRESENTED_CAPABILITIES]),
       isolation_level: 'standard', approved_by: 'testuser', approved_at: '2026-01-01T00:00:00.000Z',
       created_at: '2026-01-01T00:00:00.000Z',
     };
-    await expect(assertStillApproved(approved, ['a'])).resolves.toBeUndefined();
-    await expect(assertStillApproved(approved, ['a', 'b'])).rejects.toThrow(CapabilitiesChanged);
-    await expect(assertStillApproved({ ...approved, approved_at: null }, ['a'])).rejects.toThrow(ApprovalRequired);
+    await expect(assertStillApproved(approved, [...PRESENTED_CAPABILITIES])).resolves.toBeUndefined();
+    await expect(assertStillApproved(approved, [...PRESENTED_CAPABILITIES_REORDERED])).resolves.toBeUndefined();
+    await expect(assertStillApproved(approved, [...PRESENTED_CAPABILITIES_WIDENED])).rejects.toThrow(CapabilitiesChanged);
+    await expect(assertStillApproved({ ...approved, approved_at: null }, [...PRESENTED_CAPABILITIES]))
+      .rejects.toThrow(ApprovalRequired);
   });
 
   it('provision without approval returns 409', async () => {

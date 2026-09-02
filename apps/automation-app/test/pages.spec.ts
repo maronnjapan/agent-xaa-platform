@@ -87,6 +87,9 @@ describe('the agent detail page', () => {
   it('serves the status panel and the timeline link for the owner', async () => {
     const harness = await startAutomationApp();
     await seedAgent(harness, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' } } });
+    // A task of this agent that has not finished. It belongs to the status panel, and
+    // the timeline side of this page must not show it (RULE-59).
+    await seedEvent(harness, { event_id: 'ev-running', task_id: 'task-7', detail: { event_type: 'TOOL_SUCCEEDED' } });
     const response = await harness.fetch(`/agents/${AGENT_ID}`);
     expect(response.status).toBe(200);
     const html = await response.text();
@@ -94,6 +97,14 @@ describe('the agent detail page', () => {
     expect(html).toContain('data-section="timeline-link"');
     expect(html).toContain(TIMELINE_NOTE);
     expect(html).toContain(`/activity?agent_id=${AGENT_ID}`);
+
+    // The snapshot the panel shows comes from the checkpoint, not from the events.
+    const statusSection = html.slice(html.indexOf('data-section="status"'), html.indexOf('data-section="timeline-link"'));
+    expect(statusSection).toContain('<dd data-field="agent_status">ACTIVE</dd>');
+    expect(statusSection).toContain('task-1');
+    // And the timeline side carries no row at all, so it cannot carry a running one.
+    expect(html).not.toContain('data-status="running"');
+    expect(html).not.toContain('data-task-id=');
   });
 
   it("answers 404 for someone else's agent", async () => {

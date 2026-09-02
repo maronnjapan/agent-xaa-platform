@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { AGENT_STATUS_RESPONSE_KEYS } from '../src/agents/status.js';
 import { AUDIT_OPERATIONS } from '../src/audit/logger.js';
+import { instructionRequestSchema } from '../src/schemas/index.js';
 import { AGENT_ID, SUBJECT, seedAgent, startAutomationApp } from './helpers.js';
 
 const repoRoot = new URL('../../../', import.meta.url).pathname;
 const OTHER_AGENT = 'agent-zzzzzzzzzzzzzzzzzzzzzzzzzz';
 
 describe('agent ownership', () => {
-  it('returns 404 for another user on all three operations', async () => {
+  it('returns 404 for other user on all three operations', async () => {
     const harness = await startAutomationApp();
     await seedAgent(harness, { agentId: OTHER_AGENT, humanSubject: 'someone-else' });
 
@@ -101,7 +102,7 @@ describe('the status endpoint', () => {
 });
 
 describe('stopping an agent', () => {
-  it('delegates to the lifecycle manager', async () => {
+  it('delegates to lifecycle manager', async () => {
     const harness = await startAutomationApp({
       upstreamHandler: () => new Response(JSON.stringify({ status: 'revoking' }), {
         status: 200, headers: { 'Content-Type': 'application/json' },
@@ -164,6 +165,11 @@ describe('additional instructions', () => {
   });
 
   it('rejects a body that names a capability', async () => {
+    // One property, so there is no name in the request an operator could set to widen
+    // what a running agent may do (RULE-13). The schema is the record of that.
+    expect(Object.keys(instructionRequestSchema.properties)).toEqual(['text']);
+    expect(instructionRequestSchema.additionalProperties).toBe(false);
+
     const harness = await startAutomationApp();
     await seedAgent(harness, { state: { agent_status: 'ACTIVE' } });
     for (const body of [
@@ -187,7 +193,7 @@ describe('additional instructions', () => {
     }
   });
 
-  it('logs one line per successful operation', async () => {
+  it('emits one line per operation', async () => {
     const harness = await startAutomationApp();
     await seedAgent(harness, { state: { agent_status: 'ACTIVE' } });
     await harness.fetch(`/api/agents/${AGENT_ID}/status`);

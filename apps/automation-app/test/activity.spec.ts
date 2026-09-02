@@ -7,7 +7,7 @@ import {
 import { buildActivityPath, decodePushMessage, storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline } from '../src/activity/query.js';
 import { emitAgentStopped, emitConfirmed, emitLoggedIn, emitProposed } from '../src/activity/emit.js';
-import { SUBJECT, startAutomationApp } from './helpers.js';
+import { AGENT_ID, ISSUER, SUBJECT, mintAccessToken, seedAgent, startAutomationApp } from './helpers.js';
 
 function event(overrides: Partial<ActivityEvent> = {}): ActivityEvent {
   return validateActivityEvent({
@@ -93,12 +93,88 @@ describe('the four Automation App emitters', () => {
     }
   });
 
+  /**
+   * The four events as the app actually produces them: a real login, a work definition
+   * proposed and confirmed, and an agent stopped. Nothing calls an emitter directly, so
+   * this fails if a route stops emitting — which is how these go missing.
+   */
+  it('publishes one event per operation, from logging in to stopping', async () => {
+    // The Human IdP's answer at each of the five token exchanges the login makes.
+    const plan = ['automation-app', 'authorization-platform', 'agent-provisioner', 'lifecycle-manager'];
+    let pending = { stage: -1, nonce: '' };
+    const harness = await startAutomationApp({
+      upstreamHandler: async (url) => {
+        if (!url.startsWith(`${ISSUER}/token`)) return Response.json({ status: 'revoking' }, { status: 200 });
+        const audience = pending.stage < 0 ? 'automation-app' : plan[pending.stage]!;
+        return Response.json({
+          id_token: await mintAccessToken({ typ: 'JWT', extra: { nonce: pending.nonce } }),
+          ...(pending.stage < 0 ? {} : {
+            access_token: await mintAccessToken({ audience }),
+            token_type: 'DPoP',
+          }),
+        });
+      },
+    });
+    resetActivityPublisherForTesting();
+
+    let response = await harness.fetch('/login', { headers: { cookie: '' } });
+    let location = response.headers.get('location') ?? '';
+    let cookie = '';
+    for (let round = 0; round <= plan.length; round += 1) {
+      const state = new URL(location).searchParams.get('state')!;
+      const transaction = await harness.documents.get<{ stage: number; nonce: string }>('login_transactions', state);
+      pending = { stage: transaction!.stage, nonce: transaction!.nonce };
+      response = await harness.fetch(`/callback?state=${state}&code=c${round}`, { headers: { cookie: '' } });
+      cookie = response.headers.get('set-cookie')?.split(';')[0] ?? cookie;
+      location = response.headers.get('location') ?? '';
+      if (location === '/') break;
+    }
+    expect(location).toBe('/');
+    expect(cookie).toContain('xaa_session=');
+
+    const asUser = (path: string, init: RequestInit = {}): Promise<Response> =>
+      harness.fetch(path, { ...init, headers: { ...(init.headers as Record<string, string>), cookie } });
+
+    const created = await (await asUser('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: '毎朝の日報をまとめる' }),
+    })).json() as { work_definition_id: string };
+    await asUser(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+    await seedAgent(harness, { state: { agent_status: 'ACTIVE' } });
+    expect((await asUser(`/api/agents/${AGENT_ID}/stop`, { method: 'POST' })).status).toBe(200);
+
+    const published = drainActivityQueueForTesting();
+    expect(published.map((entry) => (entry.detail as { event_type: string }).event_type))
+      .toEqual(['LOGGED_IN', 'PROPOSED', 'CONFIRMED', 'AGENT_STOPPED']);
+    expect(published.map((entry) => [entry.phase, entry.outcome, entry.task_id])).toEqual([
+      ['login', 'info', 'provisioning'],
+      ['work_definition', 'info', 'provisioning'],
+      ['work_definition', 'success', 'provisioning'],
+      ['lifecycle', 'success', 'lifecycle'],
+    ]);
+    for (const entry of published) {
+      expect(entry.human_subject).toBe(SUBJECT);
+      for (const text of [entry.title, entry.message]) {
+        expect(text.trim()).not.toBe('');
+        // eslint-disable-next-line no-control-regex
+        expect(/^[\x00-\x7F]*$/.test(text)).toBe(false);
+      }
+    }
+  });
+
   it('rejects an empty title before it can reach the topic', async () => {
     const { publishActivityEvent } = await import('@xaa/contracts');
     await expect(publishActivityEvent(event({ title: ' ' }))).rejects.toThrow(/title/);
     await expect(publishActivityEvent(event({ message: ' ' }))).rejects.toThrow(/message/);
   });
 });
+
+const push = (harness: Awaited<ReturnType<typeof startAutomationApp>>, activity: ActivityEvent): Promise<Response> =>
+  harness.fetch('/internal/activity/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', authorization: 'Bearer pubsub-oidc', cookie: '' },
+    body: JSON.stringify({ message: { data: Buffer.from(JSON.stringify(activity)).toString('base64') } }),
+  });
 
 describe('the push subscriber', () => {
   it('rejects a delivery with no token', async () => {
@@ -108,6 +184,43 @@ describe('the push subscriber', () => {
       body: JSON.stringify({ message: { data: Buffer.from(JSON.stringify(event())).toString('base64') } }),
     });
     expect(response.status).toBe(401);
+  });
+
+  /**
+   * The endpoint as Pub/Sub reaches it: one delivery, one document, at the path docs 11
+   * §3.2 names, with the seven-day expiry the TTL policy sweeps on. The OIDC check is
+   * the one thing stood in for — everything after it is the real handler.
+   */
+  it('writes one document per delivery, at the documented path', async () => {
+    const harness = await startAutomationApp({ verifyPush: async () => ({ email: 'sa-pubsub-push@x' }) });
+    const delivered = event({ event_id: 'ev-push', occurred_at: '2026-03-01T00:00:00.000Z' });
+    const responses = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      responses.push(await push(harness, delivered));
+    }
+    for (const response of responses) expect(response.status).toBe(200);
+    expect(await responses[0]!.json()).toEqual({ status: 'created' });
+    expect(await responses[1]!.json()).toEqual({ status: 'duplicate' });
+
+    const rows = await harness.documents.queryEqual('user_activity', [['event_id', 'ev-push']]);
+    expect(rows).toHaveLength(1);
+    expect(buildActivityPath(SUBJECT, 'ev-push')).toBe(`users/${SUBJECT}/activity/ev-push`);
+    const stored = await harness.documents.get<{ expire_at: string; title: string }>('user_activity', 'ev-push');
+    expect(stored!.expire_at).toBe('2026-03-08T00:00:00.000Z');
+  });
+
+  it('refuses a body the schema does not accept, and writes nothing', async () => {
+    const harness = await startAutomationApp({ verifyPush: async () => ({ email: 'sa-pubsub-push@x' }) });
+    const response = await harness.fetch('/internal/activity/push', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', cookie: '' },
+      body: JSON.stringify({
+        message: { data: Buffer.from(JSON.stringify({ event_id: 'ev-bad', phase: 'nonsense' })).toString('base64') },
+      }),
+    });
+    // 400 rather than 500: Pub/Sub redelivers a 5xx forever, and a body that fails the
+    // schema will fail it every time.
+    expect(response.status).toBe(400);
+    expect(await harness.documents.queryEqual('user_activity', [['event_id', 'ev-bad']])).toHaveLength(0);
   });
 
   it('refuses a body that is not an Activity Event', () => {

@@ -107,7 +107,7 @@ describe('the demo cannot reach another user', () => {
     expect(Object.keys(SCENARIOS).sort()).toEqual([...ALLOWED_SCENARIOS].sort());
   });
 
-  it('throws on a slash in the subject', () => {
+  it('throws on slash in subject', () => {
     expect(() => buildActivityPath('user/../other', 'ev-1')).toThrow();
     expect(() => buildActivityPath('user-A', 'ev-1')).not.toThrow();
   });

@@ -1,5 +1,7 @@
-import { webcrypto } from 'node:crypto';
-import { createLocalEs256Signer, generateEs256KeyPair, signCompactJws, type Es256KeyPair } from '@xaa/crypto';
+import { randomUUID, webcrypto } from 'node:crypto';
+import {
+  createLocalEs256Signer, generateEs256KeyPair, jwkThumbprint, signCompactJws, type Es256KeyPair,
+} from '@xaa/crypto';
 import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
 import createAutomationApp from '@xaa/automation-app/app';
 import type { AutomationAppConfig } from '@xaa/automation-app/src/config';
@@ -24,18 +26,38 @@ export interface AutomationHarness {
 }
 
 const ISSUER = 'https://human-idp.test';
+/** The kid the other harnesses publish for the Human IdP signing key. */
+const IDP_KID = 'idp-testkey';
 let idpKey: Es256KeyPair | undefined;
 
-async function accessToken(subject: string, audience: string): Promise<string> {
+async function signingKey(): Promise<Es256KeyPair> {
   idpKey ??= await generateEs256KeyPair();
+  return idpKey;
+}
+
+/**
+ * The public half of the key these session tokens are signed with, so a real Control
+ * Plane app can be stood up next to this harness and verify them.
+ */
+export async function automationIdpPublicJwk(): Promise<JsonWebKey> {
+  return (await signingKey()).publicJwk as unknown as JsonWebKey;
+}
+
+/**
+ * An Access Token as the Human IdP issues one: DPoP-bound through `cnf.jkt`, with a
+ * `jti` the receiving app records. Both are required by the Control Plane guard, so a
+ * token without them is not a realistic stand-in for the real thing.
+ */
+async function accessToken(subject: string, audience: string, jkt: string): Promise<string> {
+  const key = await signingKey();
   const issuedAt = Math.floor(Date.now() / 1000);
   return signCompactJws({
-    header: { alg: 'ES256', typ: 'at+jwt', kid: 'idp-1' },
+    header: { alg: 'ES256', typ: 'at+jwt', kid: IDP_KID },
     payload: {
-      iss: ISSUER, sub: subject, aud: audience,
+      iss: ISSUER, sub: subject, aud: audience, jti: randomUUID(), cnf: { jkt },
       scope: 'workdef:submit agent:provision agent:revoke', iat: issuedAt, exp: issuedAt + 3600,
     },
-    signer: createLocalEs256Signer({ privateKey: idpKey.privateKey, kid: 'idp-1' }),
+    signer: createLocalEs256Signer({ privateKey: key.privateKey, kid: IDP_KID }),
   });
 }
 
@@ -59,15 +81,17 @@ export async function startAutomationAppHarness(options: {
   const pair = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const exported = await webcrypto.subtle.exportKey('jwk', pair.privateKey);
   const dpopJwk = Object.fromEntries(Object.entries(exported).filter(([key]) => key !== 'key_ops' && key !== 'ext'));
+  // The session key is what every proof is made with, so the tokens are bound to it.
+  const jkt = await jwkThumbprint({ kty: 'EC', crv: 'P-256', x: dpopJwk.x as string, y: dpopJwk.y as string });
 
   const session = await sessions.create({
     human_subject: humanSubject,
-    id_token: await accessToken(humanSubject, 'automation-app'),
+    id_token: await accessToken(humanSubject, 'automation-app', jkt),
     access_tokens: {
-      'automation-app': await accessToken(humanSubject, 'automation-app'),
-      'authorization-platform': await accessToken(humanSubject, 'authorization-platform'),
-      'agent-provisioner': await accessToken(humanSubject, 'agent-provisioner'),
-      'lifecycle-manager': await accessToken(humanSubject, 'lifecycle-manager'),
+      'automation-app': await accessToken(humanSubject, 'automation-app', jkt),
+      'authorization-platform': await accessToken(humanSubject, 'authorization-platform', jkt),
+      'agent-provisioner': await accessToken(humanSubject, 'agent-provisioner', jkt),
+      'lifecycle-manager': await accessToken(humanSubject, 'lifecycle-manager', jkt),
     },
     dpop_private_jwk: dpopJwk,
   });

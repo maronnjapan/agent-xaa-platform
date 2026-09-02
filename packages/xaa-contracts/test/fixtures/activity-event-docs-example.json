@@ -1,0 +1,20 @@
+{
+  "event_id": "evt-8f2c1a",
+  "trace_id": "trace-9a01",
+  "human_subject": "user-123",
+  "agent_id": "agent-001",
+  "task_id": "task-2",
+  "occurred_at": "2026-08-29T10:01:05+09:00",
+  "source": "agent-runtime",
+  "phase": "tool_call",
+  "outcome": "blocked",
+  "title": "実行を拒否",
+  "message": "mail.message.send は許可されたToolに含まれないため、Tool Executorが実行を拒否しました",
+  "detail": {
+    "tool_id": "mail.message.send",
+    "effective_capabilities": ["calendar.event.read"],
+    "reason": "not_in_allowed_tools"
+  },
+  "related_finding_id": null,
+  "is_simulated": false
+}

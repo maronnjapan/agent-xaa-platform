@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import {
   NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds,
@@ -7,6 +8,7 @@ import {
 import { EMPHASIS_CLASSES, EMPHASIS_LABELS, emphasisClass } from '../src/ui/replay/emphasis.js';
 import { buildReplayPlan, isFinished } from '../../automation-app/client/src/replay-plan.js';
 import { playReplay } from '../../automation-app/client/src/replay.js';
+import { start as startTimelinePage } from '../../automation-app/client/src/timeline.js';
 import { REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../../automation-app/client/src/replay-config.js';
 import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
@@ -93,6 +95,22 @@ describe('the replay plan', () => {
     const plan = buildReplayPlan(events, (source) => SOURCE_TO_NODE[source] ?? null);
     expect(plan.map((step) => step.delayMs)).toEqual([REPLAY_STEP_MS, REPLAY_STEP_MS, REPLAY_STEP_MS]);
     expect(REPLAY_STEP_MS).toBe(800);
+  });
+
+  /**
+   * REQ-11-025. Two steps, one 200ms apart and one three minutes apart, take the same
+   * time on screen. A replay paced by the real clock would either race past the fast
+   * part or leave a person watching nothing for three minutes.
+   */
+  it('gives a 200ms gap and a three minute gap the same step length', () => {
+    const paced = buildReplayPlan([
+      { event_id: 'a', occurred_at: '2026-01-01T00:00:00.000Z', source: 'automation-app', outcome: 'info', message: '一', detail: { target: 'agent-runtime' } },
+      { event_id: 'b', occurred_at: '2026-01-01T00:00:00.200Z', source: 'agent-runtime', outcome: 'success', message: '二', detail: { target: 'resource-as' } },
+      { event_id: 'c', occurred_at: '2026-01-01T00:03:00.200Z', source: 'agent-runtime', outcome: 'success', message: '三', detail: { target: 'resource-api' } },
+    ], (source) => SOURCE_TO_NODE[source] ?? null);
+    const intervals = paced.slice(1).map((step) => step.delayMs);
+    expect(new Set(intervals)).toEqual(new Set([REPLAY_STEP_MS]));
+    expect(Math.abs(intervals[0]! - intervals[1]!)).toBeLessThanOrEqual(100);
   });
 
   it('stops a blocked step short of its destination', () => {
@@ -215,6 +233,12 @@ describe('the task list', () => {
     expect(simulated.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(3);
     expect(simulated).toContain('simulated-row');
     expect(simulated).toContain('simulated-canvas');
+    // With every disclosure shut, the label is still on the page twice: once on the row
+    // and once on the canvas. A badge only inside `<details>` would be invisible to
+    // anyone who never opened one (RULE-58).
+    expect(simulated).not.toContain('<details open');
+    const outsideDisclosures = simulated.split(/<details[\s\S]*?<\/details>/g).join('');
+    expect(outsideDisclosures.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(2);
 
     const real = await render(TimelinePage({
       tasks: [{ task_id: 'task-1', agent_id: null, purpose: '実作業', status: 'running' }],
@@ -277,6 +301,64 @@ describe('the frontend bundle', () => {
     ]) {
       expect(() => execFileSync('bash', [`scripts/checks/${script}`], { cwd: repoRoot })).not.toThrow();
     }
+  });
+
+  /**
+   * A check that passes because it looks at nothing is worth nothing. Each of these
+   * plants the violation the check exists for, inside the directory it scans, and
+   * requires it to be refused — then takes the violation away again.
+   */
+  it('refuses the authorization vocabulary once it appears in the source', () => {
+    const probe = `${repoRoot}apps/automation-app/src/__vocabulary-probe.ts`;
+    // Assembled from two halves so this spec file is not itself a hit for the grep it
+    // is testing; the file written to disk contains the word.
+    writeFileSync(probe, `export const level = '${['full', 'isolation'].join('_')}';\n`);
+    try {
+      expect(() => execFileSync('bash', ['scripts/checks/no-authz-vocabulary-in-automation-app.sh'], { cwd: repoRoot }))
+        .toThrow();
+    } finally {
+      rmSync(probe, { force: true });
+    }
+    expect(() => execFileSync('bash', ['scripts/checks/no-authz-vocabulary-in-automation-app.sh'], { cwd: repoRoot }))
+      .not.toThrow();
+  });
+
+  it('refuses a renderer that imports something which decides', () => {
+    const fixture = `${repoRoot}apps/automation-app/test/fixtures/ui-decision-violation.fixture.ts`;
+    const probe = `${repoRoot}apps/automation-app/src/ui/__decision-probe.ts`;
+    copyFileSync(fixture, probe);
+    try {
+      expect(() => execFileSync('npx', ['eslint', 'apps/automation-app/src/ui/__decision-probe.ts'], { cwd: repoRoot }))
+        .toThrow();
+    } finally {
+      rmSync(probe, { force: true });
+    }
+    // Where it lives, the same file lints clean — which is why `pnpm lint` is green.
+    expect(() => execFileSync('npx', ['eslint', 'apps/automation-app/test/fixtures/ui-decision-violation.fixture.ts'], { cwd: repoRoot }))
+      .not.toThrow();
+  }, 120_000);
+
+  /**
+   * REQ-11-012 / DEV-13. The page asks once when it opens and once per press of the
+   * refresh button. Sixty seconds of sitting still produce no request at all, which is
+   * the browser-side half of "no live channel to the datastore".
+   */
+  it('asks once and then waits to be asked again', async () => {
+    const asked: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => {
+      asked.push(String(url));
+      return new Response(JSON.stringify({ tasks: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    vi.useFakeTimers();
+    try {
+      startTimelinePage(new FakeDocument().createElement('body') as unknown as Document);
+      await vi.advanceTimersByTimeAsync(60_000);
+    } finally {
+      vi.useRealTimers();
+      globalThis.fetch = original;
+    }
+    expect(asked).toEqual(['/api/activity/tasks']);
   });
 });
 
@@ -347,6 +429,10 @@ describe('the replay as it is drawn', () => {
     const destination = REPLAY_NODES.find((node) => node.id === 'resource-api')!;
     const clear = Math.abs(x - destination.x) > NODE_HALF_WIDTH || Math.abs(y - destination.y) > NODE_HALF_HEIGHT;
     expect(clear).toBe(true);
+
+    // The reason shown is the publisher's own sentence, put on screen unchanged.
+    expect(root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent))
+      .toEqual(['許可された Tool に含まれない']);
   });
 
   it('draws a blocked security event more strongly than a blocked tool call', () => {
@@ -362,12 +448,54 @@ describe('the replay as it is drawn', () => {
 
   it('keeps every message and adds one per step', () => {
     const root = canvas();
+    // Handed over out of order, on purpose: the replay decides the order, from
+    // `occurred_at`, not from however the events arrived.
     play(root, [
-      step({ event_id: 'a', message: '一番目' }),
-      step({ event_id: 'b', occurred_at: '2026-01-01T00:03:00.000Z', message: '二番目', detail: { target: 'resource-as' } }),
+      step({ event_id: 'c', occurred_at: '2026-01-01T00:09:00.000Z', message: '三番目', detail: { target: 'resource-as' } }),
+      step({ event_id: 'a', occurred_at: '2026-01-01T00:03:00.000Z', message: '一番目' }),
+      step({ event_id: 'd', occurred_at: '2026-01-01T00:12:00.000Z', message: '四番目', detail: { target: 'resource-api' } }),
+      step({ event_id: 'b', occurred_at: '2026-01-01T00:06:00.000Z', message: '二番目', detail: { target: 'resource-as' } }),
     ]);
     const messages = root.querySelectorAll('[data-messages]')[0]!;
-    expect(messages.children.map((line) => line.textContent)).toEqual(['一番目', '二番目']);
-    expect(messages.children.map((line) => line.getAttribute('data-step-index'))).toEqual(['0', '1']);
+    expect(messages.children.map((line) => line.textContent)).toEqual(['一番目', '二番目', '三番目', '四番目']);
+    expect(messages.children.map((line) => line.getAttribute('data-step-index'))).toEqual(['0', '1', '2', '3']);
+  });
+
+  /**
+   * REQ-11-023. The last frame is where the replay stays. Looping it would make a
+   * person watching for a second time unsure whether they were seeing new work.
+   */
+  it('leaves the finished replay alone five seconds later', () => {
+    const root = canvas();
+    vi.useFakeTimers();
+    try {
+      playReplay(root as unknown as HTMLElement, [step({ event_id: 'a', message: '一番目' })] as never);
+      vi.advanceTimersByTime(REPLAY_STEP_MS * 2);
+      const settled = root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent);
+      expect(root.getAttribute('data-replay-state')).toBe('finished');
+
+      vi.advanceTimersByTime(5_000);
+      expect(root.getAttribute('data-replay-state')).toBe('finished');
+      expect(root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent)).toEqual(settled);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * REQ-11-026. The disclosure belongs to the row, and the replay only appends to the
+   * message list — so the same `<details>` opens before a replay, during one, and after
+   * it has finished.
+   */
+  it('leaves the detail disclosure openable before and after playing', () => {
+    const root = canvas();
+    const disclosure = element(document_, 'details', { 'data-detail': 'true' });
+    root.appendChild(disclosure);
+    expect(disclosure.getAttribute('open')).toBeNull();
+
+    play(root, [step()]);
+
+    expect(root.querySelectorAll('[data-detail="true"]')).toHaveLength(1);
+    expect(disclosure.getAttribute('open')).toBeNull();
   });
 });

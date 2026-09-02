@@ -6,8 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Every file at once, in one process. Spawning node per file was the same check and
-# took seconds; the list is built here so the two exclusions stay visible.
+# Every file is handed to one `code-grep` run rather than one run each: the check is the
+# same, and a Node process per file made this take seconds.
 files=()
 while IFS= read -r file; do
   case "$file" in
@@ -16,6 +16,11 @@ while IFS= read -r file; do
   esac
   files+=("$file")
 done < <(find apps/lifecycle-manager/src -type f -name '*.ts' | sort)
+
+if [ ${#files[@]} -eq 0 ]; then
+  echo "no lifecycle sources to check" >&2
+  exit 1
+fi
 
 # code-grep exits 1 when it finds something, so a hit is the failure case.
 if ! node scripts/checks/code-grep.mjs "(update|set)\(['\"]agents['\"].*status:" "${files[@]}" >&2; then
