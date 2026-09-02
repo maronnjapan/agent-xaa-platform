@@ -12,6 +12,8 @@ import type { Fetcher } from './oauth-flow.js';
 import { HUMAN_IDP_ISSUER } from './human-idp.js';
 
 export const AGENT_OP_BASE = 'https://shared-agent-op.test';
+export const LIFECYCLE_SA = 'sa-lifecycle@xaa-test.iam.gserviceaccount.com';
+export const PROVISIONER_SA = 'sa-provisioner@xaa-test.iam.gserviceaccount.com';
 export const DOCS_AS_ISSUER = 'https://resource-docs-as.test';
 export const DOCS_API_RESOURCE = 'https://resource-docs-api.test';
 export const FINANCE_AS_ISSUER = 'https://resource-finance-as.test';
@@ -56,6 +58,8 @@ export interface StartAgentOpOptions {
   resources?: string[];
   scopes?: string[];
   config?: Partial<AgentOpConfig>;
+  /** The kid the OP signs with; a Dedicated OP publishes `idjag-<short>-<version>`. */
+  signingKid?: string;
   expiresAt?: string;
   /** One Firestore across several apps, for a test that spans them. */
   shared?: ReturnType<typeof createFirestoreDouble>;
@@ -73,7 +77,8 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
   const agentKeyPair = await generateEs256KeyPair();
   const dpopKeyPair = await generateEs256KeyPair();
   const opKeyPair = await generateEs256KeyPair();
-  const opSigner = createLocalEs256Signer({ privateKey: opKeyPair.privateKey, kid: 'op-shared-1' });
+  const signingKid = options.signingKid ?? 'op-shared-1';
+  const opSigner = createLocalEs256Signer({ privateKey: opKeyPair.privateKey, kid: signingKid });
   const now = () => Date.now();
 
   const firestore = options.shared ?? createFirestoreDouble();
@@ -113,7 +118,7 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
       humanIdpTokenUrl: `${HUMAN_IDP_ISSUER}/token`,
       humanIdpRevokeUrl: `${HUMAN_IDP_ISSUER}/revoke`,
       agentOpCallbackUrl: AGENT_OP_BASE,
-      clientSecretAgentPlatform: 'test-agent-platform-secret',
+      clientSecretAgentPlatform: 'agent-platform-secret', // the Human IdP harness registers agent-platform with this secret
       idJagLifetimeSeconds: 300, agentId: null, signerMode: 'local', storeMode: 'emulator',
       publicBaseUrl: AGENT_OP_BASE,
       ...options.config,
@@ -125,7 +130,7 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
       async read() {
         return { keys: [
           { ...options.idpPublicJwk, kid: 'idp-testkey', alg: 'RS256', use: 'sig' } as JsonWebKey & { kid: string },
-          { ...opKeyPair.publicJwk, kid: 'op-shared-1', alg: 'ES256', use: 'sig' } as JsonWebKey & { kid: string },
+          { ...opKeyPair.publicJwk, kid: signingKid, alg: 'ES256', use: 'sig' } as JsonWebKey & { kid: string },
         ] };
       },
     },
@@ -146,6 +151,14 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
     // buried under one service's structured logs.
     writeConnectionLog: (line) => { connectionLogs.push(line); },
     ...(options.humanIdpFetch ? { humanIdpFetch: options.humanIdpFetch } : {}),
+    // Where the callback sends the browser back to, as Terraform injects it.
+    automationAppUrl: options.automationAppUrl ?? 'https://automation-app.test',
+    // Stands in for the Cloud Run ID Token check on the two internal routes: the
+    // bearer value is the caller's service account email. A suite that models its own
+    // callers passes internalCallers, which replaces these defaults.
+    serviceIdentity: { async verify(authorization) { return authorization?.match(/^Bearer (.+)$/)?.[1] ?? null; } },
+    lifecycleServiceAccount: LIFECYCLE_SA,
+    provisionerServiceAccount: PROVISIONER_SA,
     ...(options.internalCallers
       ? {
           serviceIdentity: { verify: options.internalCallers.verify },
@@ -153,15 +166,13 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
           ...(options.internalCallers.provisioner ? { provisionerServiceAccount: options.internalCallers.provisioner } : {}),
         }
       : {}),
-    // Where the callback sends the browser back to, as Terraform injects it.
-    automationAppUrl: options.automationAppUrl ?? 'https://automation-app.test',
   };
 
   const app = createAgentOp(deps);
   return {
     fetch: async (path, init) => app.fetch(new Request(new URL(path, AGENT_OP_BASE), init)),
     documents, lifecycleStore, agentId, agentKeyPair, dpopKeyPair, events, exchangeLogs, ledgerLogs, connectionLogs,
-    opPublicJwk: { ...opKeyPair.publicJwk, kid: 'op-shared-1', alg: 'ES256', use: 'sig' } as JsonWebKey,
+    opPublicJwk: { ...opKeyPair.publicJwk, kid: signingKid, alg: 'ES256', use: 'sig' } as JsonWebKey,
     now,
   };
 }
@@ -176,6 +187,56 @@ export interface ExchangeInput {
   /** Replace the proof outright, to exercise the DPoP failure paths. */
   proof?: string;
   omitProof?: boolean;
+}
+
+/** Seeds the Human IdP Connection the Provisioner would have created (T-OP-24). */
+export async function seedIdpConnection(
+  harness: AgentOpHarness,
+  overrides: Record<string, unknown> = {},
+  refreshToken = 'rt-1',
+): Promise<string> {
+  const id = `idpconn-${harness.agentId}`;
+  await harness.documents.set('idp_connections', id, {
+    idp_connection_id: id,
+    agent_id: harness.agentId,
+    human_subject: 'testuser',
+    // The envelope double in this harness is `${aad}::${plaintext}`, base64.
+    encrypted_refresh_token: Buffer.from(`${harness.agentId}::${refreshToken}`, 'utf8').toString('base64'),
+    granted_scopes: ['openid', 'offline_access'],
+    status: 'ACTIVE',
+    created_at: new Date(harness.now()).toISOString(),
+    expires_at: new Date(harness.now() + 86_400_000).toISOString(),
+    ...overrides,
+  });
+  return id;
+}
+
+/** The /xaa/subject-token call the Agent Runtime makes when its ID Token expires. */
+export async function reissueSubjectToken(harness: AgentOpHarness): Promise<Response> {
+  const path = '/xaa/subject-token';
+  const iat = Math.floor(harness.now() / 1000);
+  const assertion = await signCompactJws({
+    header: { alg: 'ES256', typ: JWT_TYP.CLIENT_ASSERTION, kid: harness.agentId },
+    payload: { iss: harness.agentId, sub: harness.agentId, aud: `${AGENT_OP_BASE}${path}`, iat, exp: iat + 120, jti: randomUUID() },
+    signer: createLocalEs256Signer({ privateKey: harness.agentKeyPair.privateKey, kid: harness.agentId }),
+  });
+  return harness.fetch(path, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      DPoP: await createDpopProof({ method: 'POST', url: `${AGENT_OP_BASE}${path}`, keyPair: harness.dpopKeyPair, now: harness.now }),
+    },
+    body: new URLSearchParams({ client_assertion_type: CLIENT_ASSERTION_TYPE, client_assertion: assertion }).toString(),
+  });
+}
+
+/** Cleanup's call into Agent OP: hand the refresh token back to Human IdP. */
+export async function revokeConnection(harness: AgentOpHarness, caller = LIFECYCLE_SA): Promise<Response> {
+  return harness.fetch('/internal/revoke-connection', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${caller}` },
+    body: JSON.stringify({ agent_id: harness.agentId }),
+  });
 }
 
 /** Performs the full /xaa/token call the Agent Runtime would make. */

@@ -1,6 +1,7 @@
 /**
- * The 16 variables Agent OP reads. Nothing else in `src/` touches `process.env`, so
- * the deployment contract is visible in one place (T-OP-01).
+ * Every variable Agent OP reads. Nothing else in `src/` touches `process.env` — the
+ * composition root takes this value — so the deployment contract is visible in one
+ * place (T-OP-01).
  */
 export interface AgentOpConfig {
   mode: 'token' | 'callback';
@@ -26,6 +27,16 @@ export interface AgentOpConfig {
   signerMode: 'local' | 'kms';
   storeMode: 'emulator' | 'gcp';
   publicBaseUrl: string;
+  /**
+   * Cloud Run's own variables and the two caller identities the internal routes admit.
+   * Optional so a test can build a configuration without restating the runtime frame;
+   * `loadConfig` always fills the first two in.
+   */
+  port?: number;
+  revision?: string;
+  automationAppUrl?: string;
+  lifecycleServiceAccount?: string;
+  provisionerServiceAccount?: string;
 }
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -65,5 +76,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentOpConfig 
     signerMode: oneOf(env, 'SIGNER_MODE', ['local', 'kms'] as const),
     storeMode: oneOf(env, 'STORE_MODE', ['emulator', 'gcp'] as const),
     publicBaseUrl: required(env, 'PUBLIC_BASE_URL'),
+    port: Number(env.PORT ?? 8080),
+    revision: env.K_REVISION ?? 'local',
+    ...(env.AUTOMATION_APP_URL ? { automationAppUrl: env.AUTOMATION_APP_URL } : {}),
+    ...(env.LIFECYCLE_SA_EMAIL ? { lifecycleServiceAccount: env.LIFECYCLE_SA_EMAIL } : {}),
+    ...(env.PROVISIONER_SA_EMAIL ? { provisionerServiceAccount: env.PROVISIONER_SA_EMAIL } : {}),
   };
 }

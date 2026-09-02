@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
-import {
-  createCompletionCode, PLATFORM_CLIENT_ID, PROVISIONING_CODES_COLLECTION,
-} from '@xaa/contracts';
+import { createCompletionCode, PROVISIONING_CODES_COLLECTION } from '@xaa/contracts';
 import type { AgentOpDeps } from '../deps.js';
 import { createAgentOpStore } from '../store/index.js';
+import { humanIdpClientAuthHeader } from '../idp-connection/human-idp-auth.js';
 
 interface ConsentStateRecord {
   transaction_id: string;
@@ -57,7 +56,7 @@ export function createXaaCallbackRoute(deps: AgentOpDeps, automationAppUrl: stri
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${PLATFORM_CLIENT_ID}:${deps.config.clientSecretAgentPlatform}`).toString('base64')}`,
+        Authorization: humanIdpClientAuthHeader(deps.config),
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code', code,

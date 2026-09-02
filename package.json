@@ -22,6 +22,7 @@
     "docs:deviations": "node scripts/check-deviations.mjs --strict",
     "gen:design-rules": "node scripts/gen-design-rules.mjs",
     "gen:diagrams": "python3 docs/diagrams/generate.py",
+    "generate:baseline": "bash scripts/regenerate-oidc.sh",
     "lint": "eslint . && node scripts/check-deps.mjs",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:e2e": "vitest --project e2e run",

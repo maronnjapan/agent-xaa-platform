@@ -69,9 +69,15 @@ export async function startResource(options: StartResourceOptions): Promise<Reso
   };
 
   // The Resource AS pulls the trusted JWK Set over HTTP; the double answers with the
-  // Agent OP key under an `op-shared-` kid, which is the only prefix it accepts.
+  // Agent OP key under the kid that OP actually signs with. Both `op-shared-` and
+  // `idjag-` are accepted there, because a Dedicated OP's grant is the shared
+  // issuer's grant (docs 05 §5).
   const fetchImpl = (async () => Response.json({
-    keys: [{ ...options.agentOpPublicJwk, kid: 'op-shared-1', alg: 'ES256', use: 'sig' }],
+    keys: [{
+      ...options.agentOpPublicJwk,
+      kid: (options.agentOpPublicJwk as { kid?: string }).kid ?? 'op-shared-1',
+      alg: 'ES256', use: 'sig',
+    }],
   })) as unknown as typeof fetch;
 
   const asApp = options.kind === 'docs'

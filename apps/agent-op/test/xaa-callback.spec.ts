@@ -55,6 +55,15 @@ describe('GET /xaa/callback', () => {
       .toBe('WAITING_IDP_CONSENT');
   });
 
+  it('authenticates the code exchange as the confidential agent-platform client', async () => {
+    const fixture = await createFixture({ config: { mode: 'callback' } });
+    await seedState(fixture);
+    fixture.humanIdpResponses.push(Response.json({ refresh_token: 'rt-1' }));
+    expect((await callback(fixture)).status).toBe(302);
+    expect(fixture.humanIdpRequests[0]!.headers.authorization)
+      .toBe(`Basic ${Buffer.from('agent-platform:test-agent-platform-secret').toString('base64')}`);
+  });
+
   it('rejects a reused state', async () => {
     const fixture = await createFixture({ config: { mode: 'callback' } });
     await seedState(fixture);
@@ -63,14 +72,14 @@ describe('GET /xaa/callback', () => {
     expect((await callback(fixture)).status).toBe(400);
   });
 
-  it('rejects a transaction without a PKCE verifier', async () => {
+  it('rejects callback without PKCE code_verifier in the transaction', async () => {
     const fixture = await createFixture({ config: { mode: 'callback' } });
     await seedState(fixture, { code_verifier: '' });
     expect((await callback(fixture)).status).toBe(400);
     expect((await fixture.documents.get<{ status: string }>('provisioning_transactions', 'txn-1'))!.status).toBe('FAILED');
   });
 
-  it('marks the transaction FAILED on an error parameter', async () => {
+  it('sets transaction to FAILED on error parameter', async () => {
     const fixture = await createFixture({ config: { mode: 'callback' } });
     await seedState(fixture);
     const response = await callback(fixture, 'error=access_denied&state=state-1');
@@ -88,7 +97,7 @@ describe('GET /xaa/callback', () => {
     expect(response.headers.get('location')).toMatch(/^https:\/\/automation-app\.test\/provisioning\/resume\?transaction_id=txn-1&code=/);
   });
 
-  it('carries no token-bearing parameter on failure', async () => {
+  it('error response carries no token-bearing parameter', async () => {
     const fixture = await createFixture({ config: { mode: 'callback' } });
     await seedState(fixture);
     const response = await callback(fixture, 'error=access_denied&state=state-1');

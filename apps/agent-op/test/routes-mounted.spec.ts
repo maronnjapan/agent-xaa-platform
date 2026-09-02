@@ -46,9 +46,9 @@ describe('two modes, disjoint route surfaces', () => {
         const full = join(path, entry.name);
         if (entry.isDirectory()) { await walk(full); continue; }
         if (!entry.name.endsWith('.ts')) continue;
-        // config.ts owns the contract; runtime.ts is the composition root that hands
-        // it the environment and reads Cloud Run's own K_REVISION.
-        if (['config.ts', 'runtime.ts'].includes(entry.name)) continue;
+        // config.ts owns the contract; every other module, the composition root
+        // included, is handed an AgentOpConfig value.
+        if (entry.name === 'config.ts') continue;
         if ((await readFile(full, 'utf8')).includes('process.env')) offenders.push(full);
       }
     };

@@ -131,6 +131,20 @@ jobs:
       - run: bash scripts/check-bridge-no-refresh-token.sh
       - run: bash scripts/check-security-outbound.sh
       - run: for check in scripts/checks/*.sh; do bash "$check"; done
+  # The committed generator output is what check-oidc-patches diffs the hand-written
+  # OIDC sources against, so it has to be the CLI's output for the pinned version and
+  # not a copy that drifted. generated-baseline/agent-op-reference is reference only:
+  # Agent OP rebuilds the pipeline from the exported step functions (DEC-ID-01).
+  generate-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm generate:baseline
+      - run: git diff --exit-code generated-baseline
   check-oidc-patches:
     runs-on: ubuntu-latest
     steps:

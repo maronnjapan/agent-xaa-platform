@@ -6,6 +6,7 @@ import { verifyAgentState } from '../idjag/verify-agent-state.js';
 import { RotationHistory } from '../idp-connection/reuse-detection.js';
 import { emitIdpConnectionLog } from '../log/idp-connection-log.js';
 import { emitProtocolViolationEvent } from '../log/protocol-violation-event.js';
+import { humanIdpClientAuthHeader } from '../idp-connection/human-idp-auth.js';
 import type { AgentRegistration } from '../store/types.js';
 
 const ROTATION_HISTORY_TTL_SECONDS = 86_400;
@@ -42,7 +43,12 @@ export function createSubjectTokenRoute(deps: AgentOpDeps): Hono {
       const refreshToken = await deps.envelope.decrypt(connection.encrypted_refresh_token, connection.agent_id);
       const response = await httpFetch(deps.config.humanIdpTokenUrl, {
         method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          // agent-platform is a confidential client (DEC-ID-19): without Basic
+          // authentication Human IdP answers 401, which reads here as a dead token.
+          authorization: humanIdpClientAuthHeader(deps.config),
+        },
         // No `scope`: narrowing here would silently drop offline_access.
         body: new URLSearchParams({ grant_type: 'refresh_token', client_id: PLATFORM_CLIENT_ID, refresh_token: refreshToken }).toString(),
       });
@@ -58,7 +64,9 @@ export function createSubjectTokenRoute(deps: AgentOpDeps): Hono {
             human_subject: registration.human_subject, ...(deps.now ? { now: deps.now } : {}),
           });
           await store.idpConnections.update(connection.idp_connection_id, { status: 'REVOKED' });
-          await revokeUpstream(deps, refreshToken).catch(() => undefined);
+          const handedBack = await revokeUpstream(deps, refreshToken).catch(() => false);
+          // Once Human IdP has the token back, keeping the ciphertext buys nothing.
+          if (handedBack) await store.idpConnections.revokeAndForgetToken(connection.idp_connection_id);
         }
         return context.json({ error: 'invalid_grant', error_description: 'The IdP connection is not usable' }, 400);
       }
@@ -101,11 +109,16 @@ export function createSubjectTokenRoute(deps: AgentOpDeps): Hono {
   return app;
 }
 
-async function revokeUpstream(deps: AgentOpDeps, refreshToken: string): Promise<void> {
+/** Hands the token back to Human IdP; reports whether it was accepted. */
+async function revokeUpstream(deps: AgentOpDeps, refreshToken: string): Promise<boolean> {
   const httpFetch = deps.humanIdpFetch ?? globalThis.fetch;
-  await httpFetch(deps.config.humanIdpRevokeUrl, {
+  const response = await httpFetch(deps.config.humanIdpRevokeUrl, {
     method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      authorization: humanIdpClientAuthHeader(deps.config),
+    },
     body: new URLSearchParams({ token: refreshToken, token_type_hint: 'refresh_token', client_id: PLATFORM_CLIENT_ID }).toString(),
   });
+  return response.ok;
 }

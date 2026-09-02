@@ -3,6 +3,7 @@ import { createDpopProof, generateEs256KeyPair } from '@xaa/crypto';
 import { authorize, tokenRequest } from '../../harness/oauth-flow.js';
 import { AGENT_OP_CALLBACK_URI, HUMAN_IDP_ISSUER, idpPublicJwk, startHumanIdp } from '../../harness/human-idp.js';
 import { AGENT_OP_BASE, requestIdJag, startAgentOp } from '../../harness/agent-op.js';
+import { redeemForAccessToken, startResource } from '../../harness/resource.js';
 
 async function subjectToken(): Promise<string> {
   const idp = await startHumanIdp();
@@ -60,5 +61,35 @@ describe('DPoP validation at /xaa/token', () => {
       bodies.add(await (await requestIdJag(agentOp, { subjectToken: token, ...variant })).text());
     }
     expect([...bodies]).toEqual(['{"error":"invalid_dpop_proof"}']);
+  });
+
+  /**
+   * The third code of REQ-09-026. A proof can only disagree with a `cnf.jkt` where a
+   * cnf-bearing token is presented, and the only such hop is the Resource AS redeeming
+   * the ID-JAG this OP issued: /xaa/token takes no bound token at all. The grant below
+   * is bound to the agent's DPoP key and offered with a well-formed proof made by
+   * another one.
+   */
+  it('emits dpop_key_binding_mismatch for a well-formed proof made with another key', async () => {
+    const token = await subjectToken();
+    const agentOp = await startAgentOp({ idpPublicJwk: await idpPublicJwk() });
+    const docs = await startResource({
+      kind: 'docs', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER,
+    });
+    const issued = await requestIdJag(agentOp, { subjectToken: token });
+    expect(issued.status).toBe(200);
+    const idJag = (await issued.json() as { access_token: string }).access_token;
+
+    const stranger = await generateEs256KeyPair();
+    const response = await redeemForAccessToken(docs, {
+      idJag, keyPair: agentOp.dpopKeyPair, proofKeyPair: stranger,
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json() as { error: string }).error).toBe('invalid_grant');
+
+    const records = docs.logs.map((line) => JSON.parse(line) as { fields?: Record<string, unknown> })
+      .map((line) => line.fields ?? {});
+    expect(records.at(-1)!.validation_name).toBe('dpop_key_binding_mismatch');
+    expect(records.at(-1)!.cnf_jkt_match).toBe(false);
   });
 });

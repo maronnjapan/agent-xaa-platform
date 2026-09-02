@@ -21,4 +21,19 @@ export class IdpConnectionRepository {
   async update(idpConnectionId: string, patch: Partial<IdpConnection>): Promise<void> {
     await this.store.update('idp_connections', idpConnectionId, { ...patch });
   }
+
+  /**
+   * Ends the connection and drops the credential with it. `update` merges, so a field
+   * cannot be cleared that way: the document is rewritten without
+   * `encrypted_refresh_token`. Called only once Human IdP has accepted the token back
+   * — while a revocation is still owed upstream, the ciphertext is what a retry
+   * spends (RULE-22).
+   */
+  async revokeAndForgetToken(idpConnectionId: string): Promise<void> {
+    const existing = await this.find(idpConnectionId);
+    if (!existing) return;
+    const rest: Record<string, unknown> = { ...existing };
+    delete rest.encrypted_refresh_token;
+    await this.store.set('idp_connections', idpConnectionId, { ...rest, status: 'REVOKED' });
+  }
 }

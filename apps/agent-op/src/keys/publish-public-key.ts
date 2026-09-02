@@ -32,20 +32,41 @@ export async function publishPublicKey(options: {
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      await file.save(body, { preconditionOpts: { ifGenerationMatch: 0 }, contentType: 'application/json' });
-      return;
-    } catch (error) {
-      if (!isPreconditionFailure(error) || attempt === MAX_ATTEMPTS) {
-        if (attempt === MAX_ATTEMPTS) throw error;
-        throw error;
+      if (attempt === 1) {
+        await file.save(body, { preconditionOpts: { ifGenerationMatch: 0 }, contentType: 'application/json' });
+        return;
       }
       const [existing] = await file.download();
       if (existing.toString('utf8') === body) return;
       const [metadata] = await file.getMetadata();
       await file.save(body, { preconditionOpts: { ifGenerationMatch: Number(metadata.generation ?? 0) }, contentType: 'application/json' });
       return;
+    } catch (error) {
+      // Anything but a lost race is fatal at once; a lost race is worth re-reading,
+      // because the generation this attempt wrote against has already moved.
+      if (!isPreconditionFailure(error)) throw error;
     }
   }
+  throw new Error(`publishPublicKey: ${path} could not be written in ${MAX_ATTEMPTS} attempts`);
+}
+
+/**
+ * The startup seam. `MODE=callback` never signs an ID-JAG, so it must not publish a
+ * signing key — and it holds no KMS permission to read one. The guard lives here
+ * rather than at the call site so it is one testable place (T-OP-05).
+ */
+export async function publishPublicKeyOnStartup(options: {
+  mode: 'token' | 'callback';
+  storage: BucketWriter;
+  bucket: string;
+  kid: string;
+  readPublicJwk: () => Promise<JsonWebKey>;
+}): Promise<void> {
+  if (options.mode !== 'token') return;
+  await publishPublicKey({
+    storage: options.storage, bucket: options.bucket, kid: options.kid,
+    publicJwk: await options.readPublicJwk(),
+  });
 }
 
 function isPreconditionFailure(error: unknown): boolean {

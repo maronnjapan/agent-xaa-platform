@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { VIOLATION_MESSAGES } from '@xaa/contracts';
+import { createDpopProof } from '@xaa/crypto';
+import { CLIENT_ASSERTION_TYPE, VIOLATION_MESSAGES } from '@xaa/contracts';
 import {
   ACTIVITY_TOPIC, AGENT_OP_VIOLATION_CODES, emitProtocolViolationEvent, type ActivityEvent,
 } from '../src/log/protocol-violation-event.js';
+import { AGENT_OP_BASE, clientAssertion, createFixture, fakeEnvelope } from './helpers.js';
 
 function collector() {
   const events: Array<{ topic: string; event: ActivityEvent }> = [];
@@ -65,5 +67,42 @@ describe('PROTOCOL_VIOLATION activity events', () => {
     };
     await walk(root);
     expect(files).toEqual(['protocol-violation-event.ts']);
+  });
+
+  /**
+   * Activity Events come from Agent OP, the Tool Executor and the Native Resource AS
+   * only. A credential Human IdP refuses is that service's business: it writes a
+   * Security log, and Agent OP raises nothing unless one of its own six codes fires.
+   */
+  it('human-idp authentication failure emits no Activity Event', async () => {
+    const fixture = await createFixture();
+    await fixture.documents.set('idp_connections', fixture.registration.idp_connection_id, {
+      idp_connection_id: fixture.registration.idp_connection_id,
+      agent_id: fixture.agentId,
+      human_subject: fixture.registration.human_subject,
+      encrypted_refresh_token: await fakeEnvelope.encrypt('rt-original', fixture.agentId),
+      granted_scopes: ['openid', 'offline_access'],
+      status: 'ACTIVE',
+      created_at: new Date(fixture.now()).toISOString(),
+      expires_at: new Date(fixture.now() + 86_400_000).toISOString(),
+    });
+    // Human IdP rejects the credential; the token was never rotated away, so this is
+    // an ordinary authentication failure rather than a reuse.
+    fixture.humanIdpResponses.push(Response.json({ error: 'invalid_grant' }, { status: 400 }));
+
+    const path = '/xaa/subject-token';
+    const response = await fixture.fetch(path, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        DPoP: await createDpopProof({ method: 'POST', url: `${AGENT_OP_BASE}${path}`, keyPair: fixture.dpopKeyPair, now: fixture.now }),
+      },
+      body: new URLSearchParams({
+        client_assertion_type: CLIENT_ASSERTION_TYPE,
+        client_assertion: await clientAssertion(fixture, { path }),
+      }).toString(),
+    });
+    expect(response.status).toBe(400);
+    expect(fixture.events).toEqual([]);
   });
 });

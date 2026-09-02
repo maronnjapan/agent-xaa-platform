@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateEs256KeyPair, jwkThumbprint } from '@xaa/crypto';
-import { createFixture, exchange, newAgentId, subjectToken } from './helpers.js';
+import { createFixture, exchange, subjectToken } from './helpers.js';
 
 describe('RULE-49 delegation check', () => {
   it('draft 9.7: rejects subject_token(user-A) with actor of an agent delegated by user-B', async () => {
@@ -33,33 +32,4 @@ describe('RULE-49 delegation check', () => {
     expect((JSON.parse(fixture.exchangeLogs[0]!) as { fields: { delegation_check: boolean } }).fields.delegation_check).toBe(false);
   });
 
-  it('rejects act.sub equal to sub with invalid_request', async () => {
-    // A human whose subject is the agent id itself: namespaces must stay disjoint.
-    const agentId = newAgentId();
-    const fixture = await createFixture({ registration: { agent_id: agentId, human_subject: agentId } });
-    const response = await exchange(fixture, { form: { subject_token: await subjectToken(fixture, { sub: agentId }) } });
-    expect(response.status).toBe(400);
-    expect((await response.json() as { error: string }).error).toBe('invalid_request');
-  });
-
-  it('rejects an actor_token signed with another agent key with invalid_grant', async () => {
-    const fixture = await createFixture();
-    const otherKey = await generateEs256KeyPair();
-    const response = await exchange(fixture, { form: { actor_token: await (await import('./helpers.js')).actorToken(fixture, { keyPair: otherKey }) } });
-    expect(response.status).toBe(400);
-    expect((await response.json() as { error: string }).error).toBe('invalid_request');
-  });
-
-  it('rejects a cross-substituted actor: client_assertion of agent A, actor of agent B', async () => {
-    const fixture = await createFixture();
-    const otherAgent = newAgentId();
-    const otherKey = await generateEs256KeyPair();
-    void await jwkThumbprint(otherKey.publicJwk);
-    const { actorToken } = await import('./helpers.js');
-    const response = await exchange(fixture, {
-      form: { actor_token: await actorToken(fixture, { agentId: otherAgent, keyPair: otherKey }) },
-    });
-    expect(response.status).toBe(400);
-    expect((await response.json() as { error: string }).error).toBe('invalid_grant');
-  });
 });

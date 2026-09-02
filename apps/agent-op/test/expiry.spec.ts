@@ -53,7 +53,7 @@ describe('agent state gate', () => {
     expect(() => verifyAgentState(registration('ACTIVE', now.toISOString()), now)).toThrow();
   });
 
-  it('rejects token exchange once the registration has expired', async () => {
+  it('rejects token exchange 10 seconds after expires_at is moved to the past', async () => {
     const fixture = await createFixture({ registration: { expires_at: new Date(Date.now() - 10_000).toISOString() } });
     const response = await exchange(fixture);
     expect(response.status).toBe(400);

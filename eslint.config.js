@@ -24,19 +24,23 @@ export default tseslint.config(
       }],
     },
   },
-  // Flat config merges rules by name and the last block wins, so this one has to
-  // repeat the ban above: naming only the security modules here would hand agent-op
-  // and agent-runtime back the internal verifier that every other app is denied.
+  // RULE-20 / REQ-09-038: Agent OP decides nothing, so it never loads a model client or
+  // a Security Detection module. This block comes after the apps-wide one on purpose:
+  // flat config replaces a rule's options rather than merging them, so the narrower
+  // list has to restate the platform-wide entry (the internal verifier ban) or it
+  // would silently hand agent-op and agent-runtime back what every other app is denied.
   {
     files: ['apps/agent-op/**/*.ts', 'apps/agent-runtime/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', {
         paths: [
-          '@xaa/crypto/dist/verifiers-internal',
+          '@google-cloud/aiplatform',
+          '@google-cloud/vertexai',
           '@platform/security/rules',
           '@platform/security/correlation',
           '@platform/security/scoring',
           '@platform/security/ai',
+          '@xaa/crypto/dist/verifiers-internal',
         ],
       }],
     },
