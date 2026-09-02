@@ -74,6 +74,18 @@ describe('DPoP bound access tokens', () => {
     expect(introspected.cnf?.jkt).toBe((decodeJwtPayload(body.access_token).cnf as { jkt: string }).jkt);
   });
 
+  it('returns 400 invalid_dpop_proof with DPOP_REQUIRED=true and no header', async () => {
+    // DPOP_REQUIRED is the blanket flag on top of the three Control Plane audiences,
+    // so this grant asks for no operation scope and still has to carry a proof.
+    const idp = await startHumanIdp({ dpopRequired: true });
+    const response = await tokenRequest({
+      fetch: idp.fetch, clientId: 'automation-app', clientSecret: 'automation-secret',
+      issuer: HUMAN_IDP_ISSUER, form: await grant(idp, 'openid'),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'invalid_dpop_proof' });
+  });
+
   it('leaves a non Control Plane audience on Bearer when no proof is sent', async () => {
     const idp = await startHumanIdp();
     const response = await tokenRequest({

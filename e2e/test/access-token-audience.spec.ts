@@ -10,7 +10,7 @@ async function accessTokenFor(scope: string, audience?: string) {
     fetch: idp.fetch, clientId: 'automation-app', redirectUri: AUTOMATION_REDIRECT_URI,
     scope, issuer: HUMAN_IDP_ISSUER, ...(audience ? { audience } : {}),
   });
-  if (result.error) return { error: result.error };
+  if (result.error) return { error: result.error, errorDescription: result.errorDescription };
   const keyPair = await generateEs256KeyPair();
   const response = await tokenRequest({
     fetch: idp.fetch, clientId: 'automation-app', clientSecret: 'automation-secret', issuer: HUMAN_IDP_ISSUER,
@@ -51,6 +51,17 @@ describe('operation scope decides the access token audience', () => {
 
   it('an audience outside the allow list is invalid_target', async () => {
     expect((await accessTokenFor('openid agent:provision', 'unknown-app')).error).toBe('invalid_target');
+  });
+
+  it('accepts audience=agent-provisioner and refuses audience=unknown-app', async () => {
+    const allowed = await accessTokenFor('openid agent:provision', 'agent-provisioner');
+    expect(allowed.error).toBeUndefined();
+    expect(audienceIncludes(allowed.payload!.aud, 'agent-provisioner')).toBe(true);
+
+    const refused = await accessTokenFor('openid agent:provision', 'unknown-app');
+    expect(refused.error).toBe('invalid_target');
+    // The rejected value must not come back in the redirect (REQ-05-003).
+    expect(refused.errorDescription ?? '').not.toContain('unknown-app');
   });
 
   it('carries the requested scope and the at+jwt type', async () => {
