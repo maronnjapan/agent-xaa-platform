@@ -20,12 +20,18 @@ async function files(path, prefix = '') {
   return result.sort();
 }
 
+/**
+ * Removes every marked patch and keeps, for each surviving line, the line number it
+ * had in the file on disk. Without that map a reported difference would point at a
+ * line of the stripped text, which is not a place anyone can open.
+ */
 function stripPatches(source, file) {
   const output = [];
+  const sourceLines = [];
   let open;
   for (const [index, line] of source.split('\n').entries()) {
     const marker = line.match(/^\s*\/\/ XAA-PATCH:([^ ]+) (begin|end)\s*$/);
-    if (!marker) { if (!open) output.push(line); continue; }
+    if (!marker) { if (!open) { output.push(line); sourceLines.push(index + 1); } continue; }
     if (!/^REQ-\d{2}-\d{3}$/.test(marker[1])) errors.push(`${file}:${index + 1}: invalid patch requirement id`);
     if (marker[2] === 'begin') {
       if (open) errors.push(`${file}:${index + 1}: nested patch marker`);
@@ -36,7 +42,16 @@ function stripPatches(source, file) {
     }
   }
   if (open) errors.push(`${file}: unmatched patch begin`);
-  return output.join('\n');
+  return { text: output.join('\n'), lines: output, sourceLines };
+}
+
+/** The line of the file on disk where the two texts first part company. */
+function firstDifferingLine(stripped, baseline) {
+  const baselineLines = baseline.split('\n');
+  for (const [index, line] of stripped.lines.entries()) {
+    if (line !== baselineLines[index]) return stripped.sourceLines[index];
+  }
+  return stripped.sourceLines[stripped.sourceLines.length - 1] ?? 1;
 }
 
 for (const app of apps) {
@@ -45,9 +60,10 @@ for (const app of apps) {
   const actualFiles = await files(actualRoot); const baselineFiles = await files(baselineRoot);
   if (actualFiles.join('\n') !== baselineFiles.join('\n')) { errors.push(`${app}: generated file set differs`); continue; }
   for (const file of actualFiles) {
-    const actual = stripPatches(await readFile(join(actualRoot, file), 'utf8'), relative(root, join(actualRoot, file)));
+    const path = relative(root, join(actualRoot, file));
+    const actual = stripPatches(await readFile(join(actualRoot, file), 'utf8'), path);
     const baseline = await readFile(join(baselineRoot, file), 'utf8');
-    if (actual !== baseline) errors.push(`${relative(root, join(actualRoot, file))}: marker-external content differs`);
+    if (actual.text !== baseline) errors.push(`${path}:${firstDifferingLine(actual, baseline)}: marker-external content differs`);
   }
 }
 for (const error of errors) console.error(error);

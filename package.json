@@ -19,6 +19,7 @@
     "check:glossary:strict": "node scripts/check-glossary.mjs --strict",
     "check:legacy-names": "bash scripts/check-legacy-project-name.sh",
     "check:requirements": "node scripts/check-requirements-index.mjs",
+    "docs:deviations": "node scripts/check-deviations.mjs --strict",
     "gen:design-rules": "node scripts/gen-design-rules.mjs",
     "gen:diagrams": "python3 docs/diagrams/generate.py",
     "lint": "eslint . && node scripts/check-deps.mjs",
