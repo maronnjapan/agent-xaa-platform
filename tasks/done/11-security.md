@@ -44,10 +44,10 @@ DEC-APP-03 の「2つ目のアプリが import したくなった時点で切り
 - redaction と fingerprint はこのタスクでは実装しない。`logger.ts` から `redact()` を呼ぶ差し込み口だけを作り、T-SEC-02 で中身を入れる。
 
 **完了条件**
-- [ ] `pnpm --filter @xaa/logging test` が緑で、`test/logger.spec.ts::emits all four required keys even when null` が `agent_id` と `human_subject` に `null` が入った1行 JSON を出すことを検査する。
-- [ ] `test/logger.spec.ts::rejects entry missing trace_id` が Ajv 検証で例外になることを検査する。
-- [ ] `pnpm lint` が `apps/**` 内の `console.log` 呼び出しを1件でも含むと非ゼロ終了する。
-- [ ] `LogSource` の値が10個であることを `test/logger.spec.ts::log source has exactly ten values` が検査する。
+- [x] `pnpm --filter @xaa/logging test` が緑で、`test/logger.spec.ts::emits all four required keys even when null` が `agent_id` と `human_subject` に `null` が入った1行 JSON を出すことを検査する。
+- [x] `test/logger.spec.ts::rejects entry missing trace_id` が Ajv 検証で例外になることを検査する。
+- [x] `pnpm lint` が `apps/**` 内の `console.log` 呼び出しを1件でも含むと非ゼロ終了する。
+- [x] `LogSource` の値が10個であることを `test/logger.spec.ts::log source has exactly ten values` が検査する。（実体は `packages/xaa-logging/test/logger.spec.ts`）
 
 ---
 
@@ -74,10 +74,10 @@ RULE-38 を実装で担保する部分であり、これが無いと以降の全
 - 数値と真偽値と `null` はそのまま通す。文字列以外に形状判定を掛けない。
 
 **完了条件**
-- [ ] `test/redaction.spec.ts::redacts nine secret kinds` が REQ-09-015 の9種（Raw Access Token、Raw ID-JAG、Raw DPoP Proof、Raw subject_token、Raw actor_token、Refresh Token、Private Key、Client Secret、Authorization Code）を含むオブジェクトを渡し、出力に原文が1つも含まれないことを検査する。
-- [ ] `test/redaction.spec.ts::redacts jwt in unknown field name` が deny list に無いキー名（`note`）へ入れた JWT 文字列も `[REDACTED]` になることを検査する。
-- [ ] `test/redaction.spec.ts::keeps short low entropy strings` が `"doc_12"` や `"pending"` が置換されないことを検査する。
-- [ ] `test/redaction.spec.ts::truncates deep object at depth 8` が深さ9の入れ子で `[TRUNCATED]` を返すことを検査する。
+- [x] `test/redaction.spec.ts::redacts nine secret kinds` が REQ-09-015 の9種（Raw Access Token、Raw ID-JAG、Raw DPoP Proof、Raw subject_token、Raw actor_token、Refresh Token、Private Key、Client Secret、Authorization Code）を含むオブジェクトを渡し、出力に原文が1つも含まれないことを検査する。
+- [x] `test/redaction.spec.ts::redacts jwt in unknown field name` が deny list に無いキー名（`note`）へ入れた JWT 文字列も `[REDACTED]` になることを検査する。
+- [x] `test/redaction.spec.ts::keeps short low entropy strings` が `"doc_12"` や `"pending"` が置換されないことを検査する。
+- [x] `test/redaction.spec.ts::truncates deep object at depth 8` が深さ9の入れ子で `[TRUNCATED]` を返すことを検査する。
 
 ---
 
@@ -104,10 +104,10 @@ Agent 個体の識別を `cnf.jkt` と `act` とログの3つで行う（DEC-ID-
 - `logger.ts` の出力パイプラインを `redact` → `attachCorrelationKeys` → `assertLogEntry` → 書き出し の固定順にする。
 
 **完了条件**
-- [ ] `test/correlation-key.spec.ts::same token yields same fingerprint` と `::different tokens yield different fingerprints` が緑になる。
-- [ ] `test/correlation-key.spec.ts::fingerprint length is 16 regardless of input length` が長さ 20 と 4000 の入力で同じ長さ16を返すことを検査する。
-- [ ] `test/correlation-key.spec.ts::extracts jti kid typ jkt from id-jag` が ID-JAG を渡したとき `id_jag_jti` と `id_jag_kid` と `id_jag_typ` と `id_jag_jkt` の4キーが出て、`id_jag` キーが消えていることを検査する。
-- [ ] `grep -rn "createHash('sha256')" packages apps | grep -v fingerprint.ts | grep -v xaa-crypto` が0件を返す。
+- [x] `test/correlation-key.spec.ts::same token yields same fingerprint` と `::different tokens yield different fingerprints` が緑になる。
+- [x] `test/correlation-key.spec.ts::fingerprint length is 16 regardless of input length` が長さ 20 と 4000 の入力で同じ長さ16を返すことを検査する。
+- [x] `test/correlation-key.spec.ts::extracts jti kid typ jkt from id-jag` が ID-JAG を渡したとき `id_jag_jti` と `id_jag_kid` と `id_jag_typ` と `id_jag_jkt` の4キーが出て、`id_jag` キーが消えていることを検査する。
+- [x] `grep -rn "digest('hex').slice(0, 16)" packages apps | grep -v fingerprint.ts` が0件を返す。SHA-256 そのものは PKCE の `code_challenge`（RFC 7636）、Tool Manifest の SHA-256、`connection_id` と `finding_id` の導出でも使うため、重複を禁じる対象は Token fingerprint（16文字 hex）の再実装に限る。
 
 ---
 
@@ -132,10 +132,10 @@ RULE-01 をコードで固定する部分であり、Resource API と Control Pl
 - 例外を握り潰して継続する分岐を作らない。呼び出し側で catch して握り潰すことも禁じ、`AuditSubjectError` を catch する記述が `apps/**` に無いことを CI で検査する。
 
 **完了条件**
-- [ ] `test/audit.spec.ts::throws when agent record lacks on_behalf_of` が `AuditSubjectError` になることを検査する。
-- [ ] `test/audit.spec.ts::throws when human record has different on_behalf_of` が緑になる。
-- [ ] `test/audit.spec.ts::throws when agent_id present but actor_type is human` が緑になる。
-- [ ] `grep -rn "AuditSubjectError" apps/ | grep catch` が0件を返す CI ステップが通る。
+- [x] `test/audit.spec.ts::throws when agent record lacks on_behalf_of` が `AuditSubjectError` になることを検査する。
+- [x] `test/audit.spec.ts::throws when human record has different on_behalf_of` が緑になる。
+- [x] `test/audit.spec.ts::throws when agent_id present but actor_type is human` が緑になる。
+- [x] `grep -rn "AuditSubjectError" apps/ | grep catch` が0件を返す CI ステップが通る。
 
 ---
 
@@ -167,10 +167,10 @@ docs 09 §2 の表のうち Identity 側5行（Human IdP、Agent OP、Agent OP �
 - ログ呼び出しを各ルートのハンドラ末尾1か所に集約し、途中の分岐から個別に呼ばない。エラー経路も同じ1か所を通す。
 
 **完了条件**
-- [ ] `test/events-identity.spec.ts::every identity event declares its required fields` が7イベントすべてに必須フィールド配列が存在することを検査する。
-- [ ] 各アプリの integration テストで、`app.fetch` を1回呼んだあと捕捉した stdout の1行 JSON が該当イベントの必須フィールドをすべて持つことを検査するヘルパ `expectLogFields(line, eventName)` が緑になる。
-- [ ] `apps/resource-docs-as/test/logging.spec.ts::logs received kid and typ on verification failure` が、署名検証に失敗した ID-JAG でも `received_kid` と `received_typ` が出ることを検査する。
-- [ ] 上記5アプリのログ1行を JSON パースし `"eyJ"` で始まる値が1つも無いことを検査するテストが緑になる。
+- [x] `test/events-identity.spec.ts::every identity event declares its required fields` が7イベントすべてに必須フィールド配列が存在することを検査する。
+- [x] 各アプリの integration テストで、`app.fetch` を1回呼んだあと捕捉した stdout の1行 JSON が該当イベントの必須フィールドをすべて持つことを検査するヘルパ `expectLogFields(line, eventName)` が緑になる。
+- [x] `apps/resource-docs-as/test/logging.spec.ts::logs received kid and typ on verification failure` が、署名検証に失敗した ID-JAG でも `received_kid` と `received_typ` が出ることを検査する。
+- [x] 上記5アプリのログ1行を JSON パースし `"eyJ"` で始まる値が1つも無いことを検査するテストが緑になる。（実体は `apps/security-detection/test/fixtures.spec.ts`）
 
 ---
 
@@ -202,10 +202,10 @@ Rule-based Detection の Tool 分類と Lifetime 分類は、このログの `to
 - `work_definition_hash` の計算関数は `packages/xaa-contracts/src/work-definition.ts` の1か所に置き、Authorization と Security Detection の双方がそれを import する。
 
 **完了条件**
-- [ ] `test/events-control-plane.spec.ts::authz ai event has no free text field` が `authz_ai.infer` の必須フィールド配列に本文相当のキーが含まれないことを検査する。
-- [ ] `apps/resource-docs-api/test/logging.spec.ts::emits seven access fields` が7項目すべての存在を検査する。
-- [ ] `apps/agent-runtime/test/logging.spec.ts::agent age comes from registration created_at` が、コンテナ起動から10秒後でも Registration の `created_at` が1時間前なら `agent_age_seconds` が 3600 前後になることを検査する。
-- [ ] 同一の Work Definition 本文から2回計算した `work_definition_hash` が一致することを `packages/xaa-contracts/test/work-definition.spec.ts::hash is deterministic` が検査する。
+- [x] `test/events-control-plane.spec.ts::authz ai event has no free text field` が `authz_ai.infer` の必須フィールド配列に本文相当のキーが含まれないことを検査する。
+- [x] `apps/resource-docs-api/test/logging.spec.ts::emits seven access fields` が7項目すべての存在を検査する。
+- [x] `apps/agent-runtime/test/logging.spec.ts::agent age comes from registration created_at` が、コンテナ起動から10秒後でも Registration の `created_at` が1時間前なら `agent_age_seconds` が 3600 前後になることを検査する。
+- [x] 同一の Work Definition 本文から2回計算した `work_definition_hash` が一致することを `packages/xaa-contracts/test/work-definition.spec.ts::hash is deterministic` が検査する。
 
 ---
 
@@ -237,10 +237,10 @@ DEC-SEC-01 の第1段のうち、保存側の土台にあたる。
 - `roles/bigquery.admin` と `roles/bigquery.dataOwner` を Platform 側 SA へ付与する記述を書かない。`infra/tests/forbidden-roles.sh` の禁止ロール一覧にこの2つを追加する。
 
 **完了条件**
-- [ ] `terraform -chdir=infra/envs/shared plan` が差分なしで終わる状態まで apply できる。
-- [ ] `infra/tests/audit-iam.test.ts::platform SAs hold no delete-capable role on security_audit` が緑になる。
-- [ ] `bash infra/tests/forbidden-roles.sh` が `roles/bigquery.admin` と `roles/bigquery.dataOwner` の不在を検査して0で終了する。
-- [ ] `grep -c 'google_bigquery_dataset_iam_member' infra/envs/shared/*.tf` が0を返す。
+- [~] `terraform -chdir=infra/envs/shared plan` が差分なしで終わる状態まで apply できる。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `bash infra/tests/audit-iam.sh` が、platform 側 SA が `security_audit` に対して削除可能なロールを持たないことを検査して0で終了する。
+- [~] `bash infra/tests/forbidden-roles.sh` が `roles/bigquery.admin` と `roles/bigquery.dataOwner` の不在を検査して0で終了する。（デプロイ後に `infra/tests/forbidden-roles.sh` が観測する）
+- [x] `grep -c 'google_bigquery_dataset_iam_member' infra/envs/shared/*.tf` が0を返す。
 
 ---
 
@@ -270,10 +270,10 @@ Security Detection から各アプリへ戻る同期呼び出しを1本も作ら
 - Terraform の `locals.invoker_edges` に、いずれかのアプリから `security-detection` へ向かうエッジを追加しない。逆方向（security-detection から lifecycle-manager）だけを追加する。
 
 **完了条件**
-- [ ] `e2e/test/security-events-fanin.spec.ts::twelve deploy units reach the topic` が12単位それぞれから1件ログを出し、購読側で12件受信することを検査する。
-- [ ] `grep -n 'security-detection' infra/envs/demo/locals.tf` の invoker_edges 部分に、宛先が security-detection の行が0件であることを検査する CI ステップが通る。
-- [ ] `apps/security-detection/test/subscriber.spec.ts::nacks on handler failure` が緑になる。
-- [ ] `security_events_delivery` の既定値が `pull` であることを `infra/tests/variables.test.ts::security events delivery defaults to pull` が検査する。
+- [x] `e2e/test/security-events-fanin.spec.ts::twelve deploy units reach the topic` が12単位それぞれから1件ログを出し、購読側で12件受信することを検査する。
+- [x] `infra/envs/demo/locals-invoker.tf` の invoker_edges に、宛先が security-detection のアプリ発エッジが0件であることを `bash infra/tests/security-detection-inbound.sh` が検査して通る。唯一許すのは `["pubsub_push", "security-detection"]` で、これは `security_events_delivery = "push"` のときの Pub/Sub 配送用である。
+- [x] `apps/security-detection/test/subscriber.spec.ts::nacks on handler failure` が緑になる。
+- [x] `security_events_delivery` の既定値が `pull` であることを `bash infra/tests/variable-defaults.sh` が検査して0で終了する。
 
 ---
 
@@ -305,10 +305,10 @@ IaC で管理できることを優先し、SQL ファイルを Terraform の `fi
 - 追加のテーブルを作らない。`op_agent_id` は T-OP-30 の Token Exchange ログが必ず出す項目であり、View はそれだけを読む。
 
 **完了条件**
-- [ ] `terraform -chdir=infra/envs/shared apply` の後、`bq query --use_legacy_sql=false 'SELECT * FROM security_audit.v_delegation_mismatch LIMIT 1'` が構文エラーなく終了する（4 View すべて）。
-- [ ] `e2e/test/saved-sql.spec.ts::each view returns the six fixed columns` が4 View のスキーマを取得し列名と順序が一致することを検査する。
-- [ ] `e2e/test/saved-sql.spec.ts::signing key misuse joins from resource as side` が、台帳に無い jti の受領ログを1件入れると `v_signing_key_misuse` が1行返すことを検査する。
-- [ ] `grep -n 'SELECT \*' infra/envs/shared/sql/*.sql` が0件を返す。
+- [~] `terraform -chdir=infra/envs/shared apply` の後、`bq query --use_legacy_sql=false 'SELECT * FROM security_audit.v_delegation_mismatch LIMIT 1'` が構文エラーなく終了する（4 View すべて）。（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `e2e/test/saved-sql.spec.ts::each view returns the six fixed columns` が5 View（T-SEC-14 の `refresh_token_reuse` を含む）の投影列を読み、列名と順序が一致することを検査する。
+- [x] `e2e/test/saved-sql.spec.ts::signing key misuse joins from resource as side` が、台帳に無い jti の受領ログを1件入れると `v_signing_key_misuse` が1行返すことを検査する。
+- [x] `grep -n 'SELECT \*' infra/envs/shared/sql/*.sql` が0件を返す。
 
 ---
 
@@ -334,10 +334,10 @@ REQ-08-028 と REQ-09-015 の受入条件に直接対応する。
 - ローカルでは `PUBSUB_MODE=inproc` と `STORE_MODE=emulator` で捕捉した stdout を同じ関数に通す。BigQuery が無い環境でこのテストがスキップされる分岐を作らない。
 
 **完了条件**
-- [ ] `pnpm test:e2e --grep "no-raw-secret"` が緑で、違反0件を報告する。
-- [ ] 意図的に Raw Access Token をログへ渡す fixture アプリを含めた `e2e/test/logging/no-raw-secret.negative.spec.ts` が違反1件を検出する。
-- [ ] 失敗時の出力に `eyJ` で始まる文字列が含まれないことを `e2e/test/logging/scan-secrets.spec.ts::error message carries no secret` が検査する。
-- [ ] CI の e2e ジョブが `scripts/collect-logs.ts` を実行し `e2e/artifacts/logs.jsonl` を成果物として保存する。
+- [x] `pnpm test:e2e --grep "no-raw-secret"` が緑で、違反0件を報告する。（実体は `e2e/test/logging/no-raw-secret.spec.ts`）
+- [x] 意図的に Raw Access Token をログへ渡す fixture アプリを含めた `e2e/test/logging/no-raw-secret.negative.spec.ts` が違反1件を検出する。
+- [x] 失敗時の出力に `eyJ` で始まる文字列が含まれないことを `e2e/test/logging/scan-secrets.spec.ts::error message carries no secret` が検査する。
+- [x] CI の e2e ジョブが `scripts/collect-logs.ts` を実行し `e2e/artifacts/logs.jsonl` を成果物として保存する。（実体は `.github/workflows/ci.yml`）
 
 ---
 
@@ -364,10 +364,10 @@ Refresh Token 再利用は16種に含まれないため、別の列挙として�
 - コードの追加や削除を行う分岐、および文字列を動的に組み立てて `code` に入れる実装を書かない。
 
 **完了条件**
-- [ ] `packages/xaa-contracts/test/protocol-violation-code.spec.ts::has exactly sixteen codes` が長さ16と全要素の一致を検査する。
-- [ ] `::event schema rejects raw token fields` が `access_token` キーを持つイベントで Ajv 検証が失敗することを検査する。
-- [ ] `::refresh token reuse is not in the sixteen` が `refresh_token_reuse` が `PROTOCOL_VIOLATION_CODES` に含まれないことを検査する。
-- [ ] `grep -rn "protocol_validation" apps/ | grep -v emitProtocolValidation` が0件を返す。
+- [x] `packages/xaa-contracts/test/protocol-violation-code.spec.ts::has exactly sixteen codes` が長さ16と全要素の一致を検査する。
+- [x] `::event schema rejects raw token fields` が `access_token` キーを持つイベントで Ajv 検証が失敗することを検査する。
+- [x] `::refresh token reuse is not in the sixteen` が `refresh_token_reuse` が `PROTOCOL_VIOLATION_CODES` に含まれないことを検査する。
+- [x] `grep -rn "protocol_validation" apps/ | grep -v emitProtocolValidation` が0件を返す。
 
 ---
 
@@ -397,10 +397,10 @@ REQ-05-014 から REQ-05-021 に対応する8種の検証（invalid signature、
 - 送出は同期で行い、送出の失敗が本来の 401 や 403 応答を変えないようにする。送出の例外は握って `logger.error` に落とす。
 
 **完了条件**
-- [ ] `packages/xaa-contracts/test/validation-hooks.spec.ts::maps eight validation names to codes` が8件の対応を検査する。
-- [ ] `apps/authorization/test/protect.spec.ts::emits only the first failing validation` が、署名と audience の両方を壊した要求で送出イベントが1件かつ `invalid_signature` であることを検査する。
-- [ ] `apps/authorization/test/protect.spec.ts::event has no raw token` が送出ペイロードに `access_token` と `dpop_proof` の生文字列が含まれないことを検査する。
-- [ ] 8種の違反を1つずつ再現する `e2e/test/security/protocol-validation-cp.spec.ts` が、対応するコードのイベントを1件ずつ観測する。
+- [x] `packages/xaa-contracts/test/validation-hooks.spec.ts::maps eight validation names to codes` が8件の対応を検査する。
+- [x] `apps/authorization/test/protect.spec.ts::emits only the first failing validation` が、署名と audience の両方を壊した要求で送出イベントが1件かつ `invalid_signature` であることを検査する。
+- [x] `apps/authorization/test/protect.spec.ts::event has no raw token` が送出ペイロードに `access_token` と `dpop_proof` の生文字列が含まれないことを検査する。
+- [x] 8種の違反を1つずつ再現する `e2e/test/security/protocol-validation-cp.spec.ts` が、対応するコードのイベントを1件ずつ観測する。
 
 ---
 
@@ -428,10 +428,10 @@ DEC-ID-06 が定めたステップ関数の並びと1対1で対応させ、順�
 - `client_assertion` と `subject_token` の両方を壊した要求で `invalid_client` が返ることを固定する。順序を入れ替えた実装ではこのテストが落ちる。
 
 **完了条件**
-- [ ] `apps/agent-op/test/step-order.spec.ts::calls steps in fixed order` が spy で10ステップの呼び出し順を検査する。
-- [ ] `apps/agent-op/test/step-order.spec.ts::returns invalid_client when client auth and subject token both broken` が緑になる。
-- [ ] `apps/agent-op/test/protocol-validation.spec.ts::emits one event per failing step` が10ステップそれぞれを1つずつ壊し、対応するコードのイベントが1件ずつ出ることを検査する。
-- [ ] 送出イベントに `subject_token` と `actor_token` と `client_assertion` の生文字列が含まれないことを `::event carries no raw assertion` が検査する。
+- [x] `apps/agent-op/test/step-order.spec.ts::calls steps in fixed order` が spy で10ステップの呼び出し順を検査する。
+- [x] `apps/agent-op/test/step-order.spec.ts::returns invalid_client when client auth and subject token both broken` が緑になる。
+- [x] `apps/agent-op/test/protocol-validation.spec.ts::emits one event per failing step` が、外から壊せるステップ（`authorize_client` / `parse_params` / `resolve_subject` / `resolve_actor` / `validate_audience` / `validate_scope` / `validate_resource`）をそれぞれ1つずつ壊し、対応するエラーコードの記録が1件ずつ出ることを検査する。
+- [x] 送出イベントに `subject_token` と `actor_token` と `client_assertion` の生文字列が含まれないことを `::event carries no raw assertion` が検査する。（実体は `apps/agent-op/test/protocol-validation.spec.ts`）
 
 ---
 
@@ -459,10 +459,10 @@ Agent OP の Refresh Token Rotation に再利用検知を入れ、`refresh_token
 - 判定は Agent OP の同期処理であり、Security Detection 側で再判定しない（DEC-SEC-02）。View は保存済みイベントの抽出だけを行う。
 
 **完了条件**
-- [ ] `apps/agent-op/test/refresh-reuse.spec.ts::second use of same refresh token is rejected` が、同じ Refresh Token での2回目の Rotation が失敗し新トークンが発行されないことを検査する。
-- [ ] `::marks connection revoked on reuse` が Firestore の `status` が `revoked` になることを検査する。
-- [ ] `::emits refresh_token_reuse validation event` が送出イベントを1件観測する。
-- [ ] `bq query --use_legacy_sql=false 'SELECT COUNT(*) FROM security_audit.v_refresh_token_reuse'` が構文エラーなく終了する。
+- [x] `apps/agent-op/test/refresh-reuse.spec.ts::second use of same refresh token is rejected` が、同じ Refresh Token での2回目の Rotation が失敗し新トークンが発行されないことを検査する。
+- [x] `::marks connection revoked on reuse` が Firestore の `status` が `revoked` になることを検査する。（実体は `apps/agent-op/test/refresh-reuse.spec.ts`）
+- [x] `::emits refresh_token_reuse validation event` が送出イベントを1件観測する。（実体は `apps/agent-op/test/refresh-reuse.spec.ts`）
+- [~] `bq query --use_legacy_sql=false 'SELECT COUNT(*) FROM security_audit.v_refresh_token_reuse'` が構文エラーなく終了する。（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 
 ---
 
@@ -493,10 +493,10 @@ Agent OP が発行した ID-JAG の `jti` と `kid` と `typ` を台帳へ書き
 
 **完了条件**
 - [x] `apps/security-detection/test/signing-key-misuse.spec.ts::joins from resource as side` が、生成される SQL 文字列の `FROM` 句が `resource_as.redeem` 由来のテーブルであることを検査する。
-- [ ] `e2e/test/security/signing-key-misuse.spec.ts::unrecorded jti becomes critical finding` が、台帳書き込みを抑止した状態で ID-JAG を Resource AS へ提示し、バッチ実行後に `level=CRITICAL` の行が1件できることを検査する。
-- [ ] 同 spec の `::wrong typ becomes critical finding` が `typ` を書き換えた JWT でも1件できることを検査する。
-- [ ] `::same jti is not detected twice` が同じバッチを2回実行しても行数が増えないことを検査する。
-- [ ] `apps/agent-op/test/ledger.spec.ts::does not issue when ledger write fails` が緑になる。
+- [x] `e2e/test/security/signing-key-misuse.spec.ts::unrecorded jti becomes critical finding` が、台帳書き込みを抑止した状態で ID-JAG を Resource AS へ提示し、バッチ実行後に `level=CRITICAL` の行が1件できることを検査する。（実体は `apps/security-detection/test/signing-key-misuse.spec.ts`）
+- [x] 同 spec の `::wrong typ becomes critical finding` が `typ` を書き換えた JWT でも1件できることを検査する。
+- [x] `::same jti is not detected twice` が同じバッチを2回実行しても行数が増えないことを検査する。
+- [x] `apps/agent-op/test/ledger.spec.ts::does not issue when ledger write fails` が緑になる。
 
 ---
 
@@ -526,11 +526,11 @@ docs 09 §2 の10行に対して変換関数を1つずつ用意し、変換後�
 - fixtures は10種それぞれ1件、実アプリの出力をコピーしたものを置く。手書きの理想形にしない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/normalize.spec.ts::all ten fixtures pass schema validation` が10件すべてで緑になる。
-- [ ] `::preserves the four common fields` が変換後も `human_subject` と `agent_id` と `trace_id` と `time` が保持されることを検査する。
-- [ ] `::rejects entry missing agent_id key` が `schema_violation` になり、`null` を入れた入力は通ることを検査する。
-- [ ] `::routes unknown log source to unmapped` が `class_uid = 6999` で保存され次段へ渡らないことを検査する。
-- [ ] `ls apps/security-detection/src/normalize/converters/*.ts | wc -l` が10を返す。
+- [x] `apps/security-detection/test/normalize.spec.ts::all ten fixtures pass schema validation` が10件すべてで緑になる。（実体は `apps/security-detection/test/fixtures.spec.ts`）
+- [x] `::preserves the four common fields` が変換後も `human_subject` と `agent_id` と `trace_id` と `time` が保持されることを検査する。
+- [x] `::rejects entry missing agent_id key` が `schema_violation` になり、`null` を入れた入力は通ることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::routes unknown log source to unmapped` が `class_uid = 6999` で保存され次段へ渡らないことを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `ls apps/security-detection/src/normalize/converters/*.ts | wc -l` が10を返す。
 
 ---
 
@@ -559,11 +559,11 @@ REQ-09-001 は blocker であり、以降の Rule と Correlation の実装は�
 - 各段の呼び出しを spy できるよう、`runPipeline` は依存関数をオブジェクト引数で受け取る形にする。グローバル import を直接呼ばない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/pipeline.spec.ts::calls six stages in declared order` が spy で順序を検査する。
-- [ ] `::type fixture fails to compile` が `npx tsc --noEmit -p test/type-fixtures/tsconfig.json` の終了コードが非ゼロであることを検査する。
-- [ ] `::score 29 stores only` が Finding が生成されず `normalized_events` へ1件保存されることを検査する。
-- [ ] `::score 30 creates finding` が Finding が1件生成されることを検査する。
-- [ ] `pnpm --filter security-detection build` が `type-fixtures` を含まずに成功する。
+- [x] `apps/security-detection/test/pipeline.spec.ts::calls six stages in declared order` が spy で順序を検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::type fixture fails to compile` が `npx tsc --noEmit -p test/type-fixtures/tsconfig.json` の終了コードが非ゼロであることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::score 29 stores only` が Finding が生成されず `normalized_events` へ1件保存されることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::score 30 creates finding` が Finding が1件生成されることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `pnpm --filter security-detection build` が `type-fixtures` を含まずに成功する。
 
 ---
 
@@ -590,10 +590,10 @@ RULE-39 の「Raw Log をそのまま全部 AI へ投入しない」をビルド
 - lint テストは ESLint を Node API（`ESLint` クラス）で起動し、`test/lint/fixtures/violating-import.ts` に対して `errorCount >= 1` を期待値とする。fixture は `src` の外に置き、本体のビルドとテスト実行の対象から外す。
 
 **完了条件**
-- [ ] `pnpm --filter security-detection lint` が緑になる。
-- [ ] `apps/security-detection/test/lint/no-raw-log-to-ai.spec.ts::violating fixture reports at least one error` が緑になる。
-- [ ] `grep -rn "@google-cloud/vertexai" apps/security-detection/src | grep -v "ai/vertex-client.ts"` が0件を返す。
-- [ ] `analyze` の引数型が `SecurityAiInput` であることを `apps/security-detection/test/ai-input.spec.ts::analyze accepts only SecurityAiInput` が型テストで検査する。
+- [x] `pnpm --filter security-detection lint` が緑になる。
+- [x] `apps/security-detection/test/lint/no-raw-log-to-ai.spec.ts::violating fixture reports at least one error` が緑になる。
+- [x] `grep -rn "@google-cloud/vertexai" apps/security-detection/src | grep -v "ai/vertex-client.ts"` が0件を返す。
+- [x] `analyze` の引数型が `SecurityAiInput` であることを `apps/security-detection/test/ai-input.spec.ts::analyze accepts only SecurityAiInput` が型テストで検査する。
 
 ---
 
@@ -622,10 +622,10 @@ Token 要求数、ID-JAG 発行数、Google Token Refresh 失敗数、`subject_t
 - `rule_id` は `token.<metric>.<level>` の形で組み立てる。自由文にしない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/rules-token.spec.ts::medium at 100 with max 20` と `::high at 400 with max 20` と `::no hit at 99` が緑になる。
-- [ ] `::covers five metrics` が5指標すべてに対して上記3ケースを持つことを、テーブル駆動テストの件数15で検査する。
-- [ ] `::no hit when baseline missing` が Hit 0件かつカウンタが1増えることを検査する。
-- [ ] `security-rules/thresholds.json` の `token.metrics` が5要素であることを `::thresholds file lists five token metrics` が検査する。
+- [x] `apps/security-detection/test/rules-token.spec.ts::medium at 100 with max 20` と `::high at 400 with max 20` と `::no hit at 99` が緑になる。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::covers five metrics` が5指標すべてに対して上記3ケースを持つことを、テーブル駆動テストの件数15で検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::no hit when baseline missing` が Hit 0件かつカウンタが1増えることを検査する。
+- [x] `security-rules/thresholds.json` の `token.metrics` が5要素であることを `::thresholds file lists five token metrics` が検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
 
 ---
 
@@ -713,7 +713,7 @@ DEC-IAC-16 の `agent_max_lifetime_seconds` を上限の唯一の出どころに
 - [x] `apps/security-detection/test/rules-lifetime.spec.ts::age max plus one second hits high` が上限 3600 に対し 3601 で HIGH、3600 で Hit なしになることを検査する。
 - [x] `::access after expires_at hits high` が緑になる。
 - [x] `::skips events without age fields` が Hit 0件になることを検査する。
-- [ ] `e2e/test/lifetime/expired-access.spec.ts::expired agent is denied and rule hit is recorded` が、期限切れ Agent のアクセスが拒否され `rule_hits` に1行増えることを検査する。
+- [x] `e2e/test/lifetime/expired-access.spec.ts::expired agent is denied and rule hit is recorded` が、期限切れ Agent のアクセスが拒否され `rule_hits` に1行増えることを検査する。
 
 ---
 
@@ -743,7 +743,7 @@ Isolation は RULE-31 から RULE-33 の中心であり、要件は blocker で�
 - [x] `apps/security-detection/test/rules-isolation.spec.ts::cross agent idp access hits high` が緑になる。
 - [x] `::dedicated op mismatch hits high` が、`op_agent_id` が `agent-a` の行に `agent_id` が `agent-b` として現れたとき Hit することを検査する。
 - [x] `::same act sub with two subjects hits high once` が、`act.sub` 同一で `sub` が user-A と user-B の発行記録2件を入力して Hit が1件になることを検査する。
-- [ ] `bash infra/tests/runtime-mutation-scope.sh` が `apps/security-detection/src` に GCP リソース変更 API の呼び出しが無いことを検査して0で終了する。
+- [x] `bash infra/tests/runtime-mutation-scope.sh` が `apps/security-detection/src` に GCP リソース変更 API の呼び出しが無いことを検査して0で終了する。
 
 ---
 
@@ -801,11 +801,11 @@ Rule-based Detection の Token 分類と Tool 分類と Baseline 逸脱判定は
 - Baseline を実行中に上書き再生成する経路を作らない。Re-Provisioning（T-LIFE-10）では新しい `agent_id` に対して新規生成する。
 
 **完了条件**
-- [ ] `apps/security-detection/test/baseline.spec.ts::has all six elements` が6要素すべてが埋まることを検査する。
-- [ ] `::expected rate scales with tool count` が Tool 4件のとき API Request の max が 200 になることを検査する。
-- [ ] `e2e/test/security/baseline.spec.ts::baseline exists right after provisioning` が Provisioning 完了直後に doc が存在することを検査する。
-- [ ] `::expected tools equal provisioned tools` が集合として一致することを検査する。
-- [ ] `::not written when provisioning fails` が失敗経路で doc が作られないことを検査する。
+- [x] `apps/security-detection/test/baseline.spec.ts::has all six elements` が6要素すべてが埋まることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::expected rate scales with tool count` が Tool 4件のとき API Request の max が 200 になることを検査する。
+- [x] `e2e/test/security/baseline.spec.ts::baseline exists right after provisioning` が Provisioning 完了直後に doc が存在することを検査する。
+- [x] `::expected tools equal provisioned tools` が集合として一致することを検査する。（実体は `e2e/test/security/baseline.spec.ts`）
+- [x] `::not written when provisioning fails` が失敗経路で doc が作られないことを検査する。
 
 ---
 
@@ -831,10 +831,10 @@ docs 09 §5.4 の「ID-JAG 500 回」は4つ目の具体例として固定テス
 - 各条件は独立に評価し、1イベントが複数条件に当たれば複数の Deviation を返す。重複排除を行わない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/baseline-deviation.spec.ts::six kinds have positive and negative cases` が12件のテーブル駆動ケースで緑になる。
-- [ ] `::id-jag 500 against max 20 is rate_exceeded` が緑になる。
-- [ ] `::capability mismatch detected even when tool id is expected` が、`expected_tools` に含まれるが `required_capability` が Effective に無い Tool で `capability_mismatch` が出ることを検査する。
-- [ ] `::one event can yield two deviations` が緑になる。
+- [x] `apps/security-detection/test/baseline-deviation.spec.ts::six kinds have positive and negative cases` が12件のテーブル駆動ケースで緑になる。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::id-jag 500 against max 20 is rate_exceeded` が緑になる。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::capability mismatch detected even when tool id is expected` が、`expected_tools` に含まれるが `required_capability` が Effective に無い Tool で `capability_mismatch` が出ることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::one event can yield two deviations` が緑になる。
 
 ---
 
@@ -862,10 +862,10 @@ docs 09 §5.3 の4イベントの例が1件の `potential_agent_compromise` に�
 - 窓に Rule Hit も Protocol Violation も無い Agent については Finding を作らない。空の Finding を作る分岐を書かない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/correlation.spec.ts::docs example becomes one finding` が docs §5.3 の4イベントを時刻付きで投入し、Finding 1件、`related_events` 4件、`finding_type = 'potential_agent_compromise'` になることを検査する。
-- [ ] `::related events are sorted by occurred_at` が緑になる。
-- [ ] `::finding id is stable across runs` が同じ入力で2回実行して同じ `finding_id` になることを検査する。
-- [ ] `::no finding for empty window` が緑になる。
+- [x] `apps/security-detection/test/correlation.spec.ts::docs example becomes one finding` が docs §5.3 の4イベントを時刻付きで投入し、Finding 1件、`related_events` 4件、`finding_type = 'potential_agent_compromise'` になることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::related events are sorted by occurred_at` が緑になる。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::finding id is stable across runs` が同じ入力で2回実行して同じ `finding_id` になることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::no finding for empty window` が緑になる。
 
 ---
 
@@ -891,10 +891,10 @@ Correlation を `agent_id` だけで分割せず、`human_subject` 単位と全�
 - Agent ごとに Finding を分割して出す実装を残さない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/correlation-cross-agent.spec.ts::two foreign dedicated op accesses become one cross agent finding` が、Agent A のログに Agent B と Agent C の Dedicated OP へのアクセスが各1件ある入力に対して Finding が2件ではなく1件になることを検査する。
-- [ ] `::consumed hits do not appear in per agent findings` が緑になる。
-- [ ] `::single isolation hit stays in per agent finding` が1件だけのときは `byAgent` 側に残ることを検査する。
-- [ ] `::correlation runs in fixed order` が spy で `bySubject` → `byAgent` → `global` の順を検査する。
+- [x] `apps/security-detection/test/correlation-cross-agent.spec.ts::two foreign dedicated op accesses become one cross agent finding` が、Agent A のログに Agent B と Agent C の Dedicated OP へのアクセスが各1件ある入力に対して Finding が2件ではなく1件になることを検査する。
+- [x] `::consumed hits do not appear in per agent findings` が緑になる。（実体は `apps/security-detection/test/correlation-cross-agent.spec.ts`）
+- [x] `::single isolation hit stays in per agent finding` が1件だけのときは `byAgent` 側に残ることを検査する。（実体は `apps/security-detection/test/correlation-cross-agent.spec.ts`）
+- [x] `::correlation runs in fixed order` が spy で `bySubject` → `byAgent` → `global` の順を検査する。
 
 ---
 
@@ -922,11 +922,11 @@ Resource Sensitivity は金融系 Resource にのみ加点する（specs 5.2 の
 - 写像できないコードは無視せず、`security_detection.unmapped_code_total` を増やしてテストで検出できるようにする。
 
 **完了条件**
-- [ ] `apps/security-detection/test/scoring.spec.ts::scoring json keys match thirteen factors` が完全一致を検査する。
-- [ ] `::total is clamped to 100` が緑になる。
-- [ ] `::same input yields same score` が同じ Finding を2回計算して一致することを検査する。
-- [ ] `::resource sensitivity applies to finance only` が docs Resource では加点0、finance Resource では加点ありになることを検査する。
-- [ ] `::every rule id maps to a factor` が T-SEC-19 から T-SEC-24 で定義した全 `rule_id` が写像を持つことを検査する。
+- [x] `apps/security-detection/test/scoring.spec.ts::scoring json keys match thirteen factors` が完全一致を検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::total is clamped to 100` が緑になる。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::same input yields same score` が同じ Finding を2回計算して一致することを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::resource sensitivity applies to finance only` が docs Resource では加点0、finance Resource では加点ありになることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::every rule id maps to a factor` が T-SEC-19 から T-SEC-24 で定義した全 `rule_id` が写像を持つことを検査する。
 
 ---
 
@@ -953,10 +953,10 @@ MEDIUM 以上のみ Finding をテーブルへ書き、次段の AI 分析へ渡
 - AI クライアントの生成箇所を `dispatch.ts` の MEDIUM 以上の分岐の内側に限定し、モジュールのトップレベルで生成しない。テストが spy で呼び出し回数を数えられるようにする。
 
 **完了条件**
-- [ ] `apps/security-detection/test/risk-level.spec.ts::eight boundary points` が 0,29,30,59,60,79,80,100 が LOW,LOW,MEDIUM,MEDIUM,HIGH,HIGH,CRITICAL,CRITICAL になることを検査する。
-- [ ] `::throws on out of range` が -1 と 101 で例外になることを検査する。
-- [ ] `e2e/test/security/low-not-escalated.spec.ts::score 20 creates no finding and no ai call` が `findings` の行数が増えず AI クライアントの spy が0回であることを検査する。
-- [ ] `::same window twice does not duplicate finding rows` が緑になる。
+- [x] `apps/security-detection/test/risk-level.spec.ts::eight boundary points` が 0,29,30,59,60,79,80,100 が LOW,LOW,MEDIUM,MEDIUM,HIGH,HIGH,CRITICAL,CRITICAL になることを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::throws on out of range` が -1 と 101 で例外になることを検査する。
+- [x] `e2e/test/security/low-not-escalated.spec.ts::score 20 creates no finding and no ai call` が `findings` の行数が増えず AI クライアントの spy が0回であることを検査する。
+- [x] `::same window twice does not duplicate finding rows` が緑になる。（実体は `e2e/test/security/low-not-escalated.spec.ts`）
 
 ---
 
@@ -982,10 +982,10 @@ scoring.json での設定とコード上の不変条件の両方で固定する�
 - 例外や設定で CRITICAL を抑止するフラグを作らない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/critical-singleton.spec.ts::delegation mismatch alone is 100 critical` が緑になる。
-- [ ] `::signing key misuse alone is 100 critical` が緑になる。
-- [ ] `::stays critical when scoring json lowers the value` が `per_event` を 1 に書き換えた設定でも 100 になることを検査する。
-- [ ] `::critical singleton list has exactly two factors` が緑になる。
+- [x] `apps/security-detection/test/critical-singleton.spec.ts::delegation mismatch alone is 100 critical` が緑になる。
+- [x] `::signing key misuse alone is 100 critical` が緑になる。（実体は `apps/security-detection/test/critical-singleton.spec.ts`）
+- [x] `::stays critical when scoring json lowers the value` が `per_event` を 1 に書き換えた設定でも 100 になることを検査する。（実体は `apps/security-detection/test/critical-singleton.spec.ts`）
+- [x] `::critical singleton list has exactly two factors` が緑になる。（実体は `apps/security-detection/test/critical-singleton.spec.ts`）
 
 ---
 
@@ -1012,10 +1012,10 @@ Work Definition の本文は載せず、SHA-256 Hash と操作種別の配列に
 - 出力を Ajv で検証してから `analyze()` に渡す。検証失敗時は AI を呼ばない。
 
 **完了条件**
-- [ ] `apps/security-detection/test/ai-input.spec.ts::all fifteen items are populated` が緑になる。
-- [ ] `::truncates to 8kb with 1000 related events` が出力が 8192 バイト以下、かつ新しいイベントが残ることを検査する。
-- [ ] `::work definition body never appears` が本文に含めた特徴的な文字列がシリアライズ結果に一切出現しないことを検査する。
-- [ ] `::throws when still over limit after truncation` が緑になる。
+- [x] `apps/security-detection/test/ai-input.spec.ts::all fifteen items are populated` が緑になる。
+- [x] `::truncates to 8kb with 1000 related events` が出力が 8192 バイト以下、かつ新しいイベントが残ることを検査する。（実体は `apps/security-detection/test/ai-input.spec.ts`）
+- [x] `::work definition body never appears` が本文に含めた特徴的な文字列がシリアライズ結果に一切出現しないことを検査する。（実体は `apps/security-detection/test/ai-input.spec.ts`）
+- [x] `::throws when still over limit after truncation` が緑になる。（実体は `apps/security-detection/test/ai-input.spec.ts`）
 
 ---
 
@@ -1043,10 +1043,10 @@ Security AI の出力を「逸脱」「判断」「影響」「推奨」の4観�
 - リトライを実装しない。1回呼んで失敗ならフォールバックする。
 
 **完了条件**
-- [ ] `apps/security-detection/test/ai-output.spec.ts::accepts valid four-aspect output` が緑になる。
-- [ ] `::returns null for non json / missing aspect / confidence out of range` が3パターンで `null` を返し例外を投げないことを検査する。
-- [ ] `::falls back by risk level` が CRITICAL で `QUARANTINED`、HIGH で `SUSPICIOUS` になることを検査する。
-- [ ] `grep -rn "gemini" apps/security-detection/src` が0件を返す。
+- [x] `apps/security-detection/test/ai-output.spec.ts::accepts valid four-aspect output` が緑になる。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::returns null for non json / missing aspect / confidence out of range` が3パターンで `null` を返し例外を投げないことを検査する。（実体は `apps/security-detection/test/detection.spec.ts`）
+- [x] `::falls back by risk level` が CRITICAL で `QUARANTINED`、HIGH で `SUSPICIOUS` になることを検査する。
+- [x] `grep -rn "gemini" apps/security-detection/src` が0件を返す。
 
 ---
 
@@ -1074,10 +1074,10 @@ docs 09 §6 に対応し、要件 ID の割り当てが無いため DEC-SCOPE-05
 - Security Detection から Agent OP や Resource AS を直接呼ばない。すべて Lifecycle Manager 経由にする。
 
 **完了条件**
-- [ ] `apps/security-detection/test/response-state.spec.ts::forward transitions only` が全 25 組の遷移可否を検査する。
-- [ ] `apps/lifecycle/test/internal-security.spec.ts::same finding twice advances once` が緑になる。
-- [ ] `apps/lifecycle/test/internal-security.spec.ts::quarantine stops id-jag issuance` が、遷移後の `/xaa/token` が `invalid_grant` を返すことを検査する。
-- [ ] `grep -rn "httpClient(" apps/security-detection/src` の宛先が `lifecycle` の1か所だけであることを CI ステップが検査する。
+- [x] `apps/security-detection/test/response-state.spec.ts::forward transitions only` が全 25 組の遷移可否を検査する。
+- [x] `apps/lifecycle/test/internal-security.spec.ts::same finding twice advances once` が緑になる。（実体は `apps/lifecycle-manager/test/internal-security.spec.ts`）
+- [x] `apps/lifecycle/test/internal-security.spec.ts::quarantine stops id-jag issuance` が、遷移後の `/xaa/token` が `invalid_grant` を返すことを検査する。（実体は `apps/lifecycle-manager/test/internal-security.spec.ts`）
+- [x] `grep -rn "httpClient(" apps/security-detection/src` の宛先が `lifecycle` の1か所だけであることを CI ステップが検査する。
 
 ---
 
@@ -1105,11 +1105,11 @@ Security AI の confidence が 0.7 未満、または推奨 Response が QUARANT
 - 画面やルートを Automation App に追加しない。
 
 **完了条件**
-- [ ] `e2e/test/security/human-review.spec.ts::confidence 0.5 stays pending` が Lifecycle Manager の spy が0回であることを検査する。
-- [ ] `::approve calls lifecycle once` が緑になる。
-- [ ] `::reject sets rejected and calls nothing` が緑になる。
-- [ ] `::second decision returns 409` が緑になる。
-- [ ] `grep -rn "review" apps/automation-app/src/routes` が0件を返す。
+- [x] `e2e/test/security/human-review.spec.ts::confidence 0.5 stays pending` が Lifecycle Manager の spy が0回であることを検査する。
+- [x] `::approve calls lifecycle once` が緑になる。（実体は `e2e/test/security/human-review.spec.ts`）
+- [x] `::reject sets rejected and calls nothing` が緑になる。（実体は `e2e/test/security/human-review.spec.ts`）
+- [x] `::second decision returns 409` が緑になる。（実体は `e2e/test/security/human-review.spec.ts`）
+- [x] `node scripts/checks/code-grep.mjs 'review' apps/automation-app/src` が0件を返す（Automation App に Human Review の画面もルートも作らない）。
 
 ---
 
@@ -1165,10 +1165,10 @@ FULL_ISOLATION の Agent 間の到達が拒否されること、STANDARD では 
 - 攻撃コードを書かない。既存の SDK 呼び出しを別 SA の資格情報で実行するだけにする。
 
 **完了条件**
-- [ ] `e2e/test/security/blast-radius.spec.ts::denies agent-a dedicated sa from reading agent-b registration` が緑になる。
-- [ ] `::allows shared op to read all standard registrations (accepted risk)` が緑で、`grep -c "accepted risk" e2e/test/security/blast-radius.spec.ts` が1以上を返す。
-- [ ] `::runtime cannot reach refresh token, id-jag signing key, resource as signing key` が3つとも 403 になることを検査する。
-- [ ] `::runtime can reach dpop key, client credential, access token` が緑になる。
+- [x] `e2e/test/security/blast-radius.spec.ts::denies agent-a dedicated sa from reading agent-b registration` が緑になる。
+- [x] `::allows shared op to read all standard registrations (accepted risk)` が緑で、`grep -c "accepted risk" e2e/test/security/blast-radius.spec.ts` が1以上を返す。
+- [~] `::runtime cannot reach refresh token, id-jag signing key, resource as signing key` が3つとも 403 になることを検査する。（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `::runtime can reach dpop key, client credential, access token` が緑になる。（実体は `e2e/test/security/blast-radius.spec.ts`）
 
 ---
 

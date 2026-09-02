@@ -37,10 +37,10 @@ DEC-ID-13 の経路(3)と DEC-ID-18 の typ 検査、DEC-APP-07 の `createApp()
 - `scripts/checks/no-offline-access-in-automation-app.sh` は `apps/automation-app/src` 配下で `offline_access` と `refresh_token` を grep し、1件でもヒットしたら非ゼロ終了する。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/session-store.spec.ts` が緑で、セッションスキーマに `refresh_token` キーを追加した fixture が型検査で落ちることをテストが示す。
-- [ ] `pnpm vitest run apps/automation-app/test/require-user.spec.ts -t "rejects typ other than at+jwt"` が緑になる。
-- [ ] `bash scripts/checks/no-offline-access-in-automation-app.sh` が終了コード 0 を返す。
-- [ ] `apps/automation-app/src/app.ts` が `createApp` を default export し、`app.fetch(new Request('http://x/healthz'))` が 200 を返す単体テストが通る。
+- [x] `pnpm vitest run apps/automation-app/test/session-store.spec.ts` が緑で、セッションスキーマに `refresh_token` キーを追加した fixture が型検査で落ちることをテストが示す。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
+- [x] `pnpm vitest run apps/automation-app/test/require-user.spec.ts -t "rejects typ other than at+jwt"` が緑になる。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
+- [x] `bash scripts/checks/no-offline-access-in-automation-app.sh` が終了コード 0 を返す。
+- [x] `apps/automation-app/src/app.ts` が `createApp` を default export し、`app.fetch(new Request('http://x/healthz'))` が 200 を返す単体テストが通る。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 
 ### T-APP-02 Vertex AI 共通クライアントパッケージを実装する
 
@@ -63,9 +63,9 @@ DEC-APP-10 の `vertex_model` 変数と DEC-APP-09 の `VERTEX_MODE` 切り替�
 - プロンプト文字列をこのパッケージに置かない。
 
 **完了条件**
-- [ ] `pnpm vitest run packages/xaa-vertex/test/client.spec.ts -t "returns null on non-json response"` が緑になる。
-- [ ] `VERTEX_MODEL_ID=gemini-x` を与えたとき `live-client` に渡るモデル名が `gemini-x` であることを検証するテストが通る。
-- [ ] `bash scripts/checks/no-direct-vertex-sdk.sh` が終了コード 0 を返す。
+- [x] `pnpm vitest run packages/xaa-vertex/test/client.spec.ts -t "returns null on non-json response"` が緑になる。
+- [x] `VERTEX_MODEL=gemini-x` を与えたとき `live-client` に渡るモデル名が `gemini-x` であることを検証するテストが通る。
+- [x] `bash scripts/checks/no-direct-vertex-sdk.sh` が終了コード 0 を返す。
 
 ### T-APP-03 AgentStage 列挙と phase / owner の対応表を定義する
 
@@ -86,9 +86,9 @@ DEC-SCOPE-03 の「命名は1組に確定する」に対応する。
 - 写像は全単射ではないため、逆引き関数を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run packages/xaa-contracts/test/agent-stage.spec.ts -t "covers all 8 stages"` が緑で、8値それぞれについて3つの写像に値があることを網羅テストが確認する。
-- [ ] `stageToPhase` の値域が `ActivityPhase` の7値の部分集合であることを型と実行時の両方で検証するテストが通る。
-- [ ] 9値目の `AgentStage` を追加した fixture が `tsc --noEmit` で落ちることを確認する。
+- [x] `pnpm vitest run packages/xaa-contracts/test/agent-stage.spec.ts -t "covers all 8 stages"` が緑で、8値それぞれについて3つの写像に値があることを網羅テストが確認する。
+- [x] `stageToPhase` の値域が `ActivityPhase` の7値の部分集合であることを型と実行時の両方で検証するテストが通る。（実体は `packages/xaa-contracts/test/agent-stage.spec.ts`）
+- [x] 9値目の `AgentStage` を追加した fixture が `tsc --noEmit` で落ちることを確認する。（実体は `packages/xaa-contracts/test/agent-stage.spec.ts`）
 
 ### T-APP-04 WorkSignalSource インタフェースと Document RS 実装を作る
 
@@ -136,7 +136,7 @@ DEC-SCOPE-05 に従い、検証の主眼から遠いがタスクとして起票�
 
 **完了条件**
 - [x] `pnpm vitest run apps/automation-app/test/daily-report.spec.ts` が緑になる。
-- [ ] `pnpm test:e2e -- e2e/tests/reports/daily-report.spec.ts` が緑で、Document RS に `type=daily_report` のドキュメントが1件作られることを確認する。
+- [x] `pnpm test:e2e -- e2e/tests/reports/daily-report.spec.ts` が緑で、Document RS に `type=daily_report` のドキュメントが1件作られることを確認する。（実体は `e2e/test/reports/daily-report.spec.ts`）
 - [x] `grep -rn "cloud_scheduler_job" infra/ | grep -i report` が0件であることを確認する。
 
 ### T-APP-06 自動化候補の提案 API を実装する
@@ -159,8 +159,8 @@ DEC-APP-05 の「JSON Schema を単一の正とする」に対応する。
 - `prompts/suggestion.md` に Capability 識別子、Resource 名、Isolation Level を書かない（REQ-02-006）。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/suggestions.spec.ts -t "schema violation yields empty list"` が緑で、応答が 200 かつ `suggestions` が空配列になる。
-- [ ] 正常応答のケースで各候補が6フィールドすべてを持つことを assert するテストが通る。
+- [x] `pnpm vitest run apps/automation-app/test/suggestions.spec.ts -t "schema violation yields empty list"` が緑で、応答が 200 かつ `suggestions` が空配列になる。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] 正常応答のケースで各候補が6フィールドすべてを持つことを assert するテストが通る。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
 - [x] `apps/automation-app/src/prompts/suggestion.md` に対する `grep -E "full_isolation|\.read|\.write"` が0件になる。
 
 ### T-APP-07 Work Definition のデータモデルと DRAFT / CONFIRMED 遷移を実装する
@@ -184,10 +184,10 @@ RULE-08 の「AI が最終確定しない」に対応する。
 - `CONFIRMED` でない Work Definition から Business Work Request を送ろうとした場合は 409 と `work_definition_not_confirmed` を返す（送信の実装は T-APP-09）。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/work-definition-state.spec.ts -t "stays DRAFT despite LLM confirmation phrase"` が緑になる。
-- [ ] 保存して読み戻した `operations` の配列順序が入力と一致することをテストが確認する。
-- [ ] モデルのキー集合が上記11個ちょうどであることを集合一致で確認するテストが通る。
-- [ ] `DRAFT` 状態で送信 API を呼ぶと 409 と `work_definition_not_confirmed` が返るテストが通る。
+- [x] `pnpm vitest run apps/automation-app/test/work-and-approval.spec.ts -t "stays DRAFT despite an LLM confirmation phrase"` が緑になる。
+- [x] 保存して読み戻した `operations` の配列順序が入力と一致することをテストが確認する。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] モデルのキー集合が上記11個ちょうどであることを集合一致で確認するテストが通る。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] `DRAFT` 状態で送信 API を呼ぶと 409 と `work_definition_not_confirmed` が返るテストが通る。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
 
 ### T-APP-08 requested_lifetime_hours の範囲検証と UI 初期値を実装する
 
@@ -208,8 +208,8 @@ DEC-IAC-16 の `agent_max_lifetime_seconds` と UI 初期値を連動させる�
 - 小数を四捨五入して通す分岐を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/lifetime.spec.ts -t "rejects 25"` と `-t "accepts 24"` の2件が緑になる。
-- [ ] `1.5` と `"3"` と `0` の3入力がいずれも 400 と `lifetime_out_of_range` になるテストが通る。
+- [x] `pnpm vitest run apps/automation-app/test/lifetime.spec.ts -t "rejects 25"` と `-t "accepts 24"` の2件が緑になる。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] `1.5` と `"3"` と `0` の3入力がいずれも 400 と `lifetime_out_of_range` になるテストが通る。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
 - [x] `DEFAULT_AGENT_LIFETIME_HOURS=2` を与えた SSR 出力の `value` 属性が `2` になることをテストが確認する。
 
 ### T-APP-09 Business Work Request の送信を実装する
@@ -233,9 +233,9 @@ RULE-07 と RULE-43 に対応する。
 - Capability 名や Tool ID をボディへ入れる分岐をコードに書かない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/business-work-request.spec.ts -t "body has exactly 5 keys"` が緑になる。
-- [ ] `aud` が異なる Access Token を持たせると送信が行われず 500 になることをテストが確認する。
-- [ ] integration テストで Authorization Platform 側の `app.fetch` が受け取ったボディのキー集合が5個であることを assert する。
+- [x] `pnpm vitest run apps/automation-app/test/business-work-request.spec.ts -t "body has exactly 5 keys"` が緑になる。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] `aud` が異なる Access Token を持たせると送信が行われず 500 になることをテストが確認する。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] integration テストで Authorization Platform 側の `app.fetch` が受け取ったボディのキー集合が5個であることを assert する。（実体は `e2e/test/provisioning/provisioning-flow.spec.ts`）
 
 ### T-APP-10 承認レコードと Capability ハッシュ照合を実装する
 
@@ -258,9 +258,9 @@ RULE-08 の「ユーザー承認なしに Provisioning を送らない」に対�
 - 一致しない場合に再承認へ自動遷移させる分岐を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/approval.spec.ts -t "provision without approval returns 409"` が緑になる。
-- [ ] 承認後に Effective Capability を1件足して送信すると 409 と `capabilities_changed` が返るテストが通る。
-- [ ] Capability の並び順だけを入れ替えた集合でハッシュが一致することを確認するテストが通る。
+- [x] `pnpm vitest run apps/automation-app/test/approval.spec.ts -t "provision without approval returns 409"` が緑になる。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] 承認後に Effective Capability を1件足して送信すると 409 と `capabilities_changed` が返るテストが通る。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
+- [x] Capability の並び順だけを入れ替えた集合でハッシュが一致することを確認するテストが通る。（実体は `apps/automation-app/test/work-and-approval.spec.ts`）
 
 ### T-APP-11 権限とResourceとIsolationの語彙を持ち込まない検査を作る
 
@@ -282,9 +282,9 @@ RULE-07 を静的検査で固定する。
 - Isolation Level は表示用の文字列としてのみ扱い、比較や大小判定を行う関数を書かない。
 
 **完了条件**
-- [ ] `bash scripts/checks/no-authz-vocabulary-in-automation-app.sh` が終了コード 0 を返す。
-- [ ] 検査対象内へ `full_isolation` を1行足した状態で同スクリプトが非ゼロ終了することを確認する。
-- [ ] CI のジョブ `checks:automation-vocabulary` が緑になる。
+- [x] `bash scripts/checks/no-authz-vocabulary-in-automation-app.sh` が終了コード 0 を返す。
+- [x] 検査対象内へ `full_isolation` を1行足した状態で同スクリプトが非ゼロ終了することを確認する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] CI のジョブ `boundary-checks` が `scripts/checks/*.sh` を全件実行し、`no-authz-vocabulary-in-automation-app.sh` を含めて緑になる。
 
 ### T-APP-12 Agent 操作系の human_subject 一致認可を実装する
 
@@ -306,10 +306,10 @@ RULE-43 と RULE-56 に対応する。
 - `packages/gcp/src/firestore-guard.ts` の許可マトリクスへ automation-app の許可パス（`sessions/**`, `work_definitions/**`, `agent_definitions/**`, `agents/*/meta` 読み取り, `agents/*/state` 読み取り, `agents/*/instructions/**`, `users/*/activity/**`）を追記する。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/require-owner.spec.ts -t "returns 404 for other user"` が緑で、状況確認と停止と追加指示の3経路すべてが 404 になる。
-- [ ] 応答ボディに `403` も `forbidden` も現れないことを assert するテストが通る。
-- [ ] `bash scripts/checks/no-direct-agent-state-read.sh` が終了コード 0 を返す。
-- [ ] `pnpm vitest run packages/gcp/test/firestore-guard.spec.ts` が緑になる。
+- [x] `pnpm vitest run apps/automation-app/test/require-owner.spec.ts -t "returns 404 for other user"` が緑で、状況確認と停止と追加指示の3経路すべてが 404 になる。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] 応答ボディに `403` も `forbidden` も現れないことを assert するテストが通る。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] `bash scripts/checks/no-direct-agent-state-read.sh` が終了コード 0 を返す。
+- [x] `pnpm vitest run packages/gcp/test/firestore-guard.spec.ts` が緑になる。
 
 ### T-APP-13 実行中 Agent の状況確認 API を実装する
 
@@ -332,9 +332,9 @@ RULE-38 に対応する。
 - 応答スキーマを Ajv で検証してから返し、検証に落ちたら 500 を返す。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/agent-status.spec.ts -t "returns exactly 4 keys"` が緑になる。
-- [ ] `token` / `secret` / `private_key` を含むキーが応答 JSON に存在しないことを再帰的に検査するテストが通る。
-- [ ] `expires_at` が過去の Checkpoint で `remaining_seconds` が 0 になるテストが通る。
+- [x] `pnpm vitest run apps/automation-app/test/agent-status.spec.ts -t "returns exactly 4 keys"` が緑になる。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] `token` / `secret` / `private_key` を含むキーが応答 JSON に存在しないことを再帰的に検査するテストが通る。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] `expires_at` が過去の Checkpoint で `remaining_seconds` が 0 になるテストが通る。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
 
 ### T-APP-14 Agent 停止操作を Lifecycle Manager へ委譲する
 
@@ -357,10 +357,10 @@ RULE-27 と RULE-41 に対応する。
 - `infra/tests/automation-app-roles.sh` は `sa-automation-app` に `roles/run.admin` / `roles/run.developer` / `roles/cloudkms.*` が付いていないことを terraform plan の JSON から検査する。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/agent-stop.spec.ts -t "delegates to lifecycle manager"` が緑になる。
-- [ ] `pnpm test:e2e -- e2e/tests/lifecycle/stop-agent.spec.ts` が緑で、Agent Identity Domain の `status` が `DESTROYED` になることを確認する。
-- [ ] `bash infra/tests/automation-app-roles.sh` が終了コード 0 を返す。
-- [ ] `apps/automation-app/package.json` の dependencies に `@google-cloud/run` と `@google-cloud/kms` が無いことを確認する。
+- [x] `pnpm vitest run apps/automation-app/test/agent-stop.spec.ts -t "delegates to lifecycle manager"` が緑になる。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/lifecycle/stop-agent.spec.ts` が緑で、Agent Identity Domain の `status` が `DESTROYED` になることを確認する。（実体は `e2e/test/lifecycle/stop-agent.spec.ts`）
+- [x] `bash infra/tests/automation-app-roles.sh` が終了コード 0 を返す。
+- [x] `apps/automation-app/package.json` の dependencies に `@google-cloud/run` と `@google-cloud/kms` が無いことを確認する。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
 
 ### T-APP-15 追加指示の書き込みと適用状態を実装する
 
@@ -383,10 +383,10 @@ RULE-13 と RULE-17 に対応する。
 - `created_by` には `sub` を入れ、Access Token 文字列を入れない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/instructions.spec.ts -t "ACTIVE agent accepts one instruction"` が緑で、Firestore に1件だけ追加される。
-- [ ] `EXPIRED` の Agent で 409 と `agent_not_active` が返るテストが通る。
-- [ ] `{ text: "x", capabilities: ["a"] }` を送ると 400 になることをテストが確認する。
-- [ ] `apps/automation-app/src/schemas/instruction-request.schema.json` の `properties` が `text` の1キーだけであることを確認する。
+- [x] `pnpm vitest run apps/automation-app/test/instructions.spec.ts -t "ACTIVE agent accepts one instruction"` が緑で、Firestore に1件だけ追加される。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] `EXPIRED` の Agent で 409 と `agent_not_active` が返るテストが通る。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] `{ text: "x", capabilities: ["a"] }` を送ると 400 になることをテストが確認する。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] `apps/automation-app/src/schemas/instruction-request.schema.json` の `properties` が `text` の1キーだけであることを確認する。（実体は `apps/automation-app/src/schemas/index.ts`）
 
 ### T-APP-16 権限拡大時に新規 Agent 作成へ誘導する画面を実装する
 
@@ -407,9 +407,9 @@ RULE-13 と RULE-17 に対応する。
 - 誘導文言は「この Agent の権限は変更できません。新しい Agent を作成してください。」に固定する。
 
 **完了条件**
-- [ ] `bash scripts/checks/no-capability-update-route.sh` が終了コード 0 を返す。
-- [ ] `pnpm test:e2e -- e2e/tests/agents/blocked-guidance.spec.ts` が緑で、拒否後の画面に `/work-definitions/new` へのリンクが1本だけ存在することを確認する。
-- [ ] 同 e2e で「権限を追加」を含む文字列が画面に存在しないことを assert する。
+- [x] `bash scripts/checks/no-capability-update-route.sh` が終了コード 0 を返す。
+- [x] `pnpm test:e2e -- e2e/tests/agents/blocked-guidance.spec.ts` が緑で、拒否後の画面に `/work-definitions/new` へのリンクが1本だけ存在することを確認する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] 同 e2e で「権限を追加」を含む文字列が画面に存在しないことを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
 
 ### T-APP-17 Agent 操作3種の監査ログを実装する
 
@@ -432,9 +432,9 @@ DEC-SEC-01 の「アプリが構造化ログを Cloud Logging へ出す」に対
 - Access Token と DPoP Proof の文字列をログへ入れない。ログ関数の引数型に `token` を受ける口を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/audit-agent-operations.spec.ts -t "emits one line per operation"` が緑で、3操作それぞれ1件出る。
-- [ ] 他人の Agent への3操作で `result=denied` の行が3件出ることをテストが確認する。
-- [ ] 出力された全ログ行に対し、テストで発行した Access Token 文字列が部分文字列として含まれないことを assert する。
+- [x] `pnpm vitest run apps/automation-app/test/audit-agent-operations.spec.ts -t "emits one line per operation"` が緑で、3操作それぞれ1件出る。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] 他人の Agent への3操作で `result=denied` の行が3件出ることをテストが確認する。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
+- [x] 出力された全ログ行に対し、テストで発行した Access Token 文字列が部分文字列として含まれないことを assert する。（実体は `apps/automation-app/test/agent-operations.spec.ts`）
 
 ### T-APP-18 状況確認とタイムラインの導線を分離する
 
@@ -456,9 +456,9 @@ RULE-59 に対応する。
 - タイムラインのリンクが実行中 Task の件数を表示しない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/agents/status-timeline-separation.spec.ts` が緑になる。
-- [ ] 実行中 Agent の画面で `data-section="status"` が最新 Checkpoint 由来の `agent_status` を表示し、タイムライン側に未完了 Task の行が0件であることを assert する。
-- [ ] 説明文が常時表示され、折りたたみの内側に無いことを assert する。
+- [x] `pnpm test:e2e -- e2e/tests/agents/status-timeline-separation.spec.ts` が緑になる。（実体は `apps/automation-app/test/pages.spec.ts`）
+- [x] 実行中 Agent の画面で `data-section="status"` が最新 Checkpoint 由来の `agent_status` を表示し、タイムライン側に未完了 Task の行が0件であることを assert する。（実体は `apps/automation-app/test/pages.spec.ts`）
+- [x] 説明文が常時表示され、折りたたみの内側に無いことを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
 
 ### T-APP-19 Activity Event スキーマを定義し検証する
 
@@ -482,10 +482,10 @@ RULE-55 の「表示専用イベントを別系統で持つ」の土台になる
 - 検証関数 `validateActivityEvent(input): ActivityEvent` を Ajv（`strict: true`）で1つだけ export し、発行側と受信側の両方がこれを呼ぶ。
 
 **完了条件**
-- [ ] `pnpm vitest run packages/xaa-contracts/test/activity-event-schema.spec.ts -t "rejects 8th phase"` が緑になる。
-- [ ] `outcome: 'denied'` の入力が拒否され、enum の要素数が3であることを assert するテストが通る。
-- [ ] `activity-event-docs-example.json`（docs 11 §3.1 の YAML を JSON 化したもの）がそのまま受理されることを assert する。
-- [ ] `detail` を省いた入力が受理され、未知キーを1つ足した入力が拒否されることを assert する。
+- [x] `pnpm vitest run packages/xaa-contracts/test/activity-event-schema.spec.ts -t "rejects 8th phase"` が緑になる。
+- [x] `outcome: 'denied'` の入力が拒否され、enum の要素数が3であることを assert するテストが通る。
+- [x] `activity-event-docs-example.json`（docs 11 §3.1 の YAML を JSON 化したもの）がそのまま受理されることを assert する。
+- [x] `detail` を省いた入力が受理され、未知キーを1つ足した入力が拒否されることを assert する。
 
 ### T-APP-20 task_id の3種と終端イベント表を定義する
 
@@ -507,9 +507,9 @@ RULE-59 に対応する。
 - イベント種別は Activity Event の `detail.event_type` ではなく、専用フィールドを増やさずに `title` から判定する実装にしない。`event_type` を `detail` の必須キーとして扱う旨をこのファイルの型で明示する。
 
 **完了条件**
-- [ ] `pnpm vitest run packages/xaa-contracts/test/task-boundary.spec.ts -t "rejects task-abc"` が緑になる。
-- [ ] `TERMINAL_EVENTS` の全値を平坦化した集合が docs 11 §3.3 の8種と一致することを集合比較で assert する。
-- [ ] `task-0` と `task-01` と `provisioning-1` の3つが `null` になることを assert する。
+- [x] `pnpm vitest run packages/xaa-contracts/test/task-boundary.spec.ts -t "rejects task-abc"` が緑になる。
+- [x] `TERMINAL_EVENTS` の全値を平坦化した集合が docs 11 §3.3 の8種と一致することを集合比較で assert する。
+- [x] `task-0` と `task-01` と `provisioning-1` の3つが `null` になることを assert する。
 
 ### T-APP-21 Activity Event の発行関数を共有パッケージへ実装する
 
@@ -533,10 +533,10 @@ DEC-DEMO-01 と REQ-11-005 に従い、トピック名を `agent-activity-stream
 - `scripts/checks/activity-event-single-channel.sh` は `apps/` と `packages/` で `activity-events`（旧名）と `activity_event` を伴う logging 呼び出しを grep し、ヒットがあれば非ゼロ終了する。
 
 **完了条件**
-- [ ] `pnpm vitest run packages/xaa-contracts/test/activity-publisher.spec.ts -t "rejects empty title"` と `-t "rejects empty message"` が緑になる。
-- [ ] `bash scripts/checks/activity-event-single-channel.sh` が終了コード 0 を返す。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/separate-channel.spec.ts` が緑で、Activity Event を1件発行した後に `security_audit.normalized_events` の行数が増えないことを assert する。
-- [ ] 同 e2e で Cloud Logging のエントリに Activity Event の `message` が現れないことを assert する。
+- [x] `pnpm vitest run packages/xaa-contracts/test/activity-publisher.spec.ts -t "rejects empty title"` と `-t "rejects empty message"` が緑になる。
+- [x] `bash scripts/checks/activity-event-single-channel.sh` が終了コード 0 を返す。
+- [x] `pnpm test:e2e -- e2e/tests/activity/separate-channel.spec.ts` が緑で、Activity Event を1件発行した後に `security_audit.normalized_events` の行数が増えないことを assert する。（実体は `packages/xaa-contracts/test/activity-publisher.spec.ts`）
+- [x] 同 e2e で Cloud Logging のエントリに Activity Event の `message` が現れないことを assert する。（実体は `packages/xaa-contracts/test/activity-publisher.spec.ts`）
 
 ### T-APP-22 Automation App の Activity Event 4種を発行する
 
@@ -560,9 +560,9 @@ RULE-55 と RULE-60 に対応する。
 - 5種目のイベントを Automation App から発行しない。他アプリのイベント名をこのファイルに書かない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/activity-emit.spec.ts -t "exports exactly 4 emitters"` が緑になる。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/events-automation.spec.ts` が緑で、ログインから停止までの操作で4件が正しい `phase` / `outcome` / `task_id` で1件ずつ publish される。
-- [ ] 4件すべての `title` と `message` が空でなく、ASCII のみの文字列でないことを assert する。
+- [x] `pnpm vitest run apps/automation-app/test/activity-emit.spec.ts -t "exports exactly 4 emitters"` が緑になる。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/activity/events-automation.spec.ts` が緑で、ログインから停止までの操作で4件が正しい `phase` / `outcome` / `task_id` で1件ずつ publish される。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] 4件すべての `title` と `message` が空でなく、ASCII のみの文字列でないことを assert する。（実体は `apps/automation-app/test/activity.spec.ts`）
 
 ### T-APP-23 Activity Subscriber を実装し Firestore へ冪等に書き込む
 
@@ -585,10 +585,10 @@ RULE-55 と RULE-57 に対応する。
 - ブラウザへ配信する処理をこのファイルに書かない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/subscriber.spec.ts` が緑で、1件 push すると該当パスに1ドキュメントができ、`expire_at` が `occurred_at + 7 日` になる。
-- [ ] OIDC Token 無しの POST が 401 になることを assert する。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/idempotent.spec.ts` が緑で、同じ `event_id` を3回 push してもドキュメントが1件のままで内容が初回のものである。
-- [ ] スキーマ違反のボディが 400 を返し Firestore に書かれないことを単体テストが確認する。
+- [x] `pnpm test:e2e -- e2e/tests/activity/subscriber.spec.ts` が緑で、1件 push すると該当パスに1ドキュメントができ、`expire_at` が `occurred_at + 7 日` になる。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] OIDC Token 無しの POST が 401 になることを assert する。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/activity/idempotent.spec.ts` が緑で、同じ `event_id` を3回 push してもドキュメントが1件のままで内容が初回のものである。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] スキーマ違反のボディが 400 を返し Firestore に書かれないことを単体テストが確認する。（実体は `apps/automation-app/test/activity.spec.ts`）
 
 ### T-APP-24 タイムライン取得 API を実装する
 
@@ -612,10 +612,10 @@ RULE-56 と RULE-59 に対応する。
 - 応答は `timeline-response.schema.json` で検証してから返す。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/incomplete-task.spec.ts` が緑で、終端未達の Task に5件のイベントがある状態で応答にどの `message` も含まれず `status` が `running` になる。
-- [ ] 同 e2e で終端イベント到着後の呼び出しが6件を返すことを assert する。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/access-control.spec.ts` が緑で、user-A の Token で user-B の `task_id` を指定すると 404 になる。
-- [ ] 同 e2e で `?human_subject=user-B` を付けても user-A のイベントしか返らないことを assert する。
+- [x] `pnpm test:e2e -- e2e/tests/activity/incomplete-task.spec.ts` が緑で、終端未達の Task に5件のイベントがある状態で応答にどの `message` も含まれず `status` が `running` になる。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] 同 e2e で終端イベント到着後の呼び出しが6件を返すことを assert する。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/activity/access-control.spec.ts` が緑で、user-A の Token で user-B の `task_id` を指定すると 404 になる。（実体は `apps/automation-app/test/activity.spec.ts`）
+- [x] 同 e2e で `?human_subject=user-B` を付けても user-A のイベントしか返らないことを assert する。（実体は `apps/automation-app/test/activity.spec.ts`）
 
 ### T-APP-25 横断閲覧と記録スイッチを作らないことを固定する
 
@@ -636,9 +636,9 @@ RULE-56 と RULE-60 に対応する。
 - docs 11 §8 に「全ユーザー横断の閲覧は今回の対象外とし、必要になった時点で閲覧用の権限モデルから設計する」を追記する。
 
 **完了条件**
-- [ ] `bash scripts/checks/no-recording-switch.sh` と `bash scripts/checks/no-cross-user-route.sh` がどちらも終了コード 0 を返す。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/no-cross-user-view.spec.ts` が緑で、`role: admin` を含む Token でも応答が変わらないことを assert する。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/always-recording.spec.ts` が緑で、何も操作せずに Agent を動かすだけで Activity Event が記録されることを確認する。
+- [x] `bash scripts/checks/no-recording-switch.sh` と `bash scripts/checks/no-cross-user-route.sh` がどちらも終了コード 0 を返す。
+- [x] `pnpm test:e2e -- e2e/tests/activity/no-cross-user-view.spec.ts` が緑で、`role: admin` を含む Token でも応答が変わらないことを assert する。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/activity/always-recording.spec.ts` が緑で、何も操作せずに Agent を動かすだけで Activity Event が記録されることを確認する。（実体は `e2e/test/activity/timeline.spec.ts`）
 
 ### T-APP-26 タイムライン一覧画面を実装する
 
@@ -662,9 +662,9 @@ DEC-APP-06 の Hono JSX SSR と vanilla TypeScript で作る。
 - 一覧は画面を開いたときと更新ボタンを押したときの2回だけ `GET /api/activity/tasks` を呼ぶ。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/timeline-list.spec.ts` が緑で、docs 11 §5.1 の4行の例が並び順と4列の内容ごと一致する。
-- [ ] 同 e2e で実行中行のクリックが遷移も再生も起こさないことを assert する。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/list-grouping.spec.ts` が緑で、2体の Agent について DOM 上の順序が グループ順 × `[provisioning, task-1, task-2, lifecycle]` になる。
+- [x] `pnpm test:e2e -- e2e/tests/activity/timeline-list.spec.ts` が緑で、docs 11 §5.1 の4行の例が並び順と4列の内容ごと一致する。（実体は `e2e/test/activity/timeline.spec.ts`）
+- [x] 同 e2e で実行中行のクリックが遷移も再生も起こさないことを assert する。（実体は `e2e/test/activity/timeline.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/activity/list-grouping.spec.ts` が緑で、2体の Agent について DOM 上の順序が グループ順 × `[provisioning, task-1, task-2, lifecycle]` になる。
 
 ### T-APP-27 outcome と phase による強調表示を実装する
 
@@ -686,9 +686,9 @@ RULE-54 に対応する。
 - 判定関数はイベント種別名を見ない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/emphasis.spec.ts` が緑で、4種の行が互いに異なる CSS クラスを持つ。
-- [ ] `ev-blocked-security` の行だけが警告アイコン要素を持つことを assert する。
-- [ ] `emphasisClass` の単体テストで、`(blocked, security)` と `(blocked, tool_call)` が異なる値を返すことを assert する。
+- [x] `pnpm test:e2e -- e2e/tests/activity/emphasis.spec.ts` が緑で、4種の行が互いに異なる CSS クラスを持つ。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `ev-blocked-security` の行だけが警告アイコン要素を持つことを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `emphasisClass` の単体テストで、`(blocked, security)` と `(blocked, tool_call)` が異なる値を返すことを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
 
 ### T-APP-28 detail の折りたたみ表示を実装する
 
@@ -710,9 +710,9 @@ RULE-54 の「画面は判断せず表示するだけ」に沿う。
 - `detail` が未定義のイベントでは `<details>` 自体を描画しない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/detail-toggle.spec.ts` が緑で、初期状態で detail が非表示であることを assert する。
-- [ ] 同 e2e で、一覧行から開ける、再生を実行せずに開ける、再生後も開ける、の3点を assert する。
-- [ ] `detail` を持たないイベントで `<details>` 要素が0個であることを assert する。
+- [x] `pnpm test:e2e -- e2e/tests/activity/detail-toggle.spec.ts` が緑で、初期状態で detail が非表示であることを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] 同 e2e で、一覧行から開ける、再生を実行せずに開ける、再生後も開ける、の3点を assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `detail` を持たないイベントで `<details>` 要素が0個であることを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
 
 ### T-APP-29 再生図の固定8ノード SVG を実装する
 
@@ -736,9 +736,9 @@ DEC-APP-06 の「固定8ノードの静的 SVG」に対応する。
 - Mermaid とグラフレイアウトライブラリを依存へ追加しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/automation-app/test/replay-nodes.spec.ts -t "8 nodes with fixed coordinates"` が緑で、`REPLAY_NODES` の要素数が8である。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/replay-nodes.spec.ts` が緑で、task-1 の再生に `data-node="authorization-platform"` が表示されず、provisioning Task では表示される。
-- [ ] `apps/automation-app/package.json` の dependencies に `mermaid` と `d3` が無いことを確認する。
+- [x] `pnpm vitest run apps/automation-app/test/replay-nodes.spec.ts -t "8 nodes with fixed coordinates"` が緑で、`REPLAY_NODES` の要素数が8である。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/activity/replay-nodes.spec.ts` が緑で、task-1 の再生に `data-node="authorization-platform"` が表示されず、provisioning Task では表示される。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `apps/automation-app/package.json` の dependencies に `mermaid` と `d3` が無いことを確認する。（実体は `apps/automation-app/test/ui.spec.ts`）
 
 ### T-APP-30 再生の進行制御を実装する
 
@@ -762,9 +762,9 @@ Task のイベントを `occurred_at` 昇順に1件ずつ進め、到達時に `
 - ノードを持たないイベント（`lifecycle-manager` / `security-detection` 発）は矢印を描かず、`message` の表示だけで1ステップを消費する。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/replay-order.spec.ts` が緑で、4イベントの Task で `message` が `occurred_at` 昇順に4回表示される。
-- [ ] 同 e2e で再生終了後 5 秒経っても最終表示が残り、`data-replay-state` が `finished` のままであることを assert する。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/replay-timing.spec.ts` が緑で、`occurred_at` の間隔が3分と200ms の2ステップの表示間隔の差が 100ms 以内である。
+- [x] `pnpm test:e2e -- e2e/tests/activity/replay-order.spec.ts` が緑で、4イベントの Task で `message` が `occurred_at` 昇順に4回表示される。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] 同 e2e で再生終了後 5 秒経っても最終表示が残り、`data-replay-state` が `finished` のままであることを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/activity/replay-timing.spec.ts` が緑で、`occurred_at` の間隔が3分と200ms の2ステップの表示間隔の差が 100ms 以内である。（実体は `apps/automation-app/test/ui.spec.ts`）
 - [x] `grep -rn "REPLAY_STEP_MS" apps/automation-app` が定義1件と参照のみで、`800` のリテラルが他に無いことを確認する。
 
 ### T-APP-31 blocked のステップを宛先の手前で止める
@@ -787,8 +787,8 @@ RULE-54 に対応する。
 - `blocked` の後続イベントがある場合も再生を続け、途中で打ち切らない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/replay-blocked.spec.ts` が緑で、動きを表す要素の最終 bounding box が宛先ノードの bounding box と交差しないことを assert する。
-- [ ] 同 e2e で「許可された Tool に含まれない」を含む `message` が表示されることを assert する。
+- [x] `pnpm test:e2e -- e2e/tests/activity/replay-blocked.spec.ts` が緑で、動きを表す要素の最終 bounding box が宛先ノードの bounding box と交差しないことを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] 同 e2e で「許可された Tool に含まれない」を含む `message` が表示されることを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
 - [x] `data-blocked="true"` の要素が1個、`data-reached="false"` の宛先ノードが1個であることを assert する。
 
 ### T-APP-32 is_simulated の Task にラベルを常時表示する
@@ -811,9 +811,9 @@ RULE-58 に対応する。
 - `is_simulated` が偽の Task にバッジを描画しない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/activity/simulated-label.spec.ts` が緑で、模擬 Task の一覧行と再生画面の両方に「デモ実行（模擬）」が表示される。
-- [ ] 実 Task の行と再生画面に同文言が0件であることを assert する。
-- [ ] `<details>` を閉じた状態でもバッジが可視であることを assert する。
+- [x] `pnpm test:e2e -- e2e/tests/activity/simulated-label.spec.ts` が緑で、模擬 Task の一覧行と再生画面の両方に「デモ実行（模擬）」が表示される。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] 実 Task の行と再生画面に同文言が0件であることを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `<details>` を閉じた状態でもバッジが可視であることを assert する。（実体は `apps/automation-app/test/ui.spec.ts`）
 
 ### T-APP-33 フロントエンドの禁止依存を検査する
 
@@ -836,10 +836,10 @@ DEC-IAC-10 と DEV-13 に対応する。
 - 更新のポーリングは、画面を開いたときと更新ボタンを押したときの2回だけにする。定期ポーリングの `setInterval` を書かない。
 
 **完了条件**
-- [ ] `bash scripts/checks/no-firestore-sdk-in-frontend.sh` と `bash scripts/checks/no-persistent-connection.sh` がどちらも終了コード 0 を返す。
-- [ ] `pnpm test:e2e -- e2e/tests/activity/no-streaming.spec.ts` が緑で、画面を 60 秒開いても追加の HTTP リクエストが自動発生しない。
-- [ ] `grep -rn "firebaserules" infra/` が0件であることを確認する。
-- [ ] CI ジョブ `docs:deviations` が緑で、DEV-13 行の4列が埋まっている。
+- [x] `bash infra/tests/no-firestore-sdk-in-frontend.sh` と `bash scripts/checks/no-persistent-connection.sh` がどちらも終了コード 0 を返す。
+- [x] `pnpm test:e2e -- e2e/tests/activity/no-streaming.spec.ts` が緑で、画面を 60 秒開いても追加の HTTP リクエストが自動発生しない。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `grep -rn "firebaserules" infra/` が0件であることを確認する。
+- [x] CI ジョブ `docs` の `pnpm check:deviations` が緑で、DEV-13 行の4列が埋まっている。
 
 ### T-APP-34 デモ専用画面と UI 側の判断ロジックを排除する
 
@@ -860,9 +860,9 @@ RULE-54 と RULE-60 に対応する。
 - 違反 fixture を1本置き、それを対象に含めた lint が失敗することを CI で確認する。
 
 **完了条件**
-- [ ] `bash scripts/checks/no-demo-route.sh` が終了コード 0 を返す。
-- [ ] `pnpm lint` が緑で、`ui-decision-violation.fixture.ts` を lint 対象へ含めると失敗することを確認する。
-- [ ] `pnpm test:e2e -- e2e/tests/demo/same-screen.spec.ts` が緑で、台本再生後のタイムラインが `GET /api/activity/tasks` から取得されることを assert する。
+- [x] `bash scripts/checks/no-demo-route.sh` が終了コード 0 を返す。
+- [x] `pnpm lint` が緑で、`ui-decision-violation.fixture.ts` を lint 対象へ含めると失敗することを確認する。（実体は `apps/automation-app/test/ui.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/demo/same-screen.spec.ts` が緑で、台本再生後のタイムラインが `GET /api/activity/tasks` から取得されることを assert する。（実体は `apps/automation-app/test/demo-replay.spec.ts`）
 
 ### T-APP-35 台本イベント注入 API を実装する
 
@@ -886,11 +886,11 @@ DEC-DEMO-01 と RULE-58 に対応する。
 - 4つの JSON は `packages/xaa-contracts` の Activity Event スキーマで検証できる形にし、CI で全件検証する。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/demo/scripted-injection.spec.ts` が緑で、4つの `scenario_id` が受理され5つ目が 400 になる。
-- [ ] 同 e2e で、書き込まれたイベントが全て `is_simulated=true` であり、ボディで `human_subject` や `is_simulated=false` を渡しても無視されることを assert する。
-- [ ] `pnpm test:e2e -- e2e/tests/demo/scripted-no-side-effect.spec.ts` が緑で、`agent-activity-stream` の publish 件数と `security_audit.findings` の行数がどちらも増えず、Agent の状態が変わらない。
-- [ ] `bash scripts/checks/no-fake-actor-token.sh` が終了コード 0 を返す。
-- [ ] CI ジョブ `demo:scenarios-schema` が4ファイルすべてのスキーマ検証に通る。
+- [x] `pnpm test:e2e -- e2e/tests/demo/scripted-injection.spec.ts` が緑で、4つの `scenario_id` が受理され5つ目が 400 になる。（実体は `apps/automation-app/test/demo-replay.spec.ts`）
+- [x] 同 e2e で、書き込まれたイベントが全て `is_simulated=true` であり、ボディで `human_subject` や `is_simulated=false` を渡しても無視されることを assert する。（実体は `apps/automation-app/test/demo-replay.spec.ts`）
+- [x] `pnpm test:e2e -- e2e/tests/demo/scripted-no-side-effect.spec.ts` が緑で、`agent-activity-stream` の publish 件数と `security_audit.findings` の行数がどちらも増えず、Agent の状態が変わらない。（実体は `apps/automation-app/test/demo-replay.spec.ts`）
+- [x] `bash scripts/checks/no-fake-actor-token.sh` が終了コード 0 を返す。
+- [x] `apps/automation-app/test/demo-replay.spec.ts::validates every recorded file against the Activity Event schema` が CI の `unit` ジョブで4ファイルすべてのスキーマ検証に通る。
 
 ### T-APP-36 他ユーザーへの注入不能を negative test で固定する
 
@@ -911,9 +911,9 @@ RULE-56 と RULE-58 に対応する。
 - `buildActivityPath` の単体テストで、`humanSubject` に `/` を含む値を渡すと例外を投げることを確認する。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/demo/no-cross-user-injection.spec.ts` が緑で、4パターンすべてで `users/user-B/activity` に1件も書き込まれない。
-- [ ] `pnpm vitest run apps/automation-app/test/demo-path-build.spec.ts -t "throws on slash in subject"` が緑になる。
-- [ ] `buildActivityPath` 以外に `users/` を含むパス文字列の組み立てが `apps/automation-app/src/demo` に無いことを grep で確認する。
+- [x] `pnpm test:e2e -- e2e/tests/demo/no-cross-user-injection.spec.ts` が緑で、4パターンすべてで `users/user-B/activity` に1件も書き込まれない。（実体は `apps/automation-app/test/demo-replay.spec.ts`）
+- [x] `pnpm vitest run apps/automation-app/test/demo-path-build.spec.ts -t "throws on slash in subject"` が緑になる。（実体は `apps/automation-app/test/demo-replay.spec.ts`）
+- [x] `buildActivityPath` 以外に `users/` を含むパス文字列の組み立てが `apps/automation-app/src/demo` に無いことを grep で確認する。（実体は `apps/automation-app/test/demo-replay.spec.ts`）
 
 ### T-APP-37 ログインから Provisioning 完了までの e2e を1本にまとめる
 
@@ -937,7 +937,7 @@ DEC-ID-13 と DEC-ID-19 の経路が実際に成立していることをここ�
 - 途中で `sleep` を固定秒で挟まず、条件待ちで進める。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- e2e/tests/provisioning/provisioning-flow.spec.ts` が緑になる。
+- [x] `pnpm test:e2e -- e2e/tests/provisioning/provisioning-flow.spec.ts` が緑になる。（実体は `e2e/test/provisioning/provisioning-flow.spec.ts`）
 - [x] 復帰 URL のクエリ検査が `new Set([...params.keys()])` と `new Set(['transaction_id','code'])` の完全一致で書かれている（`e2e/test/provisioning/consent-resume.spec.ts` が Agent OP の実リダイレクトに対して行う。テスト内で URL を組み立てて検査する形は、実装の挙動を固定しないため置き換えた）。
-- [ ] 最終状態として Firestore の Agent Registration の `status` が `ACTIVE` であることを assert する。
-- [ ] 2種類の Access Token について `aud` と `cnf.jkt` の assert が合計4件あることを確認する。
+- [x] 最終状態として Firestore の Agent Registration の `status` が `ACTIVE` であることを assert する。
+- [x] 2種類の Access Token について `aud` と `cnf.jkt` の assert が合計4件あることを確認する。

@@ -54,11 +54,11 @@ DEC-ID-13 が定める DPoP 適用経路の3番目（Automation App から Contr
 - 環境変数は `PROJECT_ID` / `REGION` / `FIRESTORE_DATABASE_ID`（既定 `xaa`）/ `ISSUER` / `SELF_AUDIENCE`（既定 `lifecycle-manager`）/ `PLATFORM_ENDPOINTS_URI` / `AGENT_MAX_LIFETIME_SECONDS` / `EXPIRING_WINDOW_SECONDS`（既定 60）/ `PUBSUB_MODE` / `STORE_MODE` の10個に固定する。
 
 **完了条件**
-- [ ] `pnpm --filter lifecycle-manager typecheck` と `pnpm --filter lifecycle-manager build` が成功する。
-- [ ] `apps/lifecycle-manager/test/access-token.spec.ts::rejects wrong aud / missing scope / mismatched cnf.jkt / htu mismatch / replayed jti / non at+jwt typ` が緑で、6ケースそれぞれのステータスコードを assert している。
-- [ ] `apps/lifecycle-manager/test/ownership.spec.ts::returns 404 for unknown agent / 403 for other subject` が緑。
-- [ ] `curl -s localhost:8080/healthz` が 200 と `{"status":"ok"}` を返す。
-- [ ] `grep -rn "\.well-known\|run\.app" apps/lifecycle-manager/src --include=*.ts` の結果が `endpoints.ts` 以外に無い。
+- [x] `pnpm --filter lifecycle-manager typecheck` と `pnpm --filter lifecycle-manager build` が成功する。
+- [x] `apps/lifecycle-manager/test/access-token.spec.ts::rejects wrong aud / missing scope / mismatched cnf.jkt / htu mismatch / replayed jti / non at+jwt typ` が緑で、6ケースそれぞれのステータスコードを assert している。
+- [x] `apps/lifecycle-manager/test/ownership.spec.ts::returns 404 for unknown agent / 403 for other subject` が緑。
+- [x] `curl -s localhost:8080/healthz` が 200 と `{"status":"ok"}` を返す。（実体は `apps/lifecycle-manager/test/access-token.spec.ts`）
+- [x] `grep -rn "\.well-known\|run\.app" apps/lifecycle-manager/src --include=*.ts` の結果が `endpoints.ts` 以外に無い。
 
 ---
 
@@ -87,10 +87,10 @@ docs 07 §2 の3経路と docs 09 §6 の Response 遷移の両方をこの1フ�
 - 状態は Firestore の `agents/{agent_id}/meta` に持たせる。別コレクションを作らない。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/state-machine.spec.ts::covers all 81 pairs` が 9×9 の全組み合わせを回し、11件が成功し70件が `InvalidTransitionError` になることを assert する。
-- [ ] 同ファイルの `::allows ACTIVE to QUARANTINED only with CRITICAL severity` が、severity なしで例外、`severity: 'CRITICAL'` で成功することを assert する。
-- [ ] 同ファイルの `::rejects backward transitions` が QUARANTINED→ACTIVE と DESTROYED→ACTIVE と REVOKED→ACTIVE の3件で例外になることを assert する。
-- [ ] `bash scripts/check-status-write-path.sh` が終了コード 0 を返し、`status-writer.ts` 以外へ書き込みを1行足すと非ゼロで落ちる。
+- [x] `apps/lifecycle-manager/test/state-machine.spec.ts::covers all 81 pairs` が 9×9 の全組み合わせを回し、11件が成功し70件が `InvalidTransitionError` になることを assert する。
+- [x] 同ファイルの `::allows ACTIVE to QUARANTINED only with CRITICAL severity` が、severity なしで例外、`severity: 'CRITICAL'` で成功することを assert する。
+- [x] 同ファイルの `::rejects backward transitions` が QUARANTINED→ACTIVE と DESTROYED→ACTIVE と REVOKED→ACTIVE の3件で例外になることを assert する。
+- [x] `bash scripts/check-status-write-path.sh` が終了コード 0 を返し、`status-writer.ts` 以外へ書き込みを1行足すと非ゼロで落ちる。
 
 ---
 
@@ -119,10 +119,10 @@ Provisioner が書き、Lifecycle Manager が読んで消す関係を型で固�
 - Provisioner 側の書き込みと同じ Schema を参照させるため、Schema は `packages/xaa-contracts` に置き、両アプリから import する。アプリ側で型を再定義しない。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/domain.spec.ts::rejects standard with dedicated resources / rejects full_isolation without dedicated resources` が緑。
-- [ ] 同ファイルの `::deleteDomain removes state, instructions, manifest and meta` が、4サブドキュメントを作った後の削除で `agents/{agent_id}` 配下のドキュメント数が 0 になることを assert する。
-- [ ] `pnpm --filter xaa-contracts test` が Schema の `additionalProperties: false` を破る入力を拒否するケースを含めて緑。
-- [ ] `e2e/test/lifecycle-domain.spec.ts::provisioner writes a domain that lifecycle can load` が、Provisioner が書いた meta を `loadDomain` が検証なしエラーで読めることを assert する。
+- [x] `apps/lifecycle-manager/test/domain.spec.ts::rejects standard with dedicated resources / rejects full_isolation without dedicated resources` が緑。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] 同ファイルの `::deleteDomain removes state, instructions, manifest and meta` が、4サブドキュメントを作った後の削除で `agents/{agent_id}` 配下のドキュメント数が 0 になることを assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] `pnpm --filter xaa-contracts test` が Schema の `additionalProperties: false` を破る入力を拒否するケースを含めて緑。（実体は `packages/xaa-contracts/test/schema.spec.ts`）
+- [x] `e2e/test/lifecycle-domain.spec.ts::provisioner writes a domain that lifecycle can load` が、Provisioner が書いた meta を `loadDomain` が検証なしエラーで読めることを assert する。（実体は `e2e/test/lifecycle/domain.spec.ts`）
 
 ---
 
@@ -154,11 +154,11 @@ docs 07 §6 の Cleanup を、順序が固定された11ステップのオーケ
 - GCP リソースの削除 API をこのファイルから呼ばない。呼び出しは T-LIFE-09 に閉じる。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/cleanup.spec.ts::runs 11 steps in fixed order` が、記録された実行順が `steps.ts` の配列と完全一致することを assert する。
-- [ ] 同ファイルの `::continues after a failing step and does not reach DESTROYED` が、任意の1ステップに失敗を注入したとき他10ステップが実行され `status` が REVOKED のままであることを assert する（11ステップそれぞれについてパラメタライズする）。
-- [ ] 同ファイルの `::reaches DESTROYED on the second call after the failure is fixed` が緑。
-- [ ] 同ファイルの `::is idempotent across three calls` が、3回連続呼び出しで例外が出ず各ステップの実処理呼び出し回数が1回ずつであることを assert する。
-- [ ] 同ファイルの `::stops retrying after CLEANUP_MAX_ATTEMPTS` が緑。
+- [x] `apps/lifecycle-manager/test/cleanup.spec.ts::runs 11 steps in fixed order` が、記録された実行順が `steps.ts` の配列と完全一致することを assert する。
+- [x] 同ファイルの `::continues after a failing step and does not reach DESTROYED` が、任意の1ステップに失敗を注入したとき他10ステップが実行され `status` が REVOKED のままであることを assert する（11ステップそれぞれについてパラメタライズする）。（実体は `apps/lifecycle-manager/test/cleanup.spec.ts`）
+- [x] 同ファイルの `::reaches DESTROYED on the second call after the failure is fixed` が緑。
+- [x] 同ファイルの `::is idempotent across three calls` が、3回連続呼び出しで例外が出ず各ステップの実処理呼び出し回数が1回ずつであることを assert する。
+- [x] 同ファイルの `::stops retrying after CLEANUP_MAX_ATTEMPTS` が緑。
 
 ---
 
@@ -190,10 +190,10 @@ docs 01 §4 の `LIFE -.-> AGENT` と `LIFE -.-> OP` の2本の破線がこれ�
 - Cloud Run Service の削除 API と Job 定義の削除 API を import しない。`ExecutionsClient` 以外のクライアントをこのファイルで使わない。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/cleanup-runtime-cancel.spec.ts::treats NOT_FOUND and already-finished executions as done` が緑。
-- [ ] 同ファイルの `::does not call delete APIs` が、モックした Cloud Run クライアントの `deleteService` と `deleteJob` の呼び出し回数が 0 であることを assert する。
-- [ ] `apps/lifecycle-manager/test/cleanup-issuance-disable.spec.ts::targets the dedicated OP for full_isolation agents` が、台帳の URL が呼ばれることを assert する。
-- [ ] `e2e/test/lifecycle-expire-revoke.spec.ts::second invocation returns 200 and token exchange stays invalid_grant` が、期限切れ Agent に対し sweep を2回起動しても2回目がエラーにならず、その後の `/xaa/token` が `invalid_grant` を返すことを assert する。
+- [x] `apps/lifecycle-manager/test/cleanup-runtime-cancel.spec.ts::treats NOT_FOUND and already-finished executions as done` が緑。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] 同ファイルの `::does not call delete APIs` が、モックした Cloud Run クライアントの `deleteService` と `deleteJob` の呼び出し回数が 0 であることを assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] `apps/lifecycle-manager/test/cleanup-issuance-disable.spec.ts::targets the dedicated OP for full_isolation agents` が、台帳の URL が呼ばれることを assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] `e2e/test/lifecycle-expire-revoke.spec.ts::second invocation returns 200 and token exchange stays invalid_grant` が、期限切れ Agent に対し sweep を2回起動しても2回目がエラーにならず、その後の `/xaa/token` が `invalid_grant` を返すことを assert する。（実体は `e2e/test/lifecycle/expire-revoke.spec.ts`）
 
 ---
 
@@ -221,11 +221,11 @@ Refresh Token を保持するのは Agent OP だけであり（RULE-51）、FULL
 - 失敗時のエラーコードは `idp_revoke_failed` に統一し、Revoke 応答の本文をログへ出さない（Refresh Token が混入しうるため）。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/cleanup-idp-revoke.spec.ts::calls agent-op once with the agent's connection id only` が緑。
-- [ ] 同ファイルの `::treats 404 and null connection id as done` が緑。
-- [ ] 同ファイルの `::never calls KMS decrypt` が、KMS クライアントのモックの呼び出し回数 0 を assert する。
-- [ ] `e2e/test/lifecycle-idp-revoke.spec.ts::revoking agent A keeps agent B connection and the SSO session` が、A の Refresh Token での `grant_type=refresh_token` が `invalid_grant`、B のそれが 200、ブラウザセッションでの `/authorize` が再ログインを求めないことを assert する。
-- [ ] `idp_connections/{id}` に `encrypted_refresh_token` フィールドが存在しないことを同 e2e で assert する。
+- [x] `apps/lifecycle-manager/test/cleanup-idp-revoke.spec.ts::calls agent-op once with the agent's connection id only` が緑。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] 同ファイルの `::treats 404 and null connection id as done` が緑。
+- [x] 同ファイルの `::never calls KMS decrypt` が、KMS クライアントのモックの呼び出し回数 0 を assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] `e2e/test/lifecycle-idp-revoke.spec.ts::revoking agent A keeps agent B connection and the SSO session` が、A の Refresh Token での `grant_type=refresh_token` が `invalid_grant`、B のそれが 200、ブラウザセッションでの `/authorize` が再ログインを求めないことを assert する。（実体は `e2e/test/lifecycle/idp-revoke.spec.ts`）
+- [x] `idp_connections/{id}` に `encrypted_refresh_token` フィールドが存在しないことを同 e2e で assert する。（実体は `e2e/test/lifecycle/idp-revoke.spec.ts`）
 
 ---
 
@@ -254,11 +254,11 @@ step4 で Bridge の Agent Binding を無効化し、step5 で Native Resource A
 - Bridge が既定で無効な構成でもこのステップが `failed` にならないことを、`skipped` の扱いで保証する。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/cleanup-credential-revoke.spec.ts::calls revoke-by-actor on both resource AS for every reason` が、5つの `reason` すべてで docs と finance の両方が1回ずつ呼ばれることを assert する。
-- [ ] 同ファイルの `::calls upstream SaaS revoke only for QUARANTINE and IDENTITY_DISABLED` が、`EXPIRED` と `USER_STOP` と `REPROVISION` で呼び出し回数 0、残り2つで1回、かつ Connection が `REVOKED` になることを assert する。
-- [ ] 同ファイルの `::sends actor_sub in urn:xaa:agent form` が緑。
-- [ ] 同ファイルの `::calls the second resource AS even when the first fails` が緑。
-- [ ] `enable_google_bridge=false` 相当の `endpoints.json` を与えたとき step4 が `skipped` になることを同ファイルで assert する。
+- [x] `apps/lifecycle-manager/test/cleanup-credential-revoke.spec.ts::calls revoke-by-actor on both resource AS for every reason` が、5つの `reason` すべてで docs と finance の両方が1回ずつ呼ばれることを assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] 同ファイルの `::calls upstream SaaS revoke only for QUARANTINE and IDENTITY_DISABLED` が、`EXPIRED` と `USER_STOP` と `REPROVISION` で呼び出し回数 0、残り2つで1回、かつ Connection が `REVOKED` になることを assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] 同ファイルの `::sends actor_sub in urn:xaa:agent form` が緑。
+- [x] 同ファイルの `::calls the second resource AS even when the first fails` が緑。
+- [x] `enable_google_bridge=false` 相当の `endpoints.json` を与えたとき step4 が `skipped` になることを同ファイルで assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
 
 ---
 
@@ -287,11 +287,11 @@ Cleanup の後に Firestore へ何も残さないことをこのタスクで確�
 - 各ステップは対象が既に無い場合に `skipped` を返す。削除前に存在確認の読み取りを行い、`NOT_FOUND` を例外にしない。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/cleanup-tail-steps.spec.ts::leaves nothing under agents/{agent_id} after step11` が、`state` と `instructions` と `manifest` と `meta` のすべてが消えることを assert する。
-- [ ] 同ファイルの `::does not disable the shared idjag key for standard agents` が、KMS の `disableCryptoKeyVersion` 呼び出し回数 0 を assert する。
-- [ ] 同ファイルの `::audit log has the 11 required fields and no JWT-shaped string` が緑。
-- [ ] 同ファイルの `::each tail step is skipped when the target is already gone` が緑。
-- [ ] `e2e/test/lifecycle-cleanup.spec.ts::registration, idp connection, bridge binding and runtime state are all gone` が緑。
+- [x] `apps/lifecycle-manager/test/cleanup-tail-steps.spec.ts::leaves nothing under agents/{agent_id} after step11` が、`state` と `instructions` と `manifest` と `meta` のすべてが消えることを assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] 同ファイルの `::does not disable the shared idjag key for standard agents` が、KMS の `disableCryptoKeyVersion` 呼び出し回数 0 を assert する。（実体は `apps/lifecycle-manager/test/cleanup-steps.spec.ts`）
+- [x] 同ファイルの `::audit log has the 11 required fields and no JWT-shaped string` が緑。
+- [x] 同ファイルの `::each tail step is skipped when the target is already gone` が緑。
+- [x] `e2e/test/lifecycle-cleanup.spec.ts::registration, idp connection, bridge binding and runtime state are all gone` が緑。（実体は `e2e/test/lifecycle/cleanup.spec.ts`）
 
 ---
 
@@ -343,13 +343,13 @@ docs 07 §6 の step8 と step9 のとおり、FULL_ISOLATION の Dedicated Clou
   削除系 API の呼び出しが `assertRuntimeName` を通る経路にだけ現れることと、Terraform 管理の名前が文字列リテラルとして削除呼び出しの引数に現れないことを検査する。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/dedicated-destroy.spec.ts::deletes in reverse creation order` が緑で、Job、Service、鍵バージョン、IAM Binding、Service Account の順を assert する。
-- [ ] 同ファイルの `::skips both steps for standard agents` が緑で、理由コード `no_dedicated_resources` を assert する。
-- [ ] 同ファイルの `::treats NOT_FOUND as success and is idempotent on second run` が緑。
-- [ ] 同ファイルの `::refuses to delete a terraform-managed name` が、`human-idp` を台帳に混ぜたとき例外になり削除 API が1回も呼ばれないことを assert する。
-- [ ] 同ファイルの `::schedules key version destruction and never calls deleteCryptoKey` が緑。
-- [ ] `bash infra/tests/runtime-mutation-scope.sh` が終了コード 0 を返す。
-- [ ] `e2e/test/lifecycle-dedicated-destroy.spec.ts::old kid fails verification and dedicated service is gone` が緑で、FULL_ISOLATION の E2E 実行後に `terraform plan -detailed-exitcode` が 0 を返す。
+- [x] `apps/lifecycle-manager/test/dedicated-destroy.spec.ts::deletes in reverse creation order` が緑で、Job、Service、鍵バージョン、IAM Binding、Service Account の順を assert する。
+- [x] 同ファイルの `::skips both steps for standard agents` が緑で、理由コード `no_dedicated_resources` を assert する。
+- [x] 同ファイルの `::treats NOT_FOUND as success and is idempotent on second run` が緑。（実体は `apps/lifecycle-manager/test/dedicated-destroy.spec.ts`）
+- [x] 同ファイルの `::refuses to delete a terraform-managed name` が、`human-idp` を台帳に混ぜたとき例外になり削除 API が1回も呼ばれないことを assert する。
+- [x] 同ファイルの `::schedules key version destruction and never calls deleteCryptoKey` が緑。
+- [x] `bash infra/tests/runtime-mutation-scope.sh` が終了コード 0 を返す。
+- [~] `e2e/test/lifecycle-dedicated-destroy.spec.ts::old kid fails verification and dedicated service is gone` が緑で、FULL_ISOLATION の E2E 実行後に `terraform plan -detailed-exitcode` が 0 を返す。（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -383,15 +383,15 @@ Cloud Scheduler から定期起動され、期限に達した Agent を状態遷
 - Firestore のクエリは `expires_at` と `status` の複合インデックスを前提にする。必要なインデックス定義は `infra/envs/demo/firestore.tf` へ追加する。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/sweep.spec.ts::moves ACTIVE to EXPIRING inside the window` が緑。
-- [ ] 同ファイルの `::takes an expired agent to DESTROYED in a single tick` が緑。
-- [ ] 同ファイルの `::two concurrent ticks call each cleanup step exactly once` が緑。
-- [ ] 同ファイルの `::retries only failed steps and keeps the original reason` が緑。
-- [ ] 同ファイルの `::deletes a labelled resource whose agent no longer exists` が緑。
-- [ ] 同ファイルの `::leaves a labelled resource whose agent is still ACTIVE` が緑。
-- [ ] 同ファイルの `::never deletes a resource without the xaa-managed label` が緑。
-- [ ] 同ファイルの `::abandons stale provisioning transactions` が緑。
-- [ ] `POST /internal/tick` を Cloud Scheduler 以外の SA の OIDC トークンで呼ぶと 403 になることを `apps/lifecycle-manager/test/sweep.spec.ts::rejects unknown caller` が assert する。
+- [x] `apps/lifecycle-manager/test/sweep.spec.ts::moves ACTIVE to EXPIRING inside the window` が緑。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] 同ファイルの `::takes an expired agent to DESTROYED in a single tick` が緑。
+- [x] 同ファイルの `::two concurrent ticks call each cleanup step exactly once` が緑。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] 同ファイルの `::retries only failed steps and keeps the original reason` が緑。
+- [x] 同ファイルの `::deletes a labelled resource whose agent no longer exists` が緑。
+- [x] 同ファイルの `::leaves a labelled resource whose agent is still ACTIVE` が緑。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] 同ファイルの `::never deletes a resource without the xaa-managed label` が緑。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] 同ファイルの `::abandons stale provisioning transactions` が緑。
+- [x] `POST /internal/tick` を Cloud Scheduler 以外の SA の OIDC トークンで呼ぶと 403 になることを `apps/lifecycle-manager/test/sweep.spec.ts::rejects unknown caller` が assert する。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
 
 ---
 
@@ -420,12 +420,12 @@ Automation App の停止操作から呼ばれる公開 API を実装する。
 - Activity Event の発行はこの API では行わない。`AGENT_STOPPED` は Automation App が出す（docs 11 §3.2）。Lifecycle 側の終端イベントは T-LIFE-16 で扱う。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/revoke-api.spec.ts::returns 403 for another user's agent` が緑。
-- [ ] 同ファイルの `::returns 202 and starts cleanup for the owner` が、`cleanupAgent` が `USER_STOP` で1回呼ばれることを assert する。
-- [ ] 同ファイルの `::returns 200 for an already DESTROYED agent` が緑。
-- [ ] 同ファイルの `::returns 404 before checking ownership for unknown agent` が緑。
-- [ ] 同ファイルの `::ignores human_subject in the body` が、ボディに他人の `human_subject` を入れても Access Token の `sub` で照合されることを assert する。
-- [ ] 同ファイルの `::writes an audit log for denied requests` が 403 と 404 の両方で緑。
+- [x] `apps/lifecycle-manager/test/revoke-api.spec.ts::returns 403 for another user's agent` が緑。（実体は `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts`）
+- [x] 同ファイルの `::returns 202 and starts cleanup for the owner` が、`cleanupAgent` が `USER_STOP` で1回呼ばれることを assert する。
+- [x] 同ファイルの `::returns 200 for an already DESTROYED agent` が緑。
+- [x] 同ファイルの `::returns 404 before checking ownership for unknown agent` が緑。
+- [x] 同ファイルの `::ignores human_subject in the body` が、ボディに他人の `human_subject` を入れても Access Token の `sub` で照合されることを assert する。
+- [x] 同ファイルの `::writes an audit log for denied requests` が 403 と 404 の両方で緑。
 
 ---
 
@@ -455,11 +455,11 @@ QUARANTINED では ID-JAG 発行と subject_token 再取得を止め、Bridge Bi
 - 応答は 202 と `{ from, to }`。状態機械が拒否した遷移は 409 `invalid_transition` にし、例外をそのまま 500 にしない。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/quarantine.spec.ts::disables issuance and binding but never cancels the execution` が、`cancelExecution` の呼び出し回数 0 を assert する。
-- [ ] 同ファイルの `::cancels the execution only after the REVOKED transition` が緑。
-- [ ] 同ファイルの `::returns 409 for a disallowed transition` が緑。
-- [ ] 同ファイルの `::accepts ACTIVE to QUARANTINED with severity CRITICAL` が緑。
-- [ ] `e2e/test/lifecycle-quarantine.spec.ts::token exchange and subject-token both fail right after quarantine` が緑で、同テストで Firestore `agents/{agent_id}/state` への書き込みが成功することも assert する。
+- [x] `apps/lifecycle-manager/test/quarantine.spec.ts::disables issuance and binding but never cancels the execution` が、`cancelExecution` の呼び出し回数 0 を assert する。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] 同ファイルの `::cancels the execution only after the REVOKED transition` が緑。
+- [x] 同ファイルの `::returns 409 for a disallowed transition` が緑。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] 同ファイルの `::accepts ACTIVE to QUARANTINED with severity CRITICAL` が緑。
+- [x] `e2e/test/lifecycle-quarantine.spec.ts::token exchange and subject-token both fail right after quarantine` が緑で、同テストで Firestore `agents/{agent_id}/state` への書き込みが成功することも assert する。（実体は `e2e/test/lifecycle/quarantine.spec.ts`）
 
 ---
 
@@ -491,11 +491,11 @@ QUARANTINED では ID-JAG 発行と subject_token 再取得を止め、Bridge Bi
 - `inherited_expires_at` が現在時刻以下の場合は Provisioner を呼ばず、`reprovision_expired` を返して旧 Agent の Cleanup だけで終える。期限切れ間際の権限変更で寿命が延びないようにする。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/reprovision.spec.ts::keeps expires_at from the old agent` が緑。
-- [ ] 同ファイルの `::allocates a new agent_id and never reuses the old one` が緑。
-- [ ] 同ファイルの `::does not call the provisioner when cleanup fails` が緑。
-- [ ] 同ファイルの `::returns reprovision_expired when the inherited expires_at is in the past` が緑。
-- [ ] `e2e/test/lifecycle-reprovision.spec.ts::new agent starts with empty state and the old registration is gone` が、`agents/{new_id}/state` が空であることと `agents/{old_id}` が Firestore に無いことを assert する。
+- [x] `apps/lifecycle-manager/test/reprovision.spec.ts::keeps expires_at from the old agent` が緑。（実体は `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts`）
+- [x] 同ファイルの `::allocates a new agent_id and never reuses the old one` が緑。（実体は `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts`）
+- [x] 同ファイルの `::does not call the provisioner when cleanup fails` が緑。
+- [x] 同ファイルの `::returns reprovision_expired when the inherited expires_at is in the past` が緑。
+- [x] `e2e/test/lifecycle-reprovision.spec.ts::new agent starts with empty state and the old registration is gone` が、`agents/{new_id}/state` が空であることと `agents/{old_id}` が Firestore に無いことを assert する。（実体は `e2e/test/lifecycle/reprovision.spec.ts`）
 
 ---
 
@@ -522,10 +522,10 @@ QUARANTINED では ID-JAG 発行と subject_token 再取得を止め、Bridge Bi
 - 通知ペイロードの生成は T-LIFE-16 の Activity Event 発行に渡す。ここでは `missing_capabilities` を組み立てるまでを担う。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/reprovision-insufficient.spec.ts::destroys the old agent and creates no new one` が、旧 Agent が DESTROYED になり Provisioner の呼び出し回数 0 であることを assert する。
-- [ ] 同ファイルの `::reports every missing capability` が、2件不足のケースで `missing_capabilities` が2件とも含むことを assert する。
-- [ ] 同ファイルの `::marks the transaction FAILED with capability_insufficient` が緑。
-- [ ] 同ファイルの `::treats capability ids as exact strings` が、`document.read` を要求し `document.readonly` だけを与えたケースで不足と判定されることを assert する。
+- [x] `apps/lifecycle-manager/test/reprovision-insufficient.spec.ts::destroys the old agent and creates no new one` が、旧 Agent が DESTROYED になり Provisioner の呼び出し回数 0 であることを assert する。（実体は `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts`）
+- [x] 同ファイルの `::reports every missing capability` が、2件不足のケースで `missing_capabilities` が2件とも含むことを assert する。
+- [x] 同ファイルの `::marks the transaction FAILED with capability_insufficient` が緑。（実体は `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts`）
+- [x] 同ファイルの `::treats capability ids as exact strings` が、`document.read` を要求し `document.readonly` だけを与えたケースで不足と判定されることを assert する。
 
 ---
 
@@ -555,11 +555,11 @@ Pub/Sub トピック `human-identity-disabled` を pull で購読し、対象 Ag
 - 冪等性は `cleanupAgent` 側のステップ結果に任せる。同じメッセージが再配信されても各ステップは1回しか実処理を行わない。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/identity-disabled.spec.ts::revokes all six eligible statuses and skips the terminal three` が緑。
-- [ ] 同ファイルの `::continues with the remaining agents when one cleanup throws` が、3体中1体に失敗を注入しても他2体が DESTROYED になることを assert する。
-- [ ] 同ファイルの `::abandons in-flight provisioning transactions` が緑。
-- [ ] 同ファイルの `::acks and logs invalid messages without redelivery` が緑。
-- [ ] `e2e/test/lifecycle-identity-disabled.spec.ts::three agents and one transaction are settled by a single event` が緑。
+- [x] `apps/lifecycle-manager/test/identity-disabled.spec.ts::revokes all six eligible statuses and skips the terminal three` が緑。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] 同ファイルの `::continues with the remaining agents when one cleanup throws` が、3体中1体に失敗を注入しても他2体が DESTROYED になることを assert する。
+- [x] 同ファイルの `::abandons in-flight provisioning transactions` が緑。
+- [x] 同ファイルの `::acks and logs invalid messages without redelivery` が緑。（実体は `apps/lifecycle-manager/test/routes-and-sweep.spec.ts`）
+- [x] `e2e/test/lifecycle-identity-disabled.spec.ts::three agents and one transaction are settled by a single event` が緑。（実体は `e2e/test/lifecycle/identity-disabled.spec.ts`）
 
 ---
 
@@ -589,11 +589,11 @@ Re-Provisioning の中止時の通知と監査ログもここでまとめて扱�
 - `related_finding_id` は Security Detection からの遷移依頼に `finding_id` が付いていた場合だけ設定し、それ以外は `null` にする。
 
 **完了条件**
-- [ ] `apps/lifecycle-manager/test/events.spec.ts::emits exactly one lifecycle event per destroyed agent` が、Cleanup を3回呼んでも publish が1回であることを assert する。
-- [ ] 同ファイルの `::emits nothing before DESTROYED` が、失敗ステップを残した Cleanup で publish 回数 0 を assert する。
-- [ ] 同ファイルの `::maps reason to event type` が5つの `reason` すべてについて緑。
-- [ ] 同ファイルの `::payload contains no JWT-shaped string` が、成功と中止の両ケースで緑。
-- [ ] `e2e/test/lifecycle-events.spec.ts::expired, reprovisioned and security-revoked paths each produce one event` が緑。
+- [x] `apps/lifecycle-manager/test/events.spec.ts::emits exactly one lifecycle event per destroyed agent` が、Cleanup を3回呼んでも publish が1回であることを assert する。（実体は `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts`）
+- [x] 同ファイルの `::emits nothing before DESTROYED` が、失敗ステップを残した Cleanup で publish 回数 0 を assert する。
+- [x] 同ファイルの `::maps reason to event type` が5つの `reason` すべてについて緑。（実体は `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts`）
+- [x] 同ファイルの `::payload contains no JWT-shaped string` が、成功と中止の両ケースで緑。
+- [x] `e2e/test/lifecycle-events.spec.ts::expired, reprovisioned and security-revoked paths each produce one event` が緑。（実体は `e2e/test/lifecycle/events.spec.ts`）
 
 ---
 
@@ -621,9 +621,9 @@ Re-Provisioning の中止時の通知と監査ログもここでまとめて扱�
 - Playwright の追加指示送信とタイムライン表示の確認をこのファイルへ書かない。重複した経路を2か所で持たない。
 
 **完了条件**
-- [ ] `e2e/test/lifecycle-expired-demo.spec.ts::token exchange fails with invalid_grant after expiry` が緑。
-- [ ] 同ファイルの `::subject-token retrieval fails after the idp connection expires` が緑。
-- [ ] 同ファイルの `::emits AGENT_EXPIRED exactly once across two ticks` が緑。
-- [ ] 同ファイルの `::leaves no agent document and no dedicated resources` が緑。
-- [ ] `apps/lifecycle-manager/test/expiring-window.spec.ts::a 3 minute agent passes ACTIVE, EXPIRING, EXPIRED and DESTROYED in order` が緑。
-- [ ] `infra/envs/demo/terraform.tfvars.verify` を使った `terraform validate` が成功する。
+- [x] `e2e/test/lifecycle-expired-demo.spec.ts::token exchange fails with invalid_grant after expiry` が緑。（実体は `e2e/test/lifecycle/expired-demo.spec.ts`）
+- [x] 同ファイルの `::subject-token retrieval fails after the idp connection expires` が緑。（実体は `e2e/test/lifecycle/expired-demo.spec.ts`）
+- [x] 同ファイルの `::emits AGENT_EXPIRED exactly once across two ticks` が緑。
+- [x] 同ファイルの `::leaves no agent document and no dedicated resources` が緑。
+- [x] `apps/lifecycle-manager/test/expiring-window.spec.ts::a 3 minute agent passes ACTIVE, EXPIRING, EXPIRED and DESTROYED in order` が緑。
+- [x] `infra/envs/demo/terraform.tfvars.verify` を使った `terraform validate` が成功する。

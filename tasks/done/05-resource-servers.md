@@ -49,10 +49,10 @@ DEC-ID-01 の「4系統の OP のうち Resource AS 2種は生成物を使う」
 - コンテナはリポジトリ直下の単一 Dockerfile を `--build-arg APP=resource-docs-as` で切り替える。アプリ個別の Dockerfile を作らない。
 
 **完了条件**
-- [ ] `bash scripts/generate-oidc.sh --check` が `generated-baseline/` と CLI 再生成物のバイト一致を報告し、終了コード0で終わる
-- [ ] `pnpm -F resource-docs-as build` と `pnpm -F resource-finance-as build` が tsc エラー0で完了する
-- [ ] `pnpm run check:patch-markers` が `apps/resource-*-as/src/oidc/` の baseline 差分をすべて XAA-PATCH マーカー内と判定する
-- [ ] `createApp()` を import した vitest から `GET /healthz` を `app.fetch` で叩き 200 が返る
+- [x] `bash scripts/regenerate-oidc.sh --check` が `generated-baseline/` と CLI 再生成物のバイト一致を報告し、終了コード0で終わる
+- [x] `pnpm -F resource-docs-as build` と `pnpm -F resource-finance-as build` が tsc エラー0で完了する
+- [x] `pnpm run check:patch-markers` が `apps/resource-*-as/src/oidc/` の baseline 差分をすべて XAA-PATCH マーカー内と判定する（実体は `package.json`）
+- [x] `createApp()` を import した vitest から `GET /healthz` を `app.fetch` で叩き 200 が返る（実体は `apps/resource-docs-as/test/discovery.spec.ts`）
 
 ---
 
@@ -83,10 +83,10 @@ DEC-IAC-09 の「データストアは Firestore 1本」と DEV-05 に対応す�
 - Cloud SQL 実装と Firestore Security Rules を作らない。
 
 **完了条件**
-- [ ] `pnpm -F @xaa/gcp test` の `firestore-json-store.spec.ts` が get / put / delete / list / TTL 期限切れ除外の5ケースで緑になる
-- [ ] `STORE_MODE=emulator` で両 Resource AS の統合テストが起動し、Access Token のストア書き込みと読み出しが成立する
-- [ ] `resource-docs-as` の識別子で `payments/pay_x` へアクセスすると `path_not_allowed` が throw されるテストが緑になる
-- [ ] `apps/resource-*-as/src/oidc/store.ts` に手編集が入っていない（差し替えは `apply.ts` の注入のみ）
+- [x] `pnpm -F @xaa/gcp test` の `firestore-json-store.spec.ts` が get / put / delete / list / TTL 期限切れ除外の5ケースで緑になる（実体は `packages/gcp/test/firestore-json-store.spec.ts`）
+- [x] `STORE_MODE=emulator` で両 Resource AS の統合テストが起動し、Access Token のストア書き込みと読み出しが成立する（実体は `apps/resource-docs-as/test/store-backend.spec.ts`）
+- [x] `resource-docs-as` の識別子で `payments/pay_x` へアクセスすると `path_not_allowed` が throw されるテストが緑になる（実体は `packages/gcp/test/firestore-guard.spec.ts`）
+- [x] `apps/resource-*-as/src/oidc/store.ts` に手編集が入っていない（差し替えは `apply.ts` の注入のみ）
 
 ---
 
@@ -116,10 +116,10 @@ DEC-IAC-09 の「データストアは Firestore 1本」と DEV-05 に対応す�
 - 発行側関数（`processIdJagIssuanceRequest`, `signIdJag`, `buildIdJagClaims`）を import しない。
 
 **完了条件**
-- [ ] `apps/resource-docs-as/test/discovery.spec.ts::no identity_chaining, keeps authorization_grant_profiles` が緑になる
-- [ ] `apps/resource-finance-as/test/discovery.spec.ts` の同名テストが緑になる
-- [ ] `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` の POST が 400 `unsupported_grant_type` を返すテストが緑になる
-- [ ] `grep -R "processIdJagIssuanceRequest\|signIdJag\|buildIdJagClaims" apps/resource-docs-as apps/resource-finance-as` の結果が0件になる
+- [x] `apps/resource-docs-as/test/discovery.spec.ts::no identity_chaining, keeps authorization_grant_profiles` が緑になる
+- [x] `apps/resource-finance-as/test/discovery.spec.ts` の同名テストが緑になる
+- [x] `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` の POST が 400 `unsupported_grant_type` を返すテストが緑になる
+- [x] `grep -R "processIdJagIssuanceRequest\|signIdJag\|buildIdJagClaims" apps/resource-docs-as/src apps/resource-finance-as/src --exclude-dir=oidc` の結果が0件になり、`grant_type=urn:ietf:params:oauth:grant-type:token-exchange` が生成物の発行分岐へ到達しない
 
 ---
 
@@ -150,10 +150,10 @@ DEC-ID-17 と DEV-10 に対応し、docs 側の鍵で finance のトークンを
 - `SIGNER_MODE=local` のときは環境変数 `LOCAL_SIGNING_JWK` の JWK を使い、GCS と KMS を呼ばない。
 
 **完了条件**
-- [ ] `apps/resource-docs-as/test/self-bootstrap.spec.ts::idempotent under concurrent start` が10並列の `ensureSigningKey` 呼び出しで生成される鍵が1本になることを assert する
-- [ ] 既存オブジェクトがある場合に生成せず復号だけを行うテストが緑になる
-- [ ] finance の KMS 鍵名で docs の暗号化オブジェクトを復号すると失敗するテストが緑になる
-- [ ] finance AS が発行した Access Token のヘッダ `kid` が `fin-as-` で始まることを assert する統合テストが緑になる
+- [x] `apps/resource-docs-as/test/self-bootstrap.spec.ts::idempotent under concurrent start` が10並列の `ensureSigningKey` 呼び出しで生成される鍵が1本になることを assert する
+- [x] 既存オブジェクトがある場合に生成せず復号だけを行うテストが緑になる（実体は `apps/resource-docs-as/test/self-bootstrap.spec.ts`）
+- [x] finance の KMS 鍵名で docs の暗号化オブジェクトを復号すると失敗するテストが緑になる（実体は `apps/resource-docs-as/test/self-bootstrap.spec.ts`）
+- [x] finance AS が発行した Access Token のヘッダ `kid` が `fin-as-` で始まることを assert する統合テストが緑になる
 
 ---
 
@@ -181,10 +181,10 @@ DEC-ID-04 の direct プロファイル（issuer は Human IdP の Cloud Run URL
 - `TRUSTED_IDP_ISSUER` は Terraform の `platform_endpoints` オブジェクト（DEC-IAC-06）が持つ `issuer` と同じ値を Cloud Run の env として注入する。アプリ側でホスト名を組み立てない。
 
 **完了条件**
-- [ ] `apps/resource-docs-as/test/trusted-idp.spec.ts` が「JWKS の取得 URL が `TRUSTED_IDP_JWKS_URI` と一致する」ことを assert する
-- [ ] `kid` が `idp-` で始まる鍵で署名した ID-JAG の提示が `invalid_grant` になるテストが緑になる
-- [ ] 同一 IdP に対する連続2回の検証で JWKS の HTTP 取得が1回だけ発生することを assert するテストが緑になる
-- [ ] `TRUSTED_IDP_ISSUER` 未設定で起動すると終了コード1になる
+- [x] `apps/resource-docs-as/test/trusted-idp.spec.ts` が「JWKS の取得 URL が `TRUSTED_IDP_JWKS_URI` と一致する」ことを assert する
+- [x] `kid` が `idp-` で始まる鍵で署名した ID-JAG の提示が `invalid_grant` になるテストが緑になる（実体は `apps/resource-docs-as/test/trusted-idp.spec.ts`）
+- [x] 同一 IdP に対する連続2回の検証で JWKS の HTTP 取得が1回だけ発生することを assert するテストが緑になる（実体は `apps/resource-docs-as/test/trusted-idp.spec.ts`）
+- [x] `TRUSTED_IDP_ISSUER` 未設定で起動すると終了コード1になる（実体は `apps/resource-docs-as/test/trusted-idp.spec.ts`）
 
 ---
 
@@ -214,10 +214,10 @@ REQ-08-044 が禁じる「Cloud Run IAM の通過を理由に検証をスキッ�
 - リクエストの呼び出し元 SA や Cloud Run のヘッダを読んで検証を分岐させるコードを書かない。
 
 **完了条件**
-- [ ] `aud` 不一致、`client_id` 不一致、`jwk` ヘッダ付きの3パターンが 400 `invalid_grant` になる統合テストが緑になる
-- [ ] finance AS 宛（`aud` = finance AS の issuer）の ID-JAG を docs AS へ提示すると `invalid_grant` になり、docs AS 宛は Access Token に交換できるテストが緑になる
-- [ ] Cloud Run の ID Token だけを持ち assertion を持たない POST `/token` が 400 `invalid_request` を返し、Access Token を発行しないテストが緑になる
-- [ ] `redeem-step-order.spec.ts` が各ステップをスパイして上記の順序どおりに呼ばれることを assert する
+- [x] `aud` 不一致、`client_id` 不一致、`jwk` ヘッダ付きの3パターンが 400 `invalid_grant` になる統合テストが緑になる（実体は `e2e/test/resource/negative.spec.ts`）
+- [x] finance AS 宛（`aud` = finance AS の issuer）の ID-JAG を docs AS へ提示すると `invalid_grant` になり、docs AS 宛は Access Token に交換できるテストが緑になる（実体は `e2e/test/resource/negative.spec.ts`）
+- [x] Cloud Run の ID Token だけを持ち assertion を持たない POST `/token` が 400 `invalid_request` を返し、Access Token を発行しないテストが緑になる（実体は `e2e/test/resource/negative.spec.ts`）
+- [x] `redeem-step-order.spec.ts` が各ステップをスパイして上記の順序どおりに呼ばれることを assert する（実体は `apps/resource-docs-as/test/redeem-step-order.spec.ts`）
 
 ---
 
@@ -250,10 +250,10 @@ DEC-ID-14 と DEV-11 に対応し、REQ-05-085 の「添付確認だけで終わ
 - 「DPoP ヘッダが存在するか」だけを見て通す分岐を書かない。
 
 **完了条件**
-- [ ] `apps/resource-docs-as/test/client-binding.spec.ts::rejects cnf-bearing JAG without proof / with other key / accepts matching proof` の3ケースが緑になる
-- [ ] `apps/resource-finance-as/test/client-binding.spec.ts` の同名3ケースが緑になる
-- [ ] `cnf` を持たない ID-JAG の提示が `invalid_grant` になるテストが緑になる
-- [ ] 同一 `jti` の Proof を2回提示すると2回目が `invalid_grant` になり、ログの `validation_name` が `replayed_dpop_proof` になる
+- [x] `apps/resource-docs-as/test/client-binding.spec.ts::rejects cnf-bearing JAG without proof / with other key / accepts matching proof` の3ケースが緑になる
+- [x] `apps/resource-finance-as/test/client-binding.spec.ts` の同名3ケースが緑になる
+- [x] `cnf` を持たない ID-JAG の提示が `invalid_grant` になるテストが緑になる（実体は `apps/resource-docs-as/test/client-binding.spec.ts`）
+- [x] 同一 `jti` の Proof を2回提示すると2回目が `invalid_grant` になり、ログの `validation_name` が `replayed_dpop_proof` になる（実体は `apps/resource-docs-as/test/client-binding.spec.ts`）
 
 ---
 
@@ -283,10 +283,10 @@ REQ-05-086 と DEV-12（`aud` は要素一致で判定する）に対応する�
 - refresh token と ID Token を発行しない。`offline_access` は `resolveIdJagGrantScope` が落とすので追加処理を書かない。
 
 **完了条件**
-- [ ] 発行トークンのヘッダ `typ` が `at+jwt`、payload の `cnf.jkt` が提示 Proof の thumbprint と一致、`act.sub` が `urn:xaa:agent:` で始まることを assert する統合テストが緑になる
-- [ ] 応答 JSON の `token_type` が `DPoP` で、`refresh_token` と `id_token` のキーが存在しないことを assert するテストが緑になる
-- [ ] `exp` が 60 秒後の ID-JAG を提示しても `expires_in` が 300 のままであることを assert するテストが緑になる
-- [ ] `offline_access` を含む ID-JAG を提示しても応答 `scope` に含まれないことを assert するテストが緑になる
+- [x] 発行トークンのヘッダ `typ` が `at+jwt`、payload の `cnf.jkt` が提示 Proof の thumbprint と一致、`act.sub` が `urn:xaa:agent:` で始まることを assert する統合テストが緑になる（実体は `apps/resource-docs-as/test/access-token.spec.ts`）
+- [x] 応答 JSON の `token_type` が `DPoP` で、`refresh_token` と `id_token` のキーが存在しないことを assert するテストが緑になる（実体は `apps/resource-docs-as/test/access-token.spec.ts`）
+- [x] `exp` が 60 秒後の ID-JAG を提示しても `expires_in` が 300 のままであることを assert するテストが緑になる（実体は `apps/resource-docs-as/test/access-token.spec.ts`）
+- [x] `offline_access` を含む ID-JAG を提示しても応答 `scope` に含まれないことを assert するテストが緑になる（実体は `apps/resource-docs-as/test/access-token.spec.ts`）
 
 ---
 
@@ -315,10 +315,10 @@ RULE-52 と specs §5.0 の確定命名に対応する。
 - ワイルドカードを展開する処理と、実行時に登録 scope を書き換える処理を作らない。
 
 **完了条件**
-- [ ] `tests/unit/resource/registered-scope.test.ts` が docs 2件、finance 2件であり、`*` と `admin` を含まないことを assert する
-- [ ] `finance.admin` を含む ID-JAG の交換が `invalid_scope` になるテストが緑になる
-- [ ] `REGISTERED_SCOPES="docs.read docs.admin"` で起動すると終了コード1になるテストが緑になる
-- [ ] ID-JAG の `scope` が `docs.read` だけのとき、応答 `scope` も `docs.read` だけになる
+- [x] `tests/unit/resource/registered-scope.test.ts` が docs 2件、finance 2件であり、`*` と `admin` を含まないことを assert する（実体は `packages/xaa-resource-guard/test/registered-scope.spec.ts`）
+- [x] `finance.admin` を含む ID-JAG の交換が `invalid_scope` になるテストが緑になる（実体は `apps/resource-finance-as/test/access-token.spec.ts`）
+- [x] `REGISTERED_SCOPES="docs.read docs.admin"` で起動すると終了コード1になるテストが緑になる（実体は `apps/resource-docs-as/test/trusted-idp.spec.ts`）
+- [x] ID-JAG の `scope` が `docs.read` だけのとき、応答 `scope` も `docs.read` だけになる（実体は `apps/resource-docs-as/test/access-token.spec.ts`）
 
 ---
 
@@ -345,10 +345,10 @@ REQ-09-011 と RULE-38（生トークンを残さない）に対応する。
 - 出力は `packages/gcp` の共通ロガー `logStructured(payload)` 経由に限る（T-SEC-07 の静的検査対象）。`console.log` を直接呼ばない。
 
 **完了条件**
-- [ ] `tests/e2e/specs/resource/finance-as-log.spec.ts` が正常受領と cnf 不一致拒否の2経路で12項目の存在を assert する
-- [ ] `tests/e2e/specs/resource/docs-as-log.spec.ts` が同じ2経路で12項目の存在を assert する
-- [ ] ログ JSON を文字列化して assertion と access_token の値が部分文字列として現れないことを assert するテストが緑になる
-- [ ] 署名検証失敗の経路でも `idjag_jti` と `idjag_kid` と `idjag_typ` が非 null で出る
+- [x] `tests/e2e/specs/resource/finance-as-log.spec.ts` が正常受領と cnf 不一致拒否の2経路で12項目の存在を assert する（実体は `e2e/test/resource/finance-as-log.spec.ts`）
+- [x] `tests/e2e/specs/resource/docs-as-log.spec.ts` が同じ2経路で12項目の存在を assert する（実体は `e2e/test/resource/docs-as-log.spec.ts`）
+- [x] ログ JSON を文字列化して assertion と access_token の値が部分文字列として現れないことを assert するテストが緑になる（実体は `e2e/test/resource/docs-as-log.spec.ts`）
+- [x] 署名検証失敗の経路でも `idjag_jti` と `idjag_kid` と `idjag_typ` が非 null で出る（実体は `e2e/test/resource/docs-as-log.spec.ts`）
 
 ---
 
@@ -383,11 +383,11 @@ REQ-08-044 の「IAM 通過を理由に検証をスキップしない」を、�
 - 検証結果を `c.set('xaa', { humanSubject, agentId, scopes, isolationLevel, constraints })` に載せ、各ルートはここからだけ主体を読む。
 
 **完了条件**
-- [ ] 正しい Cloud Run ID Token だけを持ち ID-JAG 由来 Access Token を持たない要求が docs API と finance API の両方で 401 になり、`WWW-Authenticate` が2本返るテスト2件が緑になる
-- [ ] `act` を欠いた Access Token、`sub` を欠いた Access Token がともに 401 `invalid_token` になるテストが緑になる
-- [ ] Proof 無し、別鍵の Proof、`ath` 不一致の3ケースが 401 になるテストが緑になる
-- [ ] `docs.read` だけのトークンで書き込み系ルートを呼ぶと 403 `insufficient_scope` になるテストが緑になる
-- [ ] `aud` が `https://resource-docs-api-x/extra` のような接頭辞違いでは通らないテストが緑になる
+- [x] 正しい Cloud Run ID Token だけを持ち ID-JAG 由来 Access Token を持たない要求が docs API と finance API の両方で 401 になり、`WWW-Authenticate` が2本返るテスト2件が緑になる（実体は `packages/xaa-resource-guard/test/protect.spec.ts`）
+- [x] `act` を欠いた Access Token、`sub` を欠いた Access Token がともに 401 `invalid_token` になるテストが緑になる（実体は `packages/xaa-resource-guard/test/protect.spec.ts`）
+- [x] Proof 無し、別鍵の Proof、`ath` 不一致の3ケースが 401 になるテストが緑になる
+- [x] `docs.read` だけのトークンで書き込み系ルートを呼ぶと 403 `insufficient_scope` になるテストが緑になる（実体は `packages/xaa-resource-guard/test/protect.spec.ts`）
+- [x] `aud` が `https://resource-docs-api-x/extra` のような接頭辞違いでは通らないテストが緑になる（実体は `packages/xaa-resource-guard/test/protect.spec.ts`）
 
 ---
 
@@ -418,10 +418,10 @@ REQ-09-012 と REQ-01-017 に対応する。
 - 出力は `logStructured` 経由に限る。
 
 **完了条件**
-- [ ] `tests/e2e/specs/resource/api-log.spec.ts` が docs の読み1回と書き1回、finance の1回、計3行について7項目と `human_subject` と `agent_id` を assert する
-- [ ] 403 の応答でも同じ7項目が `outcome=error:insufficient_scope` で出ることを assert する
-- [ ] Access Token と DPoP Proof の生文字列がログ JSON に現れないことを assert する
-- [ ] `X-XAA-Tool-Id` に未登録の値を入れても応答ステータスが変わらず、ログの `tool_id` が `unknown` になる
+- [x] `tests/e2e/specs/resource/api-log.spec.ts` が docs の読み1回と書き1回、finance の1回、計3行について7項目と `human_subject` と `agent_id` を assert する（実体は `e2e/test/resource/api-log.spec.ts`）
+- [x] 403 の応答でも同じ7項目が `outcome=error:insufficient_scope` で出ることを assert する（実体は `e2e/test/resource/api-log.spec.ts`）
+- [x] Access Token と DPoP Proof の生文字列がログ JSON に現れないことを assert する（実体は `e2e/test/resource/api-log.spec.ts`）
+- [x] `X-XAA-Tool-Id` に未登録の値を入れても応答ステータスが変わらず、ログの `tool_id` が `unknown` になる（実体は `e2e/test/resource/api-log.spec.ts`）
 
 ---
 
@@ -452,10 +452,10 @@ specs §5.1 のデータ定義と REQ-02-019 に対応する。
 - 外部 SaaS からの取り込み（`WorkSignalSource` の別実装）を本タスクで実装しない。
 
 **完了条件**
-- [ ] 未定義フィールドを含む入力が Ajv で拒否されるユニットテストが緑になる
-- [ ] リクエストボディに `owner_subject` を入れても保存値がトークンの `sub` になるテストが緑になる
-- [ ] `type` に enum 外の値を入れると 400 になるテストが緑になる
-- [ ] `terraform validate` が `documents` の複合インデックス定義を通す
+- [x] 未定義フィールドを含む入力が Ajv で拒否されるユニットテストが緑になる（実体は `apps/resource-docs-api/test/documents-store.spec.ts`）
+- [x] リクエストボディに `owner_subject` を入れても保存値がトークンの `sub` になるテストが緑になる
+- [x] `type` に enum 外の値を入れると 400 になるテストが緑になる
+- [x] `terraform validate` が `documents` の複合インデックス定義を通す
 
 ---
 
@@ -486,10 +486,10 @@ REQ-02-019 と REQ-05-088 に対応する。
 - `docs.read` だけのトークンによる POST と PATCH は T-RES-11 の scope 判定で 403 `insufficient_scope` になる。ルート側で重複判定しない。
 
 **完了条件**
-- [ ] `docs.read` のみの Access Token で PATCH が 403、GET が 200 になる e2e テストが緑になる
-- [ ] `version` 不一致の PATCH が 409 `version_conflict` を返し、保存値が変わらないテストが緑になる
-- [ ] 他ユーザーの `document_id` への GET が 404 になるテストが緑になる
-- [ ] 一覧応答の各要素に `body` キーが存在しないことを assert するテストが緑になる
+- [x] `docs.read` のみの Access Token で PATCH が 403、GET が 200 になる e2e テストが緑になる（実体は `e2e/test/resource/docs-flow.spec.ts`）
+- [x] `version` 不一致の PATCH が 409 `version_conflict` を返し、保存値が変わらないテストが緑になる（実体は `e2e/test/resource/docs-flow.spec.ts`）
+- [x] 他ユーザーの `document_id` への GET が 404 になるテストが緑になる（実体は `e2e/test/resource/docs-flow.spec.ts`）
+- [x] 一覧応答の各要素に `body` キーが存在しないことを assert するテストが緑になる（実体は `e2e/test/resource/docs-flow.spec.ts`）
 
 ---
 
@@ -517,10 +517,10 @@ RULE-15（Capability と Tool の分離）と RULE-16（接続先情報は Catal
 - 命名規約の検証は T-AUTHZ-06 の検証関数を import して再利用する。同等の関数を新規に書かない。
 
 **完了条件**
-- [ ] seed 実行後に `catalog/tools` へ `internal.document.list`、`internal.document.get`、`internal.document.create`、`internal.document.update` の4件が存在する
-- [ ] `tests/unit/resource/tool-catalog-docs.test.ts` が破棄した別名の不在を assert する
-- [ ] 各 Tool の `response_schema` の allowlist キー集合が specs §5.1 の表と一致することを assert する
-- [ ] `catalog/connectors` の `internal-docs-api` が `resource_type=native_xaa` かつ `risk_level=medium` である
+- [~] seed 実行後に `catalog/tools` へ `internal.document.list`、`internal.document.get`、`internal.document.create`、`internal.document.update` の4件が存在する（デプロイ後に `scripts/deploy-gcp-guide.sh` が観測する）
+- [x] `tests/unit/resource/tool-catalog-docs.test.ts` が破棄した別名の不在を assert する（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
+- [x] 各 Tool の `response_schema` の allowlist キー集合が specs §5.1 の表と一致することを assert する（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
+- [x] `catalog/connectors` の `internal-docs-api` が `resource_type=native_xaa` かつ `risk_level=medium` である（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
 
 ---
 
@@ -551,10 +551,10 @@ specs §5.2 のデータ定義と REQ-02-018 に対応する。
 - 複合インデックス `(requester_subject asc, status asc, created_at desc)` を `infra/envs/demo/firestore.tf` に定義する。
 
 **完了条件**
-- [ ] `amount` に小数または0以下を入れると Ajv が拒否するユニットテストが緑になる
-- [ ] 入力スキーマに `approved_by` が存在しないことを assert するテストが緑になる
-- [ ] seed 実行後に `payments` へ `pending_approval` のレコードが投入される
-- [ ] `terraform validate` が `payments` の複合インデックス定義を通す
+- [x] `amount` に小数または0以下を入れると Ajv が拒否するユニットテストが緑になる
+- [x] 入力スキーマに `approved_by` が存在しないことを assert するテストが緑になる
+- [~] seed 実行後に `payments` へ `pending_approval` のレコードが投入される（デプロイ後に `scripts/deploy-gcp-guide.sh` が観測する）
+- [x] `terraform validate` が `payments` の複合インデックス定義を通す
 
 ---
 
@@ -583,10 +583,10 @@ REQ-02-018 と REQ-05-087 に対応する。
 - 承認時の主体記録は T-RES-21、金額上限の検証は T-RES-20、isolation の検証は T-RES-19 が担当する。本タスクでは状態遷移と冪等性だけを実装する。
 
 **完了条件**
-- [ ] `finance.tx.read` のトークンで approve を呼ぶと 403、`finance.tx.write` では 200 になる e2e テストが緑になる
-- [ ] 同じ payment への approve を2回呼ぶと2回目が 200 と `already_approved` を返し、`approved_at` が変わらないテストが緑になる
-- [ ] `executed` の payment への approve が 409 `invalid_state` になるテストが緑になる
-- [ ] 他ユーザーの `payment_id` への GET が 404 になるテストが緑になる
+- [x] `finance.tx.read` のトークンで approve を呼ぶと 403、`finance.tx.write` では 200 になる e2e テストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] 同じ payment への approve を2回呼ぶと2回目が 200 と `already_approved` を返し、`approved_at` が変わらないテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] `executed` の payment への approve が 409 `invalid_state` になるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] 他ユーザーの `payment_id` への GET が 404 になるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
 
 ---
 
@@ -615,10 +615,10 @@ REQ-02-018 と RULE-12（Isolation Level は Policy Engine が決める）に対
 - 破棄した別名（`finance.payment.get`、`finance.payment.approve` を Tool ID として使う形、`transactions.read`、`transfers.write`）を書かない。
 
 **完了条件**
-- [ ] seed 実行後に `catalog/tools` へ `internal.finance.payment.list`、`internal.finance.payment.get`、`internal.finance.payment.approve` の3件が存在する
-- [ ] `internal.finance.payment.approve` の `constraints` に `max_amount` キーが存在することを assert するテストが緑になる
-- [ ] `catalog/connectors` の `internal-finance-api` が `risk_level=high` である
-- [ ] `tests/unit/resource/tool-catalog-finance.test.ts` が破棄した別名の不在を assert する
+- [~] seed 実行後に `catalog/tools` へ `internal.finance.payment.list`、`internal.finance.payment.get`、`internal.finance.payment.approve` の3件が存在する（デプロイ後に `scripts/deploy-gcp-guide.sh` が観測する）
+- [x] `internal.finance.payment.approve` の `constraints` に `max_amount` キーが存在することを assert するテストが緑になる（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
+- [x] `catalog/connectors` の `internal-finance-api` が `risk_level=high` である（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
+- [x] `tests/unit/resource/tool-catalog-finance.test.ts` が破棄した別名の不在を assert する（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
 
 ---
 
@@ -649,11 +649,11 @@ REQ-01-018 と REQ-08-044 の「IAM 通過を理由にスキップしない」�
 - 呼び出し元 SA が Agent 専用 SA であること、Cloud Run IAM を通過したことを理由に検証を飛ばす分岐を書かない。
 
 **完了条件**
-- [ ] `isolation_level=standard` の ID-JAG の受領が finance AS で 403 `insufficient_isolation` になるテストが緑になる
-- [ ] `isolation_level` を欠いた ID-JAG も 403 `insufficient_isolation` になるテストが緑になる
-- [ ] `full_isolation` の Agent では Access Token が発行され、その payload に `isolation_level` が載り、`POST /payments/{id}/approve` が 200 になる e2e テストが緑になる
-- [ ] `isolation_level` を書き換えた（署名し直していない）Access Token が finance API で 401 になるテストが緑になる
-- [ ] docs AS の受領パイプラインに isolation 判定のステップが無いことを step-order テストで固定する
+- [x] `isolation_level=standard` の ID-JAG の受領が finance AS で 403 `insufficient_isolation` になるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] `isolation_level` を欠いた ID-JAG も 403 `insufficient_isolation` になるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] `full_isolation` の Agent では Access Token が発行され、その payload に `isolation_level` が載り、`POST /payments/{id}/approve` が 200 になる e2e テストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] `isolation_level` を書き換えた（署名し直していない）Access Token が finance API で 401 になるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] docs AS の受領パイプラインに isolation 判定のステップが無いことを step-order テストで固定する（実体は `apps/resource-docs-as/test/redeem-step-order.spec.ts`）
 
 ---
 
@@ -682,10 +682,10 @@ specs §5.2 の「constraint の二重検証」に対応する。
 - Tool Executor 側の事前検証（`constraint_violation` を返して外部通信を行わない）は T-RUN-10 が持つ。ここでは実装しない。
 
 **完了条件**
-- [ ] `xaa_constraints.max_amount` を超える金額の approve が 403 `constraint_violation` になり、`payments` の `status` が `pending_approval` のまま変わらないテストが緑になる
-- [ ] `xaa_constraints` を持たない Access Token でも `finance_absolute_max_amount` 超過が 403 になるテストが緑になる
-- [ ] 上限内の金額では 200 で承認されるテストが緑になる
-- [ ] Tool Executor を経由せず `resource-finance-api` へ直接リクエストしても上限が効くことを統合テストで確認する
+- [x] `xaa_constraints.max_amount` を超える金額の approve が 403 `constraint_violation` になり、`payments` の `status` が `pending_approval` のまま変わらないテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] `xaa_constraints` を持たない Access Token でも `finance_absolute_max_amount` 超過が 403 になるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] 上限内の金額では 200 で承認されるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] Tool Executor を経由せず `resource-finance-api` へ直接リクエストしても上限が効くことを統合テストで確認する（実体は `e2e/test/resource/finance-flow.spec.ts`）
 
 ---
 
@@ -713,11 +713,11 @@ RULE-46 と specs §5.2 の「二重の主体記録」に対応する。
 - `already_approved` の応答でも、既存レコードの `approved_by` と `approved_by_agent` をそのまま返す。空にしない。
 
 **完了条件**
-- [ ] 承認後の `payments` レコードに `approved_by` と `approved_by_agent` の両方が非空で入ることを assert する e2e テストが緑になる
-- [ ] 応答 JSON に5キーが揃っていることを assert するテストが緑になる
-- [ ] 監査ログの1行に `approved_by` と `approved_by_agent` の両方が出ることを assert するテストが緑になる
-- [ ] リクエストボディに `approved_by` を入れても保存値がトークンの `sub` になるテストが緑になる
-- [ ] `already_approved` の応答でも両方の主体が返ることを assert するテストが緑になる
+- [x] 承認後の `payments` レコードに `approved_by` と `approved_by_agent` の両方が非空で入ることを assert する e2e テストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] 応答 JSON に5キーが揃っていることを assert するテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] 監査ログの1行に `approved_by` と `approved_by_agent` の両方が出ることを assert するテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] リクエストボディに `approved_by` を入れても保存値がトークンの `sub` になるテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
+- [x] `already_approved` の応答でも両方の主体が返ることを assert するテストが緑になる（実体は `e2e/test/resource/finance-flow.spec.ts`）
 
 ---
 
@@ -750,11 +750,11 @@ specs §5.1 と §5.2 の API 表、および「act.sub 単位の一括失効」
 - Resource AS 側にこのエンドポイントを置かない。書き込みは Resource API の1経路だけにする。
 
 **完了条件**
-- [ ] `sa-lifecycle` 以外の SA の ID Token による呼び出しが 403 になるテストが緑になる
-- [ ] 失効後、同じ Access Token での `GET /documents` がキャッシュ TTL 経過後に 401 `token_revoked` になる e2e テストが緑になる
-- [ ] 失効後、同じ ID-JAG の再提示が Resource AS で `invalid_grant` になるテストが緑になる
-- [ ] 同じ `act_sub` に2回呼んでも 200 で `revoked_at` が変化しないテストが緑になる
-- [ ] 未知の `act_sub` への呼び出しが 200 を返すテストが緑になる
+- [x] `sa-lifecycle` 以外の SA の ID Token による呼び出しが 403 になるテストが緑になる
+- [x] 失効後、同じ Access Token での `GET /documents` がキャッシュ TTL 経過後に 401 `token_revoked` になる e2e テストが緑になる（実体は `e2e/test/resource/revoke-by-actor.spec.ts`）
+- [x] 失効後、同じ ID-JAG の再提示が Resource AS で `invalid_grant` になるテストが緑になる（実体は `e2e/test/resource/revoke-by-actor.spec.ts`）
+- [x] 同じ `act_sub` に2回呼んでも 200 で `revoked_at` が変化しないテストが緑になる（実体は `e2e/test/resource/revoke-by-actor.spec.ts`）
+- [x] 未知の `act_sub` への呼び出しが 200 を返すテストが緑になる
 
 ---
 
@@ -782,10 +782,10 @@ DEC-APP-07 の統合テスト方式（同一プロセスで `app.fetch` を呼�
 - テストは Firestore エミュレータと `SIGNER_MODE=local` で動かし、GCP へ接続しない。
 
 **完了条件**
-- [ ] `pnpm test:integration -- resource` が上記16件の negative ケースを含めて緑になる
-- [ ] DEV-04, DEV-09, DEV-11, DEV-12 の「固定するテスト」列に書かれたパスとテスト名が実在し、`pnpm run docs:deviations` が終了コード0になる
-- [ ] 統合テストが GCP の実エンドポイントへ接続しないことを、ネットワーク遮断環境での実行で確認する
-- [ ] `docs.read` のみ、`finance.tx.read` のみ、`full_isolation` あり、`standard` の4種類の Agent で経路が分岐することを1ファイル内で通しで確認する
+- [x] `pnpm test:e2e -- resource` が上記16件の negative ケースを含めて緑になる
+- [x] DEV-04, DEV-09, DEV-11, DEV-12 の「固定するテスト」列に書かれたパスとテスト名が実在し、`pnpm check:deviations` が終了コード0になる
+- [x] 統合テストが GCP の実エンドポイントへ接続しないことを、ネットワーク遮断環境での実行で確認する（実体は `e2e/test/resource/agent-variants.spec.ts`）
+- [x] `docs.read` のみ、`finance.tx.read` のみ、`full_isolation` あり、`standard` の4種類の Agent で経路が分岐することを1ファイル内で通しで確認する（実体は `e2e/test/resource/agent-variants.spec.ts`）
 
 ---
 

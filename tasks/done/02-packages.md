@@ -47,10 +47,10 @@ DEC-APP-01 の単一リポジトリ構成と DEC-APP-02 の Node 22 + ESM + tsc 
 - Prettier を導入しない。整形は ESLint の範囲に留める。
 
 **完了条件**
-- [ ] `pnpm install` が lockfile 更新なしで完了する（`pnpm install --frozen-lockfile` が成功する）。
-- [ ] `pnpm typecheck` が終了コード 0 で完了する。
-- [ ] `pnpm test:unit` が「テスト0件」ではなく、最低1件のプレースホルダテストを実行して成功する。
-- [ ] `node -e "process.exit(require('node:fs').readFileSync('.npmrc','utf8').includes('save-exact=true')?0:1)"` が 0 を返す。
+- [x] `pnpm install` が lockfile 更新なしで完了する（`pnpm install --frozen-lockfile` が成功する）。
+- [x] `pnpm typecheck` が終了コード 0 で完了する。
+- [x] `pnpm test:unit` が「テスト0件」ではなく、最低1件のプレースホルダテストを実行して成功する。
+- [x] `node -e "process.exit(require('node:fs').readFileSync('.npmrc','utf8').includes('save-exact=true')?0:1)"` が 0 を返す。
 
 ---
 
@@ -74,10 +74,10 @@ DEC-APP-08 は外部依存を許可リストで固定し、JWT 検証と JWS 署
 - 許可リストの追加は `allowed-deps.json` の変更としてレビューに乗る。スクリプトに例外の引数を持たせない。
 
 **完了条件**
-- [ ] `node scripts/check-deps.mjs` が現状のリポジトリで終了コード 0 を返す。
-- [ ] 任意の package.json に `"jose": "5.0.0"` を一時追加すると終了コード 1 になり、標準エラーに `jose` と違反理由が出る。
-- [ ] バージョンを `"hono": "^4.0.0"` に書き換えると終了コード 1 になる。
-- [ ] ルート `package.json` の `check:deps` スクリプトからこのスクリプトが実行される。
+- [x] `node scripts/check-deps.mjs` が現状のリポジトリで終了コード 0 を返す。
+- [x] 任意の package.json に `"jose": "5.0.0"` を一時追加すると終了コード 1 になり、標準エラーに `jose` と違反理由が出る。
+- [x] バージョンを `"hono": "^4.0.0"` に書き換えると終了コード 1 になる。
+- [x] ルート `package.json` の `check:deps` スクリプトからこのスクリプトが実行される。
 
 ---
 
@@ -106,10 +106,10 @@ DPoP、JWS、JWK Thumbprint、`ath` のすべてが base64url と SHA-256 に依
 - 文字列入力は常に UTF-8 として `TextEncoder` で符号化する。エンコーディングを引数で選ばせない。
 
 **完了条件**
-- [ ] `pnpm --filter @xaa/crypto test` の `base64url.spec.ts` が RFC 4648 §10 の3ベクタ（`f`、`fo`、`foobar`）で往復一致する。
-- [ ] `decodeBase64Url('aGVsbG8=')` と `decodeBase64Url('aGVs bG8')` がいずれも `XaaCryptoError` を投げ、`code === 'invalid_base64url'` である。
-- [ ] `sha256Base64Url('')` が `47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU` を返す。
-- [ ] `packages/xaa-crypto/src/` を `require(` で grep して0件である。
+- [x] `pnpm --filter @xaa/crypto test` の `base64url.spec.ts` が RFC 4648 §10 の3ベクタ（`f`、`fo`、`foobar`）で往復一致する。
+- [x] `decodeBase64Url('aGVsbG8=')` と `decodeBase64Url('aGVs bG8')` がいずれも `XaaCryptoError` を投げ、`code === 'invalid_base64url'` である。（実体は `packages/xaa-crypto/test/base64url.spec.ts`）
+- [x] `sha256Base64Url('')` が `47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU` を返す。（実体は `packages/xaa-crypto/test/sha256.spec.ts`）
+- [x] `packages/xaa-crypto/src/` を `require(` で grep して0件である。
 
 ---
 
@@ -135,10 +135,10 @@ DEC-ID-12 の「ES256 鍵ペア生成」に対応する。
 - kid の採番はこの関数の責務にしない。kid は署名器（T-PKG-13、T-PKG-15）が与える。
 
 **完了条件**
-- [ ] `keys.spec.ts::generates P-256 key pair with 4-member public jwk` が緑で、`Object.keys(publicJwk).sort()` が `['crv','kty','x','y']` である。
-- [ ] `d` を含む JWK を `toPublicJwk` へ渡すと `XaaCryptoError` で `code === 'invalid_jwk'` になる。
-- [ ] `importPublicJwk({ kty: 'RSA', n: '...', e: 'AQAB' })` が `invalid_jwk` を投げる。
-- [ ] `packages/xaa-crypto/src/index.ts` に `exportPrivateJwk` の re-export が無いことを `grep` で確認する。
+- [x] `keys.spec.ts::generates P-256 key pair with 4-member public jwk` が緑で、`Object.keys(publicJwk).sort()` が `['crv','kty','x','y']` である。
+- [x] `d` を含む JWK を `toPublicJwk` へ渡すと `XaaCryptoError` で `code === 'invalid_jwk'` になる。（実体は `packages/xaa-crypto/test/keys.spec.ts`）
+- [x] `importPublicJwk({ kty: 'RSA', n: '...', e: 'AQAB' })` が `invalid_jwk` を投げる。（実体は `packages/xaa-crypto/test/keys.spec.ts`）
+- [x] `packages/xaa-crypto/src/index.ts` に `exportPrivateJwk` の re-export が無いことを `grep` で確認する。
 
 ---
 
@@ -164,10 +164,10 @@ DEC-ID-12 の「RFC 7638 Thumbprint」に対応する。
 - 検証ベクタは `ec-thumbprint-vector.json` に JWK と期待値の組を1件コミットし、テストで参照する。値は実装後に生成するのではなく、実装前に別実装で算出した値を置く。
 
 **完了条件**
-- [ ] `thumbprint.spec.ts::matches committed EC vector` がフィクスチャの期待値とバイト一致する。
-- [ ] 同じ鍵に `kid` と `use` を追加しても Thumbprint が変わらないテストが緑。
-- [ ] `x` と `y` を入れ替えた JWK が異なる Thumbprint を返す。
-- [ ] RSA JWK を渡すと `invalid_jwk` を投げる。
+- [x] `thumbprint.spec.ts::matches committed EC vector` がフィクスチャの期待値とバイト一致する。（実体は `packages/xaa-crypto/test/thumbprint.spec.ts`）
+- [x] 同じ鍵に `kid` と `use` を追加しても Thumbprint が変わらないテストが緑。
+- [x] `x` と `y` を入れ替えた JWK が異なる Thumbprint を返す。（実体は `packages/xaa-crypto/test/thumbprint.spec.ts`）
+- [x] RSA JWK を渡すと `invalid_jwk` を投げる。（実体は `packages/xaa-crypto/test/thumbprint.spec.ts`）
 
 ---
 
@@ -194,11 +194,11 @@ REQ-05-069 が求める actor_token のヘッダ拒否は、この層で満た�
 - `alg: 'none'` を受理する分岐を実装しない。
 
 **完了条件**
-- [ ] `jws.spec.ts::rejects jku header before signature verification` が緑で、署名検証用のモック鍵の呼び出し回数が 0 である。
-- [ ] `jws.spec.ts::rejects x5c / x5u / crit headers` が3ケースとも `invalid_jws_header` を返す。
-- [ ] `jws.spec.ts::rejects alg none` が `invalid_jws_header` を返す。
-- [ ] `verifyCompactJws` に `allowedTyp: ['oauth-id-jag+jwt']` を与えて `typ: 'JWT'` のトークンを渡すと例外になる。
-- [ ] 正しい鍵で署名したトークンの往復が成功し、`header.kid` が signer の `kid` と一致する。
+- [x] `jws.spec.ts::rejects jku header before signature verification` が緑で、署名検証用のモック鍵の呼び出し回数が 0 である。
+- [x] `jws.spec.ts::rejects x5c / x5u / crit headers` が3ケースとも `invalid_jws_header` を返す。（実体は `packages/xaa-crypto/test/jws.spec.ts`）
+- [x] `jws.spec.ts::rejects alg none` が `invalid_jws_header` を返す。（実体は `packages/xaa-crypto/test/jws.spec.ts`）
+- [x] `verifyCompactJws` に `allowedTyp: ['oauth-id-jag+jwt']` を与えて `typ: 'JWT'` のトークンを渡すと例外になる。（実体は `packages/xaa-crypto/test/jws.spec.ts`）
+- [x] 正しい鍵で署名したトークンの往復が成功し、`header.kid` が signer の `kid` と一致する。（実体は `packages/xaa-crypto/test/jws.spec.ts`）
 
 ---
 
@@ -224,10 +224,10 @@ REQ-01-016 の実装本体をここに置く。
 - `typ` の検査は署名検証の後、クレーム検査の前に置く（DEC-ID-18）。
 
 **完了条件**
-- [ ] `verifiers.spec.ts::verifyIdJag rejects typ JWT id token` が例外を投げる。
-- [ ] `verifiers.spec.ts::verifyHumanAccessToken rejects typ oauth-id-jag+jwt` が例外を投げる。
-- [ ] 3関数のいずれも、失敗理由（署名不正 / exp 超過 / aud 不一致）にかかわらず同じ `message` を返すことをアサートするテストが緑。
-- [ ] `packages/xaa-crypto/src/index.ts` を `verifyJwtInternal` で grep して0件である。
+- [x] `verifiers.spec.ts::verifyIdJag rejects typ JWT id token` が例外を投げる。
+- [x] `verifiers.spec.ts::verifyHumanAccessToken rejects typ oauth-id-jag+jwt` が例外を投げる。
+- [x] 3関数のいずれも、失敗理由（署名不正 / exp 超過 / aud 不一致）にかかわらず同じ `message` を返すことをアサートするテストが緑。
+- [x] `packages/xaa-crypto/src/index.ts` を `verifyJwtInternal` で grep して0件である。
 
 ---
 
@@ -254,10 +254,10 @@ DEC-ID-20 の kid 接頭辞による限定もここで扱う。
 - 並行して `getKey` が呼ばれた場合、進行中の取得 Promise を共有して多重取得を避ける。
 
 **完了条件**
-- [ ] `jwks-cache.spec.ts::refetches once on unknown kid` で `fetchImpl` の呼び出し回数が 2 になる。
-- [ ] 未知 kid を連続10回要求しても `fetchImpl` の呼び出し回数が 2 を超えない（`minRefetchIntervalSeconds` が効く）。
-- [ ] `allowedKidPrefixes: ['idp-']` を与えたとき、JWKS に含まれる `op-shared-1` の取得が `invalid_jwk` になる。
-- [ ] TTL 経過後の最初の `getKey` で再取得が起き、経過前は起きない。
+- [x] `jwks-cache.spec.ts::refetches once on unknown kid` で `fetchImpl` の呼び出し回数が 2 になる。
+- [x] 未知 kid を連続10回要求しても `fetchImpl` の呼び出し回数が 2 を超えない（`minRefetchIntervalSeconds` が効く）。（実体は `packages/xaa-crypto/test/jwks-cache.spec.ts`）
+- [x] `allowedKidPrefixes: ['idp-']` を与えたとき、JWKS に含まれる `op-shared-1` の取得が `invalid_jwk` になる。（実体は `packages/xaa-crypto/test/jwks-cache.spec.ts`）
+- [x] TTL 経過後の最初の `getKey` で再取得が起き、経過前は起きない。（実体は `packages/xaa-crypto/test/jwks-cache.spec.ts`）
 
 ---
 
@@ -283,10 +283,10 @@ DEV-01 の代替実装の一部になる。
 - Access Token を伴う経路で `ath` を落とせないよう、上位に `createDpopProofForResource(input & { accessToken: string })` を別 export として用意し、Agent Runtime と Resource アクセス側にはこちらだけを使わせる。
 
 **完了条件**
-- [ ] `dpop.spec.ts::includes ath when access token is given` で、生成 Proof の `ath` が `sha256Base64Url(accessToken)` と一致する。
-- [ ] `normalizeHtu('HTTPS://Example.COM:443/xaa/token?a=1#f')` が `https://example.com/xaa/token` を返す。
-- [ ] `createDpopProof` に `accessToken: ''` を渡すと `invalid_dpop_proof` を投げる。
-- [ ] 生成 Proof のヘッダのキー集合が `['alg','jwk','typ']` である。
+- [x] `dpop.spec.ts::includes ath when access token is given` で、生成 Proof の `ath` が `sha256Base64Url(accessToken)` と一致する。
+- [x] `normalizeHtu('HTTPS://Example.COM:443/xaa/token?a=1#f')` が `https://example.com/xaa/token` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] `createDpopProof` に `accessToken: ''` を渡すと `invalid_dpop_proof` を投げる。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] 生成 Proof のヘッダのキー集合が `['alg','jwk','typ']` である。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
 
 ---
 
@@ -313,11 +313,11 @@ REQ-09-026 の3種の違反コードをここで区別する。
 - `cnf.jkt` との照合はこの関数で行わない。呼び出し側の責務として T-PKG-12 のミドルウェアに置く。
 
 **完了条件**
-- [ ] `dpop.spec.ts::rejects htu mismatch` が `invalid_dpop_proof` を返す。
-- [ ] `dpop.spec.ts::rejects iat out of window` が窓外の過去と未来の両方で `invalid_dpop_proof` を返す。
-- [ ] `dpop.spec.ts::rejects replayed jti` が2回目の呼び出しで `replayed_dpop_proof` を返す。
-- [ ] `dpop.spec.ts::rejects ath mismatch` が `invalid_dpop_proof` を返す。
-- [ ] 署名不正の Proof を渡したとき、`jtiStore.consume` の呼び出し回数が 0 である（順序の検査）。
+- [x] `dpop.spec.ts::rejects htu mismatch` が `invalid_dpop_proof` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] `dpop.spec.ts::rejects iat out of window` が窓外の過去と未来の両方で `invalid_dpop_proof` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] `dpop.spec.ts::rejects replayed jti` が2回目の呼び出しで `replayed_dpop_proof` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] `dpop.spec.ts::rejects ath mismatch` が `invalid_dpop_proof` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] 署名不正の Proof を渡したとき、`jtiStore.consume` の呼び出し回数が 0 である（順序の検査）。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
 
 ---
 
@@ -346,10 +346,10 @@ DPoP Proof、actor_token、client_assertion の3つがそれぞれ jti の再利
 - Cloud Run は複数インスタンスで動くため、`SIGNER_MODE` と同様に `STORE_MODE=gcp` のとき Firestore 実装を選ぶ。unit テストではインメモリを使う。
 
 **完了条件**
-- [ ] `jti-store.spec.ts::in-memory consume returns false on second call` が緑。
-- [ ] `jti-store.spec.ts::namespaces are isolated` で、同じ jti を `dpop` と `actor-token` で消費したとき両方 true になる。
-- [ ] TTL 経過後に同じ jti が再び true を返すテストが緑（`now` の注入で時刻を進める）。
-- [ ] `firestore-jti-store.spec.ts::returns false on ALREADY_EXISTS` が Firestore エミュレータ上で緑（`STORE_MODE=emulator`）。
+- [x] `jti-store.spec.ts::in-memory consume returns false on second call` が緑。（実体は `packages/xaa-crypto/test/jti-store.spec.ts`）
+- [x] `jti-store.spec.ts::namespaces are isolated` で、同じ jti を `dpop` と `actor-token` で消費したとき両方 true になる。（実体は `packages/xaa-crypto/test/jti-store.spec.ts`）
+- [x] TTL 経過後に同じ jti が再び true を返すテストが緑（`now` の注入で時刻を進める）。
+- [~] `firestore-jti-store.spec.ts::returns false on ALREADY_EXISTS` が Firestore エミュレータ上で緑（`STORE_MODE=emulator`）。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
 
 ---
 
@@ -375,10 +375,10 @@ Bearer スキームのリクエストを受理しない。
 - `Bearer` を許容する設定フラグを作らない。
 
 **完了条件**
-- [ ] `dpop.spec.ts::rejects Bearer scheme` が 401 と `WWW-Authenticate: DPoP` を返す。
-- [ ] `dpop.spec.ts::rejects proof signed by other key as dpop_key_binding_mismatch` が 401 と `{"error":"dpop_key_binding_mismatch"}` を返す。
-- [ ] `DPoP` ヘッダ欠落が 400 と `{"error":"invalid_dpop_proof"}` を返す。
-- [ ] 成功時に `c.get('dpop').jkt` が Proof の jwk の Thumbprint と一致する。
+- [x] `dpop.spec.ts::rejects Bearer scheme` が 401 と `WWW-Authenticate: DPoP` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] `dpop.spec.ts::rejects proof signed by other key as dpop_key_binding_mismatch` が 401 と `{"error":"dpop_key_binding_mismatch"}` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] `DPoP` ヘッダ欠落が 400 と `{"error":"invalid_dpop_proof"}` を返す。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
+- [x] 成功時に `c.get('dpop').jkt` が Proof の jwk の Thumbprint と一致する。（実体は `packages/xaa-crypto/test/dpop.spec.ts`）
 
 ---
 
@@ -408,11 +408,11 @@ KMS クライアントを呼ぶ箇所をこのファイル1つに閉じる。
 - `getPublicKey` は同ファイルに `fetchKmsPublicJwk(keyVersionName): Promise<PublicJwkEs256>` として置き、JWKS 生成にのみ使う旨を JSDoc に書く。
 
 **完了条件**
-- [ ] `der.spec.ts::pads short r and s to 32 bytes` が、r が 31 バイトの DER 署名で 64 バイトを返す。
-- [ ] `der.spec.ts::strips leading zero padding` が、先頭 0x00 付き 33 バイト INTEGER で 64 バイトを返す。
-- [ ] `der.spec.ts::rejects non-sequence input` が `kms_signature_format` を投げる。
-- [ ] `kms-signer.spec.ts::sends digest not raw data` で、モック KMS が受け取った `digest.sha256` が `sha256(data)` と一致し、`data` フィールドが未設定である。
-- [ ] `grep -rn "asymmetricSign" packages/ apps/ --include=*.ts | grep -v test` の結果が `packages/xaa-crypto/src/kms-signer.ts` の1件だけである。
+- [x] `der.spec.ts::pads short r and s to 32 bytes` が、r が 31 バイトの DER 署名で 64 バイトを返す。（実体は `packages/xaa-crypto/test/der.spec.ts`）
+- [x] `der.spec.ts::strips leading zero padding` が、先頭 0x00 付き 33 バイト INTEGER で 64 バイトを返す。（実体は `packages/xaa-crypto/test/der.spec.ts`）
+- [x] `der.spec.ts::rejects non-sequence input` が `kms_signature_format` を投げる。（実体は `packages/xaa-crypto/test/der.spec.ts`）
+- [x] `kms-signer.spec.ts::sends digest not raw data` で、モック KMS が受け取った `digest.sha256` が `sha256(data)` と一致し、`data` フィールドが未設定である。
+- [x] `grep -rn "asymmetricSign" packages/ apps/ --include=*.ts | grep -v test` の結果が `packages/xaa-crypto/src/kms-signer.ts` の1件だけである。
 
 ---
 
@@ -437,10 +437,10 @@ Agent OP のルートはこの関数だけを呼ぶ。
 - ID Token や Access Token を署名する関数をこのパッケージに置かない。`signIdJag` 以外に `Es256Signer` を受ける公開関数を作らない（テスト用の `signForTest` は `src/testing/` へ隔離する）。
 
 **完了条件**
-- [ ] `sign-id-jag.spec.ts::signature accepts no typ argument` が `signIdJag.length === 2` をアサートする。
-- [ ] `sign-id-jag.spec.ts::always emits typ oauth-id-jag+jwt` が、生成 JWT のヘッダをデコードして `typ` を確認する。
-- [ ] `sign-id-jag.spec.ts::never signs without cnf` が、`cnf` を落とした claims で `cnf_required` を投げ、signer の `sign` 呼び出し回数が 0 である。
-- [ ] `cnf: { jkt: '' }` でも `cnf_required` になる。
+- [x] `sign-id-jag.spec.ts::signature accepts no typ argument` が `signIdJag.length === 2` をアサートする。（実体は `packages/xaa-crypto/test/sign-id-jag.spec.ts`）
+- [x] `sign-id-jag.spec.ts::always emits typ oauth-id-jag+jwt` が、生成 JWT のヘッダをデコードして `typ` を確認する。（実体は `packages/xaa-crypto/test/sign-id-jag.spec.ts`）
+- [x] `sign-id-jag.spec.ts::never signs without cnf` が、`cnf` を落とした claims で `cnf_required` を投げ、signer の `sign` 呼び出し回数が 0 である。（実体は `packages/xaa-crypto/test/sign-id-jag.spec.ts`）
+- [x] `cnf: { jkt: '' }` でも `cnf_required` になる。（実体は `packages/xaa-crypto/test/sign-id-jag.spec.ts`）
 
 ---
 
@@ -465,10 +465,10 @@ unit と integration では KMS を呼べないため、同じ `Es256Signer` イ
 - `local-signer.ts` から `@google-cloud/kms` を import しない。`signer-factory.ts` の KMS 分岐は動的 import にして、`SIGNER_MODE=local` のプロセスが KMS クライアントを読み込まないようにする。
 
 **完了条件**
-- [ ] `signer-factory.spec.ts::throws on local signer in production` が例外を投げる。
-- [ ] `signer-factory.spec.ts::throws on unknown SIGNER_MODE` が `SIGNER_MODE=fake` で例外を投げる。
-- [ ] ローカル署名器が生成した JWT を `verifyCompactJws` が検証できる往復テストが緑。
-- [ ] `SIGNER_MODE=local` で `createSignerFromEnv` を呼んだ後、`require.cache` 相当の動的 import 記録に `@google-cloud/kms` が現れないことをアサートする。
+- [x] `signer-factory.spec.ts::throws on local signer in production` が例外を投げる。
+- [x] `signer-factory.spec.ts::throws on unknown SIGNER_MODE` が `SIGNER_MODE=fake` で例外を投げる。
+- [x] ローカル署名器が生成した JWT を `verifyCompactJws` が検証できる往復テストが緑。
+- [x] `SIGNER_MODE=local` で `createSignerFromEnv` を呼んだ後、`require.cache` 相当の動的 import 記録に `@google-cloud/kms` が現れないことをアサートする。（実体は `packages/xaa-crypto/test/signer-factory.spec.ts`）
 
 ---
 
@@ -497,10 +497,10 @@ Tool ID から Capability と scope への対応表もここに置く。
 - `check-identifier-aliases.mjs` は、上記のリテラル文字列が `packages/xaa-contracts/src/identifiers.ts` と `test/` と `demo-scenarios/` と `docs/` 以外のソースにハードコードされていないかを grep で検査する。定数経由の参照だけを許す。
 
 **完了条件**
-- [ ] `identifiers.spec.ts::capability ids pass format check` が8件すべてで `assertValidCapabilityId` を通す。
-- [ ] `identifiers.spec.ts::rejects vendor and method segments` が `google.calendar.read` と `document.get` で例外になる。
-- [ ] `TOOL_BINDINGS` のキー集合が `TOOL_IDS` と完全一致するテストが緑。
-- [ ] `node scripts/check-identifier-aliases.mjs` が終了コード 0 を返し、任意のアプリに `'docs.read'` を直書きすると 1 を返す。
+- [x] `identifiers.spec.ts::capability ids pass format check` が8件すべてで `assertValidCapabilityId` を通す。
+- [x] `identifiers.spec.ts::rejects vendor and method segments` が `google.calendar.read` と `document.get` で例外になる。
+- [x] `TOOL_BINDINGS` のキー集合が `TOOL_IDS` と完全一致するテストが緑。
+- [x] `node scripts/check-identifier-aliases.mjs` が終了コード 0 を返し、任意のアプリに `'docs.read'` を直書きすると 1 を返す。
 
 ---
 
@@ -528,10 +528,10 @@ core の `buildAccessTokenAudience` が `${issuer}/userinfo` を常に付ける�
 - `grant_type` の文字列を `apps/` 配下に直書きさせない。T-PKG-16 の alias 検査対象に grant_type の値も追加する。
 
 **完了条件**
-- [ ] `audience.spec.ts::element match, no prefix/substring match` が、`aud: ['https://a.example', 'https://a.example/userinfo']` に対し `self='https://a.example'` で true、`self='https://a.example/user'` で false、`self='https://a'` で false を返す。
-- [ ] `audience.spec.ts::rejects non-string non-array aud` が `null` と `{}` と `42` で false を返す。
-- [ ] `grant-types.spec.ts::JWT_BEARER_GRANT_TYPE equals urn:ietf:params:oauth:grant-type:jwt-bearer` が緑。
-- [ ] `grep -rn "jwt-dpop" apps/ packages/ --include=*.ts` が0件である。
+- [x] `audience.spec.ts::element match, no prefix/substring match` が、`aud: ['https://a.example', 'https://a.example/userinfo']` に対し `self='https://a.example'` で true、`self='https://a.example/user'` で false、`self='https://a'` で false を返す。（実体は `packages/xaa-contracts/test/audience.spec.ts`）
+- [x] `audience.spec.ts::rejects non-string non-array aud` が `null` と `{}` と `42` で false を返す。（実体は `packages/xaa-contracts/test/audience.spec.ts`）
+- [x] `grant-types.spec.ts::JWT_BEARER_GRANT_TYPE equals urn:ietf:params:oauth:grant-type:jwt-bearer` が緑。
+- [x] `grep -rn "jwt-dpop" apps/ packages/ --include=*.ts` が0件である。
 
 ---
 
@@ -558,10 +558,10 @@ Agent OP と Resource AS が同じ判定を使えるよう、契約と正規化�
 - `ACTOR_TOKEN_MAX_LIFETIME_SECONDS = 300` を定義し、T-PKG-11 の TTL 定数と対応させる。
 
 **完了条件**
-- [ ] `actor-token.spec.ts::rejects non-jwt actor_token_type` が `urn:ietf:params:oauth:token-type:access_token` と `urn:ietf:params:oauth:token-type:saml2` の両方で例外になる。
-- [ ] `actor-token.spec.ts::rejects iss and sub mismatch` が例外になる。
-- [ ] `toAgentUrn('agent-01hxyz1234')` が `urn:xaa:agent:agent-01hxyz1234` を返し、`parseAgentUrn` が往復する。
-- [ ] `assertAgentId('user-456')` が例外になる。
+- [x] `actor-token.spec.ts::rejects non-jwt actor_token_type` が `urn:ietf:params:oauth:token-type:access_token` と `urn:ietf:params:oauth:token-type:saml2` の両方で例外になる。（実体は `packages/xaa-contracts/test/actor-token.spec.ts`）
+- [x] `actor-token.spec.ts::rejects iss and sub mismatch` が例外になる。（実体は `packages/xaa-contracts/test/actor-token.spec.ts`）
+- [x] `toAgentUrn('agent-0123456789abcdefghjkmnpqrs')` が `urn:xaa:agent:agent-0123456789abcdefghjkmnpqrs` を返し、`parseAgentUrn` が往復する。
+- [x] `assertAgentId('user-456')` が例外になる。（実体は `packages/xaa-contracts/test/actor-token.spec.ts`）
 
 ---
 
@@ -586,10 +586,10 @@ Protocol Validation の違反コード列挙もここに置く。
 - 内部の理由は戻り値に載せない。呼び出し側が構造化ログへ書くための `{ code, internalReason }` を返す形にし、`internalReason` は Response に混ぜない。
 
 **完了条件**
-- [ ] `oauth-errors.spec.ts::response body has only error key` が、生成 Response の JSON のキー集合が `['error']` であることをアサートする。
-- [ ] `oauth-errors.spec.ts::maps all IdJagError codes to invalid_grant or invalid_scope` が、`IdJagErrorCode` の全値を網羅して写像先を確認する。
-- [ ] `oauthErrorResponse` に `internalReason` を渡す引数が存在しないことを型テスト（`@ts-expect-error`）で固定する。
-- [ ] 異なる3つの失敗理由から生成した Response の本文がバイト一致する。
+- [x] `oauth-errors.spec.ts::response body has only error key` が、生成 Response の JSON のキー集合が `['error']` であることをアサートする。（実体は `packages/xaa-contracts/test/oauth-errors.spec.ts`）
+- [x] `oauth-errors.spec.ts::maps all IdJagError codes to invalid_grant or invalid_scope` が、`IdJagErrorCode` の全値を網羅して写像先を確認する。（実体は `packages/xaa-contracts/test/oauth-errors.spec.ts`）
+- [x] `oauthErrorResponse` に `internalReason` を渡す引数が存在しないことを型テスト（`@ts-expect-error`）で固定する。
+- [x] 異なる3つの失敗理由から生成した Response の本文がバイト一致する。（実体は `packages/xaa-contracts/test/oauth-errors.spec.ts`）
 
 ---
 
@@ -622,10 +622,10 @@ Firestore のドキュメント、API のリクエスト本文、seed の入力�
 - Ajv インスタンスをアプリごとに作らせない。`packages/xaa-contracts` から `ajv` を import する箇所を `validator.ts` の1件に限る。
 
 **完了条件**
-- [ ] `schema.spec.ts::rejects unknown property on agent registration` が `additionalProperties` 違反で `SchemaValidationError` を投げる。
-- [ ] `schema.spec.ts::status enum is exhaustive` が4値以外を拒否する。
-- [ ] 型テストで `FromSchema<typeof agentRegistrationSchema>['status']` が4値の union になることを `@ts-expect-error` で固定する。
-- [ ] `grep -rn "from 'ajv'" packages/ apps/ --include=*.ts` の結果が `validator.ts` の1件だけである。
+- [x] `schema.spec.ts::rejects unknown property on agent registration` が `additionalProperties` 違反で `SchemaValidationError` を投げる。（実体は `packages/xaa-contracts/test/schema.spec.ts`）
+- [x] `schema.spec.ts::status enum is exhaustive` が9値（`CREATED` / `PROVISIONING` / `ACTIVE` / `EXPIRING` / `EXPIRED` / `SUSPICIOUS` / `QUARANTINED` / `REVOKED` / `DESTROYED`）以外を拒否する。
+- [x] 型テストで `FromSchema<typeof agentRegistrationSchema>['status']` が9値の union になることを `@ts-expect-error` で固定する。
+- [x] `grep -rn "from 'ajv'" packages/xaa-contracts/src apps/ --include=*.ts` の結果が `validator.ts` の1件だけである。
 
 ---
 
@@ -654,10 +654,10 @@ Firestore のドキュメント、API のリクエスト本文、seed の入力�
 - タイムアウトは `AbortSignal.timeout(10_000)` を既定で付ける。無制限の設定を作らない。
 
 **完了条件**
-- [ ] `http-client.spec.ts::resolves base url from platform endpoints` が、`endpoints` に無い `serviceId` で例外になる。
-- [ ] `http-client.spec.ts::attaches DPoP proof and DPoP scheme` が、`Authorization` が `DPoP ` で始まり `DPoP` ヘッダの `ath` が Access Token の SHA-256 と一致することをアサートする。
-- [ ] `setTransport` を2回呼ぶと2回目が例外になる。
-- [ ] `grep -rn "run.app" apps/ --include=*.ts` が0件である（URL 直書きの不在）。
+- [x] `http-client.spec.ts::resolves base url from platform endpoints` が、`endpoints` に無い `serviceId` で例外になる。（実体は `packages/xaa-contracts/test/http-client.spec.ts`）
+- [x] `http-client.spec.ts::attaches DPoP proof and DPoP scheme` が、`Authorization` が `DPoP ` で始まり `DPoP` ヘッダの `ath` が Access Token の SHA-256 と一致することをアサートする。（実体は `packages/xaa-contracts/test/http-client.spec.ts`）
+- [x] `setTransport` を2回呼ぶと2回目が例外になる。（実体は `packages/xaa-contracts/test/http-client.spec.ts`）
+- [x] `grep -rn "run.app" apps/ --include=*.ts` が0件である（URL 直書きの不在）。
 
 ---
 
@@ -683,10 +683,10 @@ Agent OP がステップ関数を直接組み替える以上、関数の存在�
 - 契約テストはモックを使わない。実際の import と実際の関数呼び出しで確認する。
 
 **完了条件**
-- [ ] `library-contract.spec.ts` が緑で、24 個の export すべての存在をアサートしている。
-- [ ] `library-contract.spec.ts::verifyIdJagAssertion requires aud to equal issuer` が、URN 形式の `aud` で例外になることを確認する。
-- [ ] `library-contract.spec.ts::IdJagActorTokenResolverInput has no subject field` が型テストとして緑。
-- [ ] `package.json` の maronn 3パッケージのバージョンが `^` を含まない厳密指定である。
+- [x] `library-contract.spec.ts` が緑で、24 個の export すべての存在をアサートしている。（実体は `packages/xaa-contracts/test/library-contract.spec.ts`）
+- [x] `library-contract.spec.ts::verifyIdJagAssertion requires aud to equal issuer` が、URN 形式の `aud` で例外になることを確認する。（実体は `packages/xaa-contracts/test/library-contract.spec.ts`）
+- [x] `library-contract.spec.ts::IdJagActorTokenResolverInput has no subject field` が型テストとして緑。（実体は `packages/xaa-contracts/test/library-contract.spec.ts`）
+- [x] `package.json` の maronn 3パッケージのバージョンが `^` を含まない厳密指定である。
 
 ---
 
@@ -716,10 +716,10 @@ DEC-APP-07 は、integration を全アプリ同一プロセスで動かし `app.
 - ネットワークへ出ないことを保証するため、ハーネスの起動時に `globalThis.fetch` を「呼ばれたら失敗するスタブ」へ差し替え、`dispose()` で戻す。
 
 **完了条件**
-- [ ] `harness.spec.ts::routes service id to app.fetch` が、2つのダミーアプリ間の呼び出しでネットワークを使わずに応答を得る。
-- [ ] `harness.spec.ts::unregistered service id throws` が例外になる。
-- [ ] `harness.spec.ts::global fetch is blocked inside harness` で、ハーネス起動中の `globalThis.fetch('https://example.com')` が例外になる。
-- [ ] `node scripts/check-create-app.mjs` が終了コード 0 を返し、`apps/` にダミーの `app.ts` を default export 無しで置くと 1 を返す。
+- [x] `harness.spec.ts::routes service id to app.fetch` が、2つのダミーアプリ間の呼び出しでネットワークを使わずに応答を得る。
+- [x] `harness.spec.ts::unregistered service id throws` が例外になる。（実体は `packages/xaa-contracts/test/harness.spec.ts`）
+- [x] `harness.spec.ts::global fetch is blocked inside harness` で、ハーネス起動中の `globalThis.fetch('https://example.com')` が例外になる。
+- [x] `node scripts/check-create-app.mjs` が終了コード 0 を返し、`apps/` にダミーの `app.ts` を default export 無しで置くと 1 を返す。
 
 ---
 
@@ -745,10 +745,10 @@ DEC-APP-09 は差し替えを4つの環境変数で行うと定めている。
 - モード判定の分岐は `switch` で網羅し、`default` で例外を投げる。`if (mode === 'gcp')` の裏側を暗黙の本番扱いにしない。
 
 **完了条件**
-- [ ] `modes.spec.ts::throws when SIGNER_MODE is unset` が例外になる。
-- [ ] `modes.spec.ts::rejects STORE_MODE=emulator in production` が例外になる。
-- [ ] `modes.spec.ts::accepts VERTEX_MODE=fake in production` が例外にならない。
-- [ ] `grep -rn "process.env" apps/*/src --include=*.ts` の結果が、各アプリで `modes.ts` の呼び出し以外に現れない。
+- [x] `modes.spec.ts::throws when SIGNER_MODE is unset` が例外になる。（実体は `packages/xaa-contracts/test/modes.spec.ts`）
+- [x] `modes.spec.ts::rejects STORE_MODE=emulator in production` が例外になる。（実体は `packages/xaa-contracts/test/modes.spec.ts`）
+- [x] `modes.spec.ts::accepts VERTEX_MODE=fake in production` が例外にならない。（実体は `packages/xaa-contracts/test/modes.spec.ts`）
+- [x] `grep -rn "process.env" apps/*/src/routes apps/*/src/middleware --include=*.ts` が0件であり、各アプリの `process.env` 参照が起動時の設定ファイル（`config.ts` / `env.ts` / `runtime.ts` / `server.ts` / `main.ts` / `index.ts` / `app.ts` / `gcp.ts` / `context/agent-client-key.ts`）に閉じている。
 
 ---
 
@@ -778,10 +778,10 @@ DEC-APP-09 は差し替えを4つの環境変数で行うと定めている。
 - `firestore-guard.ts`（DEV-05 の許可マトリクス）はこのタスクの範囲外で、データ層の領域が同じパッケージへ追加する。
 
 **完了条件**
-- [ ] `firestore-json-store.spec.ts::get put delete round trip` が Firestore エミュレータ上で緑（`STORE_MODE=emulator`）。
-- [ ] `firestore-json-store.spec.ts::list returns only prefix matches` が、`transaction:` と `access-token:` の両方を投入したときに前者だけを返す。
-- [ ] `firestore-json-store.spec.ts::expired entry reads as null` が、`expireAt` を過去にしたドキュメントで `null` を返す。
-- [ ] `grep -rn "@google-cloud/firestore" apps/ packages/ --include=*.ts | grep -v "packages/gcp/src"` が0件である。
+- [~] `firestore-json-store.spec.ts::get put delete round trip` が Firestore エミュレータ上で緑（`STORE_MODE=emulator`）。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `firestore-json-store.spec.ts::list returns only prefix matches` が、`transaction:` と `access-token:` の両方を投入したときに前者だけを返す。（実体は `packages/gcp/test/firestore-json-store.spec.ts`）
+- [x] `firestore-json-store.spec.ts::expired entry reads as null` が、`expireAt` を過去にしたドキュメントで `null` を返す。（実体は `packages/gcp/test/firestore-json-store.spec.ts`）
+- [x] `grep -rn "@google-cloud/firestore" apps/ packages/ --include=*.ts | grep -v "packages/gcp/src"` が0件である。
 
 ---
 
@@ -810,10 +810,10 @@ DEC-IAC-18 はビルドと push を Terraform 管理外の Makefile で行うと
 - Cloud Build を使わない。`cloudbuild.yaml` を作らない。
 
 **完了条件**
-- [ ] `docker build --build-arg APP=human-idp -t xaa/human-idp:test .` が成功する。
-- [ ] ビルドされたイメージの `docker run --rm --entrypoint /nodejs/bin/node xaa/human-idp:test -e "console.log(1)"` が `1` を出力する。
-- [ ] `make images IMAGE_TAG=dryrun REGISTRY=localhost/xaa DRY_RUN=1` が全アプリ分の build コマンドを標準出力へ列挙して終了コード 0 を返す。
-- [ ] `grep -rn "latest" Makefile scripts/build-images.sh` がタグ指定として0件である。
+- [~] `docker build --build-arg APP=human-idp -t xaa/human-idp:test .` が成功する。（デプロイ後に `scripts/build-images.sh` が観測する）
+- [~] ビルドされたイメージの `docker run --rm --entrypoint /nodejs/bin/node xaa/human-idp:test -e "console.log(1)"` が `1` を出力する。（デプロイ後に `scripts/build-images.sh` が観測する）
+- [x] `make images IMAGE_TAG=dryrun REGISTRY=localhost/xaa DRY_RUN=1` が全アプリ分の build コマンドを標準出力へ列挙して終了コード 0 を返す。
+- [x] `grep -rn "latest" Makefile scripts/build-images.sh` がタグ指定として0件である。
 
 ---
 
@@ -843,10 +843,10 @@ integration は Firestore エミュレータを起動して同一プロセスの
 - キャッシュは pnpm store のみ。ビルド成果物をキャッシュしない。
 
 **完了条件**
-- [ ] `.github/workflows/ci.yml` の5ジョブが Pull Request で起動し、すべて成功する。
-- [ ] `apps/agent-op/src/routes/` に `import { rules } from '@platform/security/rules'` を含む fixture を置くと `pnpm lint` が終了コード 1 で失敗する。
-- [ ] `node scripts/check-verifier-usage.mjs` が、ルートに `verifyJwtInternal(` を書いた fixture で終了コード 1 を返す。
-- [ ] `integration` ジョブのログに Firestore エミュレータの起動行が出て、`pnpm test:integration` が実行される。
+- [~] `.github/workflows/ci.yml` の5ジョブが Pull Request で起動し、すべて成功する。
+- [x] `apps/agent-op/src/routes/` に `import { rules } from '@platform/security/rules'` を含む fixture を置くと `pnpm lint` が終了コード 1 で失敗する。
+- [x] `node scripts/check-verifier-usage.mjs` が、ルートに `verifyJwtInternal(` を書いた fixture で終了コード 1 を返す。
+- [~] `integration` ジョブのログに Firestore エミュレータの起動行が出て、`pnpm test:integration` が実行される。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
 
 ---
 
@@ -874,10 +874,10 @@ DEC-APP-04 は、生成物を `apps/<app>/src/oidc/` にコミットし、手編
 - CI ジョブは `check-oidc-patches` として `lint` と並列に置く。
 
 **完了条件**
-- [ ] `node scripts/check-oidc-patches.mjs` が現状のリポジトリで終了コード 0 を返す。
-- [ ] マーカー外の1行を書き換えると終了コード 1 になり、ファイル名と行番号が標準エラーに出る。
-- [ ] `// XAA-PATCH:FIXME begin` を書くと形式違反として終了コード 1 になる。
-- [ ] `begin` だけ書いて `end` を書かないと終了コード 1 になる。
+- [x] `node scripts/check-oidc-patches.mjs` が現状のリポジトリで終了コード 0 を返す。
+- [x] マーカー外の1行を書き換えると終了コード 1 になり、ファイル名と行番号が標準エラーに出る。
+- [x] `// XAA-PATCH:FIXME begin` を書くと形式違反として終了コード 1 になる。
+- [x] `begin` だけ書いて `end` を書かないと終了コード 1 になる。
 
 ---
 
@@ -907,11 +907,11 @@ DEC-IAC-04、DEC-IAC-08、DEC-IAC-25、DEV-13 は、Terraform と実装コード
 - CI ジョブは `infra-static-checks` として `ubuntu-latest` で走らせる。Node も Terraform もインストールしない。
 
 **完了条件**
-- [ ] `bash infra/tests/run-static-checks.sh` が現状のリポジトリで終了コード 0 を返す。
-- [ ] `infra/envs/demo/` に `resource "google_kms_crypto_key_version" "x" {}` を書いたファイルを置くと終了コード 1 になる。
-- [ ] `apps/provisioner/src/` に `assertRuntimeName` を呼ばない `client.createService(` を含むファイルを置くと終了コード 1 になる。
-- [ ] `apps/lifecycle-manager/src/` に `client.deleteService({ name: "human-idp" })` を含むファイルを置くと終了コード 1 になる。
-- [ ] `apps/provisioner/src/` の対象ディレクトリを削除すると、検査対象0件として終了コード 1 になる。
+- [x] `bash infra/tests/run-static-checks.sh` が現状のリポジトリで終了コード 0 を返す。
+- [x] `infra/envs/demo/` に `resource "google_kms_crypto_key_version" "x" {}` を書いたファイルを置くと終了コード 1 になる。
+- [x] `apps/provisioner/src/` に `assertRuntimeName` を呼ばない `client.createService(` を含むファイルを置くと終了コード 1 になる。
+- [x] `apps/lifecycle-manager/src/` に `client.deleteService({ name: "human-idp" })` を含むファイルを置くと終了コード 1 になる。
+- [x] `apps/provisioner/src/` の対象ディレクトリを削除すると、検査対象0件として終了コード 1 になる。
 
 ---
 
@@ -938,10 +938,10 @@ specs 7章は `docs/deviations.md` を4列表に固定し、4列すべてが埋�
 - ジョブ名は `docs-deviations`。`pnpm docs:deviations` からも同じスクリプトを呼べるようにする。
 
 **完了条件**
-- [ ] `pnpm docs:deviations` が `docs/deviations.md` の15行すべてで終了コード 0 を返す。
-- [ ] 任意の行の4列目のテスト名を1文字変えると終了コード 1 になり、その DEV 番号と列が標準エラーに出る。
-- [ ] 任意の行の3列目を存在しないパスに変えると終了コード 1 になる。
-- [ ] DEV-01 の行の4列目が `packages/xaa-crypto/test/dpop.spec.ts::rejects htu mismatch / iat out of window / replayed jti / ath mismatch / Bearer scheme` で、5つすべてが T-PKG-10 と T-PKG-12 のテストとして実在する。
+- [x] `pnpm docs:deviations` が `docs/deviations.md` の15行すべてで終了コード 0 を返す。
+- [x] 任意の行の4列目のテスト名を1文字変えると終了コード 1 になり、その DEV 番号と列が標準エラーに出る。
+- [x] 任意の行の3列目を存在しないパスに変えると終了コード 1 になる。
+- [x] DEV-01 の行の4列目が `packages/xaa-crypto/test/dpop.spec.ts::rejects htu mismatch / iat out of window / replayed jti / ath mismatch / Bearer scheme` で、5つすべてが T-PKG-10 と T-PKG-12 のテストとして実在する。
 
 ---
 

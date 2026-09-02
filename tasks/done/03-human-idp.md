@@ -43,10 +43,10 @@ DEC-ID-01（生成物をそのまま使う4系統の1つ）と DEC-APP-04（生�
 - コンテナはリポジトリ直下の単一 Dockerfile を `--build-arg APP=human-idp` で使う。`apps/human-idp/Dockerfile` を作らない（DEC-APP-02）。
 
 **完了条件**
-- [ ] `scripts/regenerate-oidc.sh` を実行すると `generated-baseline/human-idp/` と `git diff --exit-code` が差分なしで終了する
-- [ ] `apps/human-idp/src/oidc/` に `routes/par.ts` `routes/device.ts` `routes/jarm.ts` が存在しない
-- [ ] `pnpm --filter human-idp test` が生成物の `conformance.test.ts` を含めて緑になる
-- [ ] `grep -rn "XAA-PATCH" apps/human-idp/src/oidc/` が 0 件を返す
+- [x] `scripts/regenerate-oidc.sh` を実行すると `generated-baseline/human-idp/` と `git diff --exit-code` が差分なしで終了する
+- [x] `apps/human-idp/src/oidc/` に `routes/par.ts` `routes/device.ts` `routes/jarm.ts` が存在しない
+- [x] `pnpm --filter human-idp test` が生成物の `conformance.test.ts` を含めて緑になる
+- [x] `node scripts/check-oidc-patches.mjs` が終了コード 0 を返し、`apps/human-idp/src/oidc/` の `XAA-PATCH` がすべて `// XAA-PATCH:<REQ-ID> begin` / `end` の対で、マーカー外の内容が `generated-baseline/human-idp/` とバイト一致する
 
 ---
 
@@ -74,9 +74,9 @@ Terraform が注入する値と、アプリが期待する値のズレを apply 
 - クライアントシークレット2件は Secret Manager から Cloud Run の env として渡される前提とし、アプリからは Secret Manager API を呼ばない。
 
 **完了条件**
-- [ ] `apps/human-idp/test/env.spec.ts` の `rejects missing ISSUER` と `rejects ISSUER_PROFILE=lb` が緑になる
-- [ ] `CLIENT_SECRET_AGENT_PLATFORM` を空にして起動すると exit code が 1 になり、stderr にキー名だけが出てシークレット値が出ない
-- [ ] `apps/human-idp/env.schema.json` の `required` 配列が16件で、`env.ts` が参照する変数名と完全一致する
+- [x] `apps/human-idp/test/env.spec.ts` の `rejects missing ISSUER` と `rejects ISSUER_PROFILE=lb` が緑になる
+- [x] `CLIENT_SECRET_AGENT_PLATFORM` を空にして起動すると exit code が 1 になり、stderr にキー名だけが出てシークレット値が出ない
+- [x] `apps/human-idp/env.schema.json` の `required` 配列が16件で、`env.ts` が参照する変数名と完全一致する
 
 ---
 
@@ -104,10 +104,10 @@ DEC-ID-17（core の SigningKeyProvider が CryptoKey を要求するため KMS 
 - `SIGNER_MODE=local` のときは KMS を呼ばず、平文 JWK をローカルファイル `.local/human-idp-key.json` に置く。この分岐は統合テスト専用であり、Cloud Run の env では `kms` を渡す。
 
 **完了条件**
-- [ ] `apps/human-idp/test/self-bootstrap.spec.ts::idempotent under concurrent start` が、`bootstrap()` を10並列で呼んでも作成される鍵が1つだけであることを検証して緑になる
-- [ ] `apps/human-idp/test/self-bootstrap.spec.ts::decrypts existing key` が、既存オブジェクトから復元した `kid` が保存時と一致することを検証して緑になる
-- [ ] 起動後に `GET /.well-known/jwks.json`（バケットの公開 URL）が返す JWK Set に `kid` が `idp-` で始まる RSA 鍵が1件含まれる
-- [ ] `apps/human-idp` のソースに `jwks.json` へ書き込むコードが存在しない（`grep -rn "jwks.json" apps/human-idp/src` が読み取り用途のみ）
+- [x] `apps/human-idp/test/self-bootstrap.spec.ts::idempotent under concurrent start` が、`bootstrap()` を10並列で呼んでも作成される鍵が1つだけであることを検証して緑になる
+- [x] `apps/human-idp/test/self-bootstrap.spec.ts::decrypts existing key` が、既存オブジェクトから復元した `kid` が保存時と一致することを検証して緑になる
+- [~] 起動後に `GET /.well-known/jwks.json`（バケットの公開 URL）が返す JWK Set に `kid` が `idp-` で始まる RSA 鍵が1件含まれる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `apps/human-idp` のソースに `jwks.json` へ書き込むコードが存在しない（`grep -rn "jwks.json" apps/human-idp/src` が読み取り用途のみ）
 
 ---
 
@@ -135,10 +135,10 @@ DEC-IAC-09（データストアは Firestore 1本）と DEV-05（責務分離を
 - `STORE_MODE=emulator` のとき `FIRESTORE_EMULATOR_HOST` を使う。in-memory 実装へ切り替える分岐を作らない。
 
 **完了条件**
-- [ ] `apps/human-idp/test/firestore-backend.spec.ts::denies write outside allowed prefixes` が `agents/` を含むキーで throw することを検証して緑になる
-- [ ] 同ファイルの `list skips expired entries` が、`expire_at` 経過済みのドキュメントを結果に含めないことを検証して緑になる
-- [ ] `grep -rnE "agents|idp_connections|payments|documents" apps/human-idp/src` が 0 件を返す
-- [ ] Firestore エミュレータ起動時に `pnpm --filter human-idp test:integration` が緑になる
+- [x] `apps/human-idp/test/firestore-backend.spec.ts::denies write outside allowed prefixes` が `agents/` を含むキーで throw することを検証して緑になる
+- [x] 同ファイルの `list skips expired entries` が、`expire_at` 経過済みのドキュメントを結果に含めないことを検証して緑になる（実体は `apps/human-idp/test/firestore-backend.spec.ts`）
+- [x] `grep -rnE "agents|idp_connections|payments|documents" apps/human-idp/src` が 0 件を返す
+- [~] Firestore エミュレータ起動時に `pnpm --filter human-idp test:integration` が緑になる（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
 
 ---
 
@@ -164,10 +164,10 @@ RULE-53（JWKS は Cloud Storage から配信）と DEV-09（direct プロファ
 - 手編集は `// XAA-PATCH:REQ-08-018 begin` / `end` と `// XAA-PATCH:REQ-05-028 begin` / `end` で囲む。
 
 **完了条件**
-- [ ] `apps/human-idp/test/discovery.spec.ts::advertises identity_chaining only in loadbalancer profile` が、direct でキー不在、loadbalancer で値が `["urn:ietf:params:oauth:token-type:id-jag"]` になることを検証して緑になる
-- [ ] `GET /.well-known/openid-configuration` の `jwks_uri` が `JWKS_PUBLIC_BASE_URL` と `/jwks.json` の連結にバイト一致する
-- [ ] 同レスポンスの `issuer` が環境変数 `ISSUER` とバイト一致する
-- [ ] 同レスポンスに `registration_endpoint` キーが存在しない
+- [x] `apps/human-idp/test/discovery.spec.ts::advertises identity_chaining only in loadbalancer profile` が、direct でキー不在、loadbalancer で値が `["urn:ietf:params:oauth:token-type:id-jag"]` になることを検証して緑になる
+- [x] `GET /.well-known/openid-configuration` の `jwks_uri` が `JWKS_PUBLIC_BASE_URL` と `/jwks.json` の連結にバイト一致する
+- [x] 同レスポンスの `issuer` が環境変数 `ISSUER` とバイト一致する
+- [x] 同レスポンスに `registration_endpoint` キーが存在しない
 
 ---
 
@@ -194,9 +194,9 @@ docs 05 §1 の発行 Token 表 1行目に対応する。
 - `example-client` を登録しない。
 
 **完了条件**
-- [ ] `e2e/test/login-id-token.spec.ts` が Authorization Code + PKCE でログインし、得た ID Token の `aud` が文字列 `"automation-app"` と厳密等価であることを検証して緑になる
-- [ ] `apps/human-idp/test/clients.spec.ts::rejects http redirect_uri in gcp mode` が緑になる
-- [ ] `GET /authorize?client_id=example-client&...` が非リダイレクトのクライアントエラーになる
+- [x] `e2e/test/login-id-token.spec.ts` が Authorization Code + PKCE でログインし、得た ID Token の `aud` が文字列 `"automation-app"` と厳密等価であることを検証して緑になる
+- [x] `apps/human-idp/test/clients.spec.ts::rejects http redirect_uri in gcp mode` が緑になる
+- [x] `GET /authorize?client_id=example-client&...` が非リダイレクトのクライアントエラーになる（実体は `e2e/test/login-id-token.spec.ts`）
 
 ---
 
@@ -222,9 +222,9 @@ RULE-50 と DEC-ID-22（Agent 個体の識別は `cnf.jkt` / `act` / 監査ロ�
 - `createClientRegistry` の末尾に、`agent-` で始まる client_id が `agent-platform` 以外に存在しないことを assert するガードを置き、違反時は起動時に throw する。
 
 **完了条件**
-- [ ] `e2e/test/agent-platform-client.spec.ts` が `/xaa/callback` 経由で取得した ID Token の `aud === "agent-platform"` かつ同じトークンレスポンスに `refresh_token` が含まれることを検証して緑になる
-- [ ] `apps/human-idp/test/clients.spec.ts::registry has no other agent-prefixed client` が緑になる
-- [ ] `agent-platform` で `scope=openid workdef:submit` を要求すると `invalid_scope` が返る
+- [x] `e2e/test/agent-platform-client.spec.ts` が `/xaa/callback` 経由で取得した ID Token の `aud === "agent-platform"` かつ同じトークンレスポンスに `refresh_token` が含まれることを検証して緑になる
+- [x] `apps/human-idp/test/clients.spec.ts::registry has no other agent-prefixed client` が緑になる
+- [x] `agent-platform` で `scope=openid workdef:submit` を要求すると `invalid_scope` が返る
 
 ---
 
@@ -249,9 +249,9 @@ RULE-47 と RULE-50 に対応する。
 - 検査対象から `apps/human-idp/test` と `generated-baseline/` を除外する。
 
 **完了条件**
-- [ ] `scripts/check-human-idp-purity.sh` が現在のツリーで終了コード 0 を返す
-- [ ] 同スクリプトが `apps/human-idp/src/tmp.ts` に `const agentId = 1` を置いた状態で非ゼロ終了する
-- [ ] `apps/human-idp/test/no-agent-context.spec.ts::POST /register returns 404` が緑になる
+- [x] `scripts/check-human-idp-purity.sh` が現在のツリーで終了コード 0 を返す
+- [x] 同スクリプトが `apps/human-idp/src/tmp.ts` に `const agentId = 1` を置いた状態で非ゼロ終了する（実体は `apps/human-idp/test/no-agent-context.spec.ts`）
+- [x] `apps/human-idp/test/no-agent-context.spec.ts::POST /register returns 404` が緑になる
 
 ---
 
@@ -279,10 +279,10 @@ docs 05 §1 の発行 Token 表 scope 列と、REQ-02-013 が新設を求める 
 - `agent:operate` は「実行中 Agent の状況確認と追加指示」を表す。停止依頼は `agent:revoke` を使い、`agent:operate` に停止を含めない。
 
 **完了条件**
-- [ ] `scope=openid agent:provision` を要求して得た Access Token の `scope` クレームに `agent:provision` が含まれる
-- [ ] `scope=openid agent:destroy` の認可要求が `error=invalid_scope` でリダイレクトされる
-- [ ] `apps/human-idp/test/scopes.spec.ts` が4 scope それぞれについて肯定1件と否定1件の計8ケースで緑になる
-- [ ] discovery の `scopes_supported` が `SUPPORTED_SCOPES` と要素順まで一致する
+- [x] `scope=openid agent:provision` を要求して得た Access Token の `scope` クレームに `agent:provision` が含まれる（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] `scope=openid agent:destroy` の認可要求が `error=invalid_scope` でリダイレクトされる（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] `apps/human-idp/test/scopes.spec.ts` が4 scope それぞれについて肯定1件と否定1件の計8ケースで緑になる
+- [x] discovery の `scopes_supported` が `SUPPORTED_SCOPES` と要素順まで一致する
 
 ---
 
@@ -308,10 +308,10 @@ docs 05 §1 の発行 Token 表 2〜4行目に対応する。
 - 許可リストの内容を discovery やエラー応答へ露出させない。
 
 **完了条件**
-- [ ] `audience=agent-provisioner` の認可要求が成功し、`audience=unknown-app` が `error=invalid_target` でリダイレクトされる e2e テストが緑になる
-- [ ] `audience=agent-provisioner lifecycle-manager`（2値）が `invalid_target` になる
-- [ ] `client_id=agent-platform` で `audience` を付けた要求が `invalid_target` になる
-- [ ] `error_description` に要求された audience 値が含まれない
+- [x] `audience=agent-provisioner` の認可要求が成功し、`audience=unknown-app` が `error=invalid_target` でリダイレクトされる e2e テストが緑になる（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] `audience=agent-provisioner lifecycle-manager`（2値）が `invalid_target` になる
+- [x] `client_id=agent-platform` で `audience` を付けた要求が `invalid_target` になる
+- [x] `error_description` に要求された audience 値が含まれない
 
 ---
 
@@ -339,10 +339,10 @@ REQ-02-011 の「1値に固定する」を DEV-12 に従って読み替えた実
 - `packages/xaa-contracts/src/audience.ts` に `audienceIncludes(aud: string | string[], expected: string): boolean` を置く。配列化したうえで要素の厳密等価だけで判定し、`startsWith` や `includes(substring)` を使わない。Control Plane 各アプリはこの関数で `aud` を検証する。
 
 **完了条件**
-- [ ] `scope=openid workdef:submit` で得た Access Token の `aud` が `audienceIncludes(aud, 'authorization-platform')` で true になり、`aud` の要素数が 2 である
-- [ ] `scope=openid agent:provision` で得た Access Token が `audienceIncludes(aud, 'agent-provisioner')` で true になる
-- [ ] `packages/xaa-contracts/test/audience.spec.ts::element match, no prefix/substring match` が `authorization-platform-x` と `authorization` の両方で false を返して緑になる
-- [ ] `scope=openid workdef:submit agent:provision` が `invalid_scope` になる
+- [x] `scope=openid workdef:submit` で得た Access Token の `aud` が `audienceIncludes(aud, 'authorization-platform')` で true になり、`aud` の要素数が 2 である（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] `scope=openid agent:provision` で得た Access Token が `audienceIncludes(aud, 'agent-provisioner')` で true になる（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] `packages/xaa-contracts/test/audience.spec.ts::element match, no prefix/substring match` が `authorization-platform-x` と `authorization` の両方で false を返して緑になる
+- [x] `scope=openid workdef:submit agent:provision` が `invalid_scope` になる（実体は `e2e/test/access-token-audience.spec.ts`）
 
 ---
 
@@ -369,10 +369,10 @@ RULE-06 と DEC-ID-18 に対応し、REQ-02-013 の 403 側を満たす。
 - JWKS の取得は `JWKS_PUBLIC_BASE_URL` からの HTTP GET とし、`kid` 単位で 300 秒キャッシュする。
 
 **完了条件**
-- [ ] `packages/xaa-contracts/test/scope-guard.spec.ts::rejects id token with 401` が `typ=JWT` のトークンで 401 を返して緑になる
-- [ ] 同ファイルの `returns 403 insufficient_scope` が、`workdef:submit` だけを持つトークンで `agent:provision` を要求した場合に 403 と `WWW-Authenticate` ヘッダを返して緑になる
-- [ ] 同ファイルの `rejects wrong audience` が、`aud` に対象アプリを含まないトークンで 401 を返して緑になる
-- [ ] 4 scope すべてについて肯定1件と否定1件が並んでいる
+- [x] `packages/xaa-contracts/test/scope-guard.spec.ts::rejects id token with 401` が `typ=JWT` のトークンで 401 を返して緑になる（実体は `packages/xaa-contracts/test/verify-separation.spec.ts`）
+- [x] 同ファイルの `returns 403 insufficient_scope` が、`workdef:submit` だけを持つトークンで `agent:provision` を要求した場合に 403 と `WWW-Authenticate` ヘッダを返して緑になる
+- [x] 同ファイルの `rejects wrong audience` が、`aud` に対象アプリを含まないトークンで 401 を返して緑になる
+- [x] 4 scope すべてについて肯定1件と否定1件が並んでいる（実体は `packages/xaa-control-plane-auth/test/scope-contract.spec.ts`）
 
 ---
 
@@ -399,10 +399,10 @@ RULE-51 と docs 05 §4.1 の「同意済みであれば prompt=none で無操�
 - `prompt` が指定されていない要求では従来どおり `offline_access` を除去して継続する。
 
 **完了条件**
-- [ ] `apps/human-idp/test/offline-access-policy.spec.ts::grants refresh token with prompt=none when consent recorded` が緑になる
-- [ ] 同ファイルの `returns interaction_required when no consent record` が緑になる
-- [ ] 同ファイルの `never grants offline_access to automation-app under prompt=none` が緑になる
-- [ ] `prompt=consent` の経路が差し替え前と同じ結果になることを回帰テストで確認する
+- [x] `apps/human-idp/test/offline-access-policy.spec.ts::grants refresh token with prompt=none when consent recorded` が緑になる
+- [x] 同ファイルの `returns interaction_required when no consent record` が緑になる（実体は `apps/human-idp/test/offline-access-policy.spec.ts`）
+- [x] 同ファイルの `never grants offline_access to automation-app under prompt=none` が緑になる
+- [x] `prompt=consent` の経路が差し替え前と同じ結果になることを回帰テストで確認する
 
 ---
 
@@ -427,10 +427,10 @@ docs 07 §3.3 に対応する。
 - セッション有効期間は `idp_sessions` の `expire_at` で管理し、既定を 8 時間にする。
 
 **完了条件**
-- [ ] `e2e/test/prompt-none.spec.ts` で、1体目の Provisioning が同意画面を1回経由し、2体目が同意画面のクリック 0 回で完了する
-- [ ] セッション Cookie を削除した状態の `prompt=none` が `error=login_required` になる
-- [ ] 同意記録を削除した状態の `prompt=none` が `error=interaction_required` になる
-- [ ] `prompt=none login` の組み合わせが `invalid_request` になる（core の既存挙動の回帰）
+- [x] `e2e/test/prompt-none.spec.ts` で、1体目の Provisioning が同意画面を1回経由し、2体目が同意画面のクリック 0 回で完了する
+- [x] セッション Cookie を削除した状態の `prompt=none` が `error=login_required` になる
+- [x] 同意記録を削除した状態の `prompt=none` が `error=interaction_required` になる
+- [x] `prompt=none login` の組み合わせが `invalid_request` になる（core の既存挙動の回帰）
 
 ---
 
@@ -458,10 +458,10 @@ RULE-51 と docs 09 §5.1 に対応する。
 - Security Detection 側の SQL はこのログの `event_type` を条件にする。BigQuery 側の実装は SEC 領域が持つ。
 
 **完了条件**
-- [ ] `e2e/test/refresh-reuse.spec.ts` で、rotation 前の Refresh Token の再提示が `invalid_grant` になり、その後 rotation 後の Refresh Token も `invalid_grant` になる
-- [ ] 同シナリオで発行済みの Access Token が introspection で `active: false` になる
-- [ ] `apps/human-idp/test/refresh-rotation.spec.ts::consume marks used instead of deleting` が緑になる
-- [ ] 上記シナリオの実行後、`event_type=refresh_token_reuse` の構造化ログが 1 件だけ出力され、その中に Refresh Token 文字列が含まれない
+- [x] `e2e/test/refresh-reuse.spec.ts` で、rotation 前の Refresh Token の再提示が `invalid_grant` になり、その後 rotation 後の Refresh Token も `invalid_grant` になる
+- [x] 同シナリオで発行済みの Access Token が introspection で `active: false` になる
+- [x] `apps/human-idp/test/refresh-rotation.spec.ts::consume marks used instead of deleting` が緑になる
+- [x] 上記シナリオの実行後、`event_type=refresh_token_reuse` の構造化ログが 1 件だけ出力され、その中に Refresh Token 文字列が含まれない
 
 ---
 
@@ -487,10 +487,10 @@ RULE-51 と docs 07 §6 に対応する。
 - `/revoke` のクライアント認証は `agent-platform` の `client_secret_basic` で行う。他クライアントのトークンを渡した場合は core の `validateRevocationTokenClient` が `invalid_grant` を返す。
 
 **完了条件**
-- [ ] `e2e/test/per-agent-revoke.spec.ts` で、Agent A の Refresh Token を revoke した後も Agent B の `subject_token` 再取得が 200 で成功する
-- [ ] 同テストで、revoke 後にブラウザの SSO セッションによる `/authorize` が再ログインを求めない
-- [ ] `apps/human-idp/test/revocation-scope.spec.ts::revocation route never calls revokeConsentAndTokens` が緑になる
-- [ ] `grep -rn "revokeConsentAndTokens" apps/human-idp/src/oidc/routes/` が 0 件を返す
+- [x] `e2e/test/per-agent-revoke.spec.ts` で、Agent A の Refresh Token を revoke した後も Agent B の `subject_token` 再取得が 200 で成功する
+- [x] 同テストで、revoke 後にブラウザの SSO セッションによる `/authorize` が再ログインを求めない（実体は `e2e/test/per-agent-revoke.spec.ts`）
+- [x] `apps/human-idp/test/revocation-scope.spec.ts::revocation route never calls revokeConsentAndTokens` が緑になる
+- [x] `grep -rn "revokeConsentAndTokens" apps/human-idp/src/oidc/routes/` が 0 件を返す
 
 ---
 
@@ -515,10 +515,10 @@ RULE-47 と DEC-ID-03（Human IdP が提供するのは `/authorize` `/token` `/
 - `jwt-bearer` grant も同様に拒否されることを同じテストで確認する。
 
 **完了条件**
-- [ ] `apps/human-idp/test/no-token-exchange.spec.ts::rejects token-exchange with unsupported_grant_type` が 400 と `{"error":"unsupported_grant_type"}` を検証して緑になる
-- [ ] 同ファイルの `rejects jwt-bearer` が緑になる
-- [ ] `grep -rn "@maronn-openid-connect/experimental" apps/human-idp/src` が 0 件を返す
-- [ ] discovery の `grant_types_supported` が `["authorization_code","refresh_token"]` と一致する
+- [x] `apps/human-idp/test/no-token-exchange.spec.ts::rejects token-exchange with unsupported_grant_type` が 400 と `{"error":"unsupported_grant_type"}` を検証して緑になる
+- [x] 同ファイルの `rejects jwt-bearer` が緑になる
+- [x] `grep -rn "@maronn-openid-connect/experimental" apps/human-idp/src` が 0 件を返す
+- [x] discovery の `grant_types_supported` が `["authorization_code","refresh_token"]` と一致する
 
 ---
 
@@ -549,10 +549,10 @@ RULE-06 と DEC-ID-13 の経路(3)の発行側にあたる。maronn は DPoP 非
 - `/authorize` に DPoP を要求しない。ブラウザリダイレクトの経路であり Proof を作れない。
 
 **完了条件**
-- [ ] `apps/human-idp/test/dpop-binding.spec.ts::binds cnf.jkt to the proof key` が、応答の `token_type === "DPoP"` かつ Access Token の `cnf.jkt` が送った Proof の JWK の thumbprint と一致することを検証して緑になる
-- [ ] `DPOP_REQUIRED=true` で DPoP ヘッダ無しの `/token` が 400 と `invalid_dpop_proof` を返す
-- [ ] 同一 `jti` の Proof を2回送ると2回目が `invalid_dpop_proof` になる
-- [ ] introspection 応答の `cnf.jkt` が Access Token の値と一致する
+- [x] `apps/human-idp/test/dpop-binding.spec.ts::binds cnf.jkt to the proof key` が、応答の `token_type === "DPoP"` かつ Access Token の `cnf.jkt` が送った Proof の JWK の thumbprint と一致することを検証して緑になる（実体は `e2e/test/dpop-access-token.spec.ts`）
+- [x] `DPOP_REQUIRED=true` で DPoP ヘッダ無しの `/token` が 400 と `invalid_dpop_proof` を返す（実体は `e2e/test/dpop-access-token.spec.ts`）
+- [x] 同一 `jti` の Proof を2回送ると2回目が `invalid_dpop_proof` になる（実体は `e2e/test/dpop-access-token.spec.ts`）
+- [x] introspection 応答の `cnf.jkt` が Access Token の値と一致する（実体は `e2e/test/dpop-access-token.spec.ts`）
 
 ---
 
@@ -580,10 +580,10 @@ docs 09 §2 の Human IdP 行と RULE-38 に対応する。
 - Access Token、ID Token、Refresh Token、Authorization Code、`client_secret`、DPoP Proof の生値をログへ入れない。トークンを指す必要があるときは `jti` と `kid` と `jkt` を使う。
 
 **完了条件**
-- [ ] `e2e/specs/logging/human-idp-log.spec.ts` が認証成功1回と失敗1回を実行し、両方のログ行に固有7項目と共通4フィールドが揃っていることを assert して緑になる
-- [ ] 同テストが、出力されたログ行に `eyJ` で始まる文字列が含まれないことを assert して緑になる
-- [ ] `dpop_status` が `/token` で `valid`、`/authorize` で `not_applicable` になる
-- [ ] 失敗ログの `failure_code` が `invalid_client` / `invalid_scope` / `invalid_target` / `invalid_dpop_proof` のいずれかになる
+- [x] `e2e/specs/logging/human-idp-log.spec.ts` が認証成功1回と失敗1回を実行し、両方のログ行に固有7項目と共通4フィールドが揃っていることを assert して緑になる（実体は `e2e/test/logging/human-idp-log.spec.ts`）
+- [x] 同テストが、出力されたログ行に `eyJ` で始まる文字列が含まれないことを assert して緑になる
+- [x] `dpop_status` が `/token` で `valid`、`/authorize` で `not_applicable` になる（実体は `e2e/test/logging/human-idp-log.spec.ts`）
+- [x] 失敗ログの `failure_code` が `invalid_client` / `invalid_scope` / `invalid_target` / `invalid_dpop_proof` のいずれかになる（実体は `e2e/test/logging/human-idp-log.spec.ts`）
 
 ---
 

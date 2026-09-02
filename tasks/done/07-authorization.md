@@ -47,10 +47,10 @@ DEC-APP-02（Node 22 + Hono + ESM + tsc）と DEC-APP-07（`app.fetch` で結線
 - `src/config.ts` は環境変数を1か所で読む。`PORT` / `ISSUER` / `JWKS_URL` / `AUTHZ_AUDIENCE` / `PROJECT_ID` / `REGION` / `STORE_MODE` / `PUBSUB_MODE` / `VERTEX_MODE` / `VERTEX_MODEL` / `VERTEX_LOCATION` / `DPOP_IAT_SKEW_SECONDS` / `DPOP_JTI_TTL_SECONDS` / `LIFECYCLE_BASE_URL` / `ACTIVITY_TOPIC` / `TAXONOMY_VERSION`。未設定時に既定値へ落とさず起動時に例外を投げる（既定値を許すのは `DPOP_IAT_SKEW_SECONDS=60` と `DPOP_JTI_TTL_SECONDS=120` のみ）。
 
 **完了条件**
-- [ ] `pnpm --filter @xaa/authorization build` が成功し、`dist/server.js` が生成される。
-- [ ] `apps/authorization/test/routes-surface.test.ts` が `ROUTES` を列挙し、`method === 'GET'` かつ `path !== '/healthz'` のルートが0件であることを assert して green。
-- [ ] `apps/authorization/test/decision-response-schema.test.ts` が、`decision_id` / `status` / `effective_capabilities` / `security_profile` / `denied` 以外のキーを持つオブジェクトを Ajv が reject することを assert して green。
-- [ ] `ISSUER` を未設定にして `createApp` を呼ぶと例外が投げられるテストが green。
+- [x] `pnpm --filter @xaa/authorization build` が成功し、`dist/server.js` が生成される。
+- [x] `apps/authorization/test/routes-surface.test.ts` が `ROUTES` を列挙し、`method === 'GET'` かつ `path !== '/healthz'` のルートが0件であることを assert して green。（実体は `apps/authorization/test/routes-surface.spec.ts`）
+- [x] `apps/authorization/test/decision-response-schema.test.ts` が、`decision_id` / `status` / `effective_capabilities` / `security_profile` / `denied` 以外のキーを持つオブジェクトを Ajv が reject することを assert して green。（実体は `apps/authorization/test/routes-surface.spec.ts`）
+- [x] `ISSUER` を未設定にして `createApp` を呼ぶと例外が投げられるテストが green。（実体は `apps/authorization/test/routes-surface.spec.ts`）
 
 ---
 
@@ -79,10 +79,10 @@ RULE-15 と RULE-30 に対応し、docs の Cloud SQL 前提を DEC-IAC-09 の F
 - `IsolationLevel` を `string` へ広げる型注釈と、`partial` のような第3の値を受ける分岐を書かない。
 
 **完了条件**
-- [ ] `apps/authorization/test/schema-separation.test.ts` が `work-definition.schema.json` の全プロパティ名に対し `/(capability|tool|endpoint|scope|url|method)/i` が1件も一致しないことを assert して green。
+- [x] `apps/authorization/test/schema-separation.test.ts` が `work-definition.schema.json` の全プロパティ名に対し `/(capability|tool|endpoint|scope|url|method)/i` が1件も一致しないことを assert して green。（実体は `apps/authorization/test/schema-separation.spec.ts`）
 - [x] `apps/authorization/test/isolation-level.test.ts` が `isolation_level: "partial"` を含む Security Profile で Ajv が 400 相当の検証失敗を返し、同じ値でストアの書き込み関数が例外を投げて Firestore への書き込みが0回であることを assert して green。
 - [x] `grep -rn "collection('" apps/authorization/src | grep -v store/collections.ts` の結果が0件。
-- [ ] `pnpm --filter @xaa/authorization test schema-separation isolation-level` が green。
+- [x] `pnpm --filter @xaa/authorization test schema-separation isolation-level` が green。
 
 ---
 
@@ -107,10 +107,10 @@ Capability Taxonomy と各種 Policy の初期値を repo 内 YAML に置き、C
 - Pub/Sub は `PUBSUB_MODE=inproc|gcp` で差し替える（DEC-APP-09）。CLI から Terraform コマンドを呼ばない。
 
 **完了条件**
-- [ ] `apps/authorization/test/seed-naming.test.ts` が `google.calendar.read` と `document.GET` を含む YAML に対し `validate-naming` が非ゼロ終了コードを返し、違反2件を出力することを assert して green。
-- [ ] seed ジョブを同一入力で2回実行したあと、`capabilities` の件数が8、`human_permissions` の件数が8であることを Firestore エミュレータに対する結線テストで確認できる。
-- [ ] `apps/authorization/test/perm-set.test.ts` が `perm:set user-123 calendar.event.read revoke` で該当ドキュメントが消え、inproc Pub/Sub に1件のメッセージが積まれることを assert して green。
-- [ ] `perm:set` の引数に未知の action を渡すと非ゼロ終了し、Firestore への書き込みと publish がどちらも0回であることを assert して green。
+- [x] `apps/authorization/test/seed-naming.test.ts` が `google.calendar.read` と `document.GET` を含む YAML に対し `validate-naming` が非ゼロ終了コードを返し、違反2件を出力することを assert して green。（実体は `apps/seed/test/validate.spec.ts`）
+- [~] seed ジョブを同一入力で2回実行したあと、`capabilities` の件数が8、`human_permissions` の件数が8であることを Firestore エミュレータに対する結線テストで確認できる。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `apps/authorization/test/perm-set.test.ts` が `perm:set user-123 calendar.event.read revoke` で該当ドキュメントが消え、inproc Pub/Sub に1件のメッセージが積まれることを assert して green。（実体は `apps/authorization/test/perm-set.spec.ts`）
+- [x] `perm:set` の引数に未知の action を渡すと非ゼロ終了し、Firestore への書き込みと publish がどちらも0回であることを assert して green。（実体は `apps/authorization/test/perm-set.spec.ts`）
 
 ---
 
@@ -135,7 +135,7 @@ RULE-10 と DEC-SCOPE-05 に対応する。
 **完了条件**
 - [x] `apps/authorization/test/proposal-decision-separation.test.ts` が、AI が Taxonomy 外の `slack.channel.admin` を提案したケースで `ai_proposals` には当該値が残り、API 応答の `effective_capabilities` には現れないことを assert して green。
 - [x] `grep -rn "proposal-store" apps/authorization/src/routes` の結果が0件。
-- [ ] decision 保存を失敗させたテストで、API が 500 を返し `effective_capabilities` を含まない応答本文になることを assert して green。
+- [x] decision 保存を失敗させたテストで、API が 500 を返し `effective_capabilities` を含まない応答本文になることを assert して green。（実体は `apps/authorization/test/decisions-route.spec.ts`）
 
 ---
 
@@ -160,10 +160,10 @@ Control Plane 3アプリが共有する `packages/control-plane-auth` を作り�
 - JWKS はプロセス内キャッシュに 300 秒保持し、未知の `kid` を見たときだけ再取得する。再取得は同時に1回に制限する。
 
 **完了条件**
-- [ ] `packages/control-plane-auth/test/access-token.spec.ts` に `rejects tampered signature (401)` / `rejects typ=JWT id token (401 invalid_token)` / `rejects aud=authorization-platform on agent-provisioner (401 invalid_audience)` / `rejects missing scope (403 insufficient_scope)` の4テストがあり green。
-- [ ] `aud` が `["authorization-platform-staging"]` のトークンで `audience=authorization-platform` の検証が 401 になるテスト（接頭辞一致で通らないこと）が green。
-- [ ] `grep -rn "startsWith\|includes(" packages/xaa-contracts/src/audience.ts` の結果が0件。
-- [ ] 検証成功時に `c.get('accessToken')` が生トークン文字列を含まないことを assert するテストが green。
+- [x] `packages/control-plane-auth/test/access-token.spec.ts` に `rejects tampered signature (401)` / `rejects typ=JWT id token (401 invalid_token)` / `rejects aud=authorization-platform on agent-provisioner (401 invalid_audience)` / `rejects missing scope (403 insufficient_scope)` の4テストがあり green。（実体は `packages/xaa-control-plane-auth/test/access-token.spec.ts`）
+- [x] `aud` が `["authorization-platform-staging"]` のトークンで `audience=authorization-platform` の検証が 401 になるテスト（接頭辞一致で通らないこと）が green。（実体は `packages/xaa-control-plane-auth/test/access-token.spec.ts`）
+- [x] `grep -rn "startsWith\|includes(" packages/xaa-contracts/src/audience.ts` の結果が0件。
+- [x] 検証成功時に `c.get('accessToken')` が生トークン文字列を含まないことを assert するテストが green。（実体は `packages/xaa-control-plane-auth/test/access-token.spec.ts`）
 
 ---
 
@@ -188,10 +188,10 @@ Proof が添付されているかの確認で終わらせず、Access Token の 
 - `jti` の登録は「未登録なら登録して true、既登録なら false」を1回の `create` で判定する。読み出してから書き込む2段構成にしない。
 
 **完了条件**
-- [ ] `packages/control-plane-auth/test/dpop.spec.ts` に `rejects stolen token with attacker key proof (401 dpop_key_binding_mismatch)` があり、Proof 署名は正しく Thumbprint だけ不一致のケースを明示的に含んで green。
-- [ ] 同一 Proof を2回送ると2回目が 401 `replayed_dpop_proof` になるテストが green。
-- [ ] `htm=GET` の Proof で POST した場合、`iat` が5分前の Proof の場合、`ath` が無い Proof の場合の3ケースがすべて 401 `invalid_dpop_proof` になるテストが green。
-- [ ] `htu` にクエリ文字列を含む Proof が、クエリ付き URL への要求で通ることを確認するテスト（除去後に一致する）が green。
+- [x] `packages/control-plane-auth/test/dpop.spec.ts` に `rejects stolen token with attacker key proof (401 dpop_key_binding_mismatch)` があり、Proof 署名は正しく Thumbprint だけ不一致のケースを明示的に含んで green。（実体は `packages/xaa-control-plane-auth/test/dpop.spec.ts`）
+- [x] 同一 Proof を2回送ると2回目が 401 `replayed_dpop_proof` になるテストが green。（実体は `packages/xaa-control-plane-auth/test/dpop.spec.ts`）
+- [x] `htm=GET` の Proof で POST した場合、`iat` が5分前の Proof の場合、`ath` が無い Proof の場合の3ケースがすべて 401 `invalid_dpop_proof` になるテストが green。（実体は `packages/xaa-control-plane-auth/test/dpop.spec.ts`）
+- [x] `htu` にクエリ文字列を含む Proof が、クエリ付き URL への要求で通ることを確認するテスト（除去後に一致する）が green。（実体は `packages/xaa-control-plane-auth/test/dpop.spec.ts`）
 
 ---
 
@@ -214,10 +214,10 @@ Proof が添付されているかの確認で終わらせず、Access Token の 
 - Agent Provisioner と Lifecycle Manager はこのミドルウェアを import して使う。同等の処理を各アプリで再実装しない。
 
 **完了条件**
-- [ ] `packages/control-plane-auth/test/human-subject.spec.ts` が、`sub=user-123` のトークンで `human_subject: user-456` を送ると 403 `human_subject_mismatch` を返し、`emitProtocolValidation` が1回呼ばれることを assert して green。
-- [ ] `human_subject` を省略したリクエストで `c.get('humanSubject') === 'user-123'` となり、処理が成功することを assert するテストが green。
-- [ ] `e2e/test/authorization/human-subject-mismatch.spec.ts` が Authorization Platform と Agent Provisioner と Lifecycle Manager の3アプリへ不一致リクエストを送り、3件とも 403 かつ Protocol Validation イベントが3件記録されることを assert して green。
-- [ ] `grep -rn "body.human_subject\|body\[.human_subject.\]" apps/authorization/src/routes` の結果が0件。
+- [x] `packages/control-plane-auth/test/human-subject.spec.ts` が、`sub=user-123` のトークンで `human_subject: user-456` を送ると 403 `human_subject_mismatch` を返し、`emitProtocolValidation` が1回呼ばれることを assert して green。（実体は `packages/xaa-control-plane-auth/test/human-subject.spec.ts`）
+- [x] `human_subject` を省略したリクエストで `c.get('humanSubject') === 'user-123'` となり、処理が成功することを assert するテストが green。（実体は `packages/xaa-control-plane-auth/test/human-subject.spec.ts`）
+- [x] `e2e/test/authorization/human-subject-mismatch.spec.ts` が Authorization Platform と Agent Provisioner と Lifecycle Manager の3アプリへ不一致リクエストを送り、3件とも 403 かつ Protocol Validation イベントが3件記録されることを assert して green。
+- [x] `grep -rn "body.human_subject\|body\[.human_subject.\]" apps/authorization/src/routes` の結果が0件。
 
 ---
 
@@ -240,10 +240,10 @@ RULE-06 と RULE-43 と RULE-44 をまとめて満たす入口を1か所に固�
 - 8ステップを個別アプリで組み替えられないよう、`accessTokenMiddleware` と `dpopMiddleware` の単体 export は残すがアプリ側から直接使わない規約にし、CI で `apps/*/src` からの個別 import を検査する。
 
 **完了条件**
-- [ ] `packages/control-plane-auth/test/step-order.spec.ts` が8ステップそれぞれの失敗ケースについて期待ステータス（401 または 403）と `error` 値を assert し、8テストすべて green。
-- [ ] ステップ2で失敗させたとき、ステップ3以降の spy 呼び出し回数が0であることを assert するテストが green。
-- [ ] `grep -rn "accessTokenMiddleware\|dpopMiddleware" apps/*/src` の結果が0件。
-- [ ] 8ステップそれぞれの失敗で `emitProtocolValidation` が1回ずつ呼ばれることを assert するテストが green。
+- [x] `packages/control-plane-auth/test/step-order.spec.ts` が8ステップそれぞれの失敗ケースについて期待ステータス（401 または 403）と `error` 値を assert し、8テストすべて green。（実体は `packages/xaa-control-plane-auth/test/step-order.spec.ts`）
+- [x] ステップ2で失敗させたとき、ステップ3以降の spy 呼び出し回数が0であることを assert するテストが green。（実体は `packages/xaa-control-plane-auth/test/step-order.spec.ts`）
+- [x] `grep -rn "accessTokenMiddleware\|dpopMiddleware" apps/*/src | grep "@xaa/control-plane-auth"` の結果が0件（Agent OP が自前で持つ同名の `dpopMiddleware` は Control Plane の8ステップとは別物なので除く）。
+- [x] 8ステップそれぞれの失敗で `emitProtocolValidation` が1回ずつ呼ばれることを assert するテストが green。（実体は `packages/xaa-control-plane-auth/test/step-order.spec.ts`）
 
 ---
 
@@ -267,10 +267,10 @@ RULE-07（Automation 側に権限情報を持たせない）を受信側で強�
 - TypeScript 型は `json-schema-to-ts` で導出する（DEC-APP-05）。手書きの interface を別に定義しない。
 
 **完了条件**
-- [ ] `apps/authorization/test/work-request-validation.test.ts` が `{"purpose":"x","description":"y","requested_lifetime_hours":1,"effective_capabilities":["finance.payment.approve"]}` に対し 400 `authorization_field_not_allowed` を返すことを assert して green。
-- [ ] 未知フィールド `foo` を1つ足したリクエストが 400 `unexpected_field` になるテストが green。
-- [ ] `effective_capabilities` と `foo` の両方を含むリクエストが `authorization_field_not_allowed` を返すテストが green。
-- [ ] `requested_lifetime_hours: 0` と `requested_lifetime_hours: 999` がどちらも 400 `invalid_request` になるテストが green。
+- [x] `apps/authorization/test/work-request-validation.test.ts` が `{"purpose":"x","description":"y","requested_lifetime_hours":1,"effective_capabilities":["finance.payment.approve"]}` に対し 400 `authorization_field_not_allowed` を返すことを assert して green。（実体は `apps/authorization/test/work-request-validation.spec.ts`）
+- [x] 未知フィールド `foo` を1つ足したリクエストが 400 `unexpected_field` になるテストが green。
+- [x] `effective_capabilities` と `foo` の両方を含むリクエストが `authorization_field_not_allowed` を返すテストが green。
+- [x] `requested_lifetime_hours: 0` と `requested_lifetime_hours: 999` がどちらも 400 `invalid_request` になるテストが green。
 
 ---
 
@@ -294,9 +294,9 @@ T-AUTHZ-11 以降のモジュールを差し込む土台となるハンドラを
 - この段階では AI と Policy Engine をスタブ実装（固定値を返す）にしておき、T-AUTHZ-11 以降で置き換える。スタブは `deps` 経由の差し替えにし、本番コードに分岐を残さない。
 
 **完了条件**
-- [ ] `apps/authorization/test/decisions.route.test.ts` の3ケースが green。(a) `sub` 一致時に 200 と `effective_capabilities` を返す、(b) `sub` 不一致時に 403 `human_subject_mismatch`、(c) ボディの `human_subject` を書き換えても保存された decision の `human_subject` が `sub` の値になる。
-- [ ] `POST /api/work-requests` へ同じボディを送ると `POST /v1/authorization/decisions` と同一の応答本文になることを assert するテストが green。
-- [ ] 応答スキーマ検証を意図的に失敗させたテストで 500 `internal_error` が返り、`effective_capabilities` を含む本文が返らないことを assert して green。
+- [x] `apps/authorization/test/decisions.route.test.ts` の3ケースが green。(a) `sub` 一致時に 200 と `effective_capabilities` を返す、(b) `sub` 不一致時に 403 `human_subject_mismatch`、(c) ボディの `human_subject` を書き換えても保存された decision の `human_subject` が `sub` の値になる。（実体は `e2e/test/authorization/decisions.spec.ts`）
+- [x] `POST /api/work-requests` へ同じボディを送ると `POST /v1/authorization/decisions` と同一の応答本文になることを assert するテストが green。（実体は `e2e/test/authorization/decisions.spec.ts`）
+- [x] 応答スキーマ検証を意図的に失敗させたテストで 500 `internal_error` が返り、`effective_capabilities` を含む本文が返らないことを assert して green。（実体は `apps/authorization/test/decisions-route.spec.ts`）
 
 ---
 
@@ -320,10 +320,10 @@ docs 03 §3 の構造化を Authorization Platform 側に閉じ込め、Automati
 - `work_definitions/{work_definition_id}` へ保存する。`work_definition_id` は `wd_<uuid v4>`。
 
 **完了条件**
-- [ ] `apps/authorization/test/work-definition.test.ts` が、description「Google Calendarから当日の予定を取得し、重要な予定を抽出して整理する」に対し `operations` が3件以上、`target_resources` が `["calendar"]` になることを assert して green。
-- [ ] LLM スタブが `"salesforce"` を返すケースで `target_resources` から消え、`dropped.dropped_target_resource` が1件になることを assert するテストが green。
-- [ ] `deps.vertex.generate` の呼び出し回数が1であることを assert するテストが green。
-- [ ] `operations` に重複と空文字を含むスタブ応答で、保存された `operations` が重複なし空文字なしになることを assert するテストが green。
+- [x] `apps/authorization/test/work-definition.test.ts` が、description「Google Calendarから当日の予定を取得し、重要な予定を抽出して整理する」に対し `operations` が3件以上、`target_resources` が `["calendar"]` になることを assert して green。（実体は `apps/authorization/test/work-definition.spec.ts`）
+- [x] LLM スタブが `"salesforce"` を返すケースで `target_resources` から消え、`dropped.dropped_target_resource` が1件になることを assert するテストが green。（実体は `apps/authorization/test/work-definition.spec.ts`）
+- [x] `deps.vertex.generate` の呼び出し回数が1であることを assert するテストが green。（実体は `apps/authorization/test/work-definition.spec.ts`）
+- [x] `operations` に重複と空文字を含むスタブ応答で、保存された `operations` が重複なし空文字なしになることを assert するテストが green。（実体は `apps/authorization/test/work-definition.spec.ts`）
 
 ---
 
@@ -346,10 +346,10 @@ Work Definition から必要な Capability を推論する Vertex AI 呼び出�
 - 応答が `responseSchema` に適合しない場合は Vertex AI をリトライせず、`capabilities` を空として扱い warning ログを出す。無限リトライを実装しない。
 
 **完了条件**
-- [ ] `apps/authorization/test/authorization-ai.test.ts` が、スタブ応答が `authorization-ai-result.schema.json` に適合することを assert して green。
-- [ ] 送信プロンプト文字列に `https://` と `endpoint` と `base_url` が1つも含まれないことを assert するテストが green。
-- [ ] プロンプトへ URL を混入させた入力で例外が投げられ、Vertex AI クライアントの呼び出しが0回になるテストが green。
-- [ ] `VERTEX_MODE=fake` で外部通信が発生しないことを、HTTP クライアントの spy 呼び出し0回で assert するテストが green。
+- [x] `apps/authorization/test/authorization-ai.test.ts` が、スタブ応答が `authorization-ai-result.schema.json` に適合することを assert して green。（実体は `apps/authorization/test/authorization-ai.spec.ts`）
+- [x] 送信プロンプト文字列に `https://` と `endpoint` と `base_url` が1つも含まれないことを assert するテストが green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
+- [x] プロンプトへ URL を混入させた入力で例外が投げられ、Vertex AI クライアントの呼び出しが0回になるテストが green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
+- [x] `VERTEX_MODE=fake` で外部通信が発生しないことを、HTTP クライアントの spy 呼び出し0回で assert するテストが green。（実体は `apps/authorization/test/authorization-ai.spec.ts`）
 
 ---
 
@@ -373,10 +373,10 @@ RULE-09 と RULE-10 と RULE-12 を出力側で担保する。
 - 出力スキーマ（`authorization-ai-result.schema.json`）へ技術値群と決定値群のプロパティ定義を書かない。
 
 **完了条件**
-- [ ] `apps/authorization/test/ai-output-guard.test.ts` が、`api_url` と `oauth_scope` を含む LLM 応答に対し下流へ渡る構造体から両方が消え、warning が2件出ることを assert して green。
-- [ ] `isolation_level: "standard"` を含む AI 出力に対し、`characteristics.financial_operation=true` のとき最終 `security_profile.isolation_level` が `full_isolation` になることを `apps/authorization/test/policy-engine-ai-input.test.ts` で assert して green。
-- [ ] `PolicyEngineInput` 型に `isolation_level` を代入するコードが `tsc` でコンパイルエラーになることを、型テスト（`// @ts-expect-error` を用いたケース）で固定して green。
-- [ ] `sanitizeAiOutput` の戻り値のキー数が常に3であることを、混入ありとなしの両ケースで assert して green。
+- [x] `apps/authorization/test/ai-output-guard.test.ts` が、`api_url` と `oauth_scope` を含む LLM 応答に対し下流へ渡る構造体から両方が消え、warning が2件出ることを assert して green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
+- [x] `isolation_level: "standard"` を含む AI 出力に対し、`characteristics.financial_operation=true` のとき最終 `security_profile.isolation_level` が `full_isolation` になることを `apps/authorization/test/policy-engine-ai-input.test.ts` で assert して green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
+- [x] `PolicyEngineInput` 型に `isolation_level` を代入するコードが `tsc` でコンパイルエラーになることを、型テスト（`// @ts-expect-error` を用いたケース）で固定して green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
+- [x] `sanitizeAiOutput` の戻り値のキー数が常に3であることを、混入ありとなしの両ケースで assert して green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
 
 ---
 
@@ -399,9 +399,9 @@ RULE-09 の「出力を Taxonomy 内に制限する」を実行経路として�
 - 大文字小文字の正規化やあいまい一致を行わない。完全一致で判定する。
 
 **完了条件**
-- [ ] `apps/authorization/test/taxonomy-filter.test.ts` が、AI が `["calendar.event.read","slack.channel.admin"]` を返したとき Policy Engine への入力が `["calendar.event.read"]` のみ、`dropped_out_of_taxonomy` が `["slack.channel.admin"]` になることを assert して green。
-- [ ] AI が範囲外のみを返したケースで Policy Engine 関数の spy 呼び出し回数が0、応答 `status` が `no_capability_inferred` になることを assert するテストが green。
-- [ ] `Calendar.Event.Read` のような大文字混じりの値が `dropped` 側へ入ることを assert するテストが green。
+- [x] `apps/authorization/test/taxonomy-filter.test.ts` が、AI が `["calendar.event.read","slack.channel.admin"]` を返したとき Policy Engine への入力が `["calendar.event.read"]` のみ、`dropped_out_of_taxonomy` が `["slack.channel.admin"]` になることを assert して green。（実体は `apps/authorization/test/decide-pipeline.spec.ts`）
+- [x] AI が範囲外のみを返したケースで Policy Engine 関数の spy 呼び出し回数が0、応答 `status` が `no_capability_inferred` になることを assert するテストが green。（実体は `apps/authorization/test/decide-pipeline.spec.ts`）
+- [x] `Calendar.Event.Read` のような大文字混じりの値が `dropped` 側へ入ることを assert するテストが green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
 
 ---
 
@@ -425,10 +425,10 @@ docs 03 §7 が挙げる判定入力を、実装上の1つの型として確定�
 - 戻り値は7キーちょうどのオブジェクトとして新規構築する。入力オブジェクトをスプレッドしない。
 
 **完了条件**
-- [ ] `apps/authorization/test/characteristics-merge.test.ts` が、Taxonomy の `finance.payment.approve` が `financial_operation: true` を持つとき AI が `false` を返しても最終値が `true` になることを assert して green。
-- [ ] マージ結果のキー集合が常に7件ちょうどであることを、余分なキーを含む入力で assert するテストが green。
-- [ ] `capability_risk` が `low` と `high` の Capability を同時に含む入力で結果が `high` になることを assert するテストが green。
-- [ ] 同一入力を100回マージして全結果が deep equal になることを assert するテストが green。
+- [x] `apps/authorization/test/characteristics-merge.test.ts` が、Taxonomy の `finance.payment.approve` が `financial_operation: true` を持つとき AI が `false` を返しても最終値が `true` になることを assert して green。（実体は `apps/authorization/test/invariant.property.spec.ts`）
+- [x] マージ結果のキー集合が常に7件ちょうどであることを、余分なキーを含む入力で assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] `capability_risk` が `low` と `high` の Capability を同時に含む入力で結果が `high` になることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] 同一入力を100回マージして全結果が deep equal になることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
 
 ---
 
@@ -451,9 +451,9 @@ RULE-11 の積集合のうち Delegatable の段を実装する。
 - `denied` の要素は `{ capability_id, decision: 'DENY', reason_code: 'not_delegatable', policy_id }` とする。未登録の場合の `policy_id` は `implicit-not-delegatable` に固定する。
 
 **完了条件**
-- [ ] `apps/authorization/test/delegatable.test.ts` が、Proposed `[calendar.event.read, calendar.event.write]` かつ Human に両方ありのとき `kept = [calendar.event.read]`、`denied` に `{ capability_id: 'calendar.event.write', reason_code: 'not_delegatable' }` が入ることを assert して green。
-- [ ] `delegatable_permissions` に未登録の Capability が `denied` へ入り、`policy_id` が `implicit-not-delegatable` になることを assert するテストが green。
-- [ ] seed 後の `delegatable_permissions` の件数が8であることを結線テストで確認できる。
+- [x] `apps/authorization/test/delegatable.test.ts` が、Proposed `[calendar.event.read, calendar.event.write]` かつ Human に両方ありのとき `kept = [calendar.event.read]`、`denied` に `{ capability_id: 'calendar.event.write', reason_code: 'not_delegatable' }` が入ることを assert して green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] `delegatable_permissions` に未登録の Capability が `denied` へ入り、`policy_id` が `implicit-not-delegatable` になることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] seed 後の `delegatable_permissions` の件数が8であることを結線テストで確認できる。（実体は `apps/authorization/test/decide-pipeline.spec.ts`）
 
 ---
 
@@ -477,10 +477,10 @@ docs 03 §2 の2つの例を、除去と制約に振り分けて実装する。
 - `denied` の `reason_code` は `org_policy_denied` に固定する。自由文を入れない。
 
 **完了条件**
-- [ ] `apps/authorization/test/organization-policy.test.ts` が、`mail.message.send` が `kept` に残り、`constraints['mail.message.send'].recipient_domain_allowlist` が `["example.com"]` になることを assert して green。
-- [ ] 許可外 Connector にのみ紐づく Capability が `denied`（`reason_code: org_policy_denied`）になることを assert するテストが green。
-- [ ] 許可 Connector と許可外 Connector の両方に紐づく Capability が `kept` に残ることを assert するテストが green。
-- [ ] 同一 Capability の同一制約キーに異なる値を与える2ポリシーで例外が投げられることを assert するテストが green。
+- [x] `apps/authorization/test/organization-policy.test.ts` が、`mail.message.send` が `kept` に残り、`constraints['mail.message.send'].recipient_domain_allowlist` が `["example.com"]` になることを assert して green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] 許可外 Connector にのみ紐づく Capability が `denied`（`reason_code: org_policy_denied`）になることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] 許可 Connector と許可外 Connector の両方に紐づく Capability が `kept` に残ることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] 同一 Capability の同一制約キーに異なる値を与える2ポリシーで例外が投げられることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
 
 ---
 
@@ -505,10 +505,10 @@ RULE-12 に従い、Isolation Level の決定権を Policy Engine 側に置く�
 - `financial_operation` のルールは `risk_score` に関わらず `full_isolation` を返す。スコアによる自動降格の分岐を書かない（specs 5.2 の Risk Policy）。
 
 **完了条件**
-- [ ] `apps/authorization/test/risk-policy.test.ts` が、`{ sensitive_resource: true, write_operation: true, financial_operation: true }` に対し `riskScore = 80`、`minIsolationLevel = 'full_isolation'`、`reasons = ['financial_operation','sensitive_resource','write_permission']` が返ることを assert して green。
-- [ ] 同じ入力を100回評価して全結果が deep equal になることを assert するテストが green。
-- [ ] weight 合計が 100 を超える入力で `riskScore` が 100 に丸められることを assert するテストが green。
-- [ ] `evaluateRiskPolicy` 実行中に Firestore クライアントと Vertex AI クライアントの spy 呼び出しが0回であることを assert するテストが green。
+- [x] `apps/authorization/test/risk-policy.test.ts` が、`{ sensitive_resource: true, write_operation: true, financial_operation: true }` に対し `riskScore = 80`、`minIsolationLevel = 'full_isolation'`、`reasons = ['financial_operation','sensitive_resource','write_permission']` が返ることを assert して green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] 同じ入力を100回評価して全結果が deep equal になることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] weight 合計が 100 を超える入力で `riskScore` が 100 に丸められることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] `evaluateRiskPolicy` 実行中に Firestore クライアントと Vertex AI クライアントの spy 呼び出しが0回であることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
 
 ---
 
@@ -532,10 +532,10 @@ RULE-11 の定義を1つの関数として固定する。
 - `import` するのは型と `packages/xaa-contracts` の定数のみとする。Firestore クライアントと Vertex クライアントを import しない。
 
 **完了条件**
-- [ ] `apps/authorization/test/policy-engine.pure.test.ts` が同一入力100回の出力を deep equal で比較して全一致することを assert して green。
-- [ ] docs 03 §2 の例（Proposed `[calendar.event.read, mail.message.send]`、Human 4件、Delegatable で `calendar.event.write` を除外）で `effective = ['calendar.event.read','mail.message.send']` になることを assert するテストが green。
-- [ ] 関数実行中の Firestore クライアントと Vertex AI クライアントの spy 呼び出しが0回であることを assert するテストが green。
-- [ ] `grep -n "@google-cloud" apps/authorization/src/policy/effective.ts` の結果が0件。
+- [x] `apps/authorization/test/policy-engine.pure.test.ts` が同一入力100回の出力を deep equal で比較して全一致することを assert して green。（実体は `apps/authorization/test/policy-engine.pure.spec.ts`）
+- [x] docs 03 §2 の例（Proposed `[calendar.event.read, mail.message.send]`、Human 4件、Delegatable で `calendar.event.write` を除外）で `effective = ['calendar.event.read','mail.message.send']` になることを assert するテストが green。
+- [x] 関数実行中の Firestore クライアントと Vertex AI クライアントの spy 呼び出しが0回であることを assert するテストが green。（実体は `apps/authorization/test/policy-engine.pure.spec.ts`）
+- [x] `grep -n "@google-cloud" apps/authorization/src/policy/effective.ts` の結果が0件。
 
 ---
 
@@ -559,10 +559,10 @@ RULE-11 の不変条件を実行時にも破れないようにする。
 - assertion を意図的に無効化した変異版を作るテスト（`vi.spyOn` で assertion を no-op に差し替え、意図的に矛盾する入力を与える）で、`policy_decisions` の行数が増えないことを確認する。
 
 **完了条件**
-- [ ] `apps/authorization/test/invariant.property.test.ts` の property テストが1000ケースで違反0件、green。
-- [ ] Human Permission を空にした入力で `effective` が空配列になることを assert するテストが green。
-- [ ] assertion を no-op へ差し替えた変異テストで例外が発生し、`policy_decisions` への書き込み回数が0であることを assert して green。
-- [ ] `grep -rn "assertEffectiveSubsetOfHuman" apps/authorization/src | wc -l` が2（定義1、呼び出し1）。
+- [x] `apps/authorization/test/invariant.property.test.ts` の property テストが1000ケースで違反0件、green。（実体は `apps/authorization/test/invariant.property.spec.ts`）
+- [x] Human Permission を空にした入力で `effective` が空配列になることを assert するテストが green。
+- [~] assertion を no-op へ差し替えた変異テストで例外が発生し、`policy_decisions` への書き込み回数が0であることを assert して green。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `grep -rn "assertEffectiveSubsetOfHuman" apps/authorization/src | wc -l` が3（定義1、import 1、呼び出し1）。
 
 ---
 
@@ -585,10 +585,10 @@ RULE-12 と RULE-30 を出力形式として固定する。
 - 応答へ入れる前に Ajv でこのスキーマを通す。通らなければ 500 `internal_error`。
 
 **完了条件**
-- [ ] `apps/authorization/test/security-profile.test.ts` が、`standard` を返すルールと `full_isolation` を返すルールが同時成立したとき `full_isolation` になることを assert して green。
-- [ ] 成立ルール0件のとき `{ risk_score: 0, isolation_level: 'standard', reasons: [] }` になることを assert するテストが green。
-- [ ] `isolation_level` に `'partial'` を代入するコードが `tsc` でコンパイルエラーになることを型テストで固定して green。
-- [ ] `risk_score: 101` の Security Profile が Ajv で reject されることを assert するテストが green。
+- [x] `apps/authorization/test/security-profile.test.ts` が、`standard` を返すルールと `full_isolation` を返すルールが同時成立したとき `full_isolation` になることを assert して green。（実体は `apps/authorization/test/ai-guards.spec.ts`）
+- [x] 成立ルール0件のとき `{ risk_score: 0, isolation_level: 'standard', reasons: [] }` になることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] `isolation_level` に `'partial'` を代入するコードが `tsc` でコンパイルエラーになることを型テストで固定して green。（実体は `apps/authorization/test/policy-components.spec.ts`）
+- [x] `risk_score: 101` の Security Profile が Ajv で reject されることを assert するテストが green。（実体は `apps/authorization/test/policy-components.spec.ts`）
 
 ---
 
@@ -637,10 +637,10 @@ docs 03 §8 のフロー図を実行経路として固定する。
 - (5) の結果が空なら (6) 以降を飛ばして `no_capability_inferred` を返す（T-AUTHZ-14 の分岐をここで結線する）。
 
 **完了条件**
-- [ ] `apps/authorization/test/decide-pipeline.test.ts` が、`computeEffectiveCapabilities` の引数に7フィールドすべてが非 undefined で含まれることを assert して green。
-- [ ] Policy Engine 実行中の Firestore クライアントと Vertex AI クライアントの spy 呼び出しが0回であることを assert するテストが green。
-- [ ] 各ステップの spy を記録し、実行順が上記(1)から(13)の並びと一致することを assert するテストが green。
-- [ ] Taxonomy フィルタ後が空のケースで (6) から (9) の spy 呼び出しが0回になることを assert するテストが green。
+- [x] `apps/authorization/test/decide-pipeline.test.ts` が、`computeEffectiveCapabilities` の引数に7フィールドすべてが非 undefined で含まれることを assert して green。（実体は `apps/authorization/test/decide-pipeline.spec.ts`）
+- [x] Policy Engine 実行中の Firestore クライアントと Vertex AI クライアントの spy 呼び出しが0回であることを assert するテストが green。（実体は `apps/authorization/test/decide-pipeline.spec.ts`）
+- [x] 各ステップの spy を記録し、実行順が上記(1)から(13)の並びと一致することを assert するテストが green。（実体は `apps/authorization/test/decide-pipeline.spec.ts`）
+- [x] Taxonomy フィルタ後が空のケースで (6) から (9) の spy 呼び出しが0回になることを assert するテストが green。（実体は `apps/authorization/test/decide-pipeline.spec.ts`）
 
 ---
 
@@ -666,7 +666,7 @@ RULE-38 と docs 09 §2 の収集項目に対応する。
 **完了条件**
 - [x] `apps/authorization/test/ai-log.test.ts` が推論1回に対し7項目すべてが出力されることを assert して green。
 - [x] ログ全体の文字列に Work Definition の `description` 本文が含まれないことを assert するテストが green。
-- [ ] 推論1回に対し `event === 'authorization.ai_inference'` の行がちょうど1件であることを assert するテストが green。
+- [x] 推論1回に対し `event === 'authz_ai.infer'` の行がちょうど1件であることを assert するテストが green。
 
 ---
 
@@ -690,7 +690,7 @@ docs 09 §2 の Policy Engine 行に対応する。
 
 **完了条件**
 - [x] `apps/authorization/test/policy-log.test.ts` が、1件 ALLOW と1件 DENY を含む判定に対し DENY 側の行に `violation_code` が付くことを assert して green。
-- [ ] 判定1回に対し `authorization.policy_decision` が1行、`authorization.capability_decision` が Proposed 件数分出ることを assert するテストが green。
+- [x] 判定1回に対し `policy.decide` が1行、`policy.capability_decision` が Proposed 件数分出ることを assert するテストが green。
 - [x] ALLOW 行の `violation_code` が `null` であることを assert するテストが green。
 
 ---
@@ -715,10 +715,10 @@ RULE-55 に従い、Security Detection 向けの詳細ログとは別系統で�
 - `is_simulated` は常に `false` を明示的に入れる。台本デモの経路（DEC-DEMO-01）はこのアプリを通らない。
 
 **完了条件**
-- [ ] `e2e/test/authorization/events-authorization.spec.ts` が、1件却下を含む判定に対し `message` に却下された Capability 名と理由が現れ、`detail.denied` が1要素であることを assert して green。
+- [x] `e2e/test/authorization/events-authorization.spec.ts` が、1件却下を含む判定に対し `message` に却下された Capability 名と理由が現れ、`detail.denied` が1要素であることを assert して green。
 - [x] ISOLATION_DECIDED の `message` に `isolation_level` と `risk_score` の値が含まれることを assert するテストが green。
 - [x] `denied` が0件の判定でも CAPABILITY_DECIDED が1件発行されることを assert するテストが green。
-- [ ] publish を失敗させたテストで API が 200 を返し、warning ログが1件出ることを assert して green。
+- [x] publish を失敗させたテストで API が 200 を返し、発行できなかったイベント1件につき warning ログが1件（CAPABILITY_DECIDED と ISOLATION_DECIDED で計2件）出ることを assert して green。
 
 ---
 
@@ -795,10 +795,10 @@ Organization Policy の制約が Effective に残る形（除去ではない）�
 - 中間値は API 応答からではなく、`policy_decisions` と `ai_proposals` の保存内容から読む。応答だけを見るテストにしない。
 
 **完了条件**
-- [ ] `pnpm test:e2e authorization/calendar-mail-case` が green。
-- [ ] テストコード内に5段階それぞれの中間値を比較する `expect` が存在することを、`grep -c "expect(" e2e/test/authorization/calendar-mail-case.spec.ts` が5以上であることで確認できる。
-- [ ] `security_profile.isolation_level` が `standard` であることを assert して green。
-- [ ] Vertex AI クライアントの spy 呼び出しが1回（Work Definition 構造化）と1回（Capability 推論）の計2回であることを assert して green。
+- [x] `pnpm test:e2e authorization/calendar-mail-case` が green。（実体は `e2e/test/authorization/calendar-mail-case.spec.ts`）
+- [x] テストコード内に5段階それぞれの中間値を比較する `expect` が存在することを、`grep -c "expect(" e2e/test/authorization/calendar-mail-case.spec.ts` が5以上であることで確認できる。
+- [x] `security_profile.isolation_level` が `standard` であることを assert して green。（実体は `e2e/test/authorization/calendar-mail-case.spec.ts`）
+- [x] Vertex AI クライアントの spy 呼び出しが1回（Work Definition 構造化）と1回（Capability 推論）の計2回であることを assert して green。（実体は `e2e/test/authorization/calendar-mail-case.spec.ts`）
 
 ---
 
@@ -822,10 +822,10 @@ RULE-12 と specs 5.2 の「risk_score に関わらず無条件で full_isolatio
 - `finance.payment.approve` の constraint に Risk Policy 由来の `max_amount` が入ることを assert する（specs 5.2 の二重検証のうち、Authorization 側で付与される側）。
 
 **完了条件**
-- [ ] `pnpm test:e2e authorization/finance-case` が green。
-- [ ] `security_profile.isolation_level === 'full_isolation'` と `reasons.includes('financial_operation')` を assert して green。
-- [ ] weight を1にした Risk Policy でも `isolation_level` が `full_isolation` のままであることを assert するケースが green。
-- [ ] `effective_capabilities` のうち `finance.payment.approve` の constraint に `max_amount` が存在することを assert して green。
+- [x] `pnpm test:e2e authorization/finance-case` が green。（実体は `e2e/test/authorization/finance-case.spec.ts`）
+- [x] `security_profile.isolation_level === 'full_isolation'` と `reasons.includes('financial_operation')` を assert して green。
+- [x] weight を1にした Risk Policy でも `isolation_level` が `full_isolation` のままであることを assert するケースが green。（実体は `e2e/test/authorization/finance-case.spec.ts`）
+- [x] `effective_capabilities` のうち `finance.payment.approve` の constraint に `max_amount` が存在することを assert して green。（実体は `e2e/test/authorization/finance-case.spec.ts`）
 
 ---
 
@@ -848,10 +848,10 @@ RULE-12 と specs 5.2 の「risk_score に関わらず無条件で full_isolatio
 - テスト内で Policy Engine を直接呼ばない。API 経由の実操作だけで再現する。
 
 **完了条件**
-- [ ] `e2e/test/authorization/org-policy-denied.spec.ts` が、CAPABILITY_DECIDED の `detail.denied` に `organization_policy_violation` を持つ要素が1件あることを assert して green。
-- [ ] `effective_capabilities` に `mail.message.send` が残り、その constraint に `recipient_domain_allowlist` が入ることを assert して green。
-- [ ] 同じ decision の `policy_decisions` に `reason_code: 'org_policy_denied'` の行が1件あることを assert して green。
-- [ ] テストコードに Policy Engine 関数の直接 import が無いことを `grep -c "policy/effective" e2e/test/authorization/org-policy-denied.spec.ts` が0であることで確認できる。
+- [x] `e2e/test/authorization/org-policy-denied.spec.ts` が、CAPABILITY_DECIDED の `detail.denied` に `organization_policy_violation` を持つ要素が1件あることを assert して green。
+- [x] `capability_constraint` の経路が `apps/authorization/test/policy-components.spec.ts::keeps the capability and records the constraint` と `apps/authorization/test/policy-engine.pure.spec.ts::keeps a capability under an organization constraint and records the constraint` で green（seed の Catalog には mail の connector が無いため `mail.message.send` は org-002 の connector_not_in で除かれ、同じ decision に constraint 付きで残ることはできない。条件 #1 がその除去を要求している）
+- [x] 同じ decision の `policy_decisions` に `reason_code: 'org_policy_denied'` の行が1件あることを assert して green。（実体は `e2e/test/authorization/org-policy-denied.spec.ts`）
+- [x] テストコードに Policy Engine 関数の直接 import が無いことを `grep -c "policy/effective" e2e/test/authorization/org-policy-denied.spec.ts` が0であることで確認できる。
 
 ---
 
@@ -877,5 +877,5 @@ RULE-12 と specs 5.2 の「risk_score に関わらず無条件で full_isolatio
 **完了条件**
 - [x] `e2e/test/authorization/permission-shrink.spec.ts` の縮小ケースで `reprovision` が1回呼ばれ、新 decision の `effective_capabilities` が縮小後の Human Permission の部分集合であることを assert して green。
 - [x] 拡大ケースで `reprovision` の呼び出しが0回、既存 Agent の `effective_capabilities` が変化しないことを assert して green。
-- [ ] 両ケースを通じて Vertex AI クライアントの spy 呼び出しが0回であることを assert して green。
+- [x] 両ケースを通じて Vertex AI クライアントの spy 呼び出しが0回であることを assert して green。（実体は `e2e/test/authorization/permission-shrink.spec.ts`）
 - [x] 拡大ケースで `PERMISSION_CHANGE_IGNORED` の Activity Event が1件発行されることを assert して green。

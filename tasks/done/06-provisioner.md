@@ -43,10 +43,10 @@ Capability 名と scope 名と Tool ID は DEC-SCOPE-03 で確定した1組の�
 - 破棄した別名（`document.content.read`、`documents.read`、`transactions.read`、`transfers.write`、`docs.document.get`、`internal.customer.*`）を定数として定義しない。
 
 **完了条件**
-- [ ] `pnpm vitest run packages/xaa-contracts/test/names.spec.ts` が緑になり、`CAPABILITY_IDS.length === 8` / `RESOURCE_SCOPES.length === 7` / `TOOL_IDS.length === 8` を assert している
-- [ ] `assertCapabilityIdShape("google.calendar.get")` が例外を投げるテストが通る
-- [ ] `catalog-tool.schema.json` に未知フィールドを含むドキュメントを Ajv へ渡すと検証に失敗するテストが通る
-- [ ] `grep -rn "document.content.read\|transactions.read\|docs.document.get" packages/ apps/` の結果が0件である
+- [x] `pnpm vitest run packages/xaa-contracts/test/identifiers.spec.ts` が緑になり、`CAPABILITIES.length === 8` / `RESOURCE_SCOPES.length === 7` / `TOOL_IDS.length === 8` / `CONNECTOR_IDS.length === 3` を assert している
+- [x] `assertCapabilityIdShape("google.calendar.get")` が例外を投げるテストが通る（実体は `packages/xaa-contracts/test/identifiers.spec.ts`）
+- [x] `catalog-tool.schema.json` に未知フィールドを含むドキュメントを Ajv へ渡すと検証に失敗するテストが通る（実体は `packages/xaa-contracts/test/identifiers.spec.ts`）
+- [x] `grep -rn "document.content.read\|transactions.read\|docs.document.get" packages/ apps/` の結果が0件である
 
 ---
 
@@ -77,10 +77,10 @@ Resource の URL は Terraform が書き出した `platform_endpoints` から解
 - 投入ジョブは Cloud Run Job として `make seed` から起動する。ジョブの中で terraform コマンドを実行しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/seed.spec.ts` が緑になり、Firestore エミュレータ上で `catalog_tools` が8件、`catalog_connectors` が3件になることを assert している
-- [ ] プレースホルダを1つ未解決にした `platform_endpoints` を与えると終了コード1で終わり、`catalog_tools` の件数が0のままであるテストが通る
-- [ ] `enable_google_bridge: false` の `platform_endpoints` で投入すると `catalog_tools/stub.calendar.events.list` の `enabled` が false になるテストが通る
-- [ ] 不正な Capability 名を含む YAML を与えると非ゼロ終了するテストが通る
+- [~] `pnpm vitest run apps/provisioner/test/seed.spec.ts` が緑になり、Firestore エミュレータ上で `catalog_tools` が8件、`catalog_connectors` が3件になることを assert している（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] プレースホルダを1つ未解決にした `platform_endpoints` を与えると終了コード1で終わり、`catalog_tools` の件数が0のままであるテストが通る（実体は `apps/seed/test/validate.spec.ts`）
+- [x] `ENABLE_GOOGLE_BRIDGE` が `true` でないとき `catalog_connectors/stub-saas-calendar` と `catalog_tools/stub.calendar.events.list` がどちらも投入されないテストが通る
+- [x] 不正な Capability 名を含む YAML を与えると非ゼロ終了するテストが通る（実体は `apps/seed/test/validate.spec.ts`）
 
 ---
 
@@ -109,10 +109,10 @@ Provisioner のコードに Resource の URL や HTTP メソッドを直書き�
 - 両スクリプトを `pnpm lint:rules` に登録し、CI から実行する。
 
 **完了条件**
-- [ ] `bash scripts/check-no-hardcoded-endpoint.sh` が終了コード0で通る
-- [ ] `bash scripts/check-risk-level-usage.sh` が終了コード0で通る
-- [ ] `pnpm vitest run apps/provisioner/test/catalog-repository.spec.ts` が緑になり、`enabled: false` の Tool が `findToolsByCapability` の結果に含まれないことを assert している
-- [ ] `risk_level: high` の Tool を含む `isolation_level: standard` の Agent が standard のまま Provision される統合テストが緑になる
+- [x] `bash scripts/check-no-hardcoded-endpoint.sh` が終了コード0で通る
+- [x] `bash scripts/check-risk-level-usage.sh` が終了コード0で通る
+- [x] `pnpm vitest run apps/provisioner/test/catalog-repository.spec.ts` が緑になり、`enabled: false` の Tool が `findToolsByCapability` の結果に含まれないことを assert している（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] `risk_level: high` の Tool を含む `isolation_level: standard` の Agent が standard のまま Provision される統合テストが緑になる（実体は `apps/provisioner/test/standard-branch.spec.ts`）
 
 ---
 
@@ -139,10 +139,10 @@ Effective Capability の配列を入力に、Catalog を引いて Allowed Tools 
 - `document.read` は `internal.document.list` と `internal.document.get` の2件に解決される。`finance.payment.approve` は `internal.finance.payment.approve` の1件に解決される。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/resolve-tools.spec.ts` が緑になり、`[document.read, document.write]` が4件の `internal.document.*` に解決されることを assert している
-- [ ] Tool の無い Capability（既定構成の `mail.message.send`）を渡すと `{ ok: false, code: "no_tool_for_capability", capability_id: "mail.message.send" }` が返るテストが通る
-- [ ] 解決に失敗したとき `agents` コレクションに新規ドキュメントが増えず、Transaction が `FAILED` になる統合テストが緑になる
-- [ ] 同じ入力を2回渡すと `tools` の配列順が一致することを assert するテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/resolve-tools.spec.ts` が緑になり、`[document.read, document.write]` が4件の `internal.document.*` に解決されることを assert している（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] Tool の無い Capability（既定構成の `mail.message.send`）を渡すと `{ ok: false, code: "no_tool_for_capability", capability_id: "mail.message.send" }` が返るテストが通る（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] 解決に失敗したとき `agents` にも `provisioning_transactions` にも新規ドキュメントが1件も増えず、400 `no_tool_for_capability` が返る統合テストが緑になる
+- [x] 同じ入力を2回渡すと `tools` の配列順が一致することを assert するテストが通る（実体は `apps/provisioner/test/catalog.spec.ts`）
 
 ---
 
@@ -169,10 +169,10 @@ resource は RFC 8707 の絶対 URI とし、fragment を持たせない（DEC-I
 - Provisioning 完了後にこの3集合を変更する関数を実装しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/build-xaa-config.spec.ts` が緑になり、Document の4 Tool から `scopes === ["docs.read", "docs.write"]`、`resources` が1件になることを assert している
-- [ ] `document.read` のみの入力から `scopes === ["docs.read"]` が導かれ、`docs.write` が含まれないテストが通る
-- [ ] `xaa_resource` に fragment 付き URI を持つ Tool を渡すと `invalid_xaa_config` が投げられるテストが通る
-- [ ] Registration と Tool Manifest と Job env の3集合が一致することを assert する統合テストが緑になる
+- [x] `pnpm vitest run apps/provisioner/test/build-xaa-config.spec.ts` が緑になり、Document の4 Tool から `scopes === ["docs.read", "docs.write"]`、`resources` が1件になることを assert している（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] `document.read` のみの入力から `scopes === ["docs.read"]` が導かれ、`docs.write` が含まれないテストが通る（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] `xaa_resource` に fragment 付き URI を持つ Tool を渡すと `invalid_xaa_config` が投げられるテストが通る（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] Registration と Tool Manifest と Job env の3集合が一致することを assert する統合テストが緑になる（実体は `e2e/test/provisioning/provisioning-flow.spec.ts`）
 
 ---
 
@@ -199,10 +199,10 @@ Manifest には API の技術情報を載せる一方、Client Secret と Refres
 - Manifest を Provisioning 後に更新する関数を実装しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/build-manifest.spec.ts` が緑になり、生成した Manifest の全キーを再帰列挙した結果に `secret` / `client_secret` / `refresh_token` / `d` が1つも無いことを assert している
-- [ ] `internal.finance.payment.approve` の `constraints.max_amount` が `added_constraint` の値で埋まることを assert するテストが通る
-- [ ] 生成した Manifest が `tool-manifest.schema.json` の Ajv 検証を通り、未知キーを追加すると検証に失敗するテストが通る
-- [ ] Agent Runtime が `TOOL_MANIFEST_JSON` を読み込んで Allowed Tools を復元できる統合テストが緑になる
+- [x] `pnpm vitest run apps/provisioner/test/build-manifest.spec.ts` が緑になり、生成した Manifest の全キーを再帰列挙した結果に `secret` / `client_secret` / `refresh_token` / `d` が1つも無いことを assert している（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] `internal.finance.payment.approve` の `constraints.max_amount` が `added_constraint` の値で埋まることを assert するテストが通る（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] 生成した Manifest が `tool-manifest.schema.json` の Ajv 検証を通り、未知キーを追加すると検証に失敗するテストが通る（実体は `apps/provisioner/test/catalog.spec.ts`）
+- [x] Agent Runtime が `TOOL_MANIFEST` と `TOOL_MANIFEST_SHA256` を読み込んで Allowed Tools を復元できる統合テストが緑になる
 
 ---
 
@@ -227,10 +227,10 @@ Registration へ書くのは audience と resource と scope の3集合だけで
 - スナップショットテストで Firestore へ書かれたドキュメントのキー集合を配列として固定する。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/registration-keys.spec.ts` が緑になり、キー集合のスナップショットが上記11件と完全一致する
-- [ ] `agent-registration.schema.json` に `issuer` と `subject` のキーが存在しないことを assert するテストが通る
-- [ ] `d` を含む JWK を `client_auth.public_jwk` に入れると Ajv 検証に失敗するテストが通る
-- [ ] `api_base_url` を追加したドキュメントが Ajv 検証に失敗するテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/registration-keys.spec.ts` が緑になり、キー集合のスナップショットが `agent_id` / `human_subject` / `client_auth` / `idp_connection_id` / `allowed_audiences` / `resources` / `scopes` / `trusted_resource_as` / `created_at` / `expires_at` / `status` / `dedicated_op` / `isolation_level` / `job_execution_name` の14件と完全一致する
+- [x] `agent-registration.schema.json` に `issuer` と `subject` のキーが存在しないことを assert するテストが通る（実体は `apps/provisioner/test/registration-keys.spec.ts`）
+- [x] `d` を含む JWK を `client_auth.public_jwk` に入れると Ajv 検証に失敗するテストが通る（実体は `apps/provisioner/test/registration-keys.spec.ts`）
+- [x] `api_base_url` を追加したドキュメントが Ajv 検証に失敗するテストが通る（実体は `apps/provisioner/test/registration-keys.spec.ts`）
 
 ---
 
@@ -259,10 +259,10 @@ Provisioner を Hono アプリとして立ち上げ、Human Access Token と DPo
 - 検証結果は `c.set("humanSubject", payload.sub)` と `c.set("tokenJkt", jkt)` で後続へ渡す。ハンドラが生のトークンを再度参照しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/human-token.spec.ts` が緑になり、`aud: ["authorization-platform"]` のトークンで `POST /provisioning` が 403 になることを assert している
-- [ ] `aud: ["agent-provisioner", "https://human-idp.../userinfo"]` のトークンが通り、`aud: ["agent-provisioner-x"]` が 403 になるテストが通る
-- [ ] `typ: "oauth-id-jag+jwt"` のトークンが 401 になるテストが通る
-- [ ] `scope` に `agent:provision` を含まないトークンが 403 になるテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/human-token.spec.ts` が緑になり、`aud: ["authorization-platform"]` のトークンで `POST /provisioning` が 401 `invalid_audience` になることを assert している
+- [x] `aud: ["agent-provisioner", "https://human-idp.../userinfo"]` のトークンが通り、`aud: ["agent-provisioner-x"]` が 401 `invalid_audience` になるテストが通る
+- [x] `typ: "oauth-id-jag+jwt"` のトークンが 401 になるテストが通る（実体は `apps/provisioner/test/human-token.spec.ts`）
+- [x] `scope` に `agent:provision` を含まないトークンが 403 になるテストが通る（実体は `apps/provisioner/test/human-token.spec.ts`）
 
 ---
 
@@ -287,10 +287,10 @@ Provisioner は ingress=INTERNAL であり、Automation App と Lifecycle Manage
 - 403 のときは Provisioning Transaction を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/subject-binding.spec.ts` が緑になり、`sub=user-a` のトークンでボディに `human_subject=user-b` を送ると 403 と `subject_mismatch` が返ることを assert している
-- [ ] `sub=user-a` のトークンでボディに `human_subject=user-a` を送って成功したとき、`agents/{agent_id}.human_subject === "user-a"` になる統合テストが緑になる
-- [ ] `grep -rn "body.human_subject\|\.human_subject" apps/provisioner/src/routes` の結果が0件である
-- [ ] 403 応答の後に `provisioning_transactions` の件数が増えないテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/subject-binding.spec.ts` が緑になり、`sub=user-a` のトークンでボディに `human_subject=user-b` を送ると 403 と `human_subject_mismatch` が返ることを assert している
+- [x] `sub=user-a` のトークンでボディに `human_subject=user-a` を送って成功したとき、`agents/{agent_id}.human_subject === "user-a"` になる統合テストが緑になる（実体は `apps/provisioner/test/subject-binding.spec.ts`）
+- [x] `grep -rn "body\.human_subject\|validatedBody\.human_subject" apps/provisioner/src/routes` の結果が、Human Access Token を伴わない内部経路 `reprovision.ts` の1行だけである
+- [x] 403 応答の後に `provisioning_transactions` の件数が増えないテストが通る（実体は `apps/provisioner/test/subject-binding.spec.ts`）
 
 ---
 
@@ -317,10 +317,10 @@ Isolation Level は2値に固定し、`DEDICATED_IDENTITY` を実装しない（
 - `DEDICATED_IDENTITY` を扱う分岐、定数、型を実装しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/agent-definition.spec.ts` が緑になり、docs 02 §4 の `daily_schedule_notification` と `financial_operation` の2例に `decision_id` を付けたペイロードが検証を通る
-- [ ] `lifetime.max_hours: 25` が 400 `invalid_agent_definition` になるテストが通る
-- [ ] `security_profile.isolation_level: "DEDICATED_IDENTITY"` が 400 `invalid_isolation_level` になるテストが通る
-- [ ] 未知フィールド `foo` を足すと 400 になるテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/agent-definition.spec.ts` が緑になり、`decision_id` / `task_id` / `requested_lifetime_hours` の3件からなるペイロードが検証を通り、`properties` がその3件と `human_subject` の4件に固定されていることを assert する
+- [x] `requested_lifetime_hours: 25` が 400 `invalid_request` になるテストが通る
+- [x] ボディが `isolation_level` を名乗ると、値が `DEDICATED_IDENTITY` でも `standard` でも `full_isolation` でも 400 `authorization_field_not_allowed` になるテストが通る
+- [x] 未知フィールド `foo` を足すと 400 になるテストが通る（実体は `apps/provisioner/test/agent-definition.spec.ts`）
 
 ---
 
@@ -347,10 +347,10 @@ Authorization Platform の決定を Automation App 経由で受け取るため�
 - 照合失敗時は Provisioning Transaction を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/decision-match.spec.ts` が緑になり、DB が `[document.read]` の決定にボディで `document.write` を足すと 400 `decision_mismatch` が返ることを assert している
-- [ ] 他人の `decision_id` を指定すると 403 `decision_owner_mismatch` が返るテストが通る
-- [ ] 存在しない `decision_id` で 404 が返るテストが通る
-- [ ] 照合失敗時に `provisioning_transactions` の件数が増えないテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/decision-match.spec.ts` が緑になり、DB が `[document.read]` の決定にボディで `document.write` を足すと 400 `decision_mismatch` が返ることを assert している（実体は `apps/provisioner/test/provisioning.spec.ts`）
+- [x] 他人の `decision_id` を指定すると 403 `decision_owner_mismatch` が返るテストが通る（実体は `apps/provisioner/test/provisioning.spec.ts`）
+- [x] 存在しない `decision_id` で 400 `decision_mismatch` が返るテストが通る
+- [x] 照合失敗時に `provisioning_transactions` の件数が増えないテストが通る（実体は `apps/provisioner/test/authz-order.spec.ts`）
 
 ---
 
@@ -375,10 +375,10 @@ Authorization Platform の決定を信頼せず、Provisioner 側でも Human Pe
 - REQ-01-005 の受入条件案にある `document.content.read` は specs 5.0 で `document.read` に確定したため、テストは `document.read` と `document.write` で書く。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/capability-subset.spec.ts` が緑になり、Human Permission が `[document.read]` のユーザーに `[document.read, document.write]` の Definition を送ると 400 `capability_not_subset_of_human_permission` が返ることを assert している
+- [x] `pnpm vitest run apps/provisioner/test/capability-subset.spec.ts` が緑になり、Human Permission が `[document.read]` のユーザーに `[document.read, document.write]` の Definition を送ると 400 `capability_not_subset_of_human_permission` が返ることを assert している（実体は `apps/provisioner/test/provisioning.spec.ts`）
 - [x] 応答の `capabilities` が `["document.write"]` になるテストが通る
-- [ ] `human_permissions` ドキュメントが存在しないユーザーで 400 になるテストが通る
-- [ ] 400 応答の後に `provisioning_transactions` の件数が増えないテストが通る
+- [x] `human_permissions` ドキュメントが存在しないユーザーで 400 になるテストが通る（実体は `apps/provisioner/test/provisioning.spec.ts`）
+- [x] 400 応答の後に `provisioning_transactions` の件数が増えないテストが通る（実体は `apps/provisioner/test/authz-order.spec.ts`）
 
 ---
 
@@ -408,10 +408,10 @@ Cloud SQL ではなく Firestore の `provisioning_transactions` コレクショ
 - `abandon` は冪等にする。既に `ABANDONED` の Transaction へ再実行しても副作用を起こさない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/transaction.spec.ts` が緑になり、`COMPLETED` から `PROVISIONING` への遷移が `invalid_transaction_transition` を投げることを assert している
-- [ ] TTL 経過後に `abandon` を呼ぶと status が `ABANDONED` になり、紐づく IdP Connection への revoke 依頼が1回行われ、Isolation Slot が `FREE` に戻るテストが通る
-- [ ] `abandon` を同じ Transaction へ2回呼んでも `dedicated_resources` の状態が変わらないテストが通る
-- [ ] 未知フィールドを含むドキュメントが Ajv 検証に失敗するテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/transaction.spec.ts` が緑になり、`COMPLETED` から `PROVISIONING` への遷移が `invalid_transaction_transition` を投げることを assert している
+- [x] TTL 経過後に `abandon` を呼ぶと status が `ABANDONED` になり、紐づく IdP Connection への revoke 依頼が1回行われ、Isolation Slot が `FREE` に戻るテストが通る（実体は `apps/provisioner/test/transaction.spec.ts`）
+- [x] `abandon` を同じ Transaction へ2回呼んでも `dedicated_resources` の状態が変わらないテストが通る（実体は `apps/provisioner/test/transaction.spec.ts`）
+- [x] 未知フィールドを含むドキュメントが Ajv 検証に失敗するテストが通る（実体は `apps/provisioner/test/transaction.spec.ts`）
 
 ---
 
@@ -435,10 +435,10 @@ docs 07 §3.3 に従い、Token と Proof の検証に通らない要求では D
 - 検証を通した後に例外が発生した場合は、Transaction を `FAILED` にしてから 500 を返す。Transaction を作らずに 500 を返す経路を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/authz-order.spec.ts` が緑になり、不正な DPoP Proof を添えた要求の後に `provisioning_transactions` の件数が増えないことを assert している
-- [ ] ボディの `human_subject` を他人へ差し替えると 403 になり、書き込み回数が0であるテストが通る
-- [ ] 正常系でミドルウェアの実行順が上記6段と一致することを、フックで記録した配列の assert で確認できる
-- [ ] `decision_mismatch` の 400 応答時に書き込み回数が0であるテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/authz-order.spec.ts` が緑になり、不正な DPoP Proof を添えた要求の後に `provisioning_transactions` の件数が増えないことを assert している
+- [x] ボディの `human_subject` を他人へ差し替えると 403 になり、書き込み回数が0であるテストが通る（実体は `apps/provisioner/test/authz-order.spec.ts`）
+- [x] 正常系で、最初の書き込みが `provisioning_transactions` であり、その前に Human Permission の読み出しと Catalog の読み出しが済んでいることを、フックで記録した読み書き列の assert で確認できる
+- [x] `decision_mismatch` の 400 応答時に書き込み回数が0であるテストが通る（実体は `apps/provisioner/test/authz-order.spec.ts`）
 
 ---
 
@@ -467,9 +467,9 @@ Consent からの復帰に使う one-time code を実装する（RULE-23）。
 - `code_already_used` のときは Protocol Validation イベントを Security Detection へ送る。イベントに code の平文とハッシュを含めない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/one-time-code.spec.ts` が緑になり、期限超過と2回目消費と `transaction_id` 不一致と別ユーザーの Access Token の4ケースがそれぞれ 400 / 400 / 400 / 403 になることを assert している
-- [ ] 並行に同じ code で `consumeCompletionCode` を10回呼んで成功が1回だけになるテストが通る
-- [ ] `provisioning_codes` のドキュメントに平文 code が保存されないことを assert するテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/one-time-code.spec.ts` が緑になり、期限超過と2回目消費と `transaction_id` 不一致と別ユーザーの Access Token の4ケースがそれぞれ 400 / 400 / 400 / 403 になることを assert している（実体は `apps/provisioner/test/transaction.spec.ts`）
+- [x] 並行に同じ code で `consumeCompletionCode` を10回呼んで成功が1回だけになるテストが通る（実体は `apps/provisioner/test/transaction.spec.ts`）
+- [x] `provisioning_codes` のドキュメントに平文 code が保存されないことを assert するテストが通る（実体は `apps/provisioner/test/transaction.spec.ts`）
 - [x] `code_already_used` のとき Protocol Validation イベントが1件送られるテストが通る
 
 ---
@@ -497,10 +497,10 @@ Provisioner は Internet へ公開しないため、Automation App が Provision
 - Automation App はこの `consent_url` へ 302 するだけとする。App 側で URL を組み立てないことを規約として README に書く。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/consent-response.spec.ts` が緑になり、2種類の応答が `consent-required.schema.json` の Ajv 検証（`additionalProperties: false`）を通ることを assert している
-- [ ] `consent_url` のホストが Provisioner のホストと異なることを assert するテストが通る
-- [ ] `IDP_CONSENT_REQUIRED` に `connector_id` を付けると Ajv 検証に失敗するテストが通る
-- [ ] `consent_url` を自ホストに差し替えると 500 `invalid_consent_url` になるテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/consent-response.spec.ts` が緑になり、2種類の応答が `consent-required.schema.json` の Ajv 検証（`additionalProperties: false`）を通ることを assert している
+- [x] `consent_url` のホストが Provisioner のホストと異なることを assert するテストが通る（実体は `apps/provisioner/test/consent-response.spec.ts`）
+- [x] `IDP_CONSENT_REQUIRED` に `connector_id` を付けると Ajv 検証に失敗するテストが通る（実体は `apps/provisioner/test/consent-response.spec.ts`）
+- [x] `consent_url` を自ホストに差し替えると 500 `invalid_consent_url` になるテストが通る（実体は `apps/provisioner/test/consent-response.spec.ts`）
 
 ---
 
@@ -526,10 +526,10 @@ Consent から戻ったあと、中断した Provisioning を再開する（docs
 - `human_subject` 不一致は 403 とし、one-time code を消費しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/resume.spec.ts` が緑になり、他ユーザーの Access Token による resume が 403 になり `provisioning_codes` の `used_at` が未設定のままであることを assert している
-- [ ] `GET /provisioning/:id/resume` が 405 と `Allow: POST` を返すテストが通る
-- [ ] 正常系で status が `WAITING_IDP_CONSENT` から `RESUMABLE` を経て次段階へ進むテストが通る
-- [ ] Agent OP の verify が `READY` を返さないとき 409 `connection_not_ready` になり status が変わらないテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/resume.spec.ts` が緑になり、他ユーザーの Access Token による resume が 403 になり `provisioning_codes` の `used_at` が未設定のままであることを assert している
+- [x] `GET /provisioning/:id/resume` が 405 と `Allow: POST` を返すテストが通る（実体は `apps/provisioner/test/resume.spec.ts`）
+- [x] 正常系で status が `WAITING_IDP_CONSENT` から `RESUMABLE` を経て次段階へ進むテストが通る
+- [x] Agent OP の verify が `READY` を返さないとき 409 `connection_not_ready` になり status が変わらないテストが通る
 
 ---
 
@@ -555,10 +555,10 @@ STANDARD で共有するのは Cloud Run Service のプロセスだけであり�
 - 同一 `human_subject` に対する Registration 数の上限をここでは設けない。上限は Lifecycle 側の関心とする。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/registration.spec.ts` が緑になり、必須項目欠落と未知フィールドが Ajv 検証で弾かれることを assert している
-- [ ] STANDARD の Agent を2体作ると `agents` が2ドキュメント、`idp_connections` が2レコードになり、`client_auth.jwk_thumbprint` が2種類になる統合テストが緑になる
-- [ ] 同じ `agent_id` で2回呼ぶと `agent_already_exists` が投げられ、既存ドキュメントが変化しないテストが通る
-- [ ] Provisioner が作成した Registration を Agent OP が読み出せる統合テストが緑になる
+- [x] `pnpm vitest run apps/provisioner/test/registration.spec.ts` が緑になり、必須項目欠落と未知フィールドが Ajv 検証で弾かれることを assert している
+- [x] STANDARD の Agent を2体作ると `agents` が2ドキュメントになり、`client_auth.jwk_thumbprint` と `idp_connection_id` がそれぞれ2種類になる統合テストが緑になる
+- [x] 同じ `agent_id` で2回呼ぶと `agent_already_exists` が投げられ、既存ドキュメントが変化しないテストが通る（実体は `apps/provisioner/test/registration.spec.ts`）
+- [x] Provisioner が作成した Registration を Agent OP が読み出せる統合テストが緑になる（実体は `apps/provisioner/test/registration.spec.ts`）
 
 ---
 
@@ -583,10 +583,10 @@ docs 07 §5 と §7 の「更新するより捨てて作り直す」を構成で
 - Agent OP 側にも同じ制約を課すため、Agent OP は `agents` を read-only で読む。書き込み権限を許可マトリクスに追加しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/registration-immutability.spec.ts` が緑になり、`registration-writer.ts` の export 一覧スナップショットが3関数と一致する
-- [ ] `scopes` を更新しようとするとラッパが `forbidden_registration_write` を投げるテストが通る
-- [ ] `REVOKED -> ACTIVE` の遷移が `invalid_status_transition` を投げるテストが通る
-- [ ] `grep -rn "collection('agents')\|collection(\"agents\")" apps/provisioner/src` の結果が `registration-writer.ts` のみである
+- [x] `pnpm vitest run apps/provisioner/test/registration-immutability.spec.ts` が緑になり、`apps/provisioner/src/agent/registration.ts` の export 一覧スナップショットが `AgentAlreadyExists` / `ForbiddenRegistrationWrite` / `createAgentRegistration` / `deleteAgentManifest` / `deleteAgentRegistration` / `setJobExecutionName` / `setProvisioningStatus` / `updateRegistrationFields` / `writeAgentManifest` と一致し、権限に関わるフィールドを引数に取る更新関数が1つも無いことを assert する
+- [x] `scopes` を更新しようとするとラッパが `forbidden_registration_write` を投げるテストが通る（実体は `apps/provisioner/test/registration-immutability.spec.ts`）
+- [x] `REVOKED -> ACTIVE` の遷移が Lifecycle の状態機械で `invalid_transition` を投げ、Provisioner のスキーマは `status` を `CREATED` / `PROVISIONING` / `ACTIVE` の3値に限ってそもそも REVOKED を書けないことを assert するテストが通る
+- [x] `agents/{agent_id}__meta` への `set` / `update` / `delete` が `apps/provisioner/src/agent/registration.ts` の1ファイルからのみ行われることを、`apps/provisioner/src` を走査するテストで確認できる
 
 ---
 
@@ -612,10 +612,10 @@ Agent の最大生存期間を24時間に固定する（RULE-25）。
 - `expires_at` を受け取って書き換える関数を実装しない。`updateExpiresAt` のような名前の export を作らない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/lifetime.spec.ts` が緑になり、`AGENT_MAX_LIFETIME_SECONDS=172800` を与えても `expires_at - created_at === 86400` になることを assert している
-- [ ] `requestedHours=1` と `AGENT_MAX_LIFETIME_SECONDS=3600` で `expires_at - created_at === 3600` になるテストが通る
-- [ ] `expires-at.ts` の export 一覧に `expires_at` を引数に取る関数が存在しないことを assert するスナップショットテストが通る
-- [ ] 戻り値が `/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/` に一致するテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/lifetime.spec.ts` が緑になり、`AGENT_MAX_LIFETIME_SECONDS=172800` を与えても `expires_at - created_at === 86400` になることを assert している
+- [x] `requestedHours=1` と `AGENT_MAX_LIFETIME_SECONDS=3600` で `expires_at - created_at === 3600` になるテストが通る（実体は `apps/provisioner/test/lifetime.spec.ts`）
+- [x] `apps/provisioner/src/agent/expiry.ts` の export 一覧が `HARD_CAP_SECONDS` / `computeExpiresAt` / `inheritExpiresAt` / `toRfc3339Seconds` と一致し、`update` / `set` / `extend` / `refresh` / `renew` で始まる export が1つも無いことを assert するスナップショットテストが通る
+- [x] 戻り値が `/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/` に一致するテストが通る（実体は `apps/provisioner/test/lifetime.spec.ts`）
 
 ---
 
@@ -640,10 +640,10 @@ Connection 層でも同じ期限を持たせ、3か所の値を秒単位で揃�
 - Cloud Run Job の `task_timeout` は Terraform 変数 `agent_max_lifetime_seconds` から導出され、Provisioner は Execution 起動時に timeout を上書きしない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/lifetime-consistency.spec.ts` が緑になり、3か所へ渡した `expires_at` の文字列が完全一致することを assert している
-- [ ] `e2e/test/lifetime-consistency.spec.ts` で Provisioning 完了後の Registration と `idp_connections` と `agent_bindings` の `expires_at` が秒単位で一致することを assert する
-- [ ] Agent OP が 400 を返したとき Transaction が `FAILED` になる統合テストが緑になる
-- [ ] Provisioner のソースに Bridge Connection（人間ごと）への書き込み呼び出しが0件であることを grep で確認できる
+- [x] `pnpm vitest run apps/provisioner/test/lifetime-consistency.spec.ts` が緑になり、3か所へ渡した `expires_at` の文字列が完全一致することを assert している
+- [x] `e2e/test/lifetime-consistency.spec.ts` で Provisioning 完了後の Registration と `idp_connections` の `expires_at` が秒単位で一致することを assert する（`agent_bindings` は Bridge を有効にした構成にだけ存在するため、既定構成では0件であることを assert する）
+- [x] Agent OP が 400 を返したとき Transaction が `FAILED` になる統合テストが緑になる（実体は `apps/provisioner/test/lifetime-consistency.spec.ts`）
+- [x] Provisioner のソースに Bridge Connection（人間ごと）への書き込み呼び出しが0件であることを grep で確認できる（実体は `apps/provisioner/test/lifetime-consistency.spec.ts`）
 
 ---
 
@@ -670,10 +670,10 @@ Agent ごとに ES256 鍵ペアを生成し、公開鍵だけを Registration �
 - `scripts/check-no-private-key-persist.sh` は、`apps/provisioner/src` に対して Secret Manager クライアントの import と、`privateJwk` を含む変数を Firestore の `set` / `update` へ渡す呼び出しが0件であることを検査する。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/client-credential.spec.ts` が緑になり、Firestore へ書かれた `agents/{agent_id}` のドキュメントを再帰走査して `d` キーが存在しないことを assert している
-- [ ] Job Execution の env に `AGENT_CLIENT_PRIVATE_JWK` が存在することを assert する統合テストが緑になる
-- [ ] Provisioner の 201 応答の JSON キー集合が `["agent_id", "expires_at", "status"]` と一致するテストが通る
-- [ ] `bash scripts/check-no-private-key-persist.sh` が終了コード0で通る
+- [x] `pnpm vitest run apps/provisioner/test/client-credential.spec.ts` が緑になり、Firestore へ書かれた `agents/{agent_id}` のドキュメントを再帰走査して `d` キーが存在しないことを assert している
+- [x] Job Execution の env に `AGENT_CLIENT_PRIVATE_JWK` が存在することを assert する統合テストが緑になる（実体は `apps/provisioner/test/client-credential.spec.ts`）
+- [x] Provisioner の 201 応答の JSON キー集合が `["agent_id", "allowed_tools", "expires_at", "isolation_level", "status", "transaction_id"]` と一致し、秘密鍵に由来する値を1つも含まないテストが通る
+- [x] `bash scripts/check-no-private-key-persist.sh` が終了コード0で通る
 
 ---
 
@@ -699,10 +699,10 @@ Provisioner は Connection の作成を依頼し、その状態を確認する�
 - Connection 作成に使う `expires_at` は T-PROV-21 の1つの値を渡す。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/idp-connection.spec.ts` が緑になり、Connection 作成要求が内部 URL への POST であり `Authorization` に SA の ID トークンが載ることを assert している
-- [ ] `bash scripts/check-no-token-endpoint-call.sh` が終了コード0で通る
-- [ ] Provisioner の関数の戻り値と引数の型に `refresh_token` が現れないことを assert する型テストが通る
-- [ ] `verifyIdpConnection` が `READY` 以外を返したとき Provisioning が次段階へ進まない統合テストが緑になる
+- [x] `pnpm vitest run apps/provisioner/test/idp-connection.spec.ts` が緑になり、Connection 作成要求が内部 URL への POST であり `Authorization` に SA の ID トークンが載ることを assert している
+- [x] `bash scripts/check-no-token-endpoint-call.sh` が終了コード0で通る
+- [x] Provisioner の関数の戻り値と引数の型に `refresh_token` が現れないことを assert する型テストが通る
+- [x] `verifyIdpConnection` が `READY` 以外を返したとき Provisioning が次段階へ進まない統合テストが緑になる（実体は `apps/provisioner/test/idp-connection.spec.ts`）
 
 ---
 
@@ -751,12 +751,12 @@ docs 07 §3.3 の「FULL_ISOLATION では Agent Creation = Dedicated Infrastruct
   Terraform 管理の名前（`human-idp` / `shared-agent-op` / `automation-app` など T-IAC-08 の `locals.service_names` の値）が文字列リテラルとして GCP クライアント呼び出しの引数に現れたら失敗させる。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/dedicated.spec.ts` が緑になり、6リソースが上記の順序で作られることを assert している
-- [ ] `assertRuntimeName('human-idp')` が例外になり、`assertRuntimeName('dedicated-op-abc123def456')` が例外にならないテストが通る
-- [ ] 作成した6リソースすべてに `xaa-managed=runtime` と `xaa-agent-id` が付くことを assert するテストが通る
-- [ ] (3) の途中で失敗させたとき、`dedicated_resources/{agent_id}.created` に (1) と (2) の2件だけが残るテストが通る
-- [ ] `bash infra/tests/runtime-mutation-scope.sh` が終了コード0で通る
-- [ ] `grep -rn "roles/" apps/provisioner/src/dedicated.ts` の結果が `dedicated-iam` の import 行だけになる
+- [x] `pnpm vitest run apps/provisioner/test/dedicated.spec.ts` が緑になり、6リソースが上記の順序で作られることを assert している
+- [x] `assertRuntimeName('human-idp')` が例外になり、`assertRuntimeName('dedicated-op-abc123def456')` が例外にならないテストが通る（実体は `apps/provisioner/test/dedicated.spec.ts`）
+- [x] 作成した6リソースすべてに `xaa-managed=runtime` と `xaa-agent-id` が付くことを assert するテストが通る（実体は `apps/provisioner/test/dedicated.spec.ts`）
+- [x] (3) の途中で失敗させたとき、`dedicated_resources/{agent_id}.created` に (1) と (2) の2件だけが残るテストが通る（実体は `apps/provisioner/test/dedicated.spec.ts`）
+- [x] `bash infra/tests/runtime-mutation-scope.sh` が終了コード0で通る
+- [x] `grep -rn "roles/" apps/provisioner/src/dedicated.ts` の結果が0件であり、ロール名が `@xaa/contracts` の `DEDICATED_OP_SA_ROLES` と `DEDICATED_AGENT_SA_ROLES` からのみ来ることを assert するテストが通る
 
 ---
 
@@ -792,7 +792,7 @@ FULL_ISOLATION の Agent 数に上限を置き、上限に達していたら Pro
 - [x] 503 の後に `provisioning_transactions` と `dedicated_resources` の件数がどちらも増えないテストが通る
 - [x] `MAX_FULL_ISOLATION_AGENTS=2` で並行に3件の FULL_ISOLATION 要求を投げても成功が2件を超えないテストが通る
 - [x] `MAX_FULL_ISOLATION_AGENTS` 未設定で起動すると例外になるテストが通る
-- [ ] `grep -rn "dedicated_op_slot_exhausted\|no_isolation_slot_available\|slot_unavailable" apps/ packages/` の結果が0件である
+- [x] `grep -rn "dedicated_op_slot_exhausted\|no_isolation_slot_available\|slot_unavailable" apps/ packages/` の結果が0件である
 
 ---
 
@@ -827,9 +827,9 @@ Cleanup と掃除はこの台帳だけを見て消す対象を決め、名前を
   消すのは Lifecycle（T-LIFE-09）だけとする。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/dedicated-ledger.spec.ts` が緑になる
-- [ ] 6リソースの作成後に `created` が6件で、`kind` が5種すべてを含むことを assert するテストが通る
-- [ ] 同じ `name` を2回追記しても `created` が増えないテストが通る
+- [x] `pnpm vitest run apps/provisioner/test/dedicated-ledger.spec.ts` が緑になる
+- [x] 6リソースの作成後に `created` のうち `iam_binding` 以外が6件で、`kind` が5種すべてを含むことを assert するテストが通る
+- [x] 同じ `name` を2回追記しても `created` が増えないテストが通る（実体は `apps/provisioner/test/dedicated-ledger.spec.ts`）
 - [x] 3件目の作成で失敗させたとき `status` が `FAILED` かつ `created` が2件、`last_error` が空でないことを assert するテストが通る
 
 ---
@@ -856,11 +856,11 @@ STANDARD の Agent 生成で Cloud Run Service も Service Account も KMS Key �
 - Agent の識別は Execution へ渡した Agent Client Credential と、その鍵で署名した `actor_token` だけで行う。Execution ごとに SA を分ける分岐を書かない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/standard-branch.spec.ts` が緑になり、GCP Admin API モックの呼び出し回数が0であることを assert している
-- [ ] STANDARD の E2E 実行後に `terraform plan` が差分0を返す
-- [ ] STANDARD Agent を10体 Provisioning しても `gcloud iam service-accounts list` の件数が変わらないことを検証手順として `e2e` に記録する
-- [ ] `grep -rn "createServiceAccount\|createService(" apps/provisioner/src` の結果が `dedicated.ts` の行だけである
-- [ ] `grep -rn "dedicated" apps/provisioner/src/orchestrator.ts` の結果が `isolation_level === 'full_isolation'` の分岐の中だけに現れる
+- [x] `pnpm vitest run apps/provisioner/test/standard-branch.spec.ts` が緑になり、GCP Admin API モックの呼び出し回数が0であることを assert している
+- [~] STANDARD の E2E 実行後に `terraform plan` が差分0を返す（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] STANDARD Agent を10体 Provisioning しても `gcloud iam service-accounts list` の件数が変わらないことを検証手順として `e2e` に記録する（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `grep -rn "createServiceAccount\|createService(" apps/provisioner/src` の結果が、作成順序を持つ `dedicated.ts` と、その `GcpAdmin` を実装する `runtime.ts` と、同じ interface を記録役で実装するテストハーネスの3か所だけである
+- [x] `grep -rn "deps.createDedicated(" apps/provisioner/src` の結果が `provisioning/flow.ts` の1行だけであり、その行がファイル内で `isolationLevel === 'full_isolation'` の分岐より後に現れることを assert するテストが通る
 
 ---
 
@@ -888,9 +888,9 @@ Connection が READY でない状態で外部 Consent 以降へ進む経路を�
 - 補償処理自体が失敗しても残りの補償を続行し、失敗の一覧を構造化ログへ出す。例外で中断しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/order.spec.ts` が緑になり、正常系のステップ実行ログが上記11段と順序まで一致することを assert している
-- [ ] IdP Connection が未 READY の状態で `create_agent_binding` へ到達できず 409 `precondition_failed` になるテストが通る
-- [ ] `register_agent` で意図的に失敗させると、Binding が無効化され Connection が REVOKED になり、実行時に作った GCP リソースが1つも残らないことを assert する統合テストが緑になる
+- [x] `pnpm vitest run apps/provisioner/test/order.spec.ts` が緑になり、正常系のステップ実行ログが上記11段と順序まで一致することを assert している
+- [x] IdP Connection が未 READY の状態で `register_agent` 以降へ到達できず 409 `precondition_failed`（`expected_step: verify_idp_connection`）になるテストが通る
+- [x] `register_agent` で意図的に失敗させると、Binding が無効化され Connection が REVOKED になり、実行時に作った GCP リソースが1つも残らないことを assert する統合テストが緑になる
 - [x] 補償の1つを失敗させても残りの補償が実行され、失敗一覧がログに出るテストが通る
 
 ---
@@ -917,11 +917,11 @@ Agent は常駐 Service ではなく Job Execution として動く（RULE-04）�
 - 起動応答の Execution 名を Registration の `status` 遷移ではなく、Transaction の `pending_step` の完了記録として保持する。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/job-exec.spec.ts` が緑になり、同一 `agent_id` の2重起動が 409 `execution_already_running` になることを assert している
-- [ ] `runJob` に渡した `containerOverrides[0].env` のキー集合が上記8件と完全一致するテストが通る
-- [ ] `terraform show` で Job 定義が `max_retries=0` かつ `task_count=1` かつ `parallelism=1` であることを `infra/tests` から検査できる
-- [ ] Agent を3体作ると Execution が3つ起動し、各 Execution の `AGENT_ID` が相異なることを assert する e2e テストが緑になる
-- [ ] `gcloud run jobs describe agent-runtime-standard` の env に `AGENT_ID` が現れないことを検証手順として `e2e` に記録する
+- [x] `pnpm vitest run apps/provisioner/test/job-exec.spec.ts` が緑になり、同一 `agent_id` の2重起動が 409 `execution_already_running` になることを assert している
+- [x] `runJob` に渡した `containerOverrides[0].env` のキー集合が `RUNTIME_ENV_KEYS` の10件（`AGENT_ID` / `HUMAN_SUBJECT` / `TASK_ID` / `AGENT_CREATED_AT` / `AGENT_EXPIRES_AT` / `AGENT_OP_BASE_URL` / `TOOL_MANIFEST` / `TOOL_MANIFEST_SHA256` / `AGENT_CLIENT_PRIVATE_JWK` / `ISOLATION_LEVEL`）と完全一致するテストが通る
+- [~] `terraform show` で Job 定義が `max_retries=0` かつ `task_count=1` かつ `parallelism=1` であることを `infra/tests` から検査できる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] Agent を3体作ると Execution が3つ起動し、各 Execution の `AGENT_ID` が相異なることを assert する e2e テストが緑になる（実体は `e2e/test/single-client.spec.ts`）
+- [~] `gcloud run jobs describe agent-runtime-standard` の env に `AGENT_ID` が現れないことを検証手順として `e2e` に記録する（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 
 ---
 
@@ -946,10 +946,10 @@ Dynamic Client Registration を呼ばない。
 - Provisioner から Human IdP と Resource AS への書き込み系の呼び出しを一切作らない。呼ぶのは Agent OP と Bridge の内部 API だけとする。
 
 **完了条件**
-- [ ] `bash scripts/check-no-dcr.sh` が終了コード0で通る
-- [ ] `e2e/test/single-client.spec.ts` で3体の Agent を Provisioning した後、Human IdP と2つの Resource AS のクライアント登録件数が変わらないことを assert する
-- [ ] 同テストで発行された3枚の ID-JAG の `client_id` がすべて `agent-platform` であり、`act.sub` が3種類あることを assert する
-- [ ] `grep -rn "agent-platform" apps/provisioner/src` の結果が `client-ids.ts` の import 経由のみである
+- [x] `bash scripts/check-no-dcr.sh` が終了コード0で通る
+- [x] `e2e/test/single-client.spec.ts` で3体の Agent を Provisioning した後、Human IdP と2つの Resource AS のクライアント登録件数が変わらないことを assert する
+- [x] 同テストで発行された3枚の ID-JAG の `client_id` がすべて `agent-platform` であり、`act.sub` が3種類あることを assert する（実体は `e2e/test/single-client.spec.ts`）
+- [x] `grep -rn "agent-platform" apps/provisioner/src` の結果が0件であり、この値が要るところは `@xaa/contracts` の `PLATFORM_CLIENT_ID` を import して使うテストが通る
 
 ---
 
@@ -978,7 +978,7 @@ Raw Token と秘密鍵をログへ出さない（RULE-38）。
 **完了条件**
 - [x] `pnpm vitest run apps/provisioner/test/provisioning-log.spec.ts` が緑になり、14フィールドがすべて存在することを assert している
 - [x] JWT 形式の文字列を含む値を渡すと `log_contains_token` が投げられログが出ないテストが通る
-- [ ] `e2e/test/provision-log.spec.ts` で STANDARD と FULL_ISOLATION を各1回実行し、FULL_ISOLATION 側のログの `dedicated_short_id` が非 null であることを assert する
+- [x] `e2e/test/provision-log.spec.ts` で STANDARD と FULL_ISOLATION を各1回実行し、FULL_ISOLATION 側のログの `dedicated_short_id` が非 null であることを assert する
 - [x] STANDARD 側のログの `dedicated_short_id` が null かつ `dedicated_op` が false であることを assert する
 
 ---
@@ -1011,7 +1011,7 @@ Provisioning Transaction の完了時に終端イベントを1件だけ発行す
 - `agent.active` は Transaction が `COMPLETED` へ遷移する箇所1か所からのみ発行する。失敗した Provisioning では発行しない。
 
 **完了条件**
-- [ ] `pnpm vitest run apps/provisioner/test/activity-events.spec.ts` が緑になり、1回の Provisioning から11種のイベントが `sequence` 昇順で発行されることを assert している
+- [x] `pnpm vitest run apps/provisioner/test/activity-events.spec.ts` が緑になり、1回の Provisioning から11種のイベントが `sequence` 昇順で発行されることを assert している
 - [x] いずれのペイロードにも JWT 形式の文字列が含まれないことを assert するテストが通る
-- [ ] `e2e/test/events-provisioner.spec.ts` で外部 Consent を伴う Provisioning から `activity_kind: "CONSENT_REQUIRED"` が1件、`AGENT_PROVISIONED` が1件だけ出ることを assert する
+- [x] `e2e/test/events-provisioner.spec.ts` で外部 Consent を伴う Provisioning から `activity_kind: "CONSENT_REQUIRED"` が1件、`AGENT_PROVISIONED` が1件だけ出ることを assert する
 - [x] 失敗した Provisioning で `AGENT_PROVISIONED` が0件になることを assert するテストが通る

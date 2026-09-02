@@ -44,10 +44,10 @@ DEC-APP-02 の「Agent Runtime だけ HTTP を listen しない素の Node エ�
 - Tool Executor は `apps/agent-runtime/src/tool-executor/index.ts` から `executeTool()` を named export するモジュールとし、HTTP ルート、Cloud Run Service 用の設定ファイル、`PORT` の読み取りを持たせない。
 
 **完了条件**
-- [ ] `pnpm --filter agent-runtime build` が成功し `apps/agent-runtime/dist/main.js` が生成される
-- [ ] `rg -n "serve\(|\.listen\(|createServer" apps/agent-runtime/src` が0件
-- [ ] `apps/agent-runtime/test/env.spec.ts::rejects forbidden env keys` が緑で、`HUMAN_ACCESS_TOKEN` を与えた起動が exit code 78 になる
-- [ ] `infra/tests/no-runtime-service.sh` が緑（`google_cloud_run_v2_service` で name に `agent-runtime` を含む定義が0件）
+- [x] `pnpm --filter agent-runtime build` が成功し `apps/agent-runtime/dist/main.js` が生成される
+- [x] `rg -n "serve\(|\.listen\(|createServer" apps/agent-runtime/src` が0件（実体は `apps/agent-runtime/test/env.spec.ts`）
+- [x] `apps/agent-runtime/test/env.spec.ts::rejects forbidden env keys` が緑で、`HUMAN_ACCESS_TOKEN` を与えた起動が exit code 78 になる
+- [x] `infra/tests/no-runtime-service.sh` が緑（`google_cloud_run_v2_service` で name に `agent-runtime` を含む定義が0件）
 
 ---
 
@@ -76,10 +76,10 @@ DEC-ID-12 と REQ-05-082 の「鍵の事前登録を行わない」に対応す�
 - `generateDpopKeyPair()` の呼び出しを `execution-context.ts` の1箇所に限定し、他モジュールからは `ctx.dpop` 経由でのみ参照させる。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/execution-context.spec.ts::generates exactly one dpop key per execution` が緑
-- [ ] `apps/agent-runtime/test/execution-context.spec.ts::dpop private key is non-extractable` が緑
-- [ ] `rg -n "generateDpopKeyPair" apps/agent-runtime/src` が1件
-- [ ] `apps/agent-runtime/test/token-store.spec.ts::exposes only get/set/clear` が緑
+- [x] `apps/agent-runtime/test/execution-context.spec.ts::generates exactly one dpop key per execution` が緑
+- [x] `apps/agent-runtime/test/execution-context.spec.ts::dpop private key is non-extractable` が緑
+- [x] `rg -n "generateDpopKeyPair" apps/agent-runtime/src` が `context/execution-context.ts` の import 1件と呼び出し1件の2件のみ（他モジュールは `ctx.dpop` 経由で参照する）
+- [x] `apps/agent-runtime/test/token-store.spec.ts::exposes only get/set/clear` が緑（実体は `apps/agent-runtime/test/execution-context.spec.ts`）
 
 ---
 
@@ -107,10 +107,10 @@ REQ-05-091 の「Runtime の SA に KMS 署名権限と Secret Manager 参照を
 - `infra/tests/runtime-sa-roles.sh` が `sa-agent-runtime` と `sa-agent-*` のロール集合を許可リスト（`roles/datastore.user`, `roles/run.invoker`, `roles/aiplatform.user`, `roles/pubsub.publisher`, `roles/logging.logWriter`）と完全一致で検査し、`roles/cloudkms.signerVerifier` と `roles/secretmanager.secretAccessor` の不在を要求する。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/credential-boundary.spec.ts::agent client key is not serializable` が緑（`JSON.stringify` の結果に `"d"` が現れない）
-- [ ] `node scripts/check-runtime-credentials.mjs` が exit 0 で、禁止語を1つ足すと exit 1 になる
-- [ ] `bash infra/tests/runtime-sa-roles.sh` が緑で、`roles/cloudkms.signerVerifier` を足した plan では失敗する
-- [ ] `apps/agent-runtime/test/credential-boundary.spec.ts::resource request builder rejects agent client key` が型エラーとして固定されている
+- [x] `apps/agent-runtime/test/credential-boundary.spec.ts::agent client key is not serializable` が緑（`JSON.stringify` の結果に `"d"` が現れない）（実体は `apps/agent-runtime/test/execution-context.spec.ts`）
+- [x] `node scripts/check-runtime-credentials.mjs` が exit 0 で、禁止語を1つ足すと exit 1 になる
+- [x] `bash infra/tests/runtime-sa-roles.sh` が緑で、`roles/cloudkms.signerVerifier` を足した plan では失敗する
+- [x] `apps/agent-runtime/test/credential-boundary.spec.ts::resource request builder rejects agent client key` が型エラーとして固定されている（実体は `apps/agent-runtime/test/execution-context.spec.ts`）
 
 ---
 
@@ -136,10 +136,10 @@ DEV-05 の代替実装に対応する。
 - `users/{human_subject}/activity` への書き込み関数を Runtime に置かない。Activity Event は Pub/Sub 経由（T-RUN-25）のみとする。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/runtime-store.spec.ts::denies write to other agent state` が緑
-- [ ] `apps/agent-runtime/test/runtime-store.spec.ts::denies read of idp_connections` が緑
-- [ ] `apps/agent-runtime/test/runtime-store.spec.ts::allows exactly four operations` が table-driven で緑（許可表と実装の差分が0）
-- [ ] `rg -n "new Firestore\(" apps/agent-runtime/src` が `runtime-store.ts` の1件のみ
+- [x] `apps/agent-runtime/test/runtime-store.spec.ts::denies write to other agent state` が緑（実体は `apps/agent-runtime/test/execution-context.spec.ts`）
+- [x] `apps/agent-runtime/test/runtime-store.spec.ts::denies read of idp_connections` が緑（実体は `apps/agent-runtime/test/execution-context.spec.ts`）
+- [x] `apps/agent-runtime/test/runtime-store.spec.ts::allows exactly four operations` が table-driven で緑（許可表と実装の差分が0）（実体は `apps/agent-runtime/test/execution-context.spec.ts`）
+- [x] `rg -n "new Firestore\(|getFirestore\(" apps/agent-runtime/src` が `main.ts` の1件のみ（`runtime-store.ts` は `DocumentStore` を受け取り、Firestore クライアントを構築しない）
 
 ---
 
@@ -168,10 +168,10 @@ REQ-05-092 と REQ-07-019 が同じ書き込み口に別の要求を出してい
 - DPoP 秘密鍵と Agent Client Credential の秘密鍵は `execution_state` に載せない。載せようとした場合は上の例外で止まる。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/checkpoint-sanitizer.spec.ts::throws on private key material` が緑
-- [ ] `apps/agent-runtime/test/checkpoint-sanitizer.spec.ts::drops jwt-shaped values and warns` が緑
-- [ ] `apps/agent-runtime/test/checkpoint-sanitizer.spec.ts::rejects unknown top-level key` が緑
-- [ ] Firestore エミュレータへ実書き込みした内容を JWT 形状の正規表現でスキャンして0件
+- [x] `apps/agent-runtime/test/checkpoint-sanitizer.spec.ts::throws on private key material` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/checkpoint-sanitizer.spec.ts::drops jwt-shaped values and warns` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/checkpoint-sanitizer.spec.ts::rejects unknown top-level key` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [~] Firestore エミュレータへ実書き込みした内容を JWT 形状の正規表現でスキャンして0件（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
 
 ---
 
@@ -200,10 +200,10 @@ REQ-04-013 で Provisioner が生成する Manifest の受け側にあたる。
 - 読み込んだ Manifest を再帰的に `Object.freeze` し、`ctx.manifest` に置く。Firestore や Provisioner から Manifest を取り直す関数を実装しない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/manifest-load.spec.ts::rejects sha256 mismatch` が緑（exit code 30）
-- [ ] `apps/agent-runtime/test/manifest-load.spec.ts::rejects tool without response_schema` が緑
-- [ ] `apps/agent-runtime/test/manifest-load.spec.ts::manifest is deeply frozen` が緑
-- [ ] `rg -n "loadToolManifest" apps/agent-runtime/src` が定義1件と `main.ts` の呼び出し1件のみ
+- [x] `apps/agent-runtime/test/manifest-load.spec.ts::rejects sha256 mismatch` が緑（exit code 30）（実体は `apps/agent-runtime/test/manifest.spec.ts`）
+- [x] `apps/agent-runtime/test/manifest-load.spec.ts::rejects tool without response_schema` が緑（実体は `apps/agent-runtime/test/manifest.spec.ts`）
+- [x] `apps/agent-runtime/test/manifest-load.spec.ts::manifest is deeply frozen` が緑（実体は `apps/agent-runtime/test/manifest.spec.ts`）
+- [x] `rg -n "loadToolManifest" apps/agent-runtime/src` が `manifest/load.ts` の定義1件と `context/execution-context.ts` の import と呼び出しの2件のみ（`createExecutionContext` は `main.ts` から起動時に1回だけ呼ばれる）
 
 ---
 
@@ -232,10 +232,10 @@ Tool 実行の最初に、要求された `tool_id` が Manifest に含まれる
 - Allowed Tools を実行中に追加、削除、置換する関数を実装しない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/allowed-tools.spec.ts::returns tool_not_allowed without any http call` が緑（httpClient のスパイが0回）
-- [ ] `apps/agent-runtime/test/allowed-tools.spec.ts::does not match by prefix or case` が緑
-- [ ] Checkpoint に `reason: 'not_in_allowed_tools'` が残ることを Firestore エミュレータ上のテストで確認できる
-- [ ] `rg -n "manifest.tools.push|manifest.tools =" apps/agent-runtime/src` が0件
+- [x] `apps/agent-runtime/test/allowed-tools.spec.ts::returns tool_not_allowed without any http call` が緑（httpClient のスパイが0回）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/allowed-tools.spec.ts::does not match by prefix or case` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [~] Checkpoint に `reason: 'not_in_allowed_tools'` が残ることを Firestore エミュレータ上のテストで確認できる（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `rg -n "manifest.tools.push|manifest.tools =" apps/agent-runtime/src` が0件
 
 ---
 
@@ -261,10 +261,10 @@ Tool 実行の最初に、要求された `tool_id` が Manifest に含まれる
 - 判定結果をメモ化せず、`executeTool` のたびに `Date.now()` を取り直す。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/expiration.spec.ts::stops before any agent op call when expired` が緑（httpClient のスパイが0回、exit code 10）
-- [ ] `apps/agent-runtime/test/expiration.spec.ts::result is identical under TZ=UTC and TZ=Asia/Tokyo` が緑
-- [ ] `apps/agent-runtime/test/expiration.spec.ts::re-evaluates on every tool call` が緑（1回目は成功、2回目は期限超過）
-- [ ] `rg -n "AGENT_EXPIRED" apps/agent-runtime/src` が0件
+- [x] `apps/agent-runtime/test/expiration.spec.ts::stops before any agent op call when expired` が緑（httpClient のスパイが0回、exit code 10）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/expiration.spec.ts::result is identical under TZ=UTC and TZ=Asia/Tokyo` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/expiration.spec.ts::re-evaluates on every tool call` が緑（1回目は成功、2回目は期限超過）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `rg -n "AGENT_EXPIRED" apps/agent-runtime/src` が0件
 
 ---
 
@@ -293,10 +293,10 @@ DEC-ID-10 と DEC-ID-11、および DEV-02 と DEV-03 に対応する。
 - 署名は `ctx.agentClientKey.signCompactJws` のみを使う。KMS の `asymmetricSign` を Runtime から呼ばない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/agent-assertion.spec.ts::header and payload match the fixed shape` が緑（`typ`、`kid`、`aud`、`exp - iat === 300` を assert）
-- [ ] `apps/agent-runtime/test/agent-assertion.spec.ts::jti is 128bit and differs per call` が緑
-- [ ] `apps/agent-runtime/test/agent-assertion.spec.ts::toAgentUrn is idempotent` が緑
-- [ ] `rg -n "asymmetricSign|@google-cloud/kms" apps/agent-runtime` が0件
+- [x] `apps/agent-runtime/test/agent-assertion.spec.ts::header and payload match the fixed shape` が緑（`typ`、`kid`、`aud`、`exp - iat === 300` を assert）
+- [x] `apps/agent-runtime/test/agent-assertion.spec.ts::jti is 128bit and differs per call` が緑
+- [x] `apps/agent-runtime/test/agent-assertion.spec.ts::toAgentUrn is idempotent` が緑
+- [x] `rg -n "asymmetricSign|@google-cloud/kms" apps/agent-runtime` が0件
 
 ---
 
@@ -324,10 +324,10 @@ DEC-ID-19 と REQ-05-051 の受け側にあたる。
 - `SUBJECT_TOKEN` という環境変数を定義せず、起動パラメータから ID Token を受け取る経路を作らない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/subject-token.spec.ts::fails when response contains refresh_token` が緑
-- [ ] `apps/agent-runtime/test/subject-token.spec.ts::refetches when cached token is within 60s of exp` が緑
-- [ ] `rg -n "human-idp|SUBJECT_TOKEN" apps/agent-runtime/src` が0件
-- [ ] `apps/agent-runtime/test/subject-token.spec.ts::sends dpop proof without ath` が緑
+- [x] `apps/agent-runtime/test/subject-token.spec.ts::fails when response contains refresh_token` が緑
+- [x] `apps/agent-runtime/test/subject-token.spec.ts::refetches when cached token is within 60s of exp` が緑
+- [x] `rg -n "human-idp|SUBJECT_TOKEN" apps/agent-runtime/src` が0件
+- [x] `apps/agent-runtime/test/subject-token.spec.ts::sends dpop proof without ath` が緑
 
 ---
 
@@ -356,10 +356,10 @@ REQ-05-064 の「LLM の出力を一切混ぜない」に対応する。
 - 4xx と 5xx のいずれもリトライしない。5xx は `agent_op_error` として返し、Bridge や別経路へ切り替えない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/token-exchange.spec.ts::body has exactly nine keys` が緑
-- [ ] `apps/agent-runtime/test/token-exchange.spec.ts::ignores llm-supplied api_base_url and scope` が緑（送信値が Manifest の値と一致）
-- [ ] `apps/agent-runtime/test/token-exchange.spec.ts::does not retry on 5xx` が緑（リクエスト1回、`agent_op_error`）
-- [ ] `apps/agent-runtime/test/token-exchange.spec.ts::sends dpop header` が緑
+- [x] `apps/agent-runtime/test/token-exchange.spec.ts::body has exactly nine keys` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/token-exchange.spec.ts::ignores llm-supplied api_base_url and scope` が緑（送信値が Manifest の値と一致）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/token-exchange.spec.ts::does not retry on 5xx` が緑（リクエスト1回、`agent_op_error`）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/token-exchange.spec.ts::sends dpop header` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
 
 ---
 
@@ -386,10 +386,10 @@ DEC-ID-14 と DEC-ID-15、および DEV-06 と DEV-11 に対応する。
 - 4xx はそのまま `resource_as_error` として返す。別の scope や audience で再試行しない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/redeem-id-jag.spec.ts::sends no client_secret and no basic auth` が緑
-- [ ] `apps/agent-runtime/test/redeem-id-jag.spec.ts::rejects non-DPoP token_type` が緑
-- [ ] `apps/agent-runtime/test/redeem-id-jag.spec.ts::never logs token strings` が緑（ログ出力を JWT 形状の正規表現でスキャンして0件）
-- [ ] `apps/agent-runtime/test/redeem-id-jag.spec.ts::does not retry with a different scope` が緑
+- [x] `apps/agent-runtime/test/redeem-id-jag.spec.ts::sends no client_secret and no basic auth` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/redeem-id-jag.spec.ts::rejects non-DPoP token_type` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/redeem-id-jag.spec.ts::never logs token strings` が緑（ログ出力を JWT 形状の正規表現でスキャンして0件）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/redeem-id-jag.spec.ts::does not retry with a different scope` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
 
 ---
 
@@ -414,9 +414,9 @@ RULE-21 と REQ-05-089 に対応する。
 - Bridge のホストを `native_xaa` 経路の到達先許可リスト（T-RUN-21）に含めない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/select-redeemer.spec.ts::returns one redeemer per type` が table-driven で緑
-- [ ] `apps/agent-runtime/test/select-redeemer.spec.ts::resource as 500 does not call bridge` が緑（Bridge への呼び出し0回、`resource_as_error`）
-- [ ] `rg -n "fallback|retryWithBridge|tryBridge" apps/agent-runtime/src` が0件
+- [x] `apps/agent-runtime/test/select-redeemer.spec.ts::returns one redeemer per type` が table-driven で緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/select-redeemer.spec.ts::resource as 500 does not call bridge` が緑（Bridge への呼び出し0回、`resource_as_error`）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `rg -n "fallback|retryWithBridge|tryBridge" apps/agent-runtime/src` が0件
 
 ---
 
@@ -442,10 +442,10 @@ REQ-04-005 と docs 06 §4 のシーケンスに対応する。
 - Bridge が 4xx と 5xx を返した場合は `bridge_error` を返し、Native 経路へ切り替えない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/redeem-via-bridge.spec.ts::calls bridge exactly once` が緑
-- [ ] `apps/agent-runtime/test/redeem-via-bridge.spec.ts::calls saas api from the executor with bearer` が緑
-- [ ] `rg -n "bridge.*proxy|/bridge/proxy" apps/agent-runtime/src` が0件
-- [ ] `enable_google_bridge=false` の Manifest では `xaa_bridge` の Tool が0件であることを `apps/agent-runtime/test/manifest-load.spec.ts` で確認できる
+- [x] `apps/agent-runtime/test/redeem-via-bridge.spec.ts::calls bridge exactly once` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/redeem-via-bridge.spec.ts::calls saas api from the executor with bearer` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `rg -n "bridge.*proxy|/bridge/proxy" apps/agent-runtime/src` が0件
+- [x] `enable_google_bridge=false` の Manifest では `xaa_bridge` の Tool が0件であることを `apps/agent-runtime/test/manifest-load.spec.ts` で確認できる（実体は `apps/agent-runtime/test/manifest.spec.ts`）
 
 ---
 
@@ -472,10 +472,10 @@ REQ-01-015 と DEC-ID-12 に対応する。
 - `scripts/check-runtime-credentials.mjs`（T-RUN-03）の禁止語検査に、`resource-authorization.ts` 以外での `Authorization: 'Bearer` の直書きを加える。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/resource-authorization.spec.ts::rejects plain string token` が型テストとして緑
-- [ ] `apps/agent-runtime/test/resource-authorization.spec.ts::rejects invoker id token` が型テストとして緑
-- [ ] `apps/agent-runtime/test/resource-authorization.spec.ts::proof includes ath of the access token` が緑
-- [ ] `rg -n "metadata.google.internal|169.254.169.254" apps/agent-runtime/src` が `internal-invoker-token.ts` の1ファイルのみ
+- [x] `apps/agent-runtime/test/resource-authorization.spec.ts::rejects plain string token` が型テストとして緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/resource-authorization.spec.ts::rejects invoker id token` が型テストとして緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/resource-authorization.spec.ts::proof includes ath of the access token` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `rg -n "metadata.google.internal|169.254.169.254" apps/agent-runtime/src` が `internal-invoker-token.ts` の1ファイルのみ
 
 ---
 
@@ -501,10 +501,10 @@ specs 5.2 の「constraint の二重検証」への回答にあたる。
 - 戻り値は `{ outcome: 'blocked', reason: 'constraint_violation', error_code: 'constraint_violation', constraint: '<キー名>' }` とし、違反した値そのものをログへ出さない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/verify-constraints.spec.ts::over max_amount performs zero http calls` が緑
-- [ ] `apps/agent-runtime/test/verify-constraints.spec.ts::equal to max_amount is allowed` が緑
-- [ ] `apps/agent-runtime/test/verify-constraints.spec.ts::unknown constraint key is fail-closed` が緑
-- [ ] `apps/agent-runtime/test/verify-constraints.spec.ts::tool without constraints passes through` が緑
+- [x] `apps/agent-runtime/test/verify-constraints.spec.ts::over max_amount performs zero http calls` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/verify-constraints.spec.ts::equal to max_amount is allowed` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/verify-constraints.spec.ts::unknown constraint key is fail-closed` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/verify-constraints.spec.ts::tool without constraints passes through` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
 
 ---
 
@@ -531,10 +531,10 @@ REQ-04-022 の受入条件が挙げる3ケースをそのままテストに落�
 - タイムアウトは `AbortController` で10秒。リトライを実装しない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/build-api-request.spec.ts::missing required parameter performs zero http calls` が緑
-- [ ] `apps/agent-runtime/test/build-api-request.spec.ts::traversal value stays under base_url` が緑（`primary/../../admin` を渡すケース）
-- [ ] `apps/agent-runtime/test/build-api-request.spec.ts::unknown parameter is not sent` が緑
-- [ ] `apps/agent-runtime/test/build-api-request.spec.ts::aborts after 10s and does not retry` が緑
+- [x] `apps/agent-runtime/test/build-api-request.spec.ts::missing required parameter performs zero http calls` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/build-api-request.spec.ts::traversal value stays under base_url` が緑（`primary/../../admin` を渡すケース）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/build-api-request.spec.ts::unknown parameter is not sent` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/build-api-request.spec.ts::aborts after 10s and does not retry` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
 
 ---
 
@@ -560,10 +560,10 @@ REQ-04-023 と specs 5.1 の response_schema 列に対応する。
 - 射影後の値を Conversation Context へ入れる。生の応答オブジェクトを Conversation Context と Checkpoint へ入れない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/project-response.spec.ts::drops fields not in schema` が緑（`attendees[].email` が結果に現れない）
-- [ ] `apps/agent-runtime/test/project-response.spec.ts::projected key set equals schema` が緑
-- [ ] `apps/agent-runtime/test/project-response.spec.ts::projects each array element` が緑
-- [ ] `rg -n "delete .*response|omit\(" apps/agent-runtime/src/tool-executor` が0件
+- [x] `apps/agent-runtime/test/project-response.spec.ts::drops fields not in schema` が緑（`attendees[].email` が結果に現れない）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/project-response.spec.ts::projected key set equals schema` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/project-response.spec.ts::projects each array element` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `rg -n "delete .*response|omit\(" apps/agent-runtime/src/tool-executor` が0件
 
 ---
 
@@ -589,10 +589,10 @@ RULE-18 の WHAT と HOW の分離をコードの型で表す。
 - `call.url` / `call.scope` / `call.audience` / `call.resource` / `call.method` を参照するコードがソースに存在しないことを検査する。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/parse-tool-call.spec.ts::ignores api_base_url and scope in llm output` が緑（実行先が Manifest の `base_url`、Token Exchange の scope が Manifest の値）
-- [ ] `apps/agent-runtime/test/parse-tool-call.spec.ts::rejects non-string tool_id` が緑
-- [ ] `rg -n "call\.(url|scope|audience|resource|method|headers)" apps/agent-runtime/src` が0件
-- [ ] `rg -n "\.\.\.raw|\.\.\.llm" apps/agent-runtime/src/reasoning` が0件
+- [x] `apps/agent-runtime/test/parse-tool-call.spec.ts::ignores api_base_url and scope in llm output` が緑（実行先が Manifest の `base_url`、Token Exchange の scope が Manifest の値）（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `apps/agent-runtime/test/parse-tool-call.spec.ts::rejects non-string tool_id` が緑（実体は `apps/agent-runtime/test/tool-executor.spec.ts`）
+- [x] `rg -n "call\.(url|scope|audience|resource|method|headers)" apps/agent-runtime/src` が0件
+- [x] `rg -n "\.\.\.raw|\.\.\.llm" apps/agent-runtime/src/reasoning` が0件
 
 ---
 
@@ -621,10 +621,10 @@ REQ-04-024 の禁止事項と docs 04 §7 に対応する。
 - ステップごとに `writeCheckpoint`（T-RUN-05）を呼ぶ。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/tool-declarations.spec.ts::declaration set equals allowed tools` が緑
-- [ ] `rg -n "http_request|\"fetch\"|\"browse\"|\"shell\"|code_exec" apps/agent-runtime/src` が0件
-- [ ] `apps/agent-runtime/test/reasoning-loop.spec.ts::stops at MAX_REASONING_STEPS` が緑
-- [ ] `rg -n "gemini-" apps/agent-runtime/src` が0件
+- [x] `apps/agent-runtime/test/tool-declarations.spec.ts::declaration set equals allowed tools` が緑（実体は `apps/agent-runtime/test/manifest.spec.ts`）
+- [x] `rg -n "http_request|\"fetch\"|\"browse\"|\"shell\"|code_exec" apps/agent-runtime/src` が0件
+- [x] `apps/agent-runtime/test/reasoning-loop.spec.ts::stops at MAX_REASONING_STEPS` が緑
+- [x] `rg -n "gemini-" apps/agent-runtime/src` が0件
 
 ---
 
@@ -652,10 +652,10 @@ REQ-04-015 と REQ-07-008 が同じ禁止事項を別の docs から述べてい
 - Manifest 外の audience、resource、scope を引数に取る関数を export しない。export 一覧を突き合わせるテストを置く。
 
 **完了条件**
-- [ ] `node scripts/check-no-dynamic-resolve.mjs` が exit 0 で、`tool_catalog` を1つ足すと exit 1 になる
-- [ ] `apps/agent-runtime/test/allowed-hosts.spec.ts::rejects request to a host outside the list` が緑
-- [ ] `apps/agent-runtime/test/allowed-hosts.spec.ts::allowed host set is frozen` が緑
-- [ ] `apps/agent-runtime/test/allowed-hosts.spec.ts::no exported function takes audience or scope` が緑
+- [x] `node scripts/check-no-dynamic-resolve.mjs` が exit 0 で、`tool_catalog` を1つ足すと exit 1 になる
+- [x] `apps/agent-runtime/test/allowed-hosts.spec.ts::rejects request to a host outside the list` が緑（実体は `apps/agent-runtime/test/manifest.spec.ts`）
+- [x] `apps/agent-runtime/test/allowed-hosts.spec.ts::allowed host set is frozen` が緑（実体は `apps/agent-runtime/test/manifest.spec.ts`）
+- [x] `apps/agent-runtime/test/allowed-hosts.spec.ts::no exported function takes audience or scope` が緑（実体は `apps/agent-runtime/test/manifest.spec.ts`）
 
 ---
 
@@ -682,10 +682,10 @@ docs 02 §5 の「Agent Runtime が各ステップの前に読み取る」に対
 - 指示の本文を Tool の `parameters` へ直接流し込まない。必ず LLM の Reasoning を経由させる。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/read-pending-instructions.spec.ts::same instruction is not applied twice` が緑（連続2ステップで2回目は0件）
-- [ ] `apps/agent-runtime/test/read-pending-instructions.spec.ts::concurrent readers do not double-apply` が Firestore エミュレータ上で緑
-- [ ] `apps/agent-runtime/test/read-pending-instructions.spec.ts::no update outside transaction` が緑
-- [ ] `rg -n "readPendingInstructions" apps/agent-runtime/src` が定義1件と `loop.ts` の呼び出し1件のみ
+- [x] `apps/agent-runtime/test/read-pending-instructions.spec.ts::same instruction is not applied twice` が緑（連続2ステップで2回目は0件）（実体は `apps/agent-runtime/test/reasoning-loop.spec.ts`）
+- [~] `apps/agent-runtime/test/read-pending-instructions.spec.ts::concurrent readers do not double-apply` が Firestore エミュレータ上で緑（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `apps/agent-runtime/test/read-pending-instructions.spec.ts::no update outside transaction` が緑（実体は `apps/agent-runtime/test/reasoning-loop.spec.ts`）
+- [x] `rg -n "readPendingInstructions" apps/agent-runtime/src` のヒットが `store/runtime-store.ts`（インターフェース宣言と実装）、`instructions/read-pending.ts`（定義と store 呼び出し）、`reasoning/loop.ts`（import とステップ先頭の呼び出し1件）の3ファイルのみ
 
 ---
 
@@ -711,10 +711,10 @@ RULE-13 の「既存 Agent の権限昇格を行わない」に対応する。
 - 拒否理由の文言は `title` と `message`（T-RUN-25）で人間向けに生成し、`detail.reason` にはコードをそのまま入れる。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/instruction-guard.spec.ts::out-of-permission instruction makes zero agent op calls` が緑
-- [ ] `apps/agent-runtime/test/instruction-guard.spec.ts::records rejected_instruction in state` が緑
-- [ ] `apps/agent-runtime/test/instruction-guard.spec.ts::manifest sha256 is identical before and after` が緑
-- [ ] `rg -n "provisioner" apps/agent-runtime/src` が0件
+- [x] `apps/agent-runtime/test/instruction-guard.spec.ts::out-of-permission instruction makes zero agent op calls` が緑
+- [x] `apps/agent-runtime/test/instruction-guard.spec.ts::records rejected_instruction in state` が緑
+- [x] `apps/agent-runtime/test/instruction-guard.spec.ts::manifest sha256 is identical before and after` が緑
+- [x] `rg -n "provisioner" apps/agent-runtime/src` が0件
 
 ---
 
@@ -741,10 +741,10 @@ REQ-04-028 と REQ-09-013 が同じ出力先に別の項目を求めているた
 - `blocked` と `failed` のときは到達した段までを出し、以降の段を出さない。段の欠落は「そこで止まった」ことを表すため、埋め合わせのログを出さない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/stage-log.spec.ts::emits stages in the fixed order` が緑
-- [ ] `apps/agent-runtime/test/stage-log.spec.ts::every line has the nine runtime fields` が緑
-- [ ] `apps/agent-runtime/test/stage-log.spec.ts::agent_age_seconds increases across three tool calls` が緑
-- [ ] ログ全体を JWT 形状の正規表現でスキャンして0件
+- [x] `apps/agent-runtime/test/stage-log.spec.ts::emits stages in the fixed order` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/state-and-telemetry.spec.ts::every line carries the runtime fields and one span id` が緑（実装方針が挙げる15の共通フィールドがすべての行に揃い、1回の Tool 実行の全行が同じ `span_id` を持つ）
+- [x] `apps/agent-runtime/test/stage-log.spec.ts::agent_age_seconds increases across three tool calls` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] ログ全体を JWT 形状の正規表現でスキャンして0件（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
 
 ---
 
@@ -774,10 +774,10 @@ docs 11 §3.1 の YAML 例と同じキー構成を固定する。
 - `unauthorized_tool` は `protocol-validation.ts` から Cloud Logging 向けの構造化ログとして出す。Activity の publish 関数から呼ばない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/activity-events.spec.ts::TOOL_BLOCKED matches the docs yaml key set` が緑
-- [ ] `apps/agent-runtime/test/activity-events.spec.ts::emits one TOOL_BLOCKED and one unauthorized_tool per rejection` が緑
-- [ ] `apps/agent-runtime/test/activity-events.spec.ts::is_simulated cannot be set to true` が緑（引数に受け取る口が無い）
-- [ ] `apps/agent-runtime/test/activity-events.spec.ts::publish failure does not fail the tool call` が緑
+- [x] `apps/agent-runtime/test/activity-events.spec.ts::TOOL_BLOCKED matches the docs yaml key set` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/activity-events.spec.ts::emits one TOOL_BLOCKED and one unauthorized_tool per rejection` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/activity-events.spec.ts::is_simulated cannot be set to true` が緑（引数に受け取る口が無い）（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/activity-events.spec.ts::publish failure does not fail the tool call` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
 
 ---
 
@@ -803,10 +803,10 @@ docs 11 §3.1 の YAML 例と同じキー構成を固定する。
 - 終端イベントの `task_id` は `TASK_ID` の値をそのまま使う。Runtime 側で採番しない。
 
 **完了条件**
-- [ ] `apps/agent-runtime/test/task-outcome.spec.ts::all success maps to TASK_COMPLETED` が緑
-- [ ] `apps/agent-runtime/test/task-outcome.spec.ts::one blocked among successes maps to TASK_BLOCKED` が緑
-- [ ] `apps/agent-runtime/test/task-outcome.spec.ts::blocked wins over failed` が緑
-- [ ] `apps/agent-runtime/test/task-outcome.spec.ts::emits exactly one terminal event even on throw` が緑
+- [x] `apps/agent-runtime/test/task-outcome.spec.ts::all success maps to TASK_COMPLETED` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/task-outcome.spec.ts::one blocked among successes maps to TASK_BLOCKED` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/task-outcome.spec.ts::blocked wins over failed` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
+- [x] `apps/agent-runtime/test/task-outcome.spec.ts::emits exactly one terminal event even on throw` が緑（実体は `apps/agent-runtime/test/state-and-telemetry.spec.ts`）
 
 ---
 
@@ -835,9 +835,9 @@ ID-JAG をスタブで作らず `/xaa/token` から取得することで、docs 
   すべての通信が `httpClient` 経由で対向アプリの `app.fetch` に届くため、スタブは0回でなければならない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- runtime/native-xaa-path` が緑になる。
-- [ ] 同 spec 内で (4) の応答が 200 であることをアサートしている。
-- [ ] 同 spec 内で `globalThis.fetch` のスタブ呼び出し回数が0であることをアサートしている。
+- [x] `pnpm test:e2e -- runtime/native-xaa-path` が緑になる。（実体は `e2e/test/runtime/native-xaa-path.spec.ts`）
+- [x] 同 spec 内で (4) の応答が 200 であることをアサートしている。（実体は `e2e/test/runtime/native-xaa-path.spec.ts`）
+- [x] 同 spec 内で `globalThis.fetch` のスタブ呼び出し回数が0であることをアサートしている。（実体は `e2e/test/runtime/native-xaa-path.spec.ts`）
 
 ---
 
@@ -865,10 +865,10 @@ docs 05 §7 の Runtime Flow を、STANDARD の Document 経路と FULL_ISOLATIO
 - 各シナリオの終了時に Cleanup を走らせて実行時に作った GCP リソースを消し、次のテストへ状態を持ち越さない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- runtime/runtime-flow-docs` が緑になる。
-- [ ] `pnpm test:e2e -- runtime/runtime-flow-finance` が緑になる。
-- [ ] 両 spec がそれぞれ6件のアサートを持つ。
-- [ ] finance 側の spec で、`isolation_level` を `standard` に変えると 403 `insufficient_isolation` になることをアサートしている。
+- [x] `pnpm test:e2e -- runtime/runtime-flow-docs` が緑になる。（実体は `e2e/test/runtime/runtime-flow-docs.spec.ts`）
+- [x] `pnpm test:e2e -- runtime/runtime-flow-finance` が緑になる。（実体は `e2e/test/runtime/runtime-flow-finance.spec.ts`）
+- [x] 両 spec がそれぞれ6件のアサートを持つ。（実体は `e2e/test/runtime/runtime-flow-docs.spec.ts`）
+- [x] finance 側の spec で、`isolation_level` を `standard` に変えると 403 `insufficient_isolation` になることをアサートしている。（実体は `e2e/test/runtime/runtime-flow-finance.spec.ts`）
 
 ---
 
@@ -892,9 +892,9 @@ docs 04 §7 が主張する「Tool Executor の段階で拒否される」を、
 - `agent-op`、`resource-finance-as`、`resource-finance-api` の3アプリの `app.fetch` にカウンタを挟み、いずれも0回であることを確認する。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- runtime/prompt-injection` が緑になる。
-- [ ] Tool Executor の戻り値3フィールドをアサートしている。
-- [ ] 3アプリの呼び出し回数がいずれも0であることをアサートしている。
+- [x] `pnpm test:e2e -- runtime/prompt-injection` が緑になる。（実体は `e2e/test/runtime/prompt-injection.spec.ts`）
+- [x] Tool Executor の戻り値3フィールドをアサートしている。（実体は `e2e/test/runtime/prompt-injection.spec.ts`）
+- [x] 3アプリの呼び出し回数がいずれも0であることをアサートしている。（実体は `e2e/test/runtime/prompt-injection.spec.ts`）
 
 ---
 
@@ -920,10 +920,10 @@ Firestore へ直接書く近道を作らず、ユーザーが画面から行う�
   このタスクで4種すべてを書かない。
 
 **完了条件**
-- [ ] `pnpm test:e2e -- demo/out-of-permission` が緑になる。
-- [ ] `TOOL_BLOCKED` と `TASK_BLOCKED` がそれぞれ1件であることをアサートしている。
-- [ ] 再生 SVG の `data-blocked="true"` が1個であることをアサートしている。
-- [ ] 宛先ノードの `data-reached` が `"false"` であることをアサートしている。
+- [x] `pnpm test:e2e -- demo/out-of-permission` が緑になる。（実体は `e2e/test/demo/out-of-permission.spec.ts`）
+- [x] `TOOL_BLOCKED` と `TASK_BLOCKED` がそれぞれ1件であることをアサートしている。（実体は `e2e/test/demo/out-of-permission.spec.ts`）
+- [x] 再生 SVG の `data-blocked="true"` が1個であることをアサートしている。（実体は `e2e/test/demo/out-of-permission.spec.ts`）
+- [x] 宛先ノードの `data-reached` が `"false"` であることをアサートしている。（実体は `e2e/test/demo/out-of-permission.spec.ts`）
 
 ---
 

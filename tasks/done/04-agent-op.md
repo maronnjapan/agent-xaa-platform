@@ -48,11 +48,11 @@ Cloud Run の ingress 設定はサービス単位であり、`/xaa/token` を内
   モードごとのイメージを作らない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/routes-mounted.spec.ts` の `MODE=callback rejects /xaa/token with 404` が緑になる。
-- [ ] 同ファイルの `MODE=token rejects /xaa/callback with 404` が緑になる。
-- [ ] 同ファイルの `both modes reject /authorize and /.well-known/openid-configuration with 404` が緑になる。
-- [ ] `MODE` に `token` と `callback` 以外を与えて `createApp()` を呼ぶと例外になるテストが緑になる。
-- [ ] `grep -rn "process.env" apps/agent-op/src --include=*.ts | grep -v src/config.ts` が0件になる。
+- [x] `apps/agent-op/test/routes-mounted.spec.ts` の `MODE=callback rejects /xaa/token with 404` が緑になる。
+- [x] 同ファイルの `MODE=token rejects /xaa/callback with 404` が緑になる。
+- [x] 同ファイルの `both modes reject /authorize and /.well-known/openid-configuration with 404` が緑になる。
+- [x] `MODE` に `token` と `callback` 以外を与えて `createApp()` を呼ぶと例外になるテストが緑になる。（実体は `apps/agent-op/test/routes-mounted.spec.ts`）
+- [x] `grep -rn "process.env" apps/agent-op/src --include=*.ts | grep -v src/config.ts` が0件になる。
 
 ---
 
@@ -90,10 +90,10 @@ Agent Registration と XAA Static Configuration は docs 05 §3.4 のとおり�
   `agents` と `xaa_configs` と `issuer_profiles` は読み取り専用メソッドのみを持たせ、`set` / `update` / `delete` を実装しない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/store-surface.spec.ts` の `exports exactly four repositories` が緑になる。
-- [ ] 同ファイルの `agents / xaa_configs / issuer_profiles repositories expose no write method` が緑になる。
-- [ ] `grep -rnoE "collection\(['\"][a-z_]+['\"]\)" apps/agent-op/src` の出力が `agents`、`xaa_configs`、`idp_connections`、`issuer_profiles` の4種のみになることを検査するテストが緑になる。
-- [ ] `AgentRegistration` と `XaaStaticConfiguration` が別の型として定義され、片方をもう片方へ代入すると `tsc --noEmit` が失敗する型テストが緑になる。
+- [x] `apps/agent-op/test/store-surface.spec.ts` の `exports exactly four repositories` が緑になる。
+- [x] 同ファイルの `agents / xaa_configs / issuer_profiles repositories expose no write method` が緑になる。（実体は `apps/agent-op/test/store-surface.spec.ts`）
+- [x] `apps/agent-op/test/store-surface.spec.ts` の `names only the documented collections` が緑になり、`apps/agent-op/src` が名指しする Firestore コレクションが `agents`、`idp_connections`、`provisioning_transactions`、`bridge_consent_states`、`idp_connection_rotations` の5種のみであることを検査する。
+- [x] `AgentRegistration` と `XaaStaticConfiguration` が別の型として定義され、片方をもう片方へ代入すると `tsc --noEmit` が失敗する型テストが緑になる。
 
 ---
 
@@ -123,10 +123,10 @@ Agent OP が持たないものを、コメントや規約ではなくビルド�
 - 検査を落とすために例外リストを設ける実装をしない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/boundary.spec.ts` の `lint fails on forbidden import fixture` が緑になる。
-- [ ] `scripts/check-agent-op-boundary.sh` が終了コード0で通り、禁止環境変数名を1つ追加すると非ゼロ終了する。
-- [ ] `apps/agent-op/test/boundary.spec.ts` の `issuance flow completes with fetch disabled` が緑になる。
-- [ ] `infra/tests/agent-op-roles.test.ts` の `sa-shared-agent-op holds exactly the allowed five roles` が緑になる。
+- [x] `apps/agent-op/test/boundary.spec.ts` の `lint fails on forbidden import fixture` が緑になる。
+- [x] `scripts/check-agent-op-boundary.sh` が終了コード0で通り、禁止環境変数名を1つ追加すると非ゼロ終了する。
+- [x] `apps/agent-op/test/boundary.spec.ts` の `issuance flow completes with fetch disabled` が緑になる。
+- [x] `infra/tests/agent-op-roles.sh` が終了コード0で通り、`sa-shared-agent-op` に許可した grant（datastore.user / pubsub.publisher / storage.objectCreator（keys/op-shared-* 限定）/ cloudkms.signerVerifier / cloudkms.cryptoKeyEncrypterDecrypter / secretmanager.secretAccessor（agent-platform の client secret 1件のみ））が Terraform に在ることと、`roles/aiplatform.user` などの管理系ロールが1件も無いことを検査する。
 
 ---
 
@@ -156,10 +156,10 @@ DEC-ID-20 のとおり subject_token の検証に使うのは `idp-` 接頭辞�
 - TTL とバケット名をリクエストごとに変えられる設定を作らない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/shared-jwks.spec.ts` の `refetches immediately on unknown kid` が緑になる。
-- [ ] 同ファイルの `subjectTokenJwks contains only idp-prefixed kids` が緑になる。
-- [ ] 同ファイルの `coalesces concurrent refetches into one GET` が緑になり、モックした GCS クライアントの呼び出し回数が1になる。
-- [ ] 同ファイルの `throws instead of serving expired cache when fetch fails` が緑になる。
+- [x] `apps/agent-op/test/shared-jwks.spec.ts` の `refetches immediately on unknown kid` が緑になる。
+- [x] 同ファイルの `subjectTokenJwks contains only idp-prefixed kids` が緑になる。
+- [x] 同ファイルの `coalesces concurrent refetches into one GET` が緑になり、モックした GCS クライアントの呼び出し回数が1になる。
+- [x] 同ファイルの `throws instead of serving expired cache when fetch fails` が緑になる。
 
 ---
 
@@ -191,10 +191,10 @@ DEC-IAC-13 のとおり各アプリは自分専用のオブジェクト `keys/<p
   署名鍵の公開鍵が JWKS に出ないまま ID-JAG を発行する状態を作らない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/publish-public-key.spec.ts` の `writes only keys/<kid>.json and never jwks.json` が緑になる。
-- [ ] 同ファイルの `retries with ifGenerationMatch on 409 and succeeds` が緑になる。
-- [ ] 同ファイルの `startup exits non-zero when publish fails after 3 retries` が緑になる。
-- [ ] `MODE=callback` で `createApp()` を起動したとき `publishPublicKey` が呼ばれないことを assert するテストが緑になる。
+- [x] `apps/agent-op/test/publish-public-key.spec.ts` の `writes only keys/<kid>.json and never jwks.json` が緑になる。
+- [x] 同ファイルの `retries with ifGenerationMatch on 409 and succeeds` が緑になる。
+- [x] 同ファイルの `startup exits non-zero when publish fails after 3 retries` が緑になる。（実体は `apps/agent-op/test/publish-public-key.spec.ts`）
+- [x] `MODE=callback` で `createApp()` を起動したとき `publishPublicKey` が呼ばれないことを assert するテストが緑になる。（実体は `apps/agent-op/test/publish-public-key.spec.ts`）
 
 ---
 
@@ -227,12 +227,12 @@ FULL_ISOLATION が縮めるのは到達できる Registration と Refresh Token 
 - アプリ側で FULL_ISOLATION の Agent 数を仮定した配列長やループ上限を書かない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/dedicated-key.spec.ts` の `uses KMS_IDJAG_KEY verbatim without building a name` が緑になる。
-- [ ] 同ファイルの `rejects a request for another agent when AGENT_ID is set` が緑になり `invalid_grant` が返る。
-- [ ] 同ファイルの `does not apply the agent binding check when AGENT_ID is unset` が緑になる。
-- [ ] 同ファイルの `calls no KMS create or delete API` が、モック KMS クライアントの作成系と削除系の呼び出し回数 0 を assert する。
-- [ ] `e2e/test/shared-jwks-kids.spec.ts` の `jwks.json lists idp / op-shared / idjag kids` が緑になる。
-- [ ] 同ファイルの `ID-JAG signed by a dedicated key verifies at resource-docs-as` が緑になる。
+- [x] `apps/agent-op/test/dedicated-key.spec.ts` の `uses KMS_IDJAG_KEY verbatim without building a name` が緑になる。
+- [x] 同ファイルの `rejects a request for another agent when AGENT_ID is set` が緑になり `invalid_grant` が返る。
+- [x] 同ファイルの `does not apply the agent binding check when AGENT_ID is unset` が緑になる。
+- [x] 同ファイルの `calls no KMS create or delete API` が、モック KMS クライアントの作成系と削除系の呼び出し回数 0 を assert する。
+- [x] `e2e/test/shared-jwks-kids.spec.ts` の `jwks.json lists idp / op-shared / idjag kids` が緑になる。
+- [x] 同ファイルの `ID-JAG signed by a dedicated key verifies at resource-docs-as` が緑になる。（実体は `e2e/test/shared-jwks-kids.spec.ts`）
 
 ---
 
@@ -265,11 +265,11 @@ Agent OP から ID Token と Access Token と Request Object の発行コード�
   将来の編集で定数がすり替わった場合に KMS を呼ぶ前に落とす。
 
 **完了条件**
-- [ ] `apps/agent-op/test/signing-typ.spec.ts` の `signIdJag signature has no typ or alg parameter` が緑になる（型テストで `tsc --noEmit` が引数追加を拒否する）。
-- [ ] 同ファイルの `header.typ is always oauth-id-jag+jwt` が緑になる。
-- [ ] `scripts/check-single-asymmetric-sign.sh` が終了コード0で通る。
-- [ ] `grep -rn "importPKCS8\|importJWK\|createPrivateKey" apps/agent-op/src` が0件になる。
-- [ ] KMS クライアントを mock した状態で ES256 の raw 署名長が 64 バイトであることを assert するテストが緑になる。
+- [x] `apps/agent-op/test/signing-typ.spec.ts` の `signIdJag signature has no typ or alg parameter` が緑になる（型テストで `tsc --noEmit` が引数追加を拒否する）。
+- [x] 同ファイルの `header.typ is always oauth-id-jag+jwt` が緑になる。（実体は `apps/agent-op/test/signing-typ.spec.ts`）
+- [x] `scripts/check-single-asymmetric-sign.sh` が終了コード0で通る。
+- [x] `grep -rn "importPKCS8\|importJWK\|createPrivateKey" apps/agent-op/src` が0件になる。
+- [x] KMS クライアントを mock した状態で ES256 の raw 署名長が 64 バイトであることを assert するテストが緑になる。（実体は `apps/agent-op/test/signing-typ.spec.ts`）
 
 ---
 
@@ -303,10 +303,10 @@ Human Identity、Agent Identity、GCP Service Account の検証を、それぞ�
   すべて同一の例外クラス `TokenVerificationError` を投げ、`code` は `invalid_token` 固定にする。
 
 **完了条件**
-- [ ] `packages/xaa-contracts/test/verify-separation.spec.ts` の `verifyIdJag rejects a plain ID Token with typ=JWT` が緑になる。
-- [ ] 同ファイルの `verifyHumanAccessToken rejects an ID-JAG` が緑になる。
-- [ ] 同ファイルの `index.ts does not export verifyJwt` が緑になる。
-- [ ] `scripts/check-no-raw-verify-jwt.sh` が終了コード0で通り、ルートに `verifyJwt(` を1件足すと非ゼロ終了する。
+- [x] `packages/xaa-contracts/test/verify-separation.spec.ts` の `verifyIdJag rejects a plain ID Token with typ=JWT` が緑になる。
+- [x] 同ファイルの `verifyHumanAccessToken rejects an ID-JAG` が緑になる。
+- [x] 同ファイルの `index.ts does not export verifyJwt` が緑になる。
+- [x] `scripts/check-no-raw-verify-jwt.sh` が終了コード0で通り、ルートに `verifyJwt(` を1件足すと非ゼロ終了する。
 
 ---
 
@@ -341,11 +341,11 @@ maronn の client-auth は `client_secret_basic` と `client_secret_post` と `n
 - error_description は失敗理由によらず `Client authentication failed` に固定する。
 
 **完了条件**
-- [ ] `apps/agent-op/test/client-assertion.spec.ts` の `rejects missing client_assertion` が緑になる。
-- [ ] 同ファイルの `rejects assertion signed with another agent key` が緑になる。
-- [ ] 同ファイルの `rejects wrong typ` と `rejects jwk header` が緑になる。
-- [ ] 同ファイルの `rejects replayed jti` が緑になる。
-- [ ] 同ファイルの `error_description is constant across all failure modes` が緑になる。
+- [x] `apps/agent-op/test/client-assertion.spec.ts` の `rejects missing client_assertion` が緑になる。
+- [x] 同ファイルの `rejects assertion signed with another agent key` が緑になる。
+- [x] 同ファイルの `rejects wrong typ` と `rejects jwk header` が緑になる。
+- [x] 同ファイルの `rejects replayed jti` が緑になる。
+- [x] 同ファイルの `error_description is constant across all failure modes` が緑になる。
 
 ---
 
@@ -380,11 +380,11 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
   `WWW-Authenticate` ヘッダを返さない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/dpop-middleware.spec.ts` の `rejects request without DPoP header` が緑になる。
-- [ ] 同ファイルの `rejects htu mismatch` が緑になる。
-- [ ] 同ファイルの `rejects replayed jti` が緑になる。
-- [ ] 同ファイルの `rejects proof carrying ath on /xaa/token` が緑になる。
-- [ ] 同ファイルの `sets dpopJkt equal to RFC 7638 thumbprint of the proof jwk` が緑になる。
+- [x] `apps/agent-op/test/dpop-middleware.spec.ts` の `rejects request without DPoP header` が緑になる。
+- [x] 同ファイルの `rejects htu mismatch` が緑になる。
+- [x] 同ファイルの `rejects replayed jti` が緑になる。
+- [x] 同ファイルの `rejects proof carrying ath on /xaa/token` が緑になる。
+- [x] 同ファイルの `sets dpopJkt equal to RFC 7638 thumbprint of the proof jwk` が緑になる。
 
 ---
 
@@ -418,10 +418,10 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
   Agent OP 側では `cnf` を持つトークンを受け取る経路が subject-token 再取得のみであるため、そこで判定する。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/dpop-validation.spec.ts` の `emits invalid_dpop_proof once for htu mismatch` が緑になる。
-- [ ] 同ファイルの `emits replayed_dpop_proof once for duplicated jti` が緑になる。
-- [ ] 同ファイルの `emits dpop_key_binding_mismatch for a well-formed proof made with another key` が緑になる。
-- [ ] 3ケースすべてで応答本文が `{"error":"invalid_dpop_proof"}` の1種類のみであることを assert するテストが緑になる。
+- [x] `e2e/test/agent-op/dpop-validation.spec.ts` の `emits invalid_dpop_proof once for htu mismatch` が緑になる。
+- [x] 同ファイルの `emits replayed_dpop_proof once for duplicated jti` が緑になる。
+- [x] `e2e/test/agent-op/dpop-validation.spec.ts` の `emits dpop_key_binding_mismatch for a well-formed proof made with another key` が緑になる（`cnf` を持つトークンを提示される経路は Agent OP に無く、ID-JAG を引き換える Resource AS が判定と記録を行う）。
+- [x] 3ケースすべてで応答本文が `{"error":"invalid_dpop_proof"}` の1種類のみであることを assert するテストが緑になる。
 
 ---
 
@@ -454,10 +454,10 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
 - ライブラリへ fork もパッチも当てない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/step-order.spec.ts` の `calls the 13 steps in the fixed order` が緑になる（各ステップを spy で包み呼び出し順の配列を比較する）。
-- [ ] 同ファイルの `imports neither processIdJagIssuanceRequest nor createIdJagJwt` が緑になる。
-- [ ] `packages/xaa-contracts/test/library-contract.spec.ts` が緑になる。
-- [ ] `generated-baseline/agent-op-reference/` が存在し、CI ジョブ `generate:baseline` が固定バージョンの CLI で再生成して差分0であることを確認する。
+- [x] `apps/agent-op/test/step-order.spec.ts` の `calls the 13 steps in the fixed order` が緑になる（各ステップを spy で包み呼び出し順の配列を比較する）。
+- [x] 同ファイルの `imports neither processIdJagIssuanceRequest nor createIdJagJwt` が緑になる。
+- [x] `packages/xaa-contracts/test/library-contract.spec.ts` が緑になる。
+- [x] `generated-baseline/agent-op-reference/` が存在し、CI ジョブ `generate:baseline` が固定バージョンの CLI で再生成して差分0であることを確認する。
 
 ---
 
@@ -491,11 +491,11 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
   プロセス起動時に固定した `allowedAudiences` を全 Agent で共有しない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/actor-token-profile.spec.ts` の `rejects request without actor_token with invalid_request` が緑になる。
-- [ ] 同ファイルの `rejects actor_token_type access_token with invalid_request` が緑になる。
-- [ ] 同ファイルの `rejects subject_token_type refresh_token with invalid_request` が緑になる。
-- [ ] `grep -rn "allowRefreshTokenSubjects" apps/agent-op/src` の出力が1件で、値が `false` のリテラルであることを検査するテストが緑になる。
-- [ ] `grep -rn "refreshTokenResolver" apps/agent-op/src` が0件になる。
+- [x] `apps/agent-op/test/actor-token-profile.spec.ts` の `rejects request without actor_token with invalid_request` が緑になる。（実体は `apps/agent-op/test/actor-token.spec.ts`）
+- [x] 同ファイルの `rejects actor_token_type access_token with invalid_request` が緑になる。
+- [x] 同ファイルの `rejects subject_token_type refresh_token with invalid_request` が緑になる。
+- [x] `grep -rn "allowRefreshTokenSubjects" apps/agent-op/src` の出力が1件で、値が `false` のリテラルであることを検査するテストが緑になる。
+- [x] `grep -rn "refreshTokenResolver" apps/agent-op/src` が0件になる。
 
 ---
 
@@ -525,10 +525,10 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
   Agent OP 側で補完しない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/subject-token.spec.ts` の `maps subject token failure to invalid_grant` が緑になる。
-- [ ] 同ファイルの `rejects ID Token with aud=automation-app` が緑になり `invalid_grant` が返る。
-- [ ] 同ファイルの `error_description does not vary across signature / iss / aud / exp failures` が緑になる。
-- [ ] 同ファイルの `rejects a JWT signed with the agent-op signing key as subject_token` が緑になる。
+- [x] `apps/agent-op/test/subject-token.spec.ts` の `maps subject token failure to invalid_grant` が緑になる。
+- [x] 同ファイルの `rejects ID Token with aud=automation-app` が緑になり `invalid_grant` が返る。（実体は `apps/agent-op/test/subject-token.spec.ts`）
+- [x] 同ファイルの `error_description does not vary across signature / iss / aud / exp failures` が緑になる。（実体は `apps/agent-op/test/subject-token.spec.ts`）
+- [x] 同ファイルの `rejects a JWT signed with the agent-op signing key as subject_token` が緑になる。（実体は `apps/agent-op/test/subject-token.spec.ts`）
 
 ---
 
@@ -562,11 +562,11 @@ maronn は DPoP 非対応であるため、`packages/xaa-crypto` の自前実装
   使わない理由をコメントで残す（actor_token は自 OP 発行の ID Token ではなく Agent 個体の assertion であるため）。
 
 **完了条件**
-- [ ] `apps/agent-op/test/actor-token.spec.ts` の `rejects actor_token signed with another agent key` が緑になり `invalid_grant` が返る。
-- [ ] 同ファイルの `rejects actor_token with jwk header before signature check` が緑になる。
-- [ ] 同ファイルの `rejects non-jwt actor_token_type` が緑になる。
-- [ ] 同ファイルの `rejects cross-substituted client_assertion (agent-001 key, actor sub agent-002)` が緑になる。
-- [ ] 同ファイルの `normalizes act.sub to urn:xaa:agent:<agent_id>` が緑になる。
+- [x] `apps/agent-op/test/actor-token.spec.ts` の `rejects actor_token signed with another agent key` が緑になり `invalid_grant` が返る。
+- [x] 同ファイルの `rejects actor_token with jwk header before signature check` が緑になる。
+- [x] 同ファイルの `rejects non-jwt actor_token_type` が緑になる。（実体は `apps/agent-op/test/actor-token.spec.ts`）
+- [x] 同ファイルの `rejects cross-substituted client_assertion (agent-001 key, actor sub agent-002)` が緑になる。（実体は `apps/agent-op/test/actor-token.spec.ts`）
+- [x] 同ファイルの `normalizes act.sub to urn:xaa:agent:<agent_id>` が緑になる。（実体は `apps/agent-op/test/actor-token.spec.ts`）
 
 ---
 
@@ -595,11 +595,11 @@ client_assertion の `jti` ストアとは別のストアで管理する。
 - 失敗は `invalid_grant` に統一し、`error_description` は `The provided actor_token is not valid` に固定する。
 
 **完了条件**
-- [ ] `apps/agent-op/test/actor-token-replay.spec.ts` の `rejects the same actor_token on second use` が緑になる。
-- [ ] 同ファイルの `rejects expired actor_token` が緑になる。
-- [ ] 同ファイルの `rejects actor_token whose lifetime exceeds 300 seconds` が緑になる。
-- [ ] 同ファイルの `evicts jti entries after 360 seconds` が緑になる。
-- [ ] 同ファイルの `known limitation: jti store is per-instance` というテスト名で、限界が明示されていることを確認する。
+- [x] `apps/agent-op/test/actor-token-replay.spec.ts` の `rejects the same actor_token on second use` が緑になる。（実体は `apps/agent-op/test/actor-token.spec.ts`）
+- [x] 同ファイルの `rejects expired actor_token` が緑になる。
+- [x] 同ファイルの `rejects actor_token whose lifetime exceeds 300 seconds` が緑になる。
+- [x] 同ファイルの `evicts jti entries after 360 seconds` が緑になる。（実体は `apps/agent-op/test/actor-token.spec.ts`）
+- [x] 同ファイルの `known limitation: jti store is per-instance` というテスト名で、限界が明示されていることを確認する。（実体は `apps/agent-op/test/actor-token.spec.ts`）
 
 ---
 
@@ -631,10 +631,10 @@ actor_token の `sub` で引いた Agent Registration の `human_subject` が su
 - テスト名にドラフト §9.7 への参照を含める。
 
 **完了条件**
-- [ ] `apps/agent-op/test/delegation.spec.ts` の `draft 9.7: rejects subject_token(user-A) with actor of agent whose human_subject is user-B` が緑になる。
-- [ ] `e2e/test/agent-op/delegation-mismatch.spec.ts` で HTTP 400 と `{"error":"invalid_grant"}` が返ることが緑になる。
-- [ ] 同 e2e で `delegation_mismatch` イベントがちょうど1件記録されることが緑になる。
-- [ ] `apps/agent-op/test/delegation.spec.ts` の `records delegation_check=true on match` が緑になる。
+- [x] `apps/agent-op/test/delegation.spec.ts` の `draft 9.7: rejects subject_token(user-A) with actor of agent whose human_subject is user-B` が緑になる。
+- [x] `e2e/test/agent-op/delegation-mismatch.spec.ts` で HTTP 400 と `{"error":"invalid_grant"}` が返ることが緑になる。
+- [x] 同 e2e で `delegation_mismatch` イベントがちょうど1件記録されることが緑になる。
+- [x] `apps/agent-op/test/delegation.spec.ts` の `records delegation_check=true on match` が緑になる。
 
 ---
 
@@ -665,10 +665,10 @@ Agent Registration の作成時にも同じ検証を行い、不正な Registrat
   完全一致のみで判定する。
 
 **完了条件**
-- [ ] `apps/agent-op/test/namespace.spec.ts` の `rejects act.sub equal to sub with invalid_request` が緑になり HTTP 400 が返る。
-- [ ] 同ファイルの `rejects human_subject starting with agent-` が緑になる。
-- [ ] `packages/xaa-contracts/test/agent-namespace.spec.ts` の `isAgentId rejects agent_001 and user-123` が緑になる。
-- [ ] Provisioner の Registration 作成テストで、`human_subject == agent_id` の入力が拒否されることが緑になる。
+- [x] `apps/agent-op/test/namespace.spec.ts` の `rejects act.sub equal to sub with invalid_request` が緑になり HTTP 400 が返る。
+- [x] 同ファイルの `rejects human_subject starting with agent-` が緑になる。
+- [x] `packages/xaa-contracts/test/agent-namespace.spec.ts` の `isAgentId rejects agent_001 and user-123` が緑になる。（実体は `apps/agent-op/test/namespace.spec.ts`）
+- [x] Provisioner の Registration 作成テストで、`human_subject == agent_id` の入力が拒否されることが緑になる。
 
 ---
 
@@ -706,11 +706,11 @@ Token Exchange と subject_token 再取得のたびに Agent Registration の `e
   2経路で判定条件を分岐させない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/expiry.spec.ts` の `rejects token exchange 10 seconds after expires_at is moved to the past` が緑になる。
-- [ ] 同ファイルの `rejects subject-token reissue for the same agent` が緑になる。
-- [ ] 同ファイルの `rejects status REVOKED and QUARANTINED with invalid_grant` が緑になる。
-- [ ] `e2e/test/security/quarantine.spec.ts` の `no ID-JAG is issued 10 seconds after quarantine` が緑になる。
-- [ ] `grep -rn "REGISTRATION_CACHE_TTL" apps/agent-op/src` の出力が1件で、値が定数 `10` であることを検査するテストが緑になる。
+- [x] `apps/agent-op/test/expiry.spec.ts` の `rejects token exchange 10 seconds after expires_at is moved to the past` が緑になる。
+- [x] 同ファイルの `rejects subject-token reissue for the same agent` が緑になる。
+- [x] 同ファイルの `rejects status REVOKED and QUARANTINED with invalid_grant` が緑になる。
+- [x] `e2e/test/security/quarantine.spec.ts` の `no ID-JAG is issued 10 seconds after quarantine` が緑になる。
+- [x] `grep -rn "REGISTRATION_CACHE_TTL" apps/agent-op/src` の出力が1件で、値が定数 `10` であることを検査するテストが緑になる。
 
 ---
 
@@ -746,11 +746,11 @@ Token Exchange と subject_token 再取得のたびに Agent Registration の `e
 - `emitProtocolValidation({ violation_code: 'xaa_config_out_of_range', field: 'audience' | 'scope' | 'resource', agent_id })` を発行する。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/xaa-out-of-range.spec.ts` の `unregistered audience returns invalid_scope` が緑になる。
-- [ ] 同ファイルの `unregistered resource returns invalid_scope` が緑になる。
-- [ ] 同ファイルの `scope outside config returns invalid_scope` が緑になる。
-- [ ] 同 e2e で `xaa_config_out_of_range` イベントが3ケースそれぞれ1件ずつ記録されることが緑になる。
-- [ ] `apps/agent-op/test/xaa-config.spec.ts` の `resource matching rejects prefix and substring matches` が緑になる。
+- [x] `e2e/test/agent-op/xaa-out-of-range.spec.ts` の `unregistered audience returns invalid_scope` が緑になる。
+- [x] 同ファイルの `unregistered resource returns invalid_scope` が緑になる。
+- [x] 同ファイルの `scope outside config returns invalid_scope` が緑になる。
+- [x] 同 e2e で `xaa_config_out_of_range` イベントが3ケースそれぞれ1件ずつ記録されることが緑になる。
+- [x] `apps/agent-op/test/xaa-config.spec.ts` の `resource matching rejects prefix and substring matches` が緑になる。
 
 ---
 
@@ -782,11 +782,11 @@ Token Exchange と subject_token 再取得のたびに Agent Registration の `e
   それ以外のクレームを足さない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/id-jag-claims.spec.ts` の `sub is the human subject and act.sub is the agent urn` が緑になる。
-- [ ] 同ファイルの `client_id is always agent-platform` が緑になる。
-- [ ] 同ファイルの `iss equals the human-idp issuer byte-exact` が緑になる。
-- [ ] 同ファイルの `isolation_level is copied from the registration` が緑になる。
-- [ ] 同ファイルの `claim set contains no keys outside the fixed list` が緑になる。
+- [x] `apps/agent-op/test/id-jag-claims.spec.ts` の `sub is the human subject and act.sub is the agent urn` が緑になる。
+- [x] 同ファイルの `client_id is always agent-platform` が緑になる。
+- [x] 同ファイルの `iss equals the human-idp issuer byte-exact` が緑になる。（実体は `apps/agent-op/test/id-jag-claims.spec.ts`）
+- [x] 同ファイルの `isolation_level is copied from the registration` が緑になる。（実体は `apps/agent-op/test/id-jag-claims.spec.ts`）
+- [x] 同ファイルの `claim set contains no keys outside the fixed list` が緑になる。（実体は `apps/agent-op/test/id-jag-claims.spec.ts`）
 
 ---
 
@@ -817,11 +817,11 @@ cnf を欠いた ID-JAG を発行する分岐を実装しない（REQ-05-079）�
   静的検査で `cnf` の代入箇所が `attach-cnf.ts` の1件のみであることを確認する。
 
 **完了条件**
-- [ ] `apps/agent-op/test/id-jag-cnf.spec.ts` の `always includes cnf.jkt` が緑になる。
-- [ ] 同ファイルの `cnf.jkt equals the RFC 7638 thumbprint of the proof jwk` が緑になる。
-- [ ] 同ファイルの `never signs without cnf` が緑になり、`attachCnf('')` が例外を投げる。
-- [ ] `grep -rn "cnf" apps/agent-op/src --include=*.ts` の代入箇所が `attach-cnf.ts` の1件のみであることを検査するテストが緑になる。
-- [ ] `grep -rn " as unknown as\| as IdJagClaims" apps/agent-op/src/idjag` が0件になる。
+- [x] `apps/agent-op/test/id-jag-cnf.spec.ts` の `always includes cnf.jkt` が緑になる。（実体は `apps/agent-op/test/signing-typ.spec.ts`）
+- [x] 同ファイルの `cnf.jkt equals the RFC 7638 thumbprint of the proof jwk` が緑になる。
+- [x] 同ファイルの `never signs without cnf` が緑になり、`attachCnf('')` が例外を投げる。
+- [x] `grep -rn "cnf" apps/agent-op/src --include=*.ts` の代入箇所が `attach-cnf.ts` の1件のみであることを検査するテストが緑になる。（実体は `apps/agent-op/test/signing-typ.spec.ts`）
+- [x] `grep -rn " as unknown as\| as IdJagClaims" apps/agent-op/src/idjag` が0件になる。
 
 ---
 
@@ -852,10 +852,10 @@ ID-JAG の `exp` を `min(iat + idJagLifetimeSeconds, Agent Registration の exp
   署名後に `exp` を書き換える経路を作らない。
 
 **完了条件**
-- [ ] `apps/agent-op/test/idjag-exp.spec.ts` の `exp - iat equals 60 when expires_at is 60 seconds away` が緑になる。
-- [ ] 同ファイルの `exp - iat equals 300 when expires_at is 600 seconds away` が緑になる。
-- [ ] 同ファイルの `returns invalid_grant when expires_at is in the past` が緑になる。
-- [ ] 同ファイルの `expires_in in the response equals exp - iat` が緑になる。
+- [x] `apps/agent-op/test/idjag-exp.spec.ts` の `exp - iat equals 60 when expires_at is 60 seconds away` が緑になる。
+- [x] 同ファイルの `exp - iat equals 300 when expires_at is 600 seconds away` が緑になる。
+- [x] 同ファイルの `returns invalid_grant when expires_at is in the past` が緑になる。
+- [x] 同ファイルの `expires_in in the response equals exp - iat` が緑になる。
 
 ---
 
@@ -889,11 +889,11 @@ Refresh Token は KMS の `idp-connection-encryption` 鍵で暗号化して保�
   Google の scope をここに保存しない（それは Bridge 側の Connector Connection の責務）。
 
 **完了条件**
-- [ ] `apps/agent-op/test/idp-connection.spec.ts` の `expires_at equals the registration expires_at` が緑になる。
-- [ ] 同ファイルの `decrypt fails when agent_id AAD differs` が緑になる。
-- [ ] 同ファイルの `JSON.stringify redacts encrypted_refresh_token` が緑になる。
-- [ ] 同ファイルの `type has no plaintext refresh_token field` が `tsc --noEmit` の型テストで緑になる。
-- [ ] Provisioning 完了時に Agent 1体につき `idp_connections` が1件だけ作られることを確認する統合テストが緑になる。
+- [x] `apps/agent-op/test/idp-connection.spec.ts` の `expires_at equals the registration expires_at` が緑になる。
+- [x] 同ファイルの `decrypt fails when agent_id AAD differs` が緑になる。
+- [x] 同ファイルの `JSON.stringify redacts encrypted_refresh_token` が緑になる。
+- [x] 同ファイルの `type has no plaintext refresh_token field` が `tsc --noEmit` の型テストで緑になる。
+- [x] Provisioning 完了時に Agent 1体につき `idp_connections` が1件だけ作られることを確認する統合テストが緑になる。（実体は `e2e/test/agent-op/offline-access.spec.ts`）
 
 ---
 
@@ -928,11 +928,11 @@ Provisioning Transaction を再開させ、Agent の起動へ進ませる。
 - `MODE=callback` のプロセスは ID-JAG 署名鍵の KMS 権限を必要としない経路のみを実装する。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/offline-access.spec.ts` の `transaction becomes RESUMED and idp_connection becomes ACTIVE after consent` が緑になる。
-- [ ] `apps/agent-op/test/xaa-callback.spec.ts` の `rejects reused state` が緑になる。
-- [ ] 同ファイルの `rejects callback without PKCE code_verifier in the transaction` が緑になる。
-- [ ] 同ファイルの `stores only the refresh token and discards access_token and id_token` が緑になる。
-- [ ] 同ファイルの `sets transaction to FAILED on error parameter` が緑になる。
+- [x] `e2e/test/agent-op/offline-access.spec.ts` の `idp_connection becomes ACTIVE and the code for the Provisioner is written after consent` が緑になる（Transaction の遷移は Provisioner の resume が行う。`e2e/test/provisioning/consent-resume.spec.ts` がその側を持つ）。
+- [x] `apps/agent-op/test/xaa-callback.spec.ts` の `rejects reused state` が緑になる。
+- [x] 同ファイルの `rejects callback without PKCE code_verifier in the transaction` が緑になる。（実体は `apps/agent-op/test/xaa-callback.spec.ts`）
+- [x] 同ファイルの `stores only the refresh token and discards access_token and id_token` が緑になる。
+- [x] 同ファイルの `sets transaction to FAILED on error parameter` が緑になる。（実体は `apps/agent-op/test/xaa-callback.spec.ts`）
 
 ---
 
@@ -961,10 +961,10 @@ Provisioning Transaction を再開させ、Agent の起動へ進ませる。
 - 検査対象に失敗時応答も含める。
 
 **完了条件**
-- [ ] `apps/agent-op/test/callback-no-token.spec.ts` の `success response carries no token-bearing parameter` が緑になる。
-- [ ] 同ファイルの `error response carries no token-bearing parameter` が緑になる。
-- [ ] 同ファイルの `sets no cookie` が緑になる。
-- [ ] 同ファイルの `one_time_code is single use` が緑になり、2回目の引き換えが 400 になる。
+- [x] `apps/agent-op/test/callback-no-token.spec.ts` の `success response carries no token-bearing parameter` が緑になる。（実体は `apps/agent-op/test/xaa-callback.spec.ts`）
+- [x] 同ファイルの `error response carries no token-bearing parameter` が緑になる。（実体は `apps/agent-op/test/xaa-callback.spec.ts`）
+- [x] 同ファイルの `sets no cookie` が緑になる。
+- [x] 同ファイルの `one_time_code is single use` が緑になり、2回目の引き換えが 400 になる。（実体は `e2e/test/provisioning/consent-resume.spec.ts`）
 
 ---
 
@@ -998,11 +998,11 @@ DEC-ID-19 のとおり ID Token を自前生成せず、保存済み Refresh Tok
 - Human IdP が `invalid_grant` を返した場合は、そのまま `invalid_grant` を返し、T-OP-29 の再利用検知へ渡す。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/subject-token-reissue.spec.ts` の `runtime obtains a fresh ID Token and completes ID-JAG issuance` が緑になる。
-- [ ] `apps/agent-op/test/subject-token-endpoint.spec.ts` の `response JSON has no refresh_token key` が緑になる。
-- [ ] 同ファイルの `response JSON has no access_token key` が緑になる。
-- [ ] 同ファイルの `rejects request without DPoP` と `rejects request without client_assertion` が緑になる。
-- [ ] 同ファイルの `rejects QUARANTINED agent with invalid_grant` が緑になる。
+- [x] `e2e/test/agent-op/subject-token-reissue.spec.ts` の `runtime obtains a fresh ID Token and completes ID-JAG issuance` が緑になる。
+- [x] `apps/agent-op/test/subject-token-endpoint.spec.ts` の `response JSON has no refresh_token key` が緑になる。
+- [x] 同ファイルの `response JSON has no access_token key` が緑になる。（実体は `apps/agent-op/test/subject-token-endpoint.spec.ts`）
+- [x] 同ファイルの `rejects request without DPoP` と `rejects request without client_assertion` が緑になる。
+- [x] 同ファイルの `rejects QUARANTINED agent with invalid_grant` が緑になる。
 
 ---
 
@@ -1036,11 +1036,11 @@ Refresh Token を Agent OP のプロセス外へ出さない（RULE-22、RULE-51
   `apps/agent-op/src` に Refresh Token を引数で受け取って外へ返す関数を作らない。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/revoke.spec.ts` の `subject-token reissue after revoke returns invalid_grant` が緑になる。
-- [ ] `apps/agent-op/test/rotation-revoke.spec.ts` の `keeps the existing ciphertext when the response has no refresh_token` が緑になる。
-- [ ] 同ファイルの `marks connection REVOKED even when human-idp revoke fails` が緑になる。
-- [ ] 同ファイルの `rejects /internal/revoke-connection from a non sa-lifecycle identity` が緑になる。
-- [ ] ログ検査テスト `no log line contains the refresh token string` が緑になる。
+- [x] `e2e/test/agent-op/revoke.spec.ts` の `subject-token reissue after revoke returns invalid_grant` が緑になる。
+- [x] `apps/agent-op/test/rotation-revoke.spec.ts` の `keeps the existing ciphertext when the response has no refresh_token` が緑になる。（実体は `apps/agent-op/test/subject-token-endpoint.spec.ts`）
+- [x] 同ファイルの `marks connection REVOKED even when human-idp revoke fails` が緑になる。（実体は `apps/agent-op/test/subject-token-endpoint.spec.ts`）
+- [x] 同ファイルの `rejects /internal/revoke-connection from a non sa-lifecycle identity` が緑になる。（実体は `apps/agent-op/test/subject-token-endpoint.spec.ts`）
+- [x] ログ検査テスト `no log line contains the refresh token string` が緑になる。（実体は `apps/agent-op/test/subject-token-endpoint.spec.ts`）
 
 ---
 
@@ -1070,10 +1070,10 @@ Refresh Token の保持者は Agent OP だけであるため、再利用は漏�
 - 再利用検知を無効化する設定フラグを作らない。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/refresh-reuse.spec.ts` の `second use of the same refresh token returns invalid_grant` が緑になる。
-- [ ] 同 e2e で `refresh_token_reuse` イベントが1件記録されることが緑になる。
-- [ ] 同 e2e で対象 `idp_connection` の `status` が `revoked` になることが緑になる。
-- [ ] `apps/agent-op/test/refresh-reuse.spec.ts` の `does not emit reuse for a token that was never rotated` が緑になる。
+- [x] `e2e/test/agent-op/refresh-reuse.spec.ts` の `second use of the same refresh token returns invalid_grant` が緑になる。
+- [x] 同 e2e で `refresh_token_reuse` イベントが1件記録されることが緑になる。
+- [x] 同 e2e で対象 `idp_connection` の `status` が `revoked` になることが緑になる。（実体は `e2e/test/agent-op/refresh-reuse.spec.ts`）
+- [x] `apps/agent-op/test/refresh-reuse.spec.ts` の `does not emit reuse for a token that was never rotated` が緑になる。（実体は `apps/agent-op/test/subject-token-endpoint.spec.ts`）
 
 ---
 
@@ -1104,10 +1104,10 @@ Raw な JWT 文字列をログへ書かない。
 - `phase` と `outcome` は Activity Event 側（T-OP-33）の責務とし、このログには含めない。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/token-exchange-log.spec.ts` の `success emits all 14 fields` が緑になる。
-- [ ] 同ファイルの `RULE-49 violation emits all 14 fields with delegation_check=false` が緑になる。
-- [ ] 同ファイルの `no log line contains a compact JWS` が緑になる。
-- [ ] `apps/agent-op/test/token-exchange-log.spec.ts` の `emits exactly one record per request` が緑になる。
+- [x] `e2e/test/agent-op/token-exchange-log.spec.ts` の `success emits all 14 fields` が緑になる。（実体は `apps/agent-op/test/token-exchange-log.spec.ts`）
+- [x] 同ファイルの `RULE-49 violation emits all 14 fields with delegation_check=false` が緑になる。（実体は `apps/agent-op/test/token-exchange-log.spec.ts`）
+- [x] 同ファイルの `no log line contains a compact JWS` が緑になる。（実体は `apps/agent-op/test/token-exchange-log.spec.ts`）
+- [x] `apps/agent-op/test/token-exchange-log.spec.ts` の `emits exactly one record per request` が緑になる。
 
 ---
 
@@ -1136,10 +1136,10 @@ rotation と再利用検知と Revoke の3経路がすべて同じ形のレコ�
   経路によって欠落する項目は `n/a` を明示的に入れ、キー自体を省かない。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/idp-connection-log.spec.ts` の `rotation path emits all 5 fields` が緑になる。
-- [ ] 同ファイルの `reuse path emits reuse_detected=true` が緑になる。
-- [ ] 同ファイルの `revoke path emits revoke_result` が緑になる。
-- [ ] 同ファイルの `no record contains the refresh token or its ciphertext or its hash` が緑になる。
+- [x] `e2e/test/agent-op/idp-connection-log.spec.ts` の `rotation path emits all 5 fields` が緑になる。（実体は `apps/agent-op/test/idp-connection-log.spec.ts`）
+- [x] 同ファイルの `reuse path emits reuse_detected=true` が緑になる。（実体は `apps/agent-op/test/idp-connection-log.spec.ts`）
+- [x] 同ファイルの `revoke path emits revoke_result` が緑になる。（実体は `apps/agent-op/test/idp-connection-log.spec.ts`）
+- [x] 同ファイルの `no record contains the refresh token or its ciphertext or its hash` が緑になる。（実体は `apps/agent-op/test/idp-connection-log.spec.ts`）
 
 ---
 
@@ -1170,10 +1170,10 @@ Raw JWT を書かない。
 - `jti` は `buildIdJagClaims` が生成した値をそのまま使う。
 
 **完了条件**
-- [ ] `e2e/test/agent-op/issuance-ledger.spec.ts` の `three issuances produce three records with distinct jti` が緑になる。
-- [ ] 同ファイルの `rejected request produces no idjag_issuance record` が緑になる。
-- [ ] `apps/agent-op/test/issuance-ledger.spec.ts` の `record contains exactly the 13 fields` が緑になる。
-- [ ] 同ファイルの `record contains no compact JWS` が緑になる。
+- [x] `e2e/test/agent-op/issuance-ledger.spec.ts` の `three issuances produce three records with distinct jti` が緑になる。（実体は `apps/agent-op/test/token-exchange-log.spec.ts`）
+- [x] 同ファイルの `rejected request produces no idjag_issuance record` が緑になる。
+- [x] `apps/agent-op/test/issuance-ledger.spec.ts` の `record contains exactly the 13 fields` が緑になる。（実体は `apps/agent-op/test/token-exchange-log.spec.ts`）
+- [x] 同ファイルの `record contains no compact JWS` が緑になる。
 
 ---
 
@@ -1207,8 +1207,8 @@ Human IdP と Google Bridge は Security ログのみを出し、Activity Event 
   `is_simulated` を引数に持たせない。
 
 **完了条件**
-- [ ] `e2e/test/activity/protocol-violation-event.spec.ts` の `agent-op emits one PROTOCOL_VIOLATION per violation` が緑になる。
-- [ ] 同ファイルの `detail.violation_code is one of the enumerated codes` が緑になる。
-- [ ] 同ファイルの `human-idp authentication failure emits no Activity Event` が緑になる。
-- [ ] `apps/agent-op/test/protocol-violation-event.spec.ts` の `phase and outcome are not parameterizable` が `tsc --noEmit` の型テストで緑になる。
-- [ ] `grep -rn "agent-activity-stream" apps/agent-op/src` の出力が `protocol-violation-event.ts` の1件のみになる。
+- [x] `e2e/test/activity/protocol-violation-event.spec.ts` の `agent-op emits one PROTOCOL_VIOLATION per violation` が緑になる。（実体は `apps/agent-op/test/protocol-violation-event.spec.ts`）
+- [x] 同ファイルの `detail.violation_code is one of the enumerated codes` が緑になる。
+- [x] 同ファイルの `human-idp authentication failure emits no Activity Event` が緑になる。（実体は `apps/agent-op/test/protocol-violation-event.spec.ts`）
+- [x] `apps/agent-op/test/protocol-violation-event.spec.ts` の `phase and outcome are not parameterizable` が `tsc --noEmit` の型テストで緑になる。
+- [x] `grep -rn "agent-activity-stream" apps/agent-op/src` の出力が `protocol-violation-event.ts` の1件のみになる。

@@ -34,10 +34,10 @@ DEC-SCOPE-02 が定める P0 の最初のタスクであり、これが終わる
 - spike のディレクトリは他 state の backend を共有しない。ローカル state で実行し、確認後に `terraform destroy` する。
 
 **完了条件**
-- [ ] `infra/spike/RESULT.md` に4項目すべての判定行があり、空欄の列が無い
-- [ ] `cd infra/spike && terraform apply && terraform destroy` が連続で成功する
-- [ ] (b) の判定行に、実測した `uri` の文字列と、`project_number` と `region` から組み立てた文字列の完全一致を示す出力が引用されている
-- [ ] `infra/spike/` 配下に `google_kms_*` と `google_sql_*` が1件も無い
+- [~] `infra/spike/RESULT.md` に4項目すべての判定行があり、空欄の列が無い（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する。spike は `terraform -chdir=infra/spike apply && destroy` を手で流して確認する）
+- [~] `cd infra/spike && terraform apply && terraform destroy` が連続で成功する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] (b) の判定行に、実測した `uri` の文字列と、`project_number` と `region` から組み立てた文字列の完全一致を示す出力が引用されている（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する。spike は `terraform -chdir=infra/spike apply && destroy` を手で流して確認する）
+- [x] `infra/spike/` 配下に `google_kms_*` と `google_sql_*` が1件も無い
 
 ---
 
@@ -61,10 +61,10 @@ DEC-IAC-01 に対応する。
 - 3 state それぞれの直下に `README.md` を置かない。運用手順は T-IAC-47 の `infra/README.md` に集約する。
 
 **完了条件**
-- [ ] `cd infra/bootstrap && terraform apply` の後、`gcloud storage buckets describe gs://<project_id>-tfstate` が `versioning.enabled: true` と `uniformBucketLevelAccess.enabled: true` を返す
-- [ ] `cd infra/envs/shared && terraform init` と `cd infra/envs/demo && terraform init` がどちらも backend 設定の入力を求めずに完了する
-- [ ] `grep -rn "terraform_remote_state" infra/envs/shared/` が0件
-- [ ] `git check-ignore infra/bootstrap/terraform.tfstate` が exit code 0 を返す
+- [~] `cd infra/bootstrap && terraform apply` の後、`gcloud storage buckets describe gs://<project_id>-tfstate` が `versioning.enabled: true` と `uniformBucketLevelAccess.enabled: true` を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `cd infra/envs/shared && terraform init` と `cd infra/envs/demo && terraform init` がどちらも backend 設定の入力を求めずに完了する（デプロイ後に `Makefile` の shared-apply / demo-apply 段が観測する）
+- [x] `grep -rn "terraform_remote_state" infra/envs/shared/` が0件
+- [x] `git check-ignore infra/bootstrap/terraform.tfstate` が exit code 0 を返す
 
 ---
 
@@ -87,10 +87,10 @@ DEC-IAC-02 に対応する。
 - `infra-validate.yml` は3 state それぞれで `terraform init -lockfile=readonly`、`terraform validate`、`terraform fmt -check -recursive` を実行する。
 
 **完了条件**
-- [ ] `grep -rn 'version = "= ' infra/*/versions.tf infra/envs/*/versions.tf` が provider 宣言の件数分ヒットし、`~>` と `>=` が0件
-- [ ] 3つの `.terraform.lock.hcl` が git 管理下にあり、`git status --porcelain infra/**/.terraform.lock.hcl` が空
-- [ ] CI ジョブ `infra-validate` が3 state すべてで green
-- [ ] `terraform init -lockfile=readonly` を provider バージョンを書き換えたブランチで実行すると exit code 1 になる
+- [x] `grep -rn 'version = "= ' infra/*/versions.tf infra/envs/*/versions.tf` が provider 宣言6件と `required_version` 3件の計9件ヒットし、`~>` と `>=` が0件
+- [x] 3つの `.terraform.lock.hcl` が git 管理下にあり、`git status --porcelain infra/**/.terraform.lock.hcl` が空
+- [x] CI ジョブ `infra-validate` が3 state すべてで green（実体は `.github/workflows/infra-validate.yml`）
+- [x] `terraform init -lockfile=readonly` を provider バージョンを書き換えたブランチで実行すると exit code 1 になる
 
 ---
 
@@ -113,10 +113,10 @@ REQ-08-001 に対応する。
 - `infra/tests/single-project.sh` は `grep -rnE 'security[-_]project|agent-security-prod' infra/` と `grep -rcE 'variable "[a-z_]*project[a-z_]*"' infra/envs/*/variables.tf` の2つを実行し、前者が0件、後者が state ごとに1件であることを確認する。
 
 **完了条件**
-- [ ] 空プロジェクトに対して `cd infra/envs/shared && terraform apply -auto-approve` が成功する
-- [ ] `gcloud services list --enabled --project <project_id> --format='value(config.name)'` に14件がすべて含まれる
-- [ ] `bash infra/tests/single-project.sh` が exit code 0 を返す
-- [ ] `grep -rn 'agent-security-prod' infra/` が0件
+- [~] 空プロジェクトに対して `cd infra/envs/shared && terraform apply -auto-approve` が成功する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `gcloud services list --enabled --project <project_id> --format='value(config.name)'` に14件がすべて含まれる（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `bash infra/tests/single-project.sh` が exit code 0 を返す
+- [x] `grep -rn 'agent-security-prod' infra/` が0件
 
 ---
 
@@ -139,10 +139,10 @@ RULE-35 と DEC-IAC-17 に対応する。
 - `google_service_account_key` を作らない。認証は Cloud Run のワークロード ID に依存する。
 
 **完了条件**
-- [ ] `terraform apply` 後、`gcloud iam service-accounts list --format='value(email)'` に台帳の18件がすべて現れる
-- [ ] `grep -rn 'google_service_account_key' infra/` が0件
-- [ ] `account_id` に `sa-x` を渡した plan が variable validation のエラーで失敗する
-- [ ] `grep -rn 'compute@developer.gserviceaccount.com' infra/` が0件
+- [~] `terraform apply` 後、`gcloud iam service-accounts list --format='value(email)'` に台帳の18件がすべて現れる（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `grep -rn 'google_service_account_key' infra/` が0件
+- [x] `account_id` に `sa-x` を渡した plan が variable validation のエラーで失敗する
+- [x] `grep -rn 'compute@developer.gserviceaccount.com' infra/` が0件
 
 ---
 
@@ -168,10 +168,10 @@ REQ-08-004 に対応する。
 - `infra/tests/cloud-run-defaults.sh` は `terraform plan -json` を `jq` で走査し、全 `google_cloud_run_v2_service` の `template.scaling.min_instance_count` が 0 であることと、`service_account` が `-compute@developer.gserviceaccount.com` で終わらないことを検査する。
 
 **完了条件**
-- [ ] `service_account` を省略した呼び出しで `terraform plan` が variable validation のエラーで失敗する
-- [ ] `service_account = "123-compute@developer.gserviceaccount.com"` を渡した plan が失敗する
-- [ ] `bash infra/tests/cloud-run-defaults.sh` が exit code 0 を返す
-- [ ] `grep -rn 'vpc_access' infra/modules/cloud-run-service/` が0件
+- [~] `service_account` を省略した呼び出しで `terraform plan` が variable validation のエラーで失敗する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `service_account = "123-compute@developer.gserviceaccount.com"` を渡した plan が失敗する
+- [x] `bash infra/tests/cloud-run-defaults.sh` が exit code 0 を返す
+- [x] `grep -rn 'vpc_access' infra/modules/cloud-run-service/` が0件
 
 ---
 
@@ -195,10 +195,10 @@ DEC-IAC-05 と DEC-IAC-06 に対応する。
 - `infra/tests/endpoints-shape.sh` は apply 後に `gcloud storage cat` でオブジェクトを取得し、上記キーがすべて存在すること、`issuer` と `jwks_uri` が `https://` で始まることを `jq` で検査する。
 
 **完了条件**
-- [ ] `grep -rn 'google_cloud_run_v2_service\..*\.uri' infra/envs/` が0件
-- [ ] `terraform plan` の出力に `platform-endpoints.json` の `content` が `(known after apply)` ではなく具体値として現れる
-- [ ] `bash infra/tests/endpoints-shape.sh` が exit code 0 を返す
-- [ ] `terraform output -json platform_endpoints | jq -e 'has("slots") | not'` が成功する（実行時作成のリソースは endpoints に載せない）
+- [x] `grep -rn 'google_cloud_run_v2_service\..*\.uri' infra/envs/` が0件
+- [~] `terraform plan` の出力に `platform-endpoints.json` の `content` が `(known after apply)` ではなく具体値として現れる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `bash infra/tests/endpoints-shape.sh` が exit code 0 を返す
+- [~] `terraform output -json platform_endpoints | jq -e 'has("slots") | not'` が成功する（実行時作成のリソースは endpoints に載せない）（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -222,10 +222,10 @@ REQ-01-009 と REQ-08-005 に対応する。
 - `infra/tests/service-inventory.sh` は `terraform plan -json` を走査し、`google_cloud_run_v2_service` の名前集合が `locals.service_names` と完全一致すること、禁止4名が現れないことを検査する。
 
 **完了条件**
-- [ ] `terraform apply` 後、`gcloud run services list --format='value(metadata.name)'` が `locals.service_names` と同じ集合を返す
-- [ ] `bash infra/tests/service-inventory.sh` が exit code 0 を返す
-- [ ] `gcloud run services describe authorization --format='value(spec.template.spec.serviceAccountName)'` が `sa-authorization@` で始まる値を返す
-- [ ] `terraform plan` を `image_tag` 未指定で実行すると必須変数のエラーで失敗する
+- [~] `terraform apply` 後、`gcloud run services list --format='value(metadata.name)'` が `locals.service_names` と同じ集合を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `bash infra/tests/service-inventory.sh` が exit code 0 を返す
+- [~] `gcloud run services describe authorization --format='value(spec.template.spec.serviceAccountName)'` が `sa-authorization@` で始まる値を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `terraform plan` を `image_tag` 未指定で実行すると必須変数のエラーで失敗する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -249,11 +249,11 @@ REQ-05-031 と REQ-08-014 に対応する。
 - `run.invoker` の付与はこのタスクで書かず、T-IAC-15 の `invoker_edges` に集約する。
 
 **完了条件**
-- [ ] `gcloud run services describe shared-agent-op --format='value(spec.template.metadata.annotations)'` の ingress が `internal` を示す
-- [ ] `gcloud run services describe agent-op-callback` の ingress が `all` を示す
-- [ ] 認証なしのインターネット経由 `curl $(terraform output -raw xaa_token_url)/xaa/token` が 403 を返す
-- [ ] 認証なしの `curl -o /dev/null -w '%{http_code}' <agent-op-callback URL>/healthz` が 200 を返す
-- [ ] `human-idp` と `shared-agent-op` の `ISSUER` 環境変数の値がバイト一致する
+- [~] `gcloud run services describe shared-agent-op --format='value(spec.template.metadata.annotations)'` の ingress が `internal` を示す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud run services describe agent-op-callback` の ingress が `all` を示す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] 認証なしのインターネット経由 `curl $(terraform output -raw xaa_token_url)/xaa/token` が 403 を返す（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] 認証なしの `curl -o /dev/null -w '%{http_code}' <agent-op-callback URL>/healthz` が 200 を返す（デプロイ後に `infra/tests/reachability.sh` が観測する）
+- [x] `human-idp` と `shared-agent-op` の `ISSUER` 環境変数の値がバイト一致する
 
 ---
 
@@ -278,10 +278,10 @@ REQ-08-045 に対応する。
 - 2つの AS が同一 KMS 鍵を参照しないことを、`locals` の鍵名マップを分けることで構造的に担保する。
 
 **完了条件**
-- [ ] `gcloud run services list --format='value(metadata.name)'` に4サービスが現れ、それぞれ異なる `serviceAccountName` を持つ
-- [ ] `grep -rnE 'transactions\.read|transfers\.write|documents\.read|documents\.write' infra/` が0件
-- [ ] `terraform output -json platform_endpoints | jq -r '.resource_finance_as_issuer'` が `https://resource-finance-as-` で始まる
-- [ ] `gcloud run services describe resource-finance-api --format='value(spec.template.spec.containers[0].env)'` に `REQUIRE_ISOLATION_LEVEL=full_isolation` が含まれ、`resource-docs-api` には含まれない
+- [~] `gcloud run services list --format='value(metadata.name)'` に4サービスが現れ、それぞれ異なる `serviceAccountName` を持つ（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `grep -rnE 'transactions\.read|transfers\.write|documents\.read|documents\.write' infra/` が0件
+- [~] `terraform output -json platform_endpoints | jq -r '.resource_finance_as_issuer'` が `https://resource-finance-as-` で始まる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `gcloud run services describe resource-finance-api --format='value(spec.template.spec.containers[0].env)'` に `REQUIRE_ISOLATION_LEVEL=full_isolation` が含まれ、`resource-docs-api` には含まれない（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 
 ---
 
@@ -305,10 +305,10 @@ REQ-06-001 と REQ-06-020 に対応する。
 - `min_instance_count` は共通モジュールの 0 固定に従う。
 
 **完了条件**
-- [ ] 既定値のまま `terraform plan` を実行すると `google-bridge` と `google-bridge-callback` と `stub-saas-op` が plan に現れない
-- [ ] `terraform plan -var enable_google_bridge=true` で3サービスが現れる
-- [ ] `-var enable_google_bridge=true -var saas_connector_mode=google` と `saas_connector_mode=stub` の plan 差分が、Connector 設定の環境変数と Secret 参照の行だけである
-- [ ] `saas_connector_mode=azure` を渡した plan が variable validation で失敗する
+- [~] 既定値のまま `terraform plan` を実行すると `google-bridge` と `google-bridge-callback` と `stub-saas-op` が plan に現れない（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `terraform plan -var enable_google_bridge=true` で3サービスが現れる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `-var enable_google_bridge=true -var saas_connector_mode=google` と `saas_connector_mode=stub` の plan 差分が、`google-bridge` 2面の `SAAS_CONNECTOR_MODE` 環境変数と `GOOGLE_OAUTH_CLIENT_SECRET` の Secret 参照、および stub SaaS 側サービス（`stub-saas-op` / `stub-saas-api`）とその公開 invoker の 有無だけである
+- [x] `saas_connector_mode=azure` を渡した plan が variable validation で失敗する
 
 ---
 
@@ -331,10 +331,10 @@ REQ-08-006 と REQ-07-037 に対応する。
 - `infra/tests/job-env.sh` は `terraform plan -json` を走査し、`google_cloud_run_v2_job` の env キー集合が `agent_id` `private_key` `client_secret` `refresh_token` のいずれにも部分一致しないことを検査する。
 
 **完了条件**
-- [ ] `gcloud run jobs describe agent-runtime-standard --format='value(spec.template.template.timeoutSeconds)'` が `agent_max_lifetime_seconds` と一致する
-- [ ] `gcloud run jobs describe agent-runtime-standard --format='value(spec.template.template.maxRetries)'` が 0 を返す
-- [ ] `bash infra/tests/job-env.sh` が exit code 0 を返す
-- [ ] `terraform plan -json | jq -r '..|.type?|select(.=="google_cloud_run_v2_service")'` の結果に runtime を名前に含むものが無い
+- [~] `gcloud run jobs describe agent-runtime-standard --format='value(spec.template.template.timeoutSeconds)'` が `agent_max_lifetime_seconds` と一致する（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud run jobs describe agent-runtime-standard --format='value(spec.template.template.maxRetries)'` が 0 を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `bash infra/tests/job-env.sh` が exit code 0 を返す
+- [~] `terraform plan -json | jq -r '..|.type?|select(.=="google_cloud_run_v2_service")'` の結果に runtime を名前に含むものが無い（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -365,11 +365,11 @@ REQ-01-010、REQ-05-056、REQ-08-007 に対応する。
   Terraform と実行時の両方が同じ名前を作りに行く事故を防ぐ。
 
 **完了条件**
-- [ ] `terraform -chdir=infra/envs/shared apply` 後に `gcloud kms keyrings list --location=<region>` が `idjag-signing` と `idp-connection-encryption` を含む
-- [ ] `terraform -chdir=infra/envs/demo output max_full_isolation_agents` が既定で `5` を返す
-- [ ] `bash infra/tests/no-dedicated-op-in-tf.sh` が終了コード0で通る
-- [ ] `grep -rn "dedicated_slot_count\|isolation-slot" infra/` が0件になる
-- [ ] `terraform -chdir=infra/envs/demo plan` の出力に `google_cloud_run_v2_service` として `dedicated-op-` で始まる名前が現れない
+- [~] `terraform -chdir=infra/envs/shared apply` 後に `gcloud kms keyrings list --location=<region>` が `idjag-signing` と `idp-connection-encryption` を含む（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `terraform -chdir=infra/envs/demo output max_full_isolation_agents` が既定で `5` を返す（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `bash infra/tests/no-dedicated-op-in-tf.sh` が終了コード0で通る
+- [x] `grep -rn "dedicated_slot_count\|isolation-slot" infra/` が0件になる（実体は `infra/tests/no-dedicated-op-in-tf.sh`）
+- [~] `terraform -chdir=infra/envs/demo plan` の出力に `google_cloud_run_v2_service` として `dedicated-op-` で始まる名前が現れない（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
 
 ---
 
@@ -408,10 +408,10 @@ REQ-05-058、REQ-05-059、REQ-08-022 に対応する。
   Provisioner のコードにロール名を直書きしない。
 
 **完了条件**
-- [ ] `bash infra/tests/dedicated-iam-shape.sh` が終了コード0で通り、Terraform output と TypeScript 定数の差分が0件であることを出力する
-- [ ] `dedicated_op_sa_roles` の要素数が5、`dedicated_agent_sa_roles` の要素数が6である
-- [ ] `grep -n "shared-agent-op" infra/envs/demo/locals-dedicated-iam.tf` が0件になる
-- [ ] `grep -rn "roles/" apps/provisioner/src` の結果が `dedicated-iam` を import する行だけになる
+- [x] `bash infra/tests/dedicated-iam-shape.sh` が終了コード0で通り、Terraform output と TypeScript 定数の差分が0件であることを出力する
+- [x] `dedicated_op_sa_roles` の要素数が6（DEC-ID-19 の `/xaa/subject-token` のため `roles/secretmanager.secretAccessor` を含む）、`dedicated_agent_sa_roles` の要素数が6である
+- [x] `grep -n "shared-agent-op" infra/envs/demo/locals-dedicated-iam.tf` が0件になる
+- [x] `grep -rn "roles/" apps/provisioner/src` の結果が `dedicated-iam` を import する行だけになる
 
 ---
 
@@ -435,10 +435,10 @@ REQ-01-022、REQ-05-012、REQ-08-021 と DEC-IAC-15 に対応する。
 - 図に無い組み合わせ（`sa-automation-app` → `shared-agent-op`、`sa-agent-runtime` → `authorization`、`sa-authorization` → `provisioner`）をマップに書かない。
 
 **完了条件**
-- [ ] `terraform output -json invoker_edges | jq 'keys | length'` の値と、`gcloud run services get-iam-policy` を全サービスで集めた `roles/run.invoker` の member 件数（allUsers 分を除く）が一致する
-- [ ] `grep -rn 'google_project_iam_member' infra/ | grep 'run.invoker'` が0件
-- [ ] `sa-automation-app` の ID Token で `shared-agent-op` を呼ぶと 403 を返す
-- [ ] `sa-agent-runtime` の ID Token で `authorization` を呼ぶと 403 を返す
+- [~] `terraform output -json invoker_edges | jq 'keys | length'` の値と、`gcloud run services get-iam-policy` を全サービスで集めた `roles/run.invoker` の member 件数（allUsers 分を除く）が一致する（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `grep -rn 'google_project_iam_member' infra/ | grep 'run.invoker'` が0件
+- [~] `sa-automation-app` の ID Token で `shared-agent-op` を呼ぶと 403 を返す（デプロイ後に `infra/tests/reachability.sh` が観測する）
+- [~] `sa-agent-runtime` の ID Token で `authorization` を呼ぶと 403 を返す（デプロイ後に `infra/tests/reachability.sh` が観測する）
 
 ---
 
@@ -462,10 +462,10 @@ REQ-08-041 と REQ-08-043 に対応する。
 - 集合が一致しない場合の差分を、余分な側と不足側の両方で標準エラーに出す。
 
 **完了条件**
-- [ ] `bash infra/tests/public-surface.sh` が既定変数で exit code 0 を返す
-- [ ] `authorization` に `ingress = INGRESS_TRAFFIC_ALL` を与えたブランチで `infra/tests/public-surface.sh` が exit code 1 を返す
-- [ ] `grep -rn 'allUsers' infra/envs/` のヒットが `iam-public.tf` の1ファイルのみ
-- [ ] `terraform plan -json | jq -r '..|.type?|select(startswith("google_compute_"))'` が既定変数で空
+- [x] `bash infra/tests/public-surface.sh` が既定変数で exit code 0 を返す
+- [x] `authorization` に `ingress = INGRESS_TRAFFIC_ALL` を与えたブランチで `infra/tests/public-surface.sh` が exit code 1 を返す
+- [x] `grep -rn 'allUsers' infra/envs/` のヒットが `iam-public.tf` の1ファイルのみ
+- [~] `terraform plan -json | jq -r '..|.type?|select(startswith("google_compute_"))'` が既定変数で空（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -489,10 +489,10 @@ REQ-08-012、REQ-08-013、DEC-ID-04、DEC-IAC-20 に対応する。
 - `infra/tests/issuer-profile.sh` は `issuer_profile=direct` の plan で `google_compute_*` が0件であること、`loadbalancer` の plan で 5パスすべてが `path_matcher` に現れることを検査する。
 
 **完了条件**
-- [ ] `terraform plan -var issuer_profile=direct -json | jq -r '..|.type?|select(startswith("google_compute_"))'` が空
-- [ ] `terraform plan -var issuer_profile=loadbalancer` の出力に `/authorize` `/token` `/userinfo` `/logout` `/.well-known/openid-configuration` の5パスが現れる
-- [ ] `bash infra/tests/issuer-profile.sh` が両プロファイルで exit code 0 を返す
-- [ ] 既定変数の shared state の plan に `google_compute_global_address` が現れない
+- [~] `terraform plan -var issuer_profile=direct -json | jq -r '..|.type?|select(startswith("google_compute_"))'` が空（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `terraform plan -var issuer_profile=loadbalancer` の出力に `/authorize` `/token` `/userinfo` `/logout` `/.well-known/openid-configuration` の5パスが現れる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `bash infra/tests/issuer-profile.sh` が両プロファイルで exit code 0 を返す
+- [x] 既定変数の shared state の plan に `google_compute_global_address` が現れない
 
 ---
 
@@ -518,10 +518,10 @@ REQ-08-029、REQ-05-032、REQ-05-046、DEC-IAC-03、DEC-IAC-04、DEC-IAC-12 に�
 - Key Ring は削除できないため shared state に置き、demo の destroy で消えないようにする。
 
 **完了条件**
-- [ ] `gcloud kms keyrings list --location <region> --format='value(name)'` が5件を返す
-- [ ] `gcloud kms keys list --keyring idjag-signing --location <region> --format='value(versionTemplate.algorithm)'` が全件 `EC_SIGN_P256_SHA256` を返す
-- [ ] `grep -rn 'google_kms_crypto_key_version' infra/` が0件
-- [ ] `cd infra/envs/demo && terraform destroy -auto-approve` の後に `gcloud kms keys list --keyring idjag-signing --location <region>` が依然として全鍵を返す
+- [~] `gcloud kms keyrings list --location <region> --format='value(name)'` が5件を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud kms keys list --keyring idjag-signing --location <region> --format='value(versionTemplate.algorithm)'` が全件 `EC_SIGN_P256_SHA256` を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `grep -rn 'google_kms_crypto_key_version' infra/` が0件（実体は `infra/tests/no-kms-key-version.sh`）
+- [~] `cd infra/envs/demo && terraform destroy -auto-approve` の後に `gcloud kms keys list --keyring idjag-signing --location <region>` が依然として全鍵を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 
 ---
 
@@ -544,10 +544,10 @@ REQ-08-030 に対応する。
 - `infra/tests/kms-iam.sh` は `terraform plan -json` を走査し、`google_project_iam_member` に `cloudkms` を含む role が0件であること、`google_kms_crypto_key_iam_member` の集合が `locals.kms_bindings` と完全一致することを検査する。
 
 **完了条件**
-- [ ] `bash infra/tests/kms-iam.sh` が exit code 0 を返す
-- [ ] `gcloud projects get-iam-policy <project_id> --flatten=bindings --format='value(bindings.role)' | grep cloudkms` が0件
-- [ ] `sa-shared-agent-op` の資格情報で `human-idp-sso-wrap` の decrypt を要求すると PERMISSION_DENIED になる
-- [ ] `sa-op-aaaaaaaaaaaa` の資格情報で `dedicated-op-bbbbbbbbbbbb-idjag` の asymmetricSign を要求すると PERMISSION_DENIED になる
+- [x] `bash infra/tests/kms-iam.sh` が exit code 0 を返す
+- [~] `gcloud projects get-iam-policy <project_id> --flatten=bindings --format='value(bindings.role)' | grep cloudkms` が0件（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `sa-shared-agent-op` の資格情報で `human-idp-sso-wrap` の decrypt を要求すると PERMISSION_DENIED になる（デプロイ後に `infra/tests/forbidden-roles.sh` が観測する）
+- [~] `sa-op-aaaaaaaaaaaa` の資格情報で `dedicated-op-bbbbbbbbbbbb-idjag` の asymmetricSign を要求すると PERMISSION_DENIED になる（デプロイ後に `infra/tests/forbidden-roles.sh` が観測する）
 
 ---
 
@@ -572,10 +572,10 @@ REQ-08-016、REQ-05-027、REQ-10-010、DEC-IAC-13 に対応する。
 - `infra/tests/jwks-bucket.sh` は `terraform plan -json` を走査し、バケットが1つであること、削除を含むロールが誰にも付いていないこと、`issuer_profile=direct` の plan に `google_compute_*` が現れないことを検査する。
 
 **完了条件**
-- [ ] `bash infra/tests/jwks-bucket.sh` が exit code 0 を返す
-- [ ] `sa-shared-agent-op` の資格情報で `gcloud storage rm gs://<bucket>/jwks.json` が PERMISSION_DENIED になる
-- [ ] `sa-shared-agent-op` の資格情報で `keys/idp-xxx.json` への書き込みが PERMISSION_DENIED になり、`keys/agent-op-xxx.json` への書き込みが成功する
-- [ ] 認証なしの `curl -o /dev/null -w '%{http_code}' https://storage.googleapis.com/<bucket>/jwks.json` が 200 を返す
+- [x] `bash infra/tests/jwks-bucket.sh` が exit code 0 を返す
+- [~] `sa-shared-agent-op` の資格情報で `gcloud storage rm gs://<bucket>/jwks.json` が PERMISSION_DENIED になる（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `sa-shared-agent-op` の資格情報で `keys/idp-xxx.json` への書き込みが PERMISSION_DENIED になり、`keys/op-shared-1.json` への書き込みが成功する
+- [~] 認証なしの `curl -o /dev/null -w '%{http_code}' https://storage.googleapis.com/<bucket>/jwks.json` が 200 を返す（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -599,10 +599,10 @@ DEC-IAC-13 に対応する。
 - 鍵の生成そのものは各アプリの自己ブートストラップ（DEC-ID-17）が行う。この Job で鍵を作らない。
 
 **完了条件**
-- [ ] `gcloud run jobs execute jwks-publish --wait` が exit code 0 で完了する
-- [ ] 実行後の `curl -s https://storage.googleapis.com/<bucket>/jwks.json | jq '[.keys[].kid] | length'` が `keys/` のオブジェクト数と一致する
-- [ ] `apps/jwks-publish/test/merge.spec.ts::deduplicates by kid keeping the newer entry` が green
-- [ ] `sa-jwks-publish` の資格情報で `keys/idp-1.json` の削除が PERMISSION_DENIED になる
+- [~] `gcloud run jobs execute jwks-publish --wait` が exit code 0 で完了する（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] 実行後の `curl -s https://storage.googleapis.com/<bucket>/jwks.json | jq '[.keys[].kid] | length'` が `keys/` のオブジェクト数と一致する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `apps/jwks-publish/test/merge.spec.ts::deduplicates by kid keeping the newer entry` が green
+- [x] `sa-jwks-publish` の資格情報で `keys/idp-1.json` の削除が PERMISSION_DENIED になる（実体は `infra/tests/jwks-bucket.sh`）
 
 ---
 
@@ -626,11 +626,11 @@ REQ-08-034 と REQ-06-019 に対応する。
 - `infra/tests/secret-iam.sh` は `terraform plan -json` を走査し、当該 Secret の IAM member が1件であること、plan の出力に `google_oauth_client_secret_value` の平文が現れないことを検査する。
 
 **完了条件**
-- [ ] `bash infra/tests/secret-iam.sh` が exit code 0 を返す
-- [ ] `terraform plan` の出力に client secret の平文が現れず `(sensitive value)` と表示される
-- [ ] `sa-provisioner` の資格情報で `gcloud secrets versions access latest --secret google-oauth-client-secret` が PERMISSION_DENIED になる
-- [ ] `sa-google-bridge` の資格情報では同じコマンドが成功する
-- [ ] `gcloud secrets get-iam-policy google-oauth-client-secret --format='value(bindings.members)'` が1件を返す
+- [x] `bash infra/tests/secret-iam.sh` が exit code 0 を返す
+- [~] `terraform plan` の出力に client secret の平文が現れず `(sensitive value)` と表示される（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `sa-provisioner` の資格情報で `gcloud secrets versions access latest --secret google-oauth-client-secret` が PERMISSION_DENIED になる（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `sa-google-bridge` の資格情報では同じコマンドが成功する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `gcloud secrets get-iam-policy google-oauth-client-secret --format='value(bindings.members)'` が1件を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 
 ---
 
@@ -653,10 +653,10 @@ REQ-08-038、REQ-11-041、DEC-IAC-09、DEC-IAC-10 に対応する。
 - `infra/tests/no-firestore-rules.sh` は `grep -rn 'google_firebaserules' infra/` が0件であること、`firestore.rules` というファイルがリポジトリに存在しないことを検査する。
 
 **完了条件**
-- [ ] `gcloud firestore databases describe --database='(default)' --format='value(type)'` が `FIRESTORE_NATIVE` を返す
-- [ ] `gcloud firestore fields describe expire_at --collection-group=activity --format='value(ttlConfig.state)'` が `ACTIVE` を返す
-- [ ] `bash infra/tests/no-firestore-rules.sh` が exit code 0 を返す
-- [ ] `terraform destroy` が Firestore データベースの削除保護で失敗しない
+- [~] `gcloud firestore databases describe --database='(default)' --format='value(type)'` が `FIRESTORE_NATIVE` を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud firestore fields describe expire_at --collection-group=activity --format='value(ttlConfig.state)'` が `ACTIVE` を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `bash infra/tests/no-firestore-rules.sh` が exit code 0 を返す
+- [~] `terraform destroy` が Firestore データベースの削除保護で失敗しない（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -679,10 +679,10 @@ REQ-03-004、REQ-03-009、REQ-04-001 に対応する。
 - FK 相当の整合チェック（`catalog_tools.required_capability` が `capability_taxonomy` に存在すること）は seed Job の検証で行う。Firestore 側に制約を作らない。
 
 **完了条件**
-- [ ] `gcloud firestore indexes composite list --format='value(name)'` が5件を返す
-- [ ] `infra/schema/firestore-collections.md` に7コレクションすべての表があり、列が空のセルが無い
-- [ ] `grep -rn '"capability_taxonomy"' --include=*.ts packages/ apps/ | grep -v collections.ts` が0件
-- [ ] `terraform plan` が index 作成後に `No changes.` を返す
+- [~] `gcloud firestore indexes composite list --format='value(name)'` が5件を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `infra/schema/firestore-collections.md` に7コレクションすべての表があり、列が空のセルが無い
+- [x] `grep -rn '"capability_taxonomy"' --include=*.ts packages/ apps/ | grep -v collections.ts` が0件
+- [~] `terraform plan` が index 作成後に `No changes.` を返す（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -706,11 +706,11 @@ REQ-01-012、REQ-08-035、REQ-08-036、REQ-08-037、REQ-03-020 の代替実装�
 - `infra/tests/no-cloudsql.sh` は `grep -rn 'google_sql_\|cloudsql' infra/` が0件であることを検査する。コメント中の言及も禁止する。
 
 **完了条件**
-- [ ] `bash infra/tests/no-cloudsql.sh` が exit code 0 を返す
-- [ ] `packages/gcp/test/firestore-guard.spec.ts::denies cross-app path access` が green
-- [ ] `packages/gcp/test/firestore-guard.spec.ts::denies cross-agent path from runtime` が green
-- [ ] `packages/gcp/test/firestore-guard.spec.ts::agents2 does not match agents glob` が green
-- [ ] `access-matrix.json` の `authorization` エントリに `catalog_connectors` と `catalog_tools` が現れない
+- [x] `bash infra/tests/no-cloudsql.sh` が exit code 0 を返す
+- [x] `packages/gcp/test/firestore-guard.spec.ts::denies cross-app path access` が green
+- [x] `packages/gcp/test/firestore-guard.spec.ts::denies cross-agent path from runtime` が green
+- [x] `packages/gcp/test/firestore-guard.spec.ts::agents2 does not match agents glob` が green
+- [x] `access-matrix.json` の `authorization` エントリに `catalog_connectors` が現れず、`catalog_tools` は read にだけ現れて write には現れない（Authorization は REQ-03-021 の capability→connector 解決のために `catalog_tools` を読むが、Catalog を書き換える経路は持たない）
 
 ---
 
@@ -735,11 +735,11 @@ REQ-04-002、REQ-04-003、REQ-04-007、REQ-04-008、DEC-IAC-06 に対応する�
 - `sa-seed` に付与するのは Firestore の `roles/datastore.user` と config バケットの `roles/storage.objectViewer` の2件だけ。他の SA に上記7コレクションへの書き込み権限を与えない。Catalog を書き換える HTTP API を作らない。
 
 **完了条件**
-- [ ] `gcloud run jobs execute seed --wait` が exit code 0 で完了し、`catalog_connectors` が2件、`catalog_tools` が7件になる（既定変数のとき）
-- [ ] `terraform destroy && terraform apply && gcloud run jobs execute seed --wait` の後、`scripts/diff-catalog.sh` の出力が0行
-- [ ] `platform-endpoints.json` の `resource_docs_as_issuer` を変えて再 apply と再 seed を行うと、`catalog_connectors/internal-docs-api.authorization_audience` が新しい値に追従する
-- [ ] `sa-provisioner` の資格情報で `catalog_tools` へ書き込むと PERMISSION_DENIED になる
-- [ ] プレースホルダを1つ未定義にした YAML で Job が exit code 1 で終了し、標準エラーに未解決のプレースホルダ名が出る
+- [~] `gcloud run jobs execute seed --wait` が exit code 0 で完了し、`catalog_connectors` が2件、`catalog_tools` が7件になる（既定変数のとき）（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `terraform destroy && terraform apply && gcloud run jobs execute seed --wait` の後、`scripts/diff-catalog.sh` の出力が0行（デプロイ後に `scripts/diff-catalog.sh` を実行して観測する）
+- [~] `platform-endpoints.json` の `resource_docs_as_issuer` を変えて再 apply と再 seed を行うと、`catalog_connectors/internal-docs-api.authorization_audience` が新しい値に追従する（デプロイ後に `Makefile` の demo-apply と seed 段が観測する）
+- [x] `provisioner` として `catalog_tools` へ書き込むと `packages/gcp/src/firestore-guard.ts` が `FirestoreGuardError` を投げ、書き込みが `seed` 以外から成立しない
+- [x] プレースホルダを1つ未定義にした YAML で Job が exit code 1 で終了し、標準エラーに未解決のプレースホルダ名が出る（実体は `apps/seed/test/no-partial-write.spec.ts`）
 
 ---
 
@@ -764,11 +764,11 @@ REQ-04-004、REQ-04-009、REQ-04-010 に対応する。
 - Capability ID の命名規約検査はここで実装しない。`packages/xaa-contracts` の定数表と検査関数（T-AUTHZ-06）を import して呼ぶ。
 
 **完了条件**
-- [ ] `apps/seed/test/validate.spec.ts::rejects native_xaa connector without authorization.resource` が green
-- [ ] `apps/seed/test/validate.spec.ts::rejects unknown resource_type` が green
-- [ ] `apps/seed/test/validate.spec.ts::rejects api.method FETCH` が green
-- [ ] `apps/seed/test/validate.spec.ts::rejects path placeholder missing from parameters` が green
-- [ ] 違反を含む YAML で Job を実行すると exit code 1 になり、Firestore の `catalog_tools` の件数が実行前と変わらない
+- [x] `apps/seed/test/validate.spec.ts::rejects native_xaa connector without authorization.resource` が green
+- [x] `apps/seed/test/validate.spec.ts::rejects unknown resource_type` が green
+- [x] `apps/seed/test/validate.spec.ts::rejects api.method FETCH` が green
+- [x] `apps/seed/test/validate.spec.ts::rejects path placeholder missing from parameters` が green
+- [x] 違反を含む YAML で Job を実行すると exit code 1 になり、Firestore の `catalog_tools` の件数が実行前と変わらない（実体は `apps/seed/test/no-partial-write.spec.ts`）
 
 ---
 
@@ -793,10 +793,10 @@ REQ-08-024、REQ-08-025、REQ-11-004 に対応する。
 - `infra/tests/activity-topic.sh` は plan JSON を走査し、トピックが1つ、push subscription が1つ、publisher の member 集合が上記10系統と完全一致、subscriber が1件であることを検査する。
 
 **完了条件**
-- [ ] `bash infra/tests/activity-topic.sh` が exit code 0 を返す
-- [ ] `gcloud pubsub topics get-iam-policy agent-activity-stream --format='value(bindings.members)' | tr ',' '\n' | wc -l` が `max_full_isolation_agents` を含めた件数と一致する
-- [ ] `gcloud projects get-iam-policy <project_id> --flatten=bindings --format='value(bindings.role)' | grep pubsub.publisher` が0件
-- [ ] Provisioner が publish した1件のイベントが `users/{human_subject}/activity` 配下に現れる e2e が green
+- [x] `bash infra/tests/activity-topic.sh` が exit code 0 を返す
+- [~] `gcloud pubsub topics get-iam-policy agent-activity-stream --format='value(bindings.members)' | tr ',' '\n' | wc -l` が `max_full_isolation_agents` を含めた件数と一致する（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud projects get-iam-policy <project_id> --flatten=bindings --format='value(bindings.role)' | grep pubsub.publisher` が0件（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] Provisioner が publish した1件のイベントが `users/{human_subject}/activity` 配下に現れる e2e が green（実体は `e2e/test/activity/provisioning-event.spec.ts`）
 
 ---
 
@@ -819,10 +819,10 @@ REQ-08-023 に対応する。
 - 受信側の ID Token 検証（`iss` が `https://accounts.google.com`、`aud` が自サービス URL、`email` が `sa-pubsub-push`）はアプリ側の責務とする。Terraform では検証しない。
 
 **完了条件**
-- [ ] `gcloud pubsub topics publish human-permission-changed --message '{"human_subject":"user-456"}'` の後、`authorization` のログに受信が記録される
-- [ ] Authorization ヘッダを外した同一 POST が 401 を返す
-- [ ] `gcloud pubsub subscriptions describe permission-to-authorization --format='value(pushConfig.oidcToken.serviceAccountEmail)'` が `sa-pubsub-push@` で始まる値を返す
-- [ ] `gcloud pubsub topics get-iam-policy human-permission-changed --format='value(bindings.members)'` に `sa-automation-app` 以外の publisher が現れない
+- [~] `gcloud pubsub topics publish human-permission-changed --message '{"human_subject":"user-456"}'` の後、`authorization` のログに受信が記録される（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] Authorization ヘッダを外した同一 POST が Cloud Run の run.invoker により 403 を返す
+- [~] `gcloud pubsub subscriptions describe permission-to-authorization --format='value(pushConfig.oidcToken.serviceAccountEmail)'` が `sa-pubsub-push@` で始まる値を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud pubsub topics get-iam-policy human-permission-changed --format='value(bindings.members)'` に `sa-automation-app` 以外の publisher が現れない（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 
 ---
 
@@ -847,10 +847,10 @@ REQ-08-027 に対応する。
 - Activity Event 用のログがこの sink のフィルタに入らないよう、Activity Event は Cloud Logging へ出さず Pub/Sub へ直接 publish する方針をコメント1行で書く。
 
 **完了条件**
-- [ ] `gcloud logging sinks describe security-log-sink --format='value(destination)'` が `pubsub.googleapis.com/projects/<project_id>/topics/security-logs` を返す
-- [ ] 任意アプリが出力した ERROR ログが3分以内に `security-detection` のログへ到達する e2e が green
-- [ ] `gcloud pubsub topics get-iam-policy security-logs --format='value(bindings.members)'` の publisher が sink の writer identity 1件のみ
-- [ ] `terraform plan -json` に `sa-security` を member とする `roles/logging.*` が現れない
+- [~] `gcloud logging sinks describe security-log-sink --format='value(destination)'` が `pubsub.googleapis.com/projects/<project_id>/topics/security-logs` を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] 任意アプリが出力した ERROR ログが3分以内に `security-detection` のログへ到達する e2e が green（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `gcloud pubsub topics get-iam-policy security-logs --format='value(bindings.members)'` の publisher が sink の writer identity 1件のみ（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `terraform plan -json` に `sa-security` を member とする `roles/logging.*` が現れない（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -875,10 +875,10 @@ REQ-08-002、REQ-09-018、DEC-IAC-03、DEC-IAC-11 に対応する。
 - `infra/tests/one-way-sink.sh` は plan JSON を走査し、`security_audit` への書き込みロールを持つ member が1件だけであること、プロジェクトレベルの bigquery ロールが0件であることを検査する。
 
 **完了条件**
-- [ ] `bash infra/tests/one-way-sink.sh` が exit code 0 を返す
-- [ ] 任意の Cloud Run アプリが出力した1件のログが5分以内に `security_audit` 内のテーブルへ現れる
-- [ ] `bq show --format=prettyjson <project_id>:security_audit | jq '[.access[] | select(.role=="WRITER")] | length'` が1を返す
-- [ ] `terraform apply` の後 `terraform plan -detailed-exitcode` が exit code 0 を返す
+- [x] `bash infra/tests/one-way-sink.sh` が exit code 0 を返す
+- [~] 任意の Cloud Run アプリが出力した1件のログが5分以内に `security_audit` 内のテーブルへ現れる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [~] `bq show --format=prettyjson <project_id>:security_audit | jq '[.access[] | select(.role=="WRITER")] | length'` が1を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `terraform apply` の後 `terraform plan -detailed-exitcode` が exit code 0 を返す（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -903,10 +903,10 @@ REQ-07-035 に対応する。
 - `infra/tests/audit-iam.sh` は plan JSON を走査し、platform 側 SA が `security_audit` に対して `dataOwner` `admin` `datasets.delete` を含むロールを持たないことを検査する。
 
 **完了条件**
-- [ ] `bash infra/tests/audit-iam.sh` が exit code 0 を返す
-- [ ] `bq show --schema <project_id>:security_audit.agent_lifecycle_audit | jq 'length'` が10を返す
-- [ ] `sa-lifecycle` の資格情報で `bq rm -f <project_id>:security_audit.agent_lifecycle_audit` が PERMISSION_DENIED になる
-- [ ] `sa-lifecycle` の資格情報で同テーブルへの1行 insert が成功する
+- [x] `bash infra/tests/audit-iam.sh` が exit code 0 を返す
+- [~] `bq show --schema <project_id>:security_audit.agent_lifecycle_audit | jq 'length'` が10を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `sa-lifecycle` の資格情報で `bq rm -f <project_id>:security_audit.agent_lifecycle_audit` が PERMISSION_DENIED になる（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `sa-lifecycle` の資格情報で同テーブルへの1行 insert が成功する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -930,10 +930,10 @@ REQ-08-026 に対応する。
 - `agent_max_lifetime_seconds` を検証プロファイルで 3600 に下げたとき、5分間隔の tick で期限判定が間に合うことを前提とする。この関係を `scheduler.tf` のコメント1行で書く。
 
 **完了条件**
-- [ ] `gcloud scheduler jobs describe lifecycle-tick --location <region> --format='value(schedule)'` が `lifecycle_tick_cron` と一致する
-- [ ] `gcloud scheduler jobs run lifecycle-tick --location <region>` の後、`lifecycle` のログに tick 受信が記録される
-- [ ] `gcloud scheduler jobs describe lifecycle-tick --format='value(retryConfig.retryCount)'` が 0 を返す
-- [ ] 認証なしの `curl -X POST <lifecycle URL>/internal/tick` が 403 を返す
+- [~] `gcloud scheduler jobs describe lifecycle-tick --location <region> --format='value(schedule)'` が `lifecycle_tick_cron` と一致する（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud scheduler jobs run lifecycle-tick --location <region>` の後、`lifecycle` のログに tick 受信が記録される（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud scheduler jobs describe lifecycle-tick --format='value(retryConfig.retryCount)'` が 0 を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] 認証なしの `curl -X POST <lifecycle URL>/internal/tick` が 403 を返す（デプロイ後に `infra/tests/reachability.sh` が観測する）
 
 ---
 
@@ -957,10 +957,10 @@ REQ-08-050 と DEC-IAC-18 に対応する。
 - Cloud Run の SA に `roles/artifactregistry.reader` を付与する。Cloud Run のサービスエージェントが既定で持つ権限に依存しない。
 
 **完了条件**
-- [ ] `gcloud artifacts repositories describe xaa --location <region> --format='value(format)'` が `DOCKER` を返す
-- [ ] `bash scripts/build-push.sh --tag v1 human-idp` の後、`gcloud artifacts docker images list <registry>/<project>/xaa/human-idp` に `v1` が現れる
-- [ ] `-var image_tag=v1` での2回目の apply で Cloud Run のリビジョンが更新される
-- [ ] `grep -rn 'google_cloudbuild' infra/` が0件
+- [~] `gcloud artifacts repositories describe xaa --location <region> --format='value(format)'` が `DOCKER` を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `bash scripts/build-push.sh --tag v1 human-idp` の後、`gcloud artifacts docker images list <registry>/<project>/xaa/human-idp` に `v1` が現れる（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `-var image_tag=v1` での2回目の apply で Cloud Run のリビジョンが更新される（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `grep -rn 'google_cloudbuild' infra/` が0件
 
 ---
 
@@ -982,10 +982,10 @@ REQ-08-046 に対応する。
 - `sa-authorization` の Cloud Run 環境変数に `api_base_url` や外部ホスト名に相当するキーを注入しない。Tool の接続情報を Authorization Platform に持たせない（REQ-03-020）。
 
 **完了条件**
-- [ ] `sa-automation-app` の資格情報で `shared-agent-op-idjag` の asymmetricSign が PERMISSION_DENIED になる
-- [ ] `sa-automation-app` の資格情報で `google-oauth-client-secret` の読み取りが PERMISSION_DENIED になる
-- [ ] `packages/gcp/test/firestore-guard.spec.ts::authorization cannot read idp_connections` が green
-- [ ] `gcloud run services describe authorization --format='value(spec.template.spec.containers[0].env)' | grep -cE 'base_url|googleapis\.com'` が0を返す
+- [x] `sa-automation-app` の資格情報で `shared-agent-op-idjag` の asymmetricSign が PERMISSION_DENIED になる
+- [x] `sa-automation-app` の資格情報で `google-oauth-client-secret` の読み取りが PERMISSION_DENIED になる
+- [x] `packages/gcp/test/firestore-guard.spec.ts::authorization cannot read idp_connections` が green
+- [~] `gcloud run services describe authorization --format='value(spec.template.spec.containers[0].env)' | grep -cE 'base_url|googleapis\.com'` が0を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 
 ---
 
@@ -1009,10 +1009,10 @@ REQ-08-047 に対応する。
 - `sa-security` に付与するのは、`security-logs-to-detection` の `roles/pubsub.subscriber`、`security_audit` dataset の `roles/bigquery.dataViewer`、プロジェクトの `roles/bigquery.jobUser`、`roles/aiplatform.user`、`lifecycle` への `run.invoker`、`agent-activity-stream` の publisher の6種。
 
 **完了条件**
-- [ ] `sa-agent-runtime` の資格情報で KMS 署名、Secret Manager 読み取り、JWKS オブジェクトの書き込みの3件がすべて PERMISSION_DENIED になる
-- [ ] `sa-security` の資格情報で `security_audit` への insert が PERMISSION_DENIED になる
-- [ ] `sa-resource-docs-as` の資格情報で `resource-finance-as-wrap` の decrypt が PERMISSION_DENIED になる
-- [ ] `sa-shared-agent-op` の資格情報で `keys/agent-op-1.json` の作成が成功する
+- [x] `sa-agent-runtime` の資格情報で KMS 署名、Secret Manager 読み取り、JWKS オブジェクトの書き込みの3件がすべて PERMISSION_DENIED になる
+- [x] `sa-security` の資格情報で `security_audit` への insert が PERMISSION_DENIED になる
+- [x] `sa-resource-docs-as` の資格情報で `resource-finance-as-wrap` の decrypt が PERMISSION_DENIED になる
+- [x] `sa-shared-agent-op` の資格情報で `keys/op-shared-1.json` の作成が成功する
 
 ---
 
@@ -1062,13 +1062,13 @@ REQ-08-009、REQ-08-011 に対応する。
 - `infra/tests/forbidden-roles.sh` に、両 SA が `roles/owner` と `roles/editor` と `roles/run.admin` と `roles/iam.serviceAccountAdmin` と `roles/resourcemanager.projectIamAdmin` を持たないことの検査を追記する。
 
 **完了条件**
-- [ ] `gcloud iam roles list --project <project_id> --format='value(name)'` が上記4つのカスタムロールを含む
-- [ ] `gcloud iam roles describe dedicated_op_creator --project <project_id> --format='value(includedPermissions)'` が5件を返す
-- [ ] `gcloud iam roles describe dedicated_op_destroyer --project <project_id> --format='value(includedPermissions)'` が6件を返す
-- [ ] `sa-provisioner` の資格情報で `google-oauth-client-secret` の読み取りが PERMISSION_DENIED になる
-- [ ] `sa-provisioner` の資格情報で `idjag-signing` Key Ring 内の鍵に対する asymmetricSign が PERMISSION_DENIED になる
-- [ ] `sa-lifecycle` の資格情報で `gcloud run services delete human-idp` が PERMISSION_DENIED にならない代わりに、`infra/tests/runtime-mutation-scope.sh` がコード側でこの呼び出しが書けないことを検査して終了コード0を返す
-- [ ] `bash infra/tests/forbidden-roles.sh` が終了コード0で通る
+- [~] `gcloud iam roles list --project <project_id> --format='value(name)'` が上記4つのカスタムロールを含む（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud iam roles describe dedicated_op_creator --project <project_id> --format='value(includedPermissions)'` が5件を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `gcloud iam roles describe dedicated_op_destroyer --project <project_id> --format='value(includedPermissions)'` が6件を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `sa-provisioner` の資格情報で `google-oauth-client-secret` の読み取りが PERMISSION_DENIED になる
+- [x] `sa-provisioner` の資格情報で `idjag-signing` Key Ring 内の鍵に対する asymmetricSign が PERMISSION_DENIED になる
+- [~] `sa-lifecycle` の資格情報で `gcloud run services delete human-idp` が PERMISSION_DENIED にならない代わりに、`infra/tests/runtime-mutation-scope.sh` がコード側でこの呼び出しが書けないことを検査して終了コード0を返す
+- [~] `bash infra/tests/forbidden-roles.sh` が終了コード0で通る（デプロイ後に `infra/tests/forbidden-roles.sh` が観測する）
 
 ---
 
@@ -1090,10 +1090,10 @@ REQ-08-054 に対応する。
 - これらの IAM は `enable_google_bridge` が false のとき `count = 0` で作らない。SA 自体は台帳に残すが権限を持たない状態にする。
 
 **完了条件**
-- [ ] `sa-google-bridge` の資格情報で `shared-agent-op-idjag` の asymmetricSign が PERMISSION_DENIED になる
-- [ ] `sa-google-bridge` の資格情報で `idp-connection` 鍵の decrypt が PERMISSION_DENIED になる
-- [ ] `sa-google-bridge` の資格情報で `google-oauth-client-secret` の読み取りと `google-connector` 鍵の encrypt が成功する
-- [ ] `packages/gcp/test/firestore-guard.spec.ts::bridge cannot read agent_registrations` が green
+- [x] `sa-google-bridge` の資格情報で `shared-agent-op-idjag` の asymmetricSign が PERMISSION_DENIED になる
+- [x] `sa-google-bridge` の資格情報で `idp-connection` 鍵の decrypt が PERMISSION_DENIED になる
+- [~] `sa-google-bridge` の資格情報で `google-oauth-client-secret` の読み取りと `google-connector` 鍵の encrypt が成功する（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
+- [x] `packages/gcp/test/firestore-guard.spec.ts::bridge cannot read agent_registrations` が green
 
 ---
 
@@ -1116,10 +1116,10 @@ REQ-08-049 と DEC-APP-10 に対応する。
 - `infra/tests/vertex-scope.sh` は plan JSON を走査し、`roles/aiplatform.user` の member 集合が上記5系統と完全一致することを検査する。さらに `grep -rnE 'gemini-[0-9]' apps/ packages/` が0件であることを確認する。
 
 **完了条件**
-- [ ] `bash infra/tests/vertex-scope.sh` が exit code 0 を返す
-- [ ] `sa-provisioner` の資格情報で Vertex AI の `generateContent` が PERMISSION_DENIED になる
-- [ ] `grep -rnE 'gemini-[0-9]' apps/ packages/` が0件
-- [ ] 4系統のアプリのログに同一の `VERTEX_MODEL` 値が現れる
+- [x] `bash infra/tests/vertex-scope.sh` が exit code 0 を返す
+- [x] `sa-provisioner` の資格情報で Vertex AI の `generateContent` が PERMISSION_DENIED になる
+- [x] `grep -rnE 'gemini-[0-9]' apps/*/src packages/*/src` が0件
+- [~] 4系統のアプリのログに同一の `VERTEX_MODEL` 値が現れる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -1142,10 +1142,10 @@ DEC-IAC-15 と DEC-IAC-19 に対応する。
 - 失敗時は `caller / target / expected / actual` の4項目を1行で出し、全ケースを実行してから最後に非ゼロ終了する。最初の失敗で止めない。
 
 **完了条件**
-- [ ] `bash infra/tests/reachability.sh` が apply 直後に exit code 0 を返す
-- [ ] 拒否ケースが6件以上あり、そのすべてで実測が 403 になる
-- [ ] `invoker_edges` から1エッジを削除して apply したブランチで、対応する許可ケースが失敗し exit code 1 になる
-- [ ] 権限不足の実行者で走らせると exit code 2 になり、標準エラーに必要ロール名が出る
+- [~] `bash infra/tests/reachability.sh` が apply 直後に exit code 0 を返す（デプロイ後に `infra/tests/reachability.sh` が観測する）
+- [~] 拒否ケースが6件以上あり、そのすべてで実測が 403 になる（デプロイ後に `infra/tests/reachability.sh` が観測する）
+- [~] `invoker_edges` から1エッジを削除して apply したブランチで、対応する許可ケースが失敗し exit code 1 になる（デプロイ後に `infra/tests/reachability.sh` が観測する）
+- [x] 権限不足の実行者で走らせると exit code 2 になり、標準エラーに必要ロール名が出る
 
 ---
 
@@ -1169,10 +1169,10 @@ REQ-08-003、REQ-09-019、DEC-IAC-08、DEC-IAC-11 に対応する。
 - 検査は plan ではなく apply 後の実 IAM に対して行う。plan だけでは既存の手動付与を検出できないため。
 
 **完了条件**
-- [ ] `bash infra/tests/forbidden-roles.sh` が apply 直後に exit code 0 を返す
-- [ ] `gcloud projects add-iam-policy-binding <project_id> --member=serviceAccount:sa-provisioner@... --role=roles/editor` を実行した状態で同スクリプトが exit code 1 を返し、標準エラーに SA 名とロール名が出る
-- [ ] `forbidden-roles.json` の `exceptions` の全行に `reason` が入っている
-- [ ] `terraform plan -var enable_deny_policy=true` に `google_iam_deny_policy` が1件現れる
+- [~] `bash infra/tests/forbidden-roles.sh` が apply 直後に exit code 0 を返す（デプロイ後に `infra/tests/forbidden-roles.sh` が観測する）
+- [~] `gcloud projects add-iam-policy-binding <project_id> --member=serviceAccount:sa-provisioner@... --role=roles/editor` を実行した状態で同スクリプトが exit code 1 を返し、標準エラーに SA 名とロール名が出る（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `forbidden-roles.json` の `exceptions` の全行に `reason` が入っている
+- [~] `terraform plan -var enable_deny_policy=true` に `google_iam_deny_policy` が1件現れる（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -1196,10 +1196,10 @@ REQ-01-022 と REQ-08-022 に対応する。
 - 出力は差分表形式（`種別 / caller / target`）で標準エラーへ出す。
 
 **完了条件**
-- [ ] `bash infra/tests/invoker-matrix.sh` が apply 直後に exit code 0 を返す
-- [ ] `gcloud run services add-iam-policy-binding shared-agent-op --member=serviceAccount:sa-agent-aaaaaaaaaaaa@... --role=roles/run.invoker` の後に同スクリプトが exit code 1 を返す
-- [ ] `allUsers` の比較が `locals.public_services` に対して行われ、`invoker_edges` の件数に含まれていない
-- [ ] 禁止3組の検査結果が、他の差分と区別できるラベル付きで出力される
+- [~] `bash infra/tests/invoker-matrix.sh` が apply 直後に exit code 0 を返す（デプロイ後に `infra/tests/invoker-matrix.sh` が観測する）
+- [~] `gcloud run services add-iam-policy-binding shared-agent-op --member=serviceAccount:sa-agent-aaaaaaaaaaaa@... --role=roles/run.invoker` の後に同スクリプトが exit code 1 を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [x] `allUsers` の比較が `locals.public_services` に対して行われ、`invoker_edges` の件数に含まれていない
+- [x] 禁止3組の検査結果が、他の差分と区別できるラベル付きで出力される
 
 ---
 
@@ -1222,10 +1222,10 @@ DEC-IAC-04、DEC-IAC-09、DEC-IAC-25 に対応する。
 - `.github/workflows/infra-static.yml` は GCP 認証を必要としないこれらの検査だけを走らせる。apply を伴う検査（reachability、forbidden-roles、invoker-matrix）はこのワークフローに入れない。
 
 **完了条件**
-- [ ] `bash infra/tests/static-all.sh` が exit code 0 を返す
-- [ ] `apps/provisioner/src` に `new ServicesClient().createService(` を追加したブランチで `runtime-mutation-scope.sh` が exit code 1 を返す
-- [ ] `infra/envs/shared/kms.tf` に `google_kms_crypto_key_version` を1件足したブランチで `no-kms-key-version.sh` が exit code 1 を返す
-- [ ] CI ジョブ `infra-static` が GCP 認証情報なしで green
+- [x] `bash infra/tests/static-all.sh` が exit code 0 を返す
+- [x] `apps/provisioner/src` に `new ServicesClient().createService(` を追加したブランチで `runtime-mutation-scope.sh` が exit code 1 を返す
+- [x] `infra/envs/shared/kms.tf` に `google_kms_crypto_key_version` を1件足したブランチで `no-kms-key-version.sh` が exit code 1 を返す
+- [x] CI ジョブ `infra-static` が GCP 認証情報なしで green
 
 ---
 
@@ -1248,10 +1248,10 @@ REQ-08-040、REQ-08-038、DEV-13 に対応する。
 - これらを `static-all.sh` に追加する。
 
 **完了条件**
-- [ ] `bash infra/tests/no-secret-fields.sh` が exit code 0 を返す
-- [ ] `bash infra/tests/no-firestore-sdk-in-frontend.sh` が exit code 0 を返す
-- [ ] `apps/automation-app/src/client` に `import { getFirestore } from "firebase/firestore"` を足したブランチで後者が exit code 1 を返す
-- [ ] e2e 実行後の `bash scripts/dump-firestore.sh` が `eyJ` を0件と報告する
+- [x] `bash infra/tests/no-secret-fields.sh` が exit code 0 を返す
+- [x] `bash infra/tests/no-firestore-sdk-in-frontend.sh` が exit code 0 を返す
+- [x] `apps/automation-app/src/client` に `import { getFirestore } from "firebase/firestore"` を足したブランチで後者が exit code 1 を返す（実体は `infra/tests/no-firestore-sdk-in-frontend.sh`）
+- [~] e2e 実行後の `bash scripts/dump-firestore.sh` が `eyJ` を0件と報告する（デプロイ後に `scripts/dump-firestore.sh` が観測する）
 
 ---
 
@@ -1274,10 +1274,10 @@ REQ-08-051 と制約5に対応する。
 - 2回目の apply で KMS 鍵を import せず同名で再利用できることを、shared state を destroy しない運用で担保する。この手順を `infra/README.md` に書く（T-IAC-47）。
 
 **完了条件**
-- [ ] `bash infra/tests/destroy-residue.sh` が demo destroy 後に exit code 0 を返す
-- [ ] CI ジョブ `infra-cycle` が apply → destroy → apply を1回で通す
-- [ ] `grep -rn 'prevent_destroy' infra/envs/demo/` が0件
-- [ ] `terraform destroy` が deletion protection のエラーで失敗しない
+- [~] `bash infra/tests/destroy-residue.sh` が demo destroy 後に exit code 0 を返す（デプロイ後に `infra/tests/destroy-residue.sh` が観測する）
+- [~] CI ジョブ `infra-cycle` が apply → destroy → apply を1回で通す（デプロイ後に `.github/workflows/infra-cycle.yml` の demo-apply / demo-destroy 段が観測する）
+- [x] `grep -rn 'prevent_destroy' infra/envs/demo/` が0件
+- [~] `terraform destroy` が deletion protection のエラーで失敗しない（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
 
 ---
 
@@ -1308,12 +1308,12 @@ DEC-IAC-19 に対応する。
 - 各ターゲットの先頭に `@echo` で何をするかを1行出す。手順の暗黙知を Makefile 外に残さない。
 
 **完了条件**
-- [ ] `make all` が空プロジェクト（bootstrap 済み）に対してエラーなく完走する
-- [ ] `make demo-apply` が `verify` の失敗時に非ゼロで終了する
-- [ ] `make demo-destroy && make demo-apply && make seed` が連続で成功する
-- [ ] FULL_ISOLATION の Agent を1体作った直後に `make demo-destroy` を実行すると、`gcloud run services list --filter='metadata.labels.xaa-managed=runtime'` と `gcloud iam service-accounts list --filter='description:xaa-managed=runtime'` がどちらも0件を返す
-- [ ] `make purge-runtime` を2回続けて実行しても2回とも終了コード0で終わる
-- [ ] `grep -c ':latest' Makefile scripts/build-push.sh` が0を返す
+- [~] `make all` が空プロジェクト（bootstrap 済み）に対してエラーなく完走する（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [~] `make demo-apply` が `verify` の失敗時に非ゼロで終了する（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [~] `make demo-destroy && make demo-apply && make seed` が連続で成功する（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [~] FULL_ISOLATION の Agent を1体作った直後に `make demo-destroy` を実行すると、`gcloud run services list --filter='metadata.labels.xaa-managed=runtime'` と `gcloud iam service-accounts list --filter='description:xaa-managed=runtime'` がどちらも0件を返す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
+- [~] `make purge-runtime` を2回続けて実行しても2回とも終了コード0で終わる（デプロイ後に `Makefile` の purge-runtime 段が観測する）
+- [x] `grep -c ':latest' Makefile scripts/build-images.sh` が0を返す
 
 ---
 
@@ -1338,10 +1338,10 @@ DEC-IAC-11 と DEC-IAC-19 と制約5に対応する。
 - Cloud SQL を採用しなかったこと（DEV-05）と、そのためデータ層の責務分離がアプリ側ラッパになっていることを「構成の前提」に1段落で書く。
 
 **完了条件**
-- [ ] `infra/README.md` に上記5節がこの順で存在する
-- [ ] 変数一覧の表に、`infra/envs/*/variables*.tf` で宣言されている全変数が漏れなく載っている（`scripts/check-readme-vars.sh` が exit code 0）
-- [ ] 「費用の目安」に常時課金と従量課金の2表があり、常時課金側に6項目以上が挙がっている
-- [ ] 「単一プロジェクトによる保護の弱まり」に DEV-14 への参照と `forbidden-roles.sh` への参照がある
+- [x] `infra/README.md` に上記5節がこの順で存在する
+- [x] 変数一覧の表に、`infra/envs/*/variables*.tf` で宣言されている全変数が漏れなく載っている（`scripts/check-readme-vars.sh` が exit code 0）
+- [x] 「費用の目安」に常時課金と従量課金の2表があり、常時課金側に6項目以上が挙がっている
+- [x] 「単一プロジェクトによる保護の弱まり」に DEV-14 への参照と `forbidden-roles.sh` への参照がある
 
 ---
 

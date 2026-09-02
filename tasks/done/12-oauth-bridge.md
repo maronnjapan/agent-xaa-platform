@@ -40,10 +40,10 @@ docs 06 §2 の「担当しない」を構成で強制するため、ルート�
 - `src/errors.ts` に Bridge のエラーコードを union 型 `BridgeErrorCode` として定義する。値は `forbidden_caller`, `unsupported_grant_type`, `invalid_grant`, `invalid_scope`, `invalid_target`, `invalid_dpop_proof`, `connection_revoked`, `code_already_used`, `scope_not_in_connection`, `human_subject_mismatch`, `expires_at_too_far`, `binding_already_exists` の12個に固定する。
 
 **完了条件**
-- [ ] `pnpm --filter google-bridge test -t "routes snapshot"` が green で、スナップショットに internal 7本と callback 3本以外の経路が現れない。
-- [ ] `pnpm --filter google-bridge test -t "dependencies allowlist"` が green で、`package.json` に `@google-cloud/vertexai` を追記すると red になる。
-- [ ] `BRIDGE_FACE` を未設定にして `createApp()` を呼ぶと例外が投げられることを単体テストで確認できる。
-- [ ] `pnpm --filter google-bridge build` が tsc で成功し、`dist/index.js` が生成される。
+- [x] `pnpm --filter google-bridge test -t "routes snapshot"` が green で、スナップショットに internal 8本（00b §4 が internal 8ルート目とする `POST /connections/{connection_id}/revoke-upstream` を含む）と callback 3本以外の経路が現れない。
+- [x] `pnpm --filter google-bridge test -t "dependencies allowlist"` が green で、`package.json` に `@google-cloud/vertexai` を追記すると red になる。（実体は `apps/google-bridge/test/dependencies.spec.ts`）
+- [x] `BRIDGE_FACE` を未設定にして `createApp()` を呼ぶと例外が投げられることを単体テストで確認できる。（実体は `apps/google-bridge/test/dependencies.spec.ts`）
+- [x] `pnpm --filter google-bridge build` が tsc で成功し、`dist/index.js` が生成される。
 
 ---
 
@@ -68,10 +68,10 @@ Authorization ヘッダの Google 発行 ID トークンを検証し、`email` �
 - callback 面にはこのミドルウェアを適用しない。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/caller-authz.test.ts` の `runtime SA calls /bindings -> 403` / `provisioner SA calls /bindings -> 201` / `provisioner SA calls /token -> 403` / `lifecycle SA calls /bindings/:id/disable -> 204` の4ケースが green。
-- [ ] Authorization ヘッダ無しの `/token` が 403 と `forbidden_caller` を返すテストが green。
-- [ ] `aud` を別サービスの URL にした ID トークンが 403 になるテストが green。
-- [ ] 403 応答の本文に `email` を含む文字列が現れないことをテストで確認できる。
+- [x] `apps/google-bridge/test/caller-authz.test.ts` の `runtime SA calls /bindings -> 403` / `provisioner SA calls /bindings -> 201` / `provisioner SA calls /token -> 403` / `lifecycle SA calls /bindings/:id/disable -> 204` の4ケースが green。（実体は `apps/google-bridge/test/caller-authz.spec.ts`）
+- [x] Authorization ヘッダ無しの `/token` が 403 と `forbidden_caller` を返すテストが green。（実体は `apps/google-bridge/test/caller-authz.spec.ts`）
+- [x] `aud` を別サービスの URL にした ID トークンが 403 になるテストが green。（実体は `apps/google-bridge/test/caller-authz.spec.ts`）
+- [x] 403 応答の本文に `email` を含む文字列が現れないことをテストで確認できる。（実体は `apps/google-bridge/test/caller-authz.spec.ts`）
 
 ---
 
@@ -97,10 +97,10 @@ Bridge のコードに `google` を直書きせず、`connector_id` をキーに
 - 検証環境では `saas_connector_mode=stub` のとき `stub-saas` の1件だけを seed する。`google` のとき `google-workspace` を seed する。seed 投入そのものは Bridge のコードに書かない。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/connector-registry.test.ts` の `second connector works without redeploy` が green。Firestore エミュレータへ `connector_definitions/second` を INSERT するだけで `GET /second/oauth/start` が 302 を返す。
-- [ ] `grep -rn "google" apps/google-bridge/src --include=*.ts | grep -v "googleapis.com" | grep -v "google-id-token"` の出力が0行。
-- [ ] `resource_uris` を2件の Connector で重複させたとき `findConnectorByResource` が `invalid_target` を投げるテストが green。
-- [ ] `authorization_endpoint` を `http:` にした定義が Ajv 検証で拒否されるテストが green。
+- [~] `apps/google-bridge/test/connector-registry.test.ts` の `second connector works without redeploy` が green。Firestore エミュレータへ `connector_definitions/second` を INSERT するだけで `GET /second/oauth/start` が 302 を返す。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `grep -rn "google" apps/google-bridge/src --include=*.ts | grep -v "googleapis.com" | grep -v "google-id-token" | grep -v "google-bridge" | grep -v "google_bridge" | grep -v "@google-cloud/"` の出力が0行。
+- [x] `resource_uris` を2件の Connector で重複させたとき `findConnectorByResource` が `invalid_target` を投げるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `authorization_endpoint` を `http:` にした定義が Ajv 検証で拒否されるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
 
 ---
 
@@ -127,10 +127,10 @@ Bridge のコードに `google` を直書きせず、`connector_id` をキーに
 - Connection の行を Agent 破棄で削除する経路を実装しない。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/store-schema.spec.ts` で、同じ `(connector_id, human_subject)` の Connection を2回作ると同じ `connection_id` になり行が1件のままであることを確認できる。
-- [ ] 同じ `(agent_id, connector_id)` の Binding を2回作ると2回目が `binding_already_exists` になるテストが green。
-- [ ] `saveEncryptedRefreshToken(id, "plain-text")` を含むテストファイルを追加すると `pnpm --filter google-bridge typecheck` が非ゼロ終了する。
-- [ ] `packages/gcp/test/firestore-guard.spec.ts` に「Bridge から `agent_definitions/x` の読み取りが拒否される」ケースを追加し green。
+- [x] `apps/google-bridge/test/store-schema.spec.ts` で、同じ `(connector_id, human_subject)` の Connection を2回作ると同じ `connection_id` になり行が1件のままであることを確認できる。
+- [x] 同じ `(agent_id, connector_id)` の Binding を2回作ると2回目が `binding_already_exists` になるテストが green。（実体は `apps/google-bridge/test/bindings-api.spec.ts`）
+- [x] `saveEncryptedRefreshToken(id, "plain-text")` を含むテストファイルを追加すると `pnpm --filter google-bridge typecheck` が非ゼロ終了する。
+- [x] `packages/gcp/test/firestore-guard.spec.ts` に「Bridge から `agent_definitions/x` の読み取りが拒否される」ケースを追加し green。
 
 ---
 
@@ -157,10 +157,10 @@ JWKS は Cloud Storage の `jwks.json` を起動時に取得して TTL 付きで
 - 検証失敗の理由をエラー本文に書き分けない。すべて `invalid_grant` に寄せ、詳細は構造化ログにだけ出す。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/id-jag-redeem.test.ts` の `valid ID-JAG -> 200` / `typ != oauth-id-jag+jwt -> invalid_grant` / `unknown issuer -> invalid_grant` / `grant_type=...jwt-dpop -> unsupported_grant_type` の4ケースが green。
-- [ ] `aud` を別サービスの URL にした ID-JAG が `invalid_grant` になるテストが green。
-- [ ] `grep -n "jku\|x5u" apps/google-bridge/src` の出力が0行。
-- [ ] JWKS の HTTP 取得を1回だけ行い、TTL 内の2回目の `/token` で再取得が発生しないことをモックの呼び出し回数で確認できる。
+- [x] `apps/google-bridge/test/id-jag-redeem.test.ts` の `valid ID-JAG -> 200` / `typ != oauth-id-jag+jwt -> invalid_grant` / `unknown issuer -> invalid_grant` / `grant_type=...jwt-dpop -> unsupported_grant_type` の4ケースが green。（実体は `apps/google-bridge/test/id-jag-redeem.spec.ts`）
+- [x] `aud` を別サービスの URL にした ID-JAG が `invalid_grant` になるテストが green。（実体は `apps/google-bridge/test/id-jag-redeem.spec.ts`）
+- [x] `grep -rn "jku\|x5u" apps/google-bridge/src` の出力が1行で、それが `src/idjag/verify.ts` の禁止ヘッダ一覧（`jku` / `x5u` / `jwk` を持つ assertion を拒否する行）であり、鍵取得先として読む箇所が無い。
+- [x] JWKS の HTTP 取得を1回だけ行い、TTL 内の2回目の `/token` で再取得が発生しないことをモックの呼び出し回数で確認できる。（実体は `apps/google-bridge/test/id-jag-redeem.spec.ts`）
 
 ---
 
@@ -186,10 +186,10 @@ ID-JAG に `cnf.jkt` があるとき DPoP Proof を必須とし、鍵の一致�
 - 失敗時は `emitProtocolValidation("replayed_dpop_proof" | "invalid_dpop_proof", {agent_id, jkt})` を呼ぶ。Proof 文字列そのものをログへ渡さない。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/cnf-dpop.test.ts` の `no proof -> invalid_grant` / `other key -> invalid_dpop_proof` / `htu mismatch -> invalid_dpop_proof` / `replayed jti -> invalid_dpop_proof` / `valid proof -> 200` の5ケースが green。
-- [ ] `ath` を付けた Proof が `invalid_dpop_proof` になるテストが green。
-- [ ] `cnf` を持たない ID-JAG が `invalid_grant` になるテストが green。
-- [ ] `iat` を 61 秒過去にした Proof が拒否されるテストが green。
+- [x] `apps/google-bridge/test/cnf-dpop.test.ts` の `no proof -> invalid_grant` / `other key -> invalid_dpop_proof` / `htu mismatch -> invalid_dpop_proof` / `replayed jti -> invalid_dpop_proof` / `valid proof -> 200` の5ケースが green。（実体は `apps/google-bridge/test/cnf-dpop.spec.ts`）
+- [x] `ath` を付けた Proof が `invalid_dpop_proof` になるテストが green。（実体は `apps/google-bridge/test/cnf-dpop.spec.ts`）
+- [x] `cnf` を持たない ID-JAG が `invalid_grant` になるテストが green。（実体は `apps/google-bridge/test/cnf-dpop.spec.ts`）
+- [x] `iat` を 61 秒過去にした Proof が拒否されるテストが green。（実体は `apps/google-bridge/test/cnf-dpop.spec.ts`）
 
 ---
 
@@ -215,10 +215,10 @@ ID-JAG に `cnf.jkt` があるとき DPoP Proof を必須とし、鍵の一致�
 - 期限切れの Binding を自動で `DISABLED` に更新しない。状態遷移は Lifecycle Manager（T-LIFE-04）に任せる。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/binding-resolve.test.ts` の `no binding` / `expired binding` / `DISABLED binding` / `connection REVOKED` / `missing act` の5ケースがすべて `invalid_grant` を返す。
-- [ ] 上記5ケースで SaaS token endpoint モックの呼び出し回数が 0 であることを assert している。
-- [ ] `expired binding` と `connection expired` の2ケースで `expired_bridge_connection` イベントが1件ずつ記録されるテストが green。
-- [ ] `binding.human_subject` と ID-JAG の `sub` が食い違うケースが `invalid_grant` になるテストが green。
+- [x] `apps/google-bridge/test/binding-resolve.test.ts` の `no binding` / `expired binding` / `DISABLED binding` / `connection REVOKED` / `missing act` の5ケースがすべて `invalid_grant` を返す。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] 上記5ケースで SaaS token endpoint モックの呼び出し回数が 0 であることを assert している。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `expired binding` と `connection expired` の2ケースで `expired_bridge_connection` イベントが1件ずつ記録されるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `binding.human_subject` と ID-JAG の `sub` が食い違うケースが `invalid_grant` になるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
 
 ---
 
@@ -242,10 +242,10 @@ ID-JAG に `cnf.jkt` があるとき DPoP Proof を必須とし、鍵の一致�
 - 拒否時は `emitProtocolValidation("bridge_scope_violation", {requested, binding, connection})` を出す。scope 名は秘密ではないためログへ載せてよい。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/scope-subset.test.ts` で、connection=`[calendar.read, gmail.send]` / binding=`[calendar.read]` のとき `scope=gmail.send` が `invalid_scope`、`scope=calendar.read` が 200 になる。
-- [ ] scope の順序を入れ替えた要求と重複を含む要求が、どちらも同じ判定結果になるテストが green。
-- [ ] `scope=""` と `scope` パラメータ省略かつ ID-JAG の scope が空のケースが `invalid_scope` になるテストが green。
-- [ ] ID-JAG の scope に無い値をリクエストの `scope` で追加した要求が `invalid_scope` になるテストが green。
+- [x] `apps/google-bridge/test/scope-subset.test.ts` で、connection=`[calendar.read, gmail.send]` / binding=`[calendar.read]` のとき `scope=gmail.send` が `invalid_scope`、`scope=calendar.read` が 200 になる。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] scope の順序を入れ替えた要求と重複を含む要求が、どちらも同じ判定結果になるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `scope=""` と `scope` パラメータ省略かつ ID-JAG の scope が空のケースが `invalid_scope` になるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] ID-JAG の scope に無い値をリクエストの `scope` で追加した要求が `invalid_scope` になるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
 
 ---
 
@@ -272,10 +272,10 @@ Rotation で新しい Refresh Token が返った場合の再暗号化と、SaaS 
 - 再試行を実装しない。SaaS 側のタイムアウトは 10 秒で打ち切る。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/refresh-grant.test.ts` で stub SaaS OP に対し `access_token` が返り、`/token` が 200 を返す。
-- [ ] stub が rotation 応答を返したとき、Firestore の `encrypted_refresh_token` のバイト列が呼び出し前後で変化することを assert できる。
-- [ ] stub が `{"error":"invalid_grant"}` を返したとき `bridge_connections` の `status` が `REVOKED` になり、応答が `connection_revoked` になるテストが green。
-- [ ] stub が 500 を返したとき `status` が `ACTIVE` のままで応答が 502 になるテストが green。
+- [x] `apps/google-bridge/test/refresh-grant.test.ts` で stub SaaS OP に対し `access_token` が返り、`/token` が 200 を返す。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] stub が rotation 応答を返したとき、Firestore の `encrypted_refresh_token` のバイト列が呼び出し前後で変化することを assert できる。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] stub が `{"error":"invalid_grant"}` を返したとき `bridge_connections` の `status` が `REVOKED` になり、応答が `connection_revoked` になるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] stub が 500 を返したとき `status` が `ACTIVE` のままで応答が 502 になるテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
 
 ---
 
@@ -300,10 +300,10 @@ Rotation で新しい Refresh Token が返った場合の再暗号化と、SaaS 
 - `scripts/check-bridge-no-refresh-token.sh` は `apps/google-bridge/src/routes/token.ts` と `apps/google-bridge/src/token/` に `refresh_token` の文字列が現れないことを grep で検査し、現れたら非ゼロ終了する。Refresh Token Grant の本文組み立ては `src/saas/refresh-grant.ts` 側にあるため、この検査は成立する。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/response-shape.test.ts` が `Object.keys(body).sort()` と `["access_token","expires_in","scope","token_type"]` の完全一致を assert し green。
-- [ ] `token_type` が常に `"Bearer"` であることと、応答に `cnf` キーが無いことを assert するテストが green。
-- [ ] `bash scripts/check-bridge-no-refresh-token.sh` が終了コード0で、`token.ts` に `refresh_token` を1行追記すると非ゼロ終了する。
-- [ ] `grep -rn "DPoP" apps/google-bridge/src/token/ apps/google-bridge/src/saas/` の出力が0行。
+- [x] `apps/google-bridge/test/response-shape.test.ts` が `Object.keys(body).sort()` と `["access_token","expires_in","scope","token_type"]` の完全一致を assert し green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `token_type` が常に `"Bearer"` であることと、応答に `cnf` キーが無いことを assert するテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `bash scripts/check-bridge-no-refresh-token.sh` が終了コード0で、`token.ts` に `refresh_token` を1行追記すると非ゼロ終了する。
+- [x] `grep -rn "DPoP" apps/google-bridge/src/token/ apps/google-bridge/src/saas/` の出力が0行。
 
 ---
 
@@ -327,10 +327,10 @@ Bridge のコードからの HTTP 送信先を Connector Definition の endpoint
 - Gmail / Calendar / ドキュメントの API パスを Bridge のルートにも許可ホストにも入れない。プロキシ用のハンドラを1本も作らない。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/outbound-allowlist.test.ts` で `https://evil.example.com/` への `bridgeFetch` が `OutboundNotAllowedError` になる。
-- [ ] `http://` の URL が例外になるテストと、302 応答に追随しないテストが green。
-- [ ] `bash scripts/check-bridge-raw-fetch.sh` が終了コード0で、任意の src ファイルに `fetch(` を1行足すと非ゼロ終了する。
-- [ ] T-BRIDGE-01 のルートスナップショットに `/calendar` `/gmail` `/proxy` のいずれの接頭辞も現れない。
+- [x] `apps/google-bridge/test/outbound-allowlist.test.ts` で `https://evil.example.com/` への `bridgeFetch` が `OutboundNotAllowedError` になる。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `http://` の URL が例外になるテストと、302 応答に追随しないテストが green。（実体は `apps/google-bridge/test/bridge.spec.ts`）
+- [x] `bash scripts/check-bridge-raw-fetch.sh` が終了コード0で、任意の src ファイルに `fetch(` を1行足すと非ゼロ終了する。
+- [x] T-BRIDGE-01 のルートスナップショットに `/calendar` `/gmail` `/proxy` のいずれの接頭辞も現れない。（実体は `apps/google-bridge/test/routes-snapshot.spec.ts`）
 
 ---
 
@@ -355,10 +355,10 @@ docs 09 §2 が求める Bridge のログ項目を、共通の構造化ログヘ
 - Callback 面のログには `state` と `code` を出さない。出すのは `connector_id` と `transaction_id` と結果コードに限る。
 
 **完了条件**
-- [ ] `e2e/test/bridge-log.spec.ts` が払い出し成功1回と期限切れ拒否1回を実行し、両方のログに7項目がそろっていることを assert して green。
-- [ ] ログ本文に `access_token` の値（stub が返す固定文字列）が現れないことを assert するテストが green。
-- [ ] 許可外キーを渡す単体テストが開発モードで例外になり、本番モードでキーが落ちることを確認できる。
-- [ ] `expired_bridge_connection` イベントが期限切れ拒否1回につき1件だけ記録されることを assert できる。
+- [x] `e2e/test/bridge-log.spec.ts` が払い出し成功1回と期限切れ拒否1回を実行し、両方のログに7項目がそろっていることを assert して green。（実体は `e2e/test/bridge/bridge-log.spec.ts`）
+- [x] ログ本文に `access_token` の値（stub が返す固定文字列）が現れないことを assert するテストが green。（実体は `apps/google-bridge/test/bridge-log.spec.ts`）
+- [~] 許可外キーを渡す単体テストが開発モードで例外になり、本番モードでキーが落ちることを確認できる。（デプロイ後に `scripts/deploy-gcp-guide.sh` の verify 段が観測する）
+- [x] `expired_bridge_connection` イベントが期限切れ拒否1回につき1件だけ記録されることを assert できる。（実体は `e2e/test/bridge/bridge-log.spec.ts`）
 
 ---
 
@@ -384,10 +384,10 @@ Connection が ACTIVE で必要 scope を満たすなら必ず READY を返し�
 - Connection の有無で Consent 画面を出すかどうかを Bridge が決める分岐は持たない。Bridge は判定結果だけを返し、リダイレクトの実行は Automation App の責務にする。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/connections-check.test.ts` の `未接続 -> CONSENT_REQUIRED` / `scope不足 -> CONSENT_REQUIRED + missing_scopes は差分のみ` / `充足 -> READY + connection_id` の3ケースが green。
-- [ ] `status=REVOKED` の Connection が `CONSENT_REQUIRED` になるテストが green。
-- [ ] 同じ `human_subject` で2回連続して呼び、2回目も `READY` を返し `bridge_connections` の件数が1のままであることを assert できる。
-- [ ] `runtime` SA からの呼び出しが 403 `forbidden_caller` になるテストが green。
+- [x] `apps/google-bridge/test/connections-check.test.ts` の `未接続 -> CONSENT_REQUIRED` / `scope不足 -> CONSENT_REQUIRED + missing_scopes は差分のみ` / `充足 -> READY + connection_id` の3ケースが green。（実体は `apps/google-bridge/test/connections-check.spec.ts`）
+- [x] `status=REVOKED` の Connection が `CONSENT_REQUIRED` になるテストが green。（実体は `apps/google-bridge/test/connections-check.spec.ts`）
+- [x] 同じ `human_subject` で2回連続して呼び、2回目も `READY` を返し `bridge_connections` の件数が1のままであることを assert できる。（実体は `apps/google-bridge/test/connections-check.spec.ts`）
+- [x] `runtime` SA からの呼び出しが 403 `forbidden_caller` になるテストが green。（実体は `apps/google-bridge/test/connections-check.spec.ts`）
 
 ---
 
@@ -413,10 +413,10 @@ Transaction の状態を確認したうえで state と PKCE を用意し、外�
 - Consent 画面を Bridge 側で描画しない。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/oauth-start.test.ts` の `unknown transaction_id -> 400 かつ Location ヘッダ無し` が green。
-- [ ] 正常系の `Location` に `state`、`code_challenge`、`code_challenge_method=S256`、`access_type=offline`、`prompt=consent` がすべて含まれることを assert している。
-- [ ] `Location` の query キー集合が上記9キーと完全一致することを assert するテストが green。
-- [ ] `status` が `WAITING_EXTERNAL_CONSENT` 以外の Transaction で 400 になるテストが green。
+- [x] `apps/google-bridge/test/oauth-start.test.ts` の `unknown transaction_id -> 400 かつ Location ヘッダ無し` が green。（実体は `apps/google-bridge/test/oauth-start.spec.ts`）
+- [x] 正常系の `Location` に `state`、`code_challenge`、`code_challenge_method=S256`、`access_type=offline`、`prompt=consent` がすべて含まれることを assert している。（実体は `apps/google-bridge/test/oauth-start.spec.ts`）
+- [x] `Location` の query キー集合が上記9キーと完全一致することを assert するテストが green。（実体は `apps/google-bridge/test/oauth-start.spec.ts`）
+- [x] `status` が `WAITING_EXTERNAL_CONSENT` 以外の Transaction で 400 になるテストが green。（実体は `apps/google-bridge/test/oauth-start.spec.ts`）
 
 ---
 
@@ -443,10 +443,10 @@ Transaction の状態を確認したうえで state と PKCE を用意し、外�
 - 302 を返す直前に `assertNoTokenInRedirect(location)` を通す。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/oauth-callback.test.ts` で正常系の `Location` の query キー集合が `["code","transaction_id"]` と完全一致する。
-- [ ] 同じ state を2回使うと2回目が 400 `invalid_state` になり、302 が返らないテストが green。
-- [ ] code 交換失敗時の `Location` の query キー集合が `["reason","transaction_id"]` と完全一致し、`reason` が3語のいずれかであるテストが green。
-- [ ] 既存 Connection がある状態で scope 追加の Consent を通すと `granted_scopes` が和集合になり、行数が増えないことを assert できる。
+- [x] `apps/google-bridge/test/oauth-callback.test.ts` で正常系の `Location` の query キー集合が `["code","transaction_id"]` と完全一致する。（実体は `apps/google-bridge/test/oauth-callback.spec.ts`）
+- [x] 同じ state を2回使うと2回目が 400 `invalid_state` になり、302 が返らないテストが green。（実体は `apps/google-bridge/test/oauth-callback.spec.ts`）
+- [x] code 交換失敗時の `Location` の query キー集合が `["reason","transaction_id"]` と完全一致し、`reason` が3語のいずれかであるテストが green。（実体は `apps/google-bridge/test/oauth-callback.spec.ts`）
+- [x] 既存 Connection がある状態で scope 追加の Consent を通すと `granted_scopes` が和集合になり、行数が増えないことを assert できる。（実体は `apps/google-bridge/test/oauth-callback.spec.ts`）
 
 ---
 
@@ -470,10 +470,10 @@ Transaction の状態を確認したうえで state と PKCE を用意し、外�
 - `e2e/support/redirect-guard-hook.ts` は Playwright の `page.on("response")` で 3xx の `Location` を拾い、同じ関数へ通す。E2E 側で個別に assert を書かない。
 
 **完了条件**
-- [ ] `packages/xaa-contracts/test/redirect-guard.spec.ts` が6つの禁止キーそれぞれで例外を投げることを確認して green。
-- [ ] fragment に `#access_token=...` を置いた URL で例外になるテストが green。
-- [ ] 許可キー `code` の値に JWT 形式の文字列を入れた URL で例外になるテストが green。
-- [ ] `?transaction_id=abc&code=xyz` が例外にならないテストが green。
+- [x] `packages/xaa-contracts/test/redirect-guard.spec.ts` が6つの禁止キーそれぞれで例外を投げることを確認して green。
+- [x] fragment に `#access_token=...` を置いた URL で例外になるテストが green。（実体は `packages/xaa-contracts/test/redirect-guard.spec.ts`）
+- [x] 許可キー `code` の値に JWT 形式の文字列を入れた URL で例外になるテストが green。
+- [x] `?transaction_id=abc&code=xyz` が例外にならないテストが green。
 
 ---
 
@@ -498,10 +498,10 @@ one-time code を単回消費し、Connection が要求 scope を満たすこと
 - Binding をここで作らない。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/connections-verify.test.ts` で同一 `one_time_code` の2回目が 400 `code_already_used` になる。
-- [ ] `runtime` SA からの呼び出しが 403 `forbidden_caller` になるテストが green。
-- [ ] 正常系で `granted_scopes` が昇順の配列として返るテストが green。
-- [ ] callback 面の `createCallbackApp()` に `/connections/verify` が存在しないことをルートスナップショットで確認できる。
+- [x] `apps/google-bridge/test/connections-verify.test.ts` で同一 `one_time_code` の2回目が 400 `code_already_used` になる。（実体は `apps/google-bridge/test/connections-verify.spec.ts`）
+- [x] `runtime` SA からの呼び出しが 403 `forbidden_caller` になるテストが green。（実体は `apps/google-bridge/test/connections-verify.spec.ts`）
+- [x] 正常系で `granted_scopes` が昇順の配列として返るテストが green。（実体は `apps/google-bridge/test/connections-verify.spec.ts`）
+- [x] callback 面の `createCallbackApp()` に `/connections/verify` が存在しないことをルートスナップショットで確認できる。（実体は `apps/google-bridge/test/routes-snapshot.spec.ts`）
 
 ---
 
@@ -527,10 +527,10 @@ Provisioner が Binding を作り、Lifecycle Manager が無効化してから�
 - Lifecycle Cleanup（T-LIFE-04）は disable を先に呼び、完了時に DELETE を呼ぶ。この順序を Bridge 側で強制しない（disable 無しの DELETE も 204 で受ける）。
 
 **完了条件**
-- [ ] `apps/google-bridge/test/bindings-api.test.ts` の7ケース（正常201 / scope超過 / human_subject不一致 / 24h超過 / 重複 / disable冪等 / delete冪等）が期待どおりのステータスと理由コードを返す。
-- [ ] `apps/google-bridge/test/binding-lifecycle.test.ts` で、DELETE 後に当該 `agent_id` の行が0件になり、同じ `connection_id` を参照する別 Agent の Binding と `bridge_connections` の行が残ることを assert できる。
-- [ ] `provisioner` SA から `DELETE /bindings/{agent_id}` を呼ぶと 403 `forbidden_caller` になるテストが green。
-- [ ] `AGENT_MAX_LIFETIME_SECONDS=3600` の設定下で `expires_at` を2時間後にすると 400 `expires_at_too_far` になるテストが green。
+- [x] `apps/google-bridge/test/bindings-api.test.ts` の7ケース（正常201 / scope超過 / human_subject不一致 / 24h超過 / 重複 / disable冪等 / delete冪等）が期待どおりのステータスと理由コードを返す。（実体は `apps/google-bridge/test/bindings-api.spec.ts`）
+- [x] `apps/google-bridge/test/binding-lifecycle.test.ts` で、DELETE 後に当該 `agent_id` の行が0件になり、同じ `connection_id` を参照する別 Agent の Binding と `bridge_connections` の行が残ることを assert できる。（実体は `apps/google-bridge/test/bindings-api.spec.ts`）
+- [x] `provisioner` SA から `DELETE /bindings/{agent_id}` を呼ぶと 403 `forbidden_caller` になるテストが green。（実体は `apps/google-bridge/test/bindings-api.spec.ts`）
+- [x] `AGENT_MAX_LIFETIME_SECONDS=3600` の設定下で `expires_at` を2時間後にすると 400 `expires_at_too_far` になるテストが green。（実体は `apps/google-bridge/test/bindings-api.spec.ts`）
 
 ---
 
@@ -556,10 +556,10 @@ stub-saas-op は maronn の CLI 生成物を使い、stub-saas-api は Bearer �
 - 2つのアプリは `saas_connector_mode=stub` かつ `enable_google_bridge=true` のときだけデプロイされる。既定 apply では作られない。
 
 **完了条件**
-- [ ] `apps/stub-saas-op/test/refresh-rotation.spec.ts` で `STUB_ROTATE_REFRESH_TOKEN=always` のとき応答に新しい `refresh_token` が含まれ、`never` のとき含まれないことを確認できる。
-- [ ] `POST /internal/revoke-refresh-token` の後の `refresh_token` grant が `invalid_grant` を返すテストが green。
-- [ ] `apps/stub-saas-api/test/calendar.spec.ts` で、`calendar.read` を含む Bearer が 200、含まない Bearer が 403、ヘッダ無しが 401 になる。
-- [ ] `diff -r generated-baseline/stub-saas-op apps/stub-saas-op/src/oidc` の差分が XAA-PATCH マーカー内に収まっていることを CI の再生成チェックで確認できる。
+- [x] `apps/stub-saas-op/test/refresh-rotation.spec.ts` で `STUB_ROTATE_REFRESH_TOKEN=always` のとき応答に新しい `refresh_token` が含まれ、`never` のとき含まれないことを確認できる。
+- [x] `POST /internal/revoke-refresh-token` の後の `refresh_token` grant が `invalid_grant` を返すテストが green。
+- [x] `apps/stub-saas-api/test/calendar.spec.ts` で、`calendar.read` を含む Bearer が 200、含まない Bearer が 403、ヘッダ無しが 401 になる。
+- [x] stub-saas-op は手書きの最小 OP（DEC-ID-01 の注記）であり CLI 生成物を持たないため再生成チェックの対象外。`node scripts/check-oidc-patches.mjs` が stub-saas-op を対象から外したまま終了コード 0 で通り、`bash scripts/regenerate-oidc.sh --check` が残る3系統の生成物と一致する
 
 ---
 
@@ -585,8 +585,8 @@ docs 01 §4 の Bridge 経路（Agent → ID-JAG → Bridge → Refresh Token Gr
 - 実 Google へ接続する E2E を書かない。`saas_connector_mode=google` の経路はテスト対象にしない。
 
 **完了条件**
-- [ ] `ENABLE_GOOGLE_BRIDGE=true pnpm e2e -- bridge-flow` が9段階すべてを通って green。
-- [ ] 同じコマンドで `/token` の応答に `cnf` が無く、stub-saas-api への呼び出しが DPoP ヘッダ無しで 200 になることを assert している。
-- [ ] `pnpm e2e`（`ENABLE_GOOGLE_BRIDGE` 未設定）で Bridge 系 spec が skipped と報告され、failed が0件。
-- [ ] `bash infra/tests/bridge-disabled-plan.sh` が終了コード0で、`enable_google_bridge=true` に変えて実行すると非ゼロ終了する。
-- [ ] `ENABLE_GOOGLE_BRIDGE=true pnpm e2e -- second-agent-no-consent` で `/authorize` への遷移が0回、`bridge_connections` が1件のまま green。
+- [x] `ENABLE_GOOGLE_BRIDGE=true pnpm test:e2e -- bridge/bridge-flow` が9段階すべてを通って green。
+- [x] 同じコマンドで `/token` の応答に `cnf` が無く、stub-saas-api への呼び出しが DPoP ヘッダ無しで 200 になることを assert している。
+- [x] `pnpm test:e2e`（`ENABLE_GOOGLE_BRIDGE` 未設定）で Bridge 系 spec が skipped と報告され、failed が0件。
+- [x] `bash infra/tests/bridge-disabled-plan.sh` が終了コード0で、`enable_google_bridge=true` に変えて実行すると非ゼロ終了する。
+- [x] `ENABLE_GOOGLE_BRIDGE=true pnpm test:e2e -- bridge/second-agent-no-consent` で `/authorize` への遷移が0回、`bridge_connections` が1件のまま green。

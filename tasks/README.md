@@ -8,6 +8,12 @@ docs 01 から 11 までの記述から実装可能な要件を421件抽出し�
 [done/](./done/) へ移してある。要件とタスクの対応は
 [docs/requirements.md](../docs/requirements.md) が正本で、CI が実在を検査する。
 
+完了条件の確認状況は `pnpm check:done` が検査する。
+`- [x]` はリポジトリ内で確認した条件、`- [~]` は live の GCP でしか観測できない条件で、行内に観測するスクリプトを書く（[00b](./00b-conventions.md) 5節）。
+成果物の宣言パスが統合や改名で無くなったものは [artifact-map.json](./artifact-map.json) が実体へ解決する。
+`scripts/deploy-gcp-guide.sh` はこの検査が通らない間、GCP を変更する前に止まる。
+突き合わせの結果は [docs/implementation-audit.md](../docs/implementation-audit.md) にある。
+
 ## 先に読むもの
 
 | ファイル | 内容 |

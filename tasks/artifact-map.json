@@ -1,48 +1,2579 @@
 {
   "$comment": "宣言した成果物パスと、その挙動を実際に持つファイルの対応。tasks/00b-conventions.md 5節「成果物の唯一の所有者」の機械可読版であり、pnpm check:done がパス不在を解決するのに使う。統合や改名で宣言どおりのパスが無くなった場合だけ書く。挙動そのものが無い場合は、ここへ書かずに実装する。",
+  "T-APP-01": {
+    "declared": [
+      "apps/automation-app/src/index.ts",
+      "apps/automation-app/test/session-store.spec.ts",
+      "apps/automation-app/test/require-user.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/src/server.ts",
+      "apps/automation-app/test/session-and-auth.spec.ts",
+      "apps/automation-app/test/type-fixtures/session-refresh-token.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The process entry that only calls `serve` is named server.ts here, and package.json's main is dist/src/server.js; src/schemas/index.ts is an unrelated basename match.。The session tests were merged into session-and-auth.spec.ts; the type fixture beside it is what makes the refresh-token field a compile error.。Same merge: 'resolving who is asking' in session-and-auth.spec.ts holds the require-user tests."
+  },
+  "T-APP-05": {
+    "declared": [
+      "apps/automation-app/src/reports/routes.ts",
+      "apps/automation-app/src/schemas/daily-report.schema.json",
+      "e2e/tests/reports/daily-report.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/ui/routes.tsx",
+      "apps/automation-app/src/reports/daily-report.ts",
+      "apps/automation-app/src/app.ts",
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/test/daily-report.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The app has one route table: POST /api/reports/daily is registered in app.ts, which is what keeps every route under the same two guards.。Schemas are TypeScript consts in one file so the types are derived from them (DEC-APP-05); `dailyReportSchema` is the declared one.。The report write is asserted against the outgoing request in the app's own spec; the true end-to-end write is blocked by the Document RS accepting only XAA Access Tokens (see the failed condition)."
+  },
+  "T-APP-06": {
+    "declared": [
+      "apps/automation-app/src/automation/routes.ts",
+      "apps/automation-app/src/schemas/suggestion.schema.json",
+      "apps/automation-app/test/suggestions.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/ui/routes.tsx",
+      "apps/automation-app/src/prompts/suggestion.md",
+      "apps/automation-app/src/app.ts",
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/test/work-and-approval.spec.ts",
+      "apps/automation-app/test/work-signal-source.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。POST /api/automation/suggestions is registered in the app's single route table.。`suggestionSchema` and `suggestionListSchema` live with the other schemas (DEC-APP-05).。The suggestion tests were merged: the route and schema behaviour into work-and-approval.spec.ts, the prompt-and-period behaviour into work-signal-source.spec.ts."
+  },
+  "T-APP-07": {
+    "declared": [
+      "apps/automation-app/src/work-definition/routes.ts",
+      "apps/automation-app/src/schemas/work-definition.schema.json",
+      "apps/automation-app/test/work-definition-state.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/ui/routes.tsx",
+      "apps/automation-app/src/app.ts",
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/test/work-and-approval.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The work definition routes are registered in the app's single route table.。`workDefinitionSchema` and `WORK_DEFINITION_FIELDS` live with the other schemas (DEC-APP-05); the two 候補 the mechanical pass found are the browser bundle, which is unrelated.。Merged into work-and-approval.spec.ts, whose 'the work definition' block holds the state tests."
+  },
+  "T-APP-08": {
+    "declared": [
+      "apps/automation-app/test/lifetime.spec.ts"
+    ],
+    "owner": [
+      "apps/provisioner/test/lifetime.spec.ts",
+      "apps/automation-app/test/work-and-approval.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。Merged into work-and-approval.spec.ts, whose 'the requested lifetime' block holds them."
+  },
+  "T-APP-09": {
+    "declared": [
+      "apps/automation-app/src/schemas/business-work-request.schema.json",
+      "apps/automation-app/test/business-work-request.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/test/work-and-approval.spec.ts"
+    ],
+    "why": "`businessWorkRequestSchema` and `BUSINESS_WORK_REQUEST_KEYS` live with the other schemas (DEC-APP-05).。Merged into work-and-approval.spec.ts, whose 'the business work request' block holds them."
+  },
+  "T-APP-10": {
+    "declared": [
+      "apps/automation-app/src/agent-definition/routes.ts",
+      "apps/automation-app/src/agent-definition/provision-request.ts",
+      "apps/automation-app/test/approval.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/ui/routes.tsx",
+      "apps/automation-app/src/app.ts",
+      "apps/automation-app/test/work-and-approval.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The approve and provision routes are registered in the app's single route table.。The Provisioner body is three keys built inline in the /provision route; a separate builder would be a second place a fourth key could be added to a request the Provisioner refuses.。Merged into work-and-approval.spec.ts, whose 'approval' block holds them."
+  },
+  "T-APP-12": {
+    "declared": [
+      "apps/automation-app/test/require-owner.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/agent-operations.spec.ts"
+    ],
+    "why": "Merged into agent-operations.spec.ts, whose 'agent ownership' block holds them."
+  },
+  "T-APP-13": {
+    "declared": [
+      "apps/automation-app/src/schemas/agent-status-response.schema.json",
+      "apps/automation-app/test/agent-status.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/test/agent-operations.spec.ts"
+    ],
+    "why": "`agentStatusResponseSchema` and AGENT_STATUS_RESPONSE_KEYS live with the other schemas (DEC-APP-05).。Merged into agent-operations.spec.ts, whose 'the status endpoint' block holds them."
+  },
+  "T-APP-14": {
+    "declared": [
+      "e2e/tests/lifecycle/stop-agent.spec.ts",
+      "apps/automation-app/test/agent-stop.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/lifecycle/stop-agent.spec.ts",
+      "apps/automation-app/test/agent-operations.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。Merged into agent-operations.spec.ts, whose 'stopping an agent' block holds them.。Created; e2e specs live under e2e/test/ in this repo, which is what vitest's e2e project includes."
+  },
+  "T-APP-15": {
+    "declared": [
+      "apps/automation-app/src/schemas/instruction-request.schema.json",
+      "apps/automation-app/test/instructions.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/test/agent-operations.spec.ts"
+    ],
+    "why": "`instructionRequestSchema` lives with the other schemas (DEC-APP-05).。Merged into agent-operations.spec.ts, whose 'additional instructions' block holds them."
+  },
+  "T-APP-16": {
+    "declared": [
+      "e2e/tests/agents/blocked-guidance.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/ui.spec.ts",
+      "apps/automation-app/test/pages.spec.ts"
+    ],
+    "why": "One app and one screen, so the assertions are unit-level: ui.spec.ts renders the page and pages.spec.ts serves it through app.fetch."
+  },
+  "T-APP-17": {
+    "declared": [
+      "apps/automation-app/src/audit/agent-operations.ts",
+      "apps/automation-app/test/audit-agent-operations.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/audit/logger.ts",
+      "apps/automation-app/src/agents/require-owner.ts",
+      "apps/automation-app/src/app.ts",
+      "apps/automation-app/test/agent-operations.spec.ts"
+    ],
+    "why": "logger.ts holds the record shape and the writer; the two call sites are the denial branch in require-owner and the success branch in app.ts, which is what makes a refused operation audited too.。Merged into agent-operations.spec.ts, where the audit assertions sit next to the operations that produce the lines."
+  },
+  "T-APP-18": {
+    "declared": [
+      "e2e/tests/agents/status-timeline-separation.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/pages.spec.ts",
+      "apps/automation-app/test/ui.spec.ts"
+    ],
+    "why": "One app and one screen: pages.spec.ts serves the page through app.fetch and ui.spec.ts asserts the two sections are distinct DOM elements."
+  },
+  "T-APP-19": {
+    "declared": [
+      "packages/xaa-contracts/src/schemas/activity-event.schema.json"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/activity-event.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The schema is a TypeScript const so `ActivityEvent` can be derived from it with json-schema-to-ts (DEC-APP-05); a .json file would need a hand-written interface beside it."
+  },
+  "T-APP-21": {
+    "declared": [
+      "e2e/tests/activity/separate-channel.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/test/activity-publisher.spec.ts",
+      "scripts/checks/activity-event-single-channel.sh"
+    ],
+    "why": "The separation is a property of the publisher (one topic, no log write) and of the repository (no second channel anywhere), so it is fixed by a unit test and a static check rather than by a second app."
+  },
+  "T-APP-22": {
+    "declared": [
+      "apps/automation-app/test/activity-emit.spec.ts",
+      "e2e/tests/activity/events-automation.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/activity.spec.ts",
+      "e2e/test/lifecycle/events.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。Merged into activity.spec.ts, whose 'the four Automation App emitters' block holds them.。The whole path — the four-stage login, the work definition, the stop — runs inside this one app, so the spec drives it through app.fetch rather than standing up a second service."
+  },
+  "T-APP-23": {
+    "declared": [
+      "e2e/tests/activity/subscriber.spec.ts",
+      "apps/automation-app/test/activity-subscriber.spec.ts",
+      "e2e/tests/activity/idempotent.spec.ts"
+    ],
+    "owner": [
+      "apps/security-detection/test/subscriber.spec.ts",
+      "apps/automation-app/test/activity.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。Merged into activity.spec.ts, whose 'the push subscriber' block holds them.。The delivery is exercised through the real endpoint in activity.spec.ts; only Pub/Sub's OIDC signature is stood in for, and that is the part only a live project can produce.。Same: three deliveries of one event through the real endpoint, asserting one row with the first content."
+  },
+  "T-APP-24": {
+    "declared": [
+      "apps/automation-app/src/activity/routes.ts",
+      "apps/automation-app/src/schemas/timeline-response.schema.json",
+      "apps/automation-app/test/activity-query.spec.ts",
+      "e2e/tests/activity/incomplete-task.spec.ts",
+      "e2e/tests/activity/access-control.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/src/ui/routes.tsx",
+      "apps/automation-app/src/app.ts",
+      "apps/automation-app/src/schemas/index.ts",
+      "apps/automation-app/test/activity.spec.ts",
+      "e2e/test/activity/timeline.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。GET /api/activity/tasks and /api/activity/tasks/:task_id are registered in the app's single route table.。`timelineResponseSchema` lives with the other schemas (DEC-APP-05).。Merged into activity.spec.ts, whose 'reading the timeline' block holds them.。One app: the assertions run against the real endpoint in activity.spec.ts.。activity.spec.ts covers the 404 and the ignored ?human_subject; timeline.spec.ts repeats it across two harnesses sharing one datastore."
+  },
+  "T-APP-25": {
+    "declared": [
+      "e2e/tests/activity/no-cross-user-view.spec.ts",
+      "e2e/tests/activity/always-recording.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/activity/timeline.spec.ts",
+      "apps/automation-app/test/session-and-auth.spec.ts"
+    ],
+    "why": "timeline.spec.ts asserts a second user sees nothing; session-and-auth.spec.ts asserts a token claiming admin gets the same answer as an ordinary one.。Its 'recording is not a mode' block is exactly this: nothing is switched on and the event is there."
+  },
+  "T-APP-26": {
+    "declared": [
+      "e2e/tests/activity/timeline-list.spec.ts",
+      "e2e/tests/activity/list-grouping.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/activity/timeline.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The list and grouping specs were written as one file under e2e/test/, the directory the e2e project includes.。Same file: the grouping assertions are in ::groups by agent and orders provisioning, tasks, lifecycle."
+  },
+  "T-APP-27": {
+    "declared": [
+      "e2e/tests/activity/emphasis.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/ui.spec.ts",
+      "apps/automation-app/test/pages.spec.ts"
+    ],
+    "why": "The class is a pure function and the four badges are rendered markup, so ui.spec.ts fixes it; pages.spec.ts asserts the served stylesheet carries all four classes."
+  },
+  "T-APP-28": {
+    "declared": [
+      "e2e/tests/activity/detail-toggle.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/ui.spec.ts"
+    ],
+    "why": "`<details>` needs no browser to assert: ui.spec.ts checks the initial state, the shared component and that a replay leaves it alone."
+  },
+  "T-APP-29": {
+    "declared": [
+      "apps/automation-app/test/replay-nodes.spec.ts",
+      "e2e/tests/activity/replay-nodes.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/ui.spec.ts"
+    ],
+    "why": "Merged into ui.spec.ts, whose 'the replay diagram' block holds them.。Same block: the per-task visibility of a node is asserted on the rendered canvas."
+  },
+  "T-APP-30": {
+    "declared": [
+      "e2e/tests/activity/replay-order.spec.ts",
+      "e2e/tests/activity/replay-timing.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/ui.spec.ts"
+    ],
+    "why": "The replay is driven against the DOM double in test/fake-dom.ts, so order, pacing and the finished state are asserted without a browser.。Same: the step length is a property of the plan, asserted for a 200ms gap and a three minute gap."
+  },
+  "T-APP-31": {
+    "declared": [
+      "e2e/tests/activity/replay-blocked.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/ui.spec.ts"
+    ],
+    "why": "Same DOM double: the stop mark's coordinates are compared with the destination node's box."
+  },
+  "T-APP-32": {
+    "declared": [
+      "e2e/tests/activity/simulated-label.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/ui.spec.ts",
+      "apps/automation-app/test/pages.spec.ts"
+    ],
+    "why": "ui.spec.ts counts the label in the row, the canvas and the summary and asserts a real task has none; pages.spec.ts asserts it on the served page."
+  },
+  "T-APP-33": {
+    "declared": [
+      "scripts/checks/no-firestore-sdk-in-frontend.sh",
+      "e2e/tests/activity/no-streaming.spec.ts"
+    ],
+    "owner": [
+      "infra/tests/no-firestore-sdk-in-frontend.sh",
+      "apps/automation-app/test/ui.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b §5 gives this check to T-PKG-29 at the infra/tests path and tells the other tasks to drop it from their artifacts.。The page's browser half is started against the DOM double with fake timers, which is a stricter check than watching a real browser for sixty seconds."
+  },
+  "T-APP-34": {
+    "declared": [
+      "e2e/tests/demo/same-screen.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/demo-replay.spec.ts"
+    ],
+    "why": "The point is that the demo uses the ordinary endpoint; demo-replay.spec.ts replays a scenario and reads it back through GET /api/activity/tasks."
+  },
+  "T-APP-35": {
+    "declared": [
+      "e2e/tests/demo/scripted-injection.spec.ts",
+      "e2e/tests/demo/scripted-no-side-effect.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/demo-replay.spec.ts"
+    ],
+    "why": "One app and a static scenario file: the injection assertions run against the real route.。Same file: ::publishes nothing and touches no agent asserts an empty publish queue and no outbound call."
+  },
+  "T-APP-36": {
+    "declared": [
+      "e2e/tests/demo/no-cross-user-injection.spec.ts",
+      "apps/automation-app/test/demo-path-build.spec.ts"
+    ],
+    "owner": [
+      "apps/automation-app/test/demo-replay.spec.ts"
+    ],
+    "why": "The four crossing attempts are separate tests in demo-replay.spec.ts, each asserting user-B's activity is still empty.。Merged into demo-replay.spec.ts, where the path assertions sit beside the route that builds the path."
+  },
+  "T-APP-37": {
+    "declared": [
+      "e2e/tests/provisioning/provisioning-flow.spec.ts",
+      "e2e/src/helpers/token-assert.ts",
+      "e2e/src/helpers/firestore-assert.ts"
+    ],
+    "owner": [
+      "e2e/test/provisioning/provisioning-flow.spec.ts",
+      "e2e/harness/oauth-flow.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。e2e specs live under e2e/test/ in this repo.。The four aud / cnf.jkt assertions are written out in the spec so they can be counted there, over tokens obtained by its own `boundToken`; decodeJwtPayload comes from the shared oauth-flow harness.。The final-state check reads the Provisioner harness's own document store directly; a wrapper would hide which collection the assertion is about."
+  },
+  "T-AUTHZ-01": {
+    "declared": [
+      "apps/authorization/src/routes/healthz.ts",
+      "apps/authorization/test/routes-surface.test.ts",
+      "apps/authorization/test/decision-response-schema.test.ts",
+      "apps/authorization/src/errors.ts",
+      "packages/xaa-contracts/schemas/authorization-decision-response.schema.json"
+    ],
+    "owner": [
+      "apps/agent-op/src/routes/healthz.ts",
+      "apps/authorization/test/routes-surface.spec.ts",
+      "apps/authorization/src/validation/work-request.ts",
+      "apps/authorization/src/policy/invariant.ts",
+      "apps/authorization/src/routes/decisions.ts",
+      "apps/authorization/src/app.ts",
+      "apps/authorization/src/routes/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。The app returns the two-key error body inline at the route and raises its two typed errors where they are detected (WorkRequestRejected, EffectiveExceedsHumanPermissionError); there is no separate error module.。GET /healthz is one line registered in createApp; the mechanical candidate (apps/agent-op/src/routes/healthz.ts) is another app's route.。The response schema is authorizationDecisionResponseSchema next to ROUTES and DECISION_RESPONSE_KEYS; schemas in this repo are TypeScript consts compiled with Ajv, not .json files.。.spec.ts per 00b §1.。Merged: the same file pins the route surface and the five response keys ('fixes the response to five top-level keys', 'allows only the two decision statuses')."
+  },
+  "T-AUTHZ-02": {
+    "declared": [
+      "packages/xaa-contracts/schemas/work-definition.schema.json",
+      "apps/authorization/test/schema-separation.test.ts",
+      "apps/authorization/test/isolation-level.test.ts",
+      "packages/xaa-contracts/schemas/capability.schema.json",
+      "packages/xaa-contracts/schemas/capability-taxonomy.schema.json"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/work-definition.ts",
+      "apps/authorization/test/schema-separation.spec.ts",
+      "apps/authorization/src/work-definition/build.ts",
+      "apps/authorization/src/store/authorization-store.ts",
+      "infra/seed/capabilities.yaml",
+      "apps/seed/src/validate.ts",
+      "apps/authorization/test/policy-decision-store.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。The work definition's shape (and the LLM response schema it validates) lives with buildWorkDefinition; packages/xaa-contracts/src/work-definition.ts, which the mechanical pass matched on basename, only holds workDefinitionHash.。The capability row is typed as TaxonomyEntry where it is read, seeded from infra/seed/capabilities.yaml, and its id checked by validateSeed before any write.。Same collection; the taxonomy version falls back to TAXONOMY_VERSION where the seeded rows carry none (loadTaxonomy / decide).。Created in this pass.。describe('the isolation level a decision is stored with') holds the Ajv refusal and the store refusal for 'partial'/'sandboxed'."
+  },
+  "T-AUTHZ-03": {
+    "declared": [
+      "scripts/perm-set.ts",
+      "apps/authorization/test/seed-naming.test.ts",
+      "apps/authorization/test/perm-set.test.ts",
+      "apps/authorization/policy-data/capability-taxonomy.yaml",
+      "apps/authorization/policy-data/human-permission.yaml",
+      "apps/authorization/src/seed/seed.ts",
+      "apps/authorization/src/seed/validate-naming.ts"
+    ],
+    "owner": [
+      "apps/authorization/src/perm-set.ts",
+      "apps/authorization/test/perm-set.spec.ts",
+      "infra/seed/capabilities.yaml",
+      "infra/seed/human-permissions.yaml",
+      "apps/seed/src/index.ts",
+      "packages/xaa-contracts/src/identifiers.ts",
+      "apps/seed/src/validate.ts",
+      "apps/authorization/src/perm-set-cli.ts",
+      "package.json",
+      "apps/seed/test/validate.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。apps/authorization/policy-data/manifest.yaml points at infra/seed so Terraform uploads exactly what the Policy Engine reads (one authoring copy).。Created in this pass: the seed Job cleared human_permissions and had no input to write back, so a seeded deployment granted nothing. Same eight rows the task specifies (user-123 calendar/mail, user-456 finance/document).。00b §5: the seed Job and infra/seed/** are owned by T-IAC-26; Authorization does not run its own seed.。00b §5 forbids this file: T-AUTHZ-03 imports assertValidCapabilityId. The call over every taxonomy row was added to validateSeed in this pass.。Created in this pass. The repo has no TypeScript under scripts/ (they are .mjs or .sh), so the logic is a typed module in the app and `pnpm perm:set` runs the built entry point.。The naming check runs in the seed Job, so its test sits with it; apps/authorization does not depend on @xaa/seed and must not (scripts/allowed-deps.json).。Created in this pass."
+  },
+  "T-AUTHZ-04": {
+    "declared": [
+      "apps/authorization/src/store/proposal-store.ts",
+      "apps/authorization/src/store/decision-store.ts",
+      "apps/authorization/test/proposal-decision-separation.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/src/store/authorization-store.ts",
+      "apps/authorization/test/policy-decision-store.spec.ts",
+      "apps/authorization/test/decide-pipeline.spec.ts"
+    ],
+    "why": "saveProposal / getProposalByDecisionId live in the one store; StoredProposal deliberately has no effective_capabilities field.。saveDecision / getDecision / listActiveDecisionsBySubject, in the same merged store.。policy-decision-store.spec.ts keeps slack.channel.admin in ai_proposals.dropped_out_of_taxonomy while it never reaches effective_capabilities; decide-pipeline.spec.ts pins the same for the whole pipeline."
+  },
+  "T-AUTHZ-05": {
+    "declared": [
+      "packages/control-plane-auth/src/access-token.ts",
+      "packages/control-plane-auth/package.json",
+      "packages/control-plane-auth/src/jwks-cache.ts",
+      "packages/control-plane-auth/test/access-token.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-control-plane-auth/src/access-token.ts",
+      "packages/xaa-control-plane-auth/package.json",
+      "packages/xaa-crypto/src/jwks-cache.ts",
+      "packages/xaa-control-plane-auth/test/access-token.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b §6: packages/control-plane-auth is renamed to packages/xaa-control-plane-auth.。Same rename.。One JWKS cache for the platform (createJwksCache with the 300s TTL and the single-flight refetch); accessTokenMiddleware calls it rather than keeping its own."
+  },
+  "T-AUTHZ-06": {
+    "declared": [
+      "packages/control-plane-auth/src/jti-store.ts",
+      "packages/control-plane-auth/src/dpop.ts",
+      "packages/control-plane-auth/test/dpop.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-crypto/src/jti-store.ts",
+      "packages/xaa-control-plane-auth/src/dpop.ts",
+      "packages/xaa-control-plane-auth/test/dpop.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b §6 rename; apps/agent-op/src/middleware/dpop.ts is Agent OP's own client-assertion guard, not this one.。00b §5: FirestoreJtiStore/InMemoryJtiStore belong to T-PKG-11 and are injected here (app.ts, runtime.ts) instead of being re-implemented.。Same rename; packages/xaa-crypto/test/dpop.spec.ts covers verifyDpopProof itself."
+  },
+  "T-AUTHZ-07": {
+    "declared": [
+      "packages/control-plane-auth/src/human-subject.ts",
+      "packages/control-plane-auth/test/human-subject.spec.ts",
+      "packages/control-plane-auth/src/protocol-validation.ts"
+    ],
+    "owner": [
+      "packages/xaa-control-plane-auth/src/human-subject.ts",
+      "packages/xaa-control-plane-auth/test/human-subject.spec.ts",
+      "packages/xaa-control-plane-auth/src/protocol-validation.ts",
+      "packages/xaa-contracts/src/protocol-violation.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b §6 rename.。The eight-value emitter type and the per-app emitter factory are here; the log line itself is emitProtocolValidation(logger, ctx, ev) from @xaa/contracts (00b §5, T-SEC-11)."
+  },
+  "T-AUTHZ-08": {
+    "declared": [
+      "packages/control-plane-auth/src/index.ts",
+      "packages/control-plane-auth/README.md",
+      "packages/control-plane-auth/test/step-order.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-control-plane-auth/src/index.ts",
+      "packages/xaa-control-plane-auth/README.md",
+      "packages/xaa-control-plane-auth/test/step-order.spec.ts"
+    ],
+    "why": "00b §6 rename; holds controlPlaneAuth and STEP_TABLE.。Same rename; carries the step list and the DPoP ordering note the 実装方針 asks for.。Same rename; apps/agent-op/test/step-order.spec.ts is a different app's chain."
+  },
+  "T-AUTHZ-09": {
+    "declared": [
+      "apps/authorization/test/work-request-validation.test.ts",
+      "packages/xaa-contracts/schemas/business-work-request.schema.json"
+    ],
+    "owner": [
+      "apps/authorization/test/work-request-validation.spec.ts",
+      "apps/authorization/src/validation/work-request.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。businessWorkRequestSchema ($id business-work-request, additionalProperties false, five properties) is a TS const compiled with Ajv next to validateWorkRequest.。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-10": {
+    "declared": [
+      "apps/authorization/test/decisions.route.test.ts"
+    ],
+    "owner": [
+      "e2e/test/authorization/decisions.spec.ts",
+      "apps/authorization/test/decisions-route.spec.ts"
+    ],
+    "why": "The route is exercised with a real Access Token and DPoP proof in the e2e spec; the two internal failure paths (store failure, response-contract failure) are unit-level in decisions-route.spec.ts, added in this pass."
+  },
+  "T-AUTHZ-11": {
+    "declared": [
+      "apps/authorization/src/work-definition/prompt.ts",
+      "apps/authorization/test/work-definition.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/src/ai/prompt.ts",
+      "apps/authorization/test/work-definition.spec.ts",
+      "apps/authorization/src/work-definition/build.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。buildPrompt (with the technical-value assertion) is in src/ai/prompt.ts; the structuring prompt is inline in build.ts, the module's single model call.。Created in this pass; packages/xaa-contracts/test/work-definition.spec.ts, which the mechanical pass matched on basename, only covers workDefinitionHash."
+  },
+  "T-AUTHZ-12": {
+    "declared": [
+      "apps/authorization/src/ai/vertex-client.ts",
+      "apps/authorization/test/authorization-ai.test.ts",
+      "packages/xaa-contracts/schemas/authorization-ai-result.schema.json"
+    ],
+    "owner": [
+      "apps/security-detection/src/ai/vertex-client.ts",
+      "apps/authorization/test/authorization-ai.spec.ts",
+      "packages/xaa-vertex/src/index.ts",
+      "packages/xaa-vertex/src/fake-client.ts",
+      "packages/xaa-vertex/src/live-client.ts",
+      "apps/authorization/src/runtime.ts",
+      "apps/authorization/src/ai/authorization-ai.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。One Vertex client for the platform (VERTEX_MODE=fake|live, model from VERTEX_MODEL), constructed for this app in runtime.ts and injected; apps/security-detection/src/ai/vertex-client.ts, the mechanical candidate, is that app's own summariser.。authorizationAiResultSchema ($id authorization-ai-result, additionalProperties false, three properties) is the TS const passed to the model as its responseSchema.。Created in this pass."
+  },
+  "T-AUTHZ-13": {
+    "declared": [
+      "apps/authorization/test/ai-output-guard.test.ts",
+      "apps/authorization/test/policy-engine-ai-input.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/ai-guards.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。Merged: describe('AI output guard') holds the sanitiser cases.。Merged: describe('what the Policy Engine is given'), added in this pass, holds the isolation-level and type cases."
+  },
+  "T-AUTHZ-14": {
+    "declared": [
+      "apps/authorization/test/taxonomy-filter.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/decide-pipeline.spec.ts",
+      "apps/authorization/test/policy-decision-store.spec.ts",
+      "apps/authorization/test/ai-guards.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe('taxonomy filter') in ai-guards.spec.ts holds the pure function's cases; the pipeline's no_capability_inferred branch and the stored dropped_out_of_taxonomy are in the other two."
+  },
+  "T-AUTHZ-15": {
+    "declared": [
+      "apps/authorization/test/characteristics-merge.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/invariant.property.spec.ts",
+      "apps/authorization/test/policy-components.spec.ts",
+      "apps/authorization/test/policy-engine.pure.spec.ts",
+      "apps/authorization/test/regression-cases.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。Merged: describe('characteristics merge')."
+  },
+  "T-AUTHZ-16": {
+    "declared": [
+      "apps/authorization/test/delegatable.test.ts",
+      "apps/authorization/policy-data/delegatable-permission.yaml"
+    ],
+    "owner": [
+      "apps/authorization/test/policy-components.spec.ts",
+      "infra/seed/policies/delegatable.yaml"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。manifest.yaml points the delegatable rows at infra/seed/policies/delegatable.yaml so the uploaded file and the tested file are the same one.。Merged: describe('delegatable permission')."
+  },
+  "T-AUTHZ-17": {
+    "declared": [
+      "apps/authorization/policy-data/organization-policy.yaml",
+      "apps/authorization/test/organization-policy.test.ts"
+    ],
+    "owner": [
+      "infra/seed/policies/organization.yaml",
+      "apps/authorization/test/policy-components.spec.ts",
+      "apps/authorization/test/policy-engine.pure.spec.ts"
+    ],
+    "why": "Same single-authoring-copy arrangement as the other policy files.。Merged: describe('organization policy') holds the four cases; the engine-level view is in policy-engine.pure.spec.ts."
+  },
+  "T-AUTHZ-18": {
+    "declared": [
+      "apps/authorization/policy-data/risk-policy.yaml",
+      "apps/authorization/test/risk-policy.test.ts"
+    ],
+    "owner": [
+      "infra/seed/policies/risk.yaml",
+      "apps/authorization/test/policy-components.spec.ts"
+    ],
+    "why": "Same arrangement; the four rules and their weights live there.。Merged: describe('risk policy')."
+  },
+  "T-AUTHZ-19": {
+    "declared": [
+      "apps/authorization/test/policy-engine.pure.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/policy-engine.pure.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-20": {
+    "declared": [
+      "apps/authorization/test/invariant.property.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/invariant.property.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-21": {
+    "declared": [
+      "apps/authorization/test/security-profile.test.ts",
+      "packages/xaa-contracts/schemas/security-profile.schema.json"
+    ],
+    "owner": [
+      "apps/authorization/test/ai-guards.spec.ts",
+      "apps/authorization/test/policy-components.spec.ts",
+      "apps/authorization/test/policy-decision-store.spec.ts",
+      "apps/authorization/test/regression-cases.spec.ts",
+      "apps/authorization/src/policy/security-profile.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。securityProfileSchema ($id security-profile, additionalProperties false, the two-value isolation_level enum and risk_score 0..100) is compiled with Ajv and applied to every profile before it is returned.。Merged: describe('security profile') holds the build rules and the schema refusal; the store-level refusal of a third level is in policy-decision-store.spec.ts and the end-to-end levels in regression-cases.spec.ts."
+  },
+  "T-AUTHZ-22": {
+    "declared": [
+      "apps/authorization/test/policy-decision-store.test.ts",
+      "apps/authorization/src/store/policy-decision-store.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/policy-decision-store.spec.ts",
+      "apps/authorization/src/store/authorization-store.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。savePolicyDecisions - reason-code validation then one transaction for all rows - is part of the single store; packages/xaa-contracts/src/reason-codes.ts holds the vocabulary.。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-23": {
+    "declared": [
+      "apps/authorization/test/decide-pipeline.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/decide-pipeline.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-24": {
+    "declared": [
+      "apps/authorization/test/ai-log.test.ts",
+      "apps/authorization/src/log/logger.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/ai-log.spec.ts",
+      "packages/xaa-logging/src/logger.ts",
+      "apps/authorization/src/log/ai-log.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The structured-log envelope (severity/message/event plus the correlation keys) is the shared createLogger; the app's own file holds only the seven fields of the inference line.。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-25": {
+    "declared": [
+      "apps/authorization/test/policy-log.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/policy-log.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-26": {
+    "declared": [
+      "apps/authorization/test/activity-events.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/activity-events.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-27": {
+    "declared": [
+      "apps/authorization/test/permission-change.test.ts",
+      "apps/authorization/test/re-evaluate.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/permission-change.spec.ts",
+      "apps/authorization/test/re-evaluate.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-28": {
+    "declared": [
+      "apps/authorization/test/reevaluate-branch.test.ts"
+    ],
+    "owner": [
+      "apps/authorization/test/reevaluate-branch.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。.spec.ts per 00b §1."
+  },
+  "T-AUTHZ-31": {
+    "declared": [
+      "apps/authorization/policy-data/organization-policy.yaml"
+    ],
+    "owner": [
+      "infra/seed/policies/organization.yaml"
+    ],
+    "why": "Same single-authoring-copy arrangement; org-001 and org-002 are both there."
+  },
+  "T-BRIDGE-01": {
+    "declared": [
+      "apps/google-bridge/src/routes/healthz.ts",
+      "apps/google-bridge/src/app-internal.ts",
+      "apps/google-bridge/src/app-callback.ts"
+    ],
+    "owner": [
+      "apps/agent-op/src/routes/healthz.ts",
+      "apps/google-bridge/src/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The two faces are named exports of one module — createInternalApp and createCallbackApp — rather than two files, so the shared wiring (wire(), callerOptions()) has one definition instead of two that must agree.。Same module: createCallbackApp is the callback face.。Both faces register GET /healthz inline; a one-line handler in its own file would only add an import."
+  },
+  "T-BRIDGE-02": {
+    "declared": [
+      "apps/google-bridge/test/caller-authz.test.ts",
+      "apps/google-bridge/src/middleware/google-id-token.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/test/caller-authz.spec.ts",
+      "packages/xaa-crypto/src/verifiers.ts",
+      "apps/google-bridge/src/middleware/caller-authz.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。verifyGoogleServiceIdentity in @xaa/crypto does the signature, iss, aud and exp checks against the Google certs endpoint; caller-authz.ts maps the email onto the per-route role lists. A local copy would mean two verifiers to keep in step.。Same file, .spec.ts per 00b §1."
+  },
+  "T-BRIDGE-03": {
+    "declared": [
+      "apps/google-bridge/schemas/connector-definition.schema.json",
+      "apps/google-bridge/test/connector-registry.test.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/src/connectors/types.ts",
+      "apps/google-bridge/test/bridge.spec.ts"
+    ],
+    "why": "connectorDefinitionSchema is an `as const` object next to the ConnectorDefinition interface it types, compiled with Ajv through compile() from @xaa/contracts. Keeping the schema and the type in one file is what stops them drifting; every Bridge schema in this task file follows the same pattern.。The registry tests are the 'the connector registry' describe there: exact resource match, duplicate resource_uris, http endpoint, and no vendor name in the source."
+  },
+  "T-BRIDGE-04": {
+    "declared": [
+      "apps/google-bridge/schemas/connection.schema.json",
+      "apps/google-bridge/schemas/agent-binding.schema.json"
+    ],
+    "owner": [
+      "apps/google-bridge/src/store/connection.ts",
+      "apps/google-bridge/src/store/binding.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The BridgeConnection interface and the deterministic connectionId() are the schema; Firestore has no DDL to validate against.。Same: AgentBinding plus bindingId(), with create() standing in for the (agent_id, connector_id) unique constraint."
+  },
+  "T-BRIDGE-05": {
+    "declared": [
+      "apps/google-bridge/test/id-jag-redeem.test.ts",
+      "apps/google-bridge/src/routes/token.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/test/id-jag-redeem.spec.ts",
+      "apps/google-bridge/src/index.ts",
+      "apps/google-bridge/src/idjag/verify.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The POST /token handler is registered in index.ts; the redemption itself (parseIdJagRedemptionParams, verifyIdJagAssertion, the typ and jku/x5u/jwk checks) is verify.ts. The same-named files the mechanical pass found belong to the OIDC providers and are unrelated.。Same file, .spec.ts per 00b §1."
+  },
+  "T-BRIDGE-06": {
+    "declared": [
+      "apps/google-bridge/src/dpop/jti-store.ts",
+      "apps/google-bridge/test/cnf-dpop.test.ts"
+    ],
+    "owner": [
+      "packages/xaa-crypto/src/jti-store.ts",
+      "apps/google-bridge/test/cnf-dpop.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b §5 gives FirestoreJtiStore to T-PKG-11 and tells T-BRIDGE-06 to pass a namespace rather than write its own store; server.ts injects the Firestore one and the harness the in-memory one.。Same file, .spec.ts per 00b §1."
+  },
+  "T-BRIDGE-07": {
+    "declared": [
+      "apps/google-bridge/test/binding-resolve.test.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/test/bridge.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The 'resolving the binding' describe there covers the five refusal cases, the missing act claim, the human_subject mismatch and the expiry events."
+  },
+  "T-BRIDGE-08": {
+    "declared": [
+      "apps/google-bridge/test/scope-subset.test.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/test/bridge.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The 'scope containment' describe there covers narrowing, the binding bound, the empty and omitted scope, and order/duplication indifference."
+  },
+  "T-BRIDGE-09": {
+    "declared": [
+      "apps/google-bridge/test/refresh-grant.test.ts",
+      "apps/google-bridge/src/saas/secret.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/test/bridge.spec.ts",
+      "apps/google-bridge/src/server.ts",
+      "apps/google-bridge/src/index.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。readSecret is a BridgeDeps function so the Secret Manager client is injected rather than imported: production reads accessSecretVersion per call in server.ts (no module-scope cache, so a rotated secret takes effect without a redeploy) and tests inject their own.。The 'the refresh grant' describe there covers rotation, the SaaS invalid_grant revocation and the 5xx case."
+  },
+  "T-BRIDGE-10": {
+    "declared": [
+      "apps/google-bridge/test/response-shape.test.ts",
+      "apps/google-bridge/schemas/token-response.schema.json"
+    ],
+    "owner": [
+      "apps/google-bridge/test/bridge.spec.ts",
+      "apps/google-bridge/test/id-jag-redeem.spec.ts",
+      "apps/google-bridge/src/token/response.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。tokenResponseSchema sits beside BridgeTokenResponse and buildTokenResponse self-validates against it before answering.。The four-key assertion is in both: bridge.spec.ts::is four keys, built fresh for the builder, id-jag-redeem.spec.ts::valid ID-JAG -> 200 for the wire response."
+  },
+  "T-BRIDGE-11": {
+    "declared": [
+      "apps/google-bridge/test/outbound-allowlist.test.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/test/bridge.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The 'the outbound allow list' describe there covers the unknown host, the http scheme, redirect:'manual' and the raw-fetch script."
+  },
+  "T-BRIDGE-12": {
+    "declared": [
+      "e2e/test/bridge-log.spec.ts",
+      "apps/google-bridge/schemas/bridge-token-log.schema.json"
+    ],
+    "owner": [
+      "e2e/test/bridge/bridge-log.spec.ts",
+      "apps/google-bridge/src/log/bridge-log.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。BRIDGE_LOG_FIELDS and ALWAYS_DROPPED are the allow list, and emitBridgeTokenLog enforces it — a JSON schema would describe the shape without dropping anything.。Created under e2e/test/bridge/ with the other bridge specs; both paths match the e2e glob in 00b §1."
+  },
+  "T-BRIDGE-13": {
+    "declared": [
+      "apps/google-bridge/test/connections-check.test.ts",
+      "apps/google-bridge/src/routes/connections-check.ts",
+      "apps/google-bridge/schemas/connections-check.schema.json"
+    ],
+    "owner": [
+      "apps/google-bridge/test/connections-check.spec.ts",
+      "apps/google-bridge/src/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The route is registered in createInternalApp.。The three-key body is checked inline in the handler (key count plus types, 400 on any mismatch) rather than with Ajv. The effect matches additionalProperties:false, but note for the record that this route does not go through a compiled schema the way the connector definition and the token response do.。Same file, .spec.ts per 00b §1."
+  },
+  "T-BRIDGE-14": {
+    "declared": [
+      "apps/google-bridge/test/oauth-start.test.ts",
+      "apps/google-bridge/src/routes/oauth-start.ts"
+    ],
+    "owner": [
+      "apps/google-bridge/test/oauth-start.spec.ts",
+      "apps/google-bridge/src/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The route is registered in createCallbackApp; state and PKCE live in src/consent/.。Same file, .spec.ts per 00b §1."
+  },
+  "T-BRIDGE-15": {
+    "declared": [
+      "apps/google-bridge/src/consent/one-time-code.ts",
+      "apps/google-bridge/test/oauth-callback.test.ts",
+      "apps/google-bridge/src/routes/oauth-callback.ts"
+    ],
+    "owner": [
+      "apps/provisioner/src/transaction/one-time-code.ts",
+      "apps/google-bridge/test/oauth-callback.spec.ts",
+      "apps/google-bridge/src/index.ts",
+      "apps/google-bridge/src/consent/state-store.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The route is registered in createCallbackApp.。putCode/consumeCode sit beside putState/consumeState because both are single-use rows read and deleted in one Firestore transaction; splitting them would duplicate that transaction. The Provisioner's own one-time code file is a different collection and a different owner.。Same file, .spec.ts per 00b §1."
+  },
+  "T-BRIDGE-17": {
+    "declared": [
+      "apps/google-bridge/test/connections-verify.test.ts",
+      "apps/google-bridge/src/routes/connections-verify.ts",
+      "apps/google-bridge/schemas/connections-verify.schema.json"
+    ],
+    "owner": [
+      "apps/google-bridge/test/connections-verify.spec.ts",
+      "apps/google-bridge/src/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The route is registered in createInternalApp only, never on the callback face.。The two-key body is checked inline in the handler, as with connections-check.。Same file, .spec.ts per 00b §1."
+  },
+  "T-BRIDGE-18": {
+    "declared": [
+      "apps/google-bridge/test/bindings-api.test.ts",
+      "apps/google-bridge/test/binding-lifecycle.test.ts",
+      "apps/google-bridge/src/routes/bindings.ts",
+      "apps/google-bridge/schemas/binding-create.schema.json"
+    ],
+    "owner": [
+      "apps/google-bridge/test/bindings-api.spec.ts",
+      "apps/google-bridge/src/index.ts",
+      "apps/google-bridge/src/store/binding.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。The three routes are registered in createInternalApp; the prefix-range queries behind disable and delete are in the store.。The six-key body is checked inline in the handler, as with the other two internal POST bodies.。Same file, .spec.ts per 00b §1; the tests were moved out of bridge.spec.ts rather than duplicated.。The 'the binding lifecycle' describe in the same file: two agents on one connection, delete one, and assert the other agent's binding and the connection survive."
+  },
+  "T-BRIDGE-19": {
+    "declared": [
+      "apps/stub-saas-api/src/routes/calendar.ts"
+    ],
+    "owner": [
+      "apps/stub-saas-api/src/index.ts"
+    ],
+    "why": "The stub API is two routes (GET /calendar/events and GET /healthz) and the HMAC verifier they share; a routes/ directory for one handler would only add an import."
+  },
+  "T-BRIDGE-20": {
+    "declared": [
+      "e2e/test/bridge-flow.spec.ts",
+      "e2e/test/second-agent-no-consent.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/bridge/bridge-flow.spec.ts",
+      "e2e/test/bridge/second-agent-no-consent.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。Grouped with the other bridge specs; both paths match the e2e glob in 00b §1.。Split out of bridge-flow.spec.ts into its own file in this pass so the condition's `-- second-agent-no-consent` filter selects it."
+  },
   "T-DOCS-01": {
-    "declared": ["scripts/check-requirements-index.ts", "tests/docs/requirements-index.test.ts"],
-    "owner": ["scripts/check-requirements-index.mjs", "tests/docs/docs-registry.spec.ts"],
-    "why": "検査スクリプトは Node が直接実行する .mjs にした（ビルド生成物を経由させないため）。docs の検査テストは 00b のテスト拡張子 .spec.ts に従い、1ファイルへ集約した"
+    "declared": [
+      "scripts/check-requirements-index.ts",
+      "tests/docs/requirements-index.test.ts"
+    ],
+    "owner": [
+      "scripts/check-requirements-index.mjs",
+      "tests/docs/docs-registry.spec.ts"
+    ],
+    "why": "検査スクリプトは Node が直接実行する .mjs にした（ビルド生成物を経由させないため）。docs の検査テストは 00b のテスト拡張子 .spec.ts に従い、1ファイルへ集約した。same basename; path moved/renamed (auto)"
   },
   "T-DOCS-03": {
-    "declared": ["scripts/check-deviations.ts", "tests/docs/deviations.test.ts"],
-    "owner": ["scripts/check-deviations.mjs", "tests/docs/docs-registry.spec.ts"],
-    "why": "T-DOCS-01 と同じ理由"
+    "declared": [
+      "scripts/check-deviations.ts",
+      "tests/docs/deviations.test.ts"
+    ],
+    "owner": [
+      "scripts/check-deviations.mjs",
+      "tests/docs/docs-registry.spec.ts"
+    ],
+    "why": "T-DOCS-01 と同じ理由。same basename; path moved/renamed (auto)"
   },
   "T-DOCS-04": {
-    "declared": ["scripts/gen-design-rules.ts", "tests/docs/rules-registry.test.ts"],
-    "owner": ["scripts/gen-design-rules.mjs", "tests/docs/docs-registry.spec.ts"],
-    "why": "T-DOCS-01 と同じ理由"
+    "declared": [
+      "scripts/gen-design-rules.ts",
+      "tests/docs/rules-registry.test.ts"
+    ],
+    "owner": [
+      "scripts/gen-design-rules.mjs",
+      "tests/docs/docs-registry.spec.ts"
+    ],
+    "why": "T-DOCS-01 と同じ理由。same basename; path moved/renamed (auto)"
   },
   "T-DOCS-10": {
-    "declared": ["scripts/check-glossary.ts", "tests/docs/glossary.test.ts"],
-    "owner": ["scripts/check-glossary.mjs", "tests/docs/docs-registry.spec.ts"],
-    "why": "T-DOCS-01 と同じ理由"
+    "declared": [
+      "scripts/check-glossary.ts",
+      "tests/docs/glossary.test.ts"
+    ],
+    "owner": [
+      "scripts/check-glossary.mjs",
+      "tests/docs/docs-registry.spec.ts"
+    ],
+    "why": "T-DOCS-01 と同じ理由。same basename; path moved/renamed (auto)"
   },
   "T-DOCS-12": {
-    "declared": ["tests/docs/example-capabilities.test.ts"],
-    "owner": ["tests/docs/docs-registry.spec.ts"],
+    "declared": [
+      "tests/docs/example-capabilities.test.ts"
+    ],
+    "owner": [
+      "tests/docs/docs-registry.spec.ts"
+    ],
     "why": "docs 02 の例示検証は docs 検査の1 describe として同じファイルに置いた"
   },
   "T-DOCS-13": {
-    "declared": ["scripts/check-docs-links.ts", "tests/docs/links.test.ts"],
-    "owner": ["scripts/check-docs-links.mjs", "tests/docs/docs-registry.spec.ts"],
-    "why": "T-DOCS-01 と同じ理由"
+    "declared": [
+      "scripts/check-docs-links.ts",
+      "tests/docs/links.test.ts"
+    ],
+    "owner": [
+      "scripts/check-docs-links.mjs",
+      "tests/docs/docs-registry.spec.ts"
+    ],
+    "why": "T-DOCS-01 と同じ理由。same basename; path moved/renamed (auto)"
   },
   "T-DOCS-14": {
-    "declared": ["tests/docs/traceability.test.ts"],
-    "owner": ["tests/docs/docs-registry.spec.ts"],
+    "declared": [
+      "tests/docs/traceability.test.ts"
+    ],
+    "owner": [
+      "tests/docs/docs-registry.spec.ts"
+    ],
     "why": "T-DOCS-12 と同じ理由"
   },
   "T-DOCS-15": {
-    "declared": ["tests/docs/token-catalog.test.ts"],
-    "owner": ["packages/xaa-contracts/test/token-catalog.spec.ts"],
-    "why": "突き合わせ先の定数 TOKEN_CATALOG と同じパッケージに置いた。定数が動けば同じコミットでテストが動く"
+    "declared": [
+      "tests/docs/token-catalog.test.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/test/token-catalog.spec.ts"
+    ],
+    "why": "突き合わせ先の定数 TOKEN_CATALOG と同じパッケージに置いた。定数が動けば同じコミットでテストが動く。same basename; path moved/renamed (auto)"
   },
   "T-DOCS-16": {
-    "declared": [".github/workflows/docs.yml"],
-    "owner": [".github/workflows/ci.yml"],
+    "declared": [
+      ".github/workflows/docs.yml"
+    ],
+    "owner": [
+      ".github/workflows/ci.yml"
+    ],
     "why": "CI は単一の ci.yml に集約してある。docs ジョブと diagrams ジョブがこのファイルにある"
+  },
+  "T-IAC-08": {
+    "declared": [
+      "infra/envs/demo/services-controlplane.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/services.tf",
+      "infra/envs/demo/locals-services.tf"
+    ],
+    "why": "All permanent Cloud Run Services are generated from one module block over local.service_definitions, so the per-group service files were merged into services.tf with the inventory in locals-services.tf."
+  },
+  "T-IAC-09": {
+    "declared": [
+      "infra/envs/demo/services-identity.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/services.tf",
+      "infra/envs/demo/locals-services.tf"
+    ],
+    "why": "Same merge: human-idp, shared-agent-op and agent-op-callback are entries of local.service_specific_env and local.service_sa_key in services.tf / locals-services.tf."
+  },
+  "T-IAC-10": {
+    "declared": [
+      "infra/envs/demo/services-resource.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/services.tf",
+      "infra/envs/demo/locals-resource.tf"
+    ],
+    "why": "Same merge; locals-resource.tf keeps local.resource_servers (issuer / resource / scopes per family) and services.tf holds the four services' environment."
+  },
+  "T-IAC-11": {
+    "declared": [
+      "infra/envs/demo/services-bridge.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/services.tf",
+      "infra/envs/demo/locals-services.tf",
+      "infra/envs/demo/variables-bridge.tf"
+    ],
+    "why": "Same merge; the bridge and stub services are conditional members of local.service_names, which is what makes enable_google_bridge / saas_connector_mode gate them."
+  },
+  "T-IAC-12": {
+    "declared": [
+      "infra/envs/demo/jobs-runtime.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/jobs.tf"
+    ],
+    "why": "All three Cloud Run Jobs (agent-runtime-standard, jwks-publish, seed) are declared in one jobs.tf."
+  },
+  "T-IAC-16": {
+    "declared": [
+      "infra/envs/demo/locals-public.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/locals-services.tf"
+    ],
+    "why": "local.public_services is defined next to local.service_names, because the public set is a subset of the inventory and splitting them let the two drift."
+  },
+  "T-IAC-19": {
+    "declared": [
+      "infra/envs/demo/locals-kms.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/iam-kms.tf"
+    ],
+    "why": "local.kms_bindings is the locals block at the head of iam-kms.tf, immediately above the for_each that consumes it; infra/tests/kms-iam.sh now pins both the map and the file."
+  },
+  "T-IAC-21": {
+    "declared": [
+      "infra/envs/demo/jobs-jwks-publish.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/jobs.tf"
+    ],
+    "why": "module \"jwks_publish\" is declared in jobs.tf with the other Cloud Run Jobs."
+  },
+  "T-IAC-25": {
+    "declared": [
+      "infra/envs/demo/firestore-access-matrix.tf"
+    ],
+    "owner": [
+      "packages/gcp/src/access-matrix.json",
+      "packages/gcp/src/firestore-guard.ts"
+    ],
+    "why": "The matrix is enforced in the application wrapper, not in Terraform: Firestore cannot be split by IAM (DEV-05), so a Terraform file holding it would be documentation with nothing reading it. 00b-conventions.md §5 assigns both files to T-IAC-25."
+  },
+  "T-IAC-26": {
+    "declared": [
+      "infra/envs/demo/jobs-seed.tf",
+      "infra/seed/connectors/google-workspace.yaml"
+    ],
+    "owner": [
+      "infra/envs/demo/jobs.tf",
+      "infra/envs/demo/storage-seed.tf",
+      "infra/seed/connectors/stub-saas-calendar.yaml"
+    ],
+    "why": "module \"seed\" is in jobs.tf; storage-seed.tf uploads infra/seed/**/*.yaml into the config bucket.。00b-conventions.md §5 states this file is not created: the bridge-side connector is the stub SaaS calendar, seeded only when ENABLE_GOOGLE_BRIDGE is true (apps/seed/src/index.ts filters on connector_id == \"stub-saas-calendar\")."
+  },
+  "T-IAC-30": {
+    "declared": [
+      "infra/envs/demo/logging-security.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/security-events.tf"
+    ],
+    "why": "00b-conventions.md §5 folds T-IAC-30 into T-SEC-08 and fixes the file as security-events.tf, which holds the security-logs topic, the Log Sink, the writer-identity publisher binding and the security-logs-to-detection subscription."
+  },
+  "T-IAC-34": {
+    "declared": [
+      "scripts/build-push.sh"
+    ],
+    "owner": [
+      "scripts/build-images.sh",
+      "Makefile"
+    ],
+    "why": "00b-conventions.md §5 states this script is not created and that image building belongs to T-PKG-26 (scripts/build-images.sh, driven by `make images` / `make image-<app> IMAGE_TAG=...`)."
+  },
+  "T-IAC-35": {
+    "declared": [
+      "infra/envs/demo/iam-controlplane.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/iam-project.tf",
+      "infra/envs/demo/iam-config.tf",
+      "infra/envs/demo/iam-invoker.tf",
+      "infra/envs/demo/pubsub-activity.tf"
+    ],
+    "why": "IAM is organised by the resource being granted rather than by the grantee, so one for_each per resource kind replaces the per-app files: project roles in iam-project.tf, the config bucket in iam-config.tf, run.invoker in iam-invoker.tf, topic roles in pubsub-activity.tf."
+  },
+  "T-IAC-36": {
+    "declared": [
+      "infra/envs/demo/iam-identity.tf",
+      "infra/envs/demo/iam-runtime.tf",
+      "infra/envs/demo/iam-security.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/iam-kms.tf",
+      "infra/envs/demo/iam-jwks.tf",
+      "infra/envs/demo/iam-project.tf",
+      "infra/envs/demo/iam-config.tf",
+      "infra/envs/demo/iam-invoker.tf",
+      "infra/envs/demo/pubsub-activity.tf",
+      "infra/envs/demo/iam-audit.tf",
+      "infra/envs/demo/security-events.tf"
+    ],
+    "why": "Same by-resource organisation: the identity apps' key grants are in iam-kms.tf, their prefix-scoped JWKS writes in iam-jwks.tf, datastore/vertex in iam-project.tf and the config bucket in iam-config.tf.。sa-agent-runtime holds only project roles, the config bucket, invoker edges and the activity publisher; infra/tests/runtime-sa-roles.sh is the check that the union stays inside the allow list.。sa-security's dataset viewer and jobUser are in iam-audit.tf / iam-project.tf and its subscription reader is in security-events.tf, next to the subscription it reads."
+  },
+  "T-IAC-37": {
+    "declared": [
+      "infra/envs/demo/iam-provisioner.tf",
+      "infra/envs/demo/iam-lifecycle.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/iam-runtime-admin.tf",
+      "infra/envs/demo/custom-roles.tf",
+      "infra/envs/demo/iam-kms.tf",
+      "infra/envs/demo/iam-audit.tf"
+    ],
+    "why": "The four custom roles are in custom-roles.tf, their bindings and the job executor grants in iam-runtime-admin.tf, and the two Key Ring admin grants in iam-kms.tf.。Same split; the table-scoped agent_lifecycle_audit dataEditor grant is in iam-audit.tf."
+  },
+  "T-IAC-38": {
+    "declared": [
+      "infra/envs/demo/iam-bridge.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/iam-secrets.tf",
+      "infra/envs/demo/iam-kms.tf",
+      "infra/envs/demo/iam-project.tf",
+      "infra/envs/demo/iam-config.tf",
+      "infra/envs/demo/pubsub-activity.tf"
+    ],
+    "why": "The bridge's five grants live with the resources they are on; infra/tests/secret-iam.sh and infra/tests/kms-iam.sh are what keep the set from widening."
+  },
+  "T-IAC-39": {
+    "declared": [
+      "infra/envs/demo/iam-vertex.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/iam-project.tf",
+      "infra/envs/demo/variables-vertex.tf"
+    ],
+    "why": "roles/aiplatform.user is a project-level grant, so it is the local.vertex_users for_each in iam-project.tf; infra/tests/vertex-scope.sh pins that set to exactly four principals."
+  },
+  "T-IAC-45": {
+    "declared": [
+      "infra/envs/demo/lifecycle-flags.tf"
+    ],
+    "owner": [
+      "infra/envs/demo/storage-jwks.tf",
+      "infra/envs/demo/storage-config.tf",
+      "infra/envs/demo/firestore.tf",
+      "infra/modules/cloud-run-service/main.tf",
+      "infra/modules/cloud-run-job/main.tf"
+    ],
+    "why": "Terraform has no way to set another resource's destroy flags from a separate file, so each flag is on the resource it governs (force_destroy, deletion_policy / delete_protection_state, deletion_protection). The property the task asserts — no prevent_destroy in the demo state — holds: grep -rn prevent_destroy infra/envs/demo returns 0, and the only occurrences are infra/envs/shared/kms.tf and infra/bootstrap/main.tf."
+  },
+  "T-IDP-01": {
+    "declared": [
+      "apps/human-idp/src/index.ts"
+    ],
+    "owner": [
+      "apps/human-idp/src/server.ts"
+    ],
+    "why": "起動エントリのファイル名を server.ts にした（package.json の main と exports \".\" が dist/server.js を指す）。loadEnv() → serve({ fetch: createApp({env}).fetch, port: env.port }) を呼ぶのはこのファイルだけで、app.ts は serve() を呼ばない（DEC-APP-07）。"
+  },
+  "T-IDP-12": {
+    "declared": [
+      "packages/xaa-contracts/test/scope-guard.spec.ts",
+      "packages/xaa-contracts/src/scope-guard.ts",
+      "packages/xaa-contracts/src/token-types.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/test/verify-separation.spec.ts",
+      "packages/xaa-control-plane-auth/src/access-token.ts",
+      "packages/xaa-control-plane-auth/src/index.ts",
+      "packages/xaa-contracts/src/identifiers.ts",
+      "packages/xaa-contracts/src/token-catalog.ts",
+      "packages/xaa-control-plane-auth/test/scope-contract.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。00b-conventions §5 が packages/xaa-control-plane-auth/** を T-AUTHZ-05 の所有物と定め、T-IDP-12 は scope-guard.ts と token-types.ts を作らず契約テストだけを持つと決めている。scope と typ を検査する Hono ミドルウェアの実体は accessTokenMiddleware（署名 → typ → iss → aud → exp → scope の順で、403 insufficient_scope と WWW-Authenticate: DPoP を返す）。。同上。typ の値（at+jwt / JWT / oauth-id-jag+jwt など）は identifiers.ts の TOKEN_TYP 定数と、00b-conventions が T-PKG-16 の所有物と定める token-catalog.ts の TOKEN_CATALOG（8件の表）が持ち、専用ファイルを作っていない。。00b-conventions §5 の指定どおり契約テストは packages/xaa-control-plane-auth/test/scope-contract.spec.ts にある。rejects an id token with 401 / returns 403 insufficient_scope without <scope> / rejects the wrong audience with 401 と、4 scope の肯定・否定8件を持つ。機械照合が挙げた packages/xaa-contracts/test/verify-separation.spec.ts は別物（検証関数の分離）で、この挙動を持たない。"
+  },
+  "T-IDP-19": {
+    "declared": [
+      "e2e/specs/logging/human-idp-log.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/logging/human-idp-log.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b-conventions §1 の vitest e2e glob が e2e/test/**/*.spec.ts（e2e/specs/** は採用しない別名）であるため、同内容のファイルを e2e/test/logging/ に置いた。"
+  },
+  "T-LIFE-01": {
+    "declared": [
+      "apps/lifecycle-manager/src/middleware/access-token.ts"
+    ],
+    "owner": [
+      "packages/xaa-control-plane-auth/src/access-token.ts",
+      "packages/xaa-control-plane-auth/src/dpop.ts",
+      "packages/xaa-control-plane-auth/src/human-subject.ts",
+      "packages/xaa-control-plane-auth/src/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b §5 gives packages/xaa-control-plane-auth the eight-step guard for all three control-plane apps; apps/lifecycle-manager/src/index.ts mounts it as controlPlaneAuth({...deps.accessToken}) on POST /agents/{id}/revoke."
+  },
+  "T-LIFE-03": {
+    "declared": [
+      "apps/lifecycle-manager/test/domain.spec.ts",
+      "packages/xaa-contracts/src/schema/agent-identity-domain.schema.json",
+      "packages/xaa-contracts/src/agent-identity-domain.ts"
+    ],
+    "owner": [
+      "e2e/test/lifecycle/domain.spec.ts",
+      "apps/lifecycle-manager/src/domain.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The schema is a TypeScript const (agentIdentityDomainSchema) compiled by the shared @xaa/contracts `compile()`, not a standalone .json file, and it is deliberately open rather than additionalProperties:false because two services write agents/{agent_id}/meta — the Provisioner the registration and the Lifecycle Manager its status bookkeeping. What must never appear is refused explicitly by FORBIDDEN_DOMAIN_KEYS in the same file. The closed write-side schema is apps/provisioner/src/agent/registration.ts.。Same file: the AgentIdentityDomain type, loadDomain, deleteDomain and DOMAIN_SUBDOCUMENTS all live there. e2e/test/lifecycle/domain.spec.ts holds the two ends together by writing with the Provisioner's writer and reading with this reader."
+  },
+  "T-LIFE-05": {
+    "declared": [
+      "apps/lifecycle-manager/src/clients/cloud-run.ts",
+      "apps/lifecycle-manager/src/clients/agent-op.ts",
+      "apps/lifecycle-manager/test/cleanup-runtime-cancel.spec.ts",
+      "apps/lifecycle-manager/test/cleanup-issuance-disable.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/src/clients/gcp.ts",
+      "apps/lifecycle-manager/src/clients/types.ts",
+      "apps/lifecycle-manager/src/clients/http.ts",
+      "apps/lifecycle-manager/src/clients/op-target.ts",
+      "apps/lifecycle-manager/test/cleanup-steps.spec.ts"
+    ],
+    "why": "One module builds every Google Cloud client this service uses (ExecutionsClient, JobsClient, ServicesClient, KMS, IAM, Storage) so that assertRuntimeName is applied at a single boundary; CloudRunClient is the interface it satisfies.。createInternalClients in http.ts implements AgentOpClient (disableIssuance, revokeIdpConnection, revokeClientCredential, deleteRegistration) alongside the Resource AS, Bridge and Provisioner clients, all through one injected sender with one OIDC token policy. op-target.ts decides which OP — shared or dedicated — a given agent's calls go to.。The eleven steps share one harness and one cleanupAgent entry point, so their tests live in one file with a describe per step group; 'step1 and step2' holds the runtime-cancel cases.。Same file, same describe."
+  },
+  "T-LIFE-06": {
+    "declared": [
+      "apps/lifecycle-manager/test/cleanup-idp-revoke.spec.ts",
+      "apps/lifecycle-manager/src/clients/agent-op.ts",
+      "e2e/test/lifecycle-idp-revoke.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/cleanup-steps.spec.ts",
+      "apps/lifecycle-manager/src/clients/http.ts",
+      "e2e/test/lifecycle/idp-revoke.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。revokeIdpConnection is one of the four AgentOpClient methods createInternalClients implements.。The 'step3, the IdP connection' describe holds these cases.。Created in this pass, under the e2e/test/lifecycle/ directory this repository already uses for lifecycle integration tests."
+  },
+  "T-LIFE-07": {
+    "declared": [
+      "apps/lifecycle-manager/test/cleanup-credential-revoke.spec.ts",
+      "apps/lifecycle-manager/src/clients/bridge.ts",
+      "apps/lifecycle-manager/src/clients/resource-as.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/cleanup-steps.spec.ts",
+      "apps/lifecycle-manager/src/clients/http.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。BridgeClient (disableBindings, deleteBindings, revokeUpstream) is implemented by createInternalClients.。ResourceAsClient (revokeByActor) is implemented by createInternalClients.。The 'step4 and step5, the credentials already issued' describe holds these cases."
+  },
+  "T-LIFE-08": {
+    "declared": [
+      "apps/lifecycle-manager/test/cleanup-tail-steps.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/cleanup-steps.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The 'the tail steps' describe holds these cases."
+  },
+  "T-LIFE-09": {
+    "declared": [
+      "apps/lifecycle-manager/src/cleanup/steps/dedicated-sa-delete.ts",
+      "apps/lifecycle-manager/src/clients/kms.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/src/cleanup/steps/dedicated-destroy.ts",
+      "apps/lifecycle-manager/src/clients/gcp.ts",
+      "apps/lifecycle-manager/src/clients/types.ts"
+    ],
+    "why": "step8 and step9 read the same ledger in the same reverse order and differ only in which kinds they act on, so dedicatedDestroy and dedicatedSaDelete are two exports of one file; splitting them would duplicate the ledger walk and the assertRuntimeName guard.。KmsClient.destroyCryptoKeyVersion is built by createLifecycleGcpClients alongside the other Google clients, behind the same assertRuntimeName boundary."
+  },
+  "T-LIFE-10": {
+    "declared": [
+      "apps/lifecycle-manager/test/sweep.spec.ts",
+      "apps/lifecycle-manager/src/routes/tick.ts",
+      "e2e/test/lifecycle-sweep.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/routes-and-sweep.spec.ts",
+      "apps/lifecycle-manager/src/index.ts",
+      "apps/lifecycle-manager/src/sweep.ts",
+      "e2e/test/lifecycle/expire-revoke.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The app has five routes and they are registered together in index.ts (00b: createApp is the single mount point); POST /internal/tick is three lines there and delegates the whole pass to sweep.ts.。The sweep and the routes that trigger it are tested in one file; the 'the sweep' and 'the tick endpoint' describes hold these cases.。Created in this pass. It drives POST /internal/tick against the real Agent OP over a shared Firestore, which is what a sweep e2e is for; the sweep's per-stage behaviour is pinned by apps/lifecycle-manager/test/routes-and-sweep.spec.ts."
+  },
+  "T-LIFE-11": {
+    "declared": [
+      "apps/lifecycle-manager/test/revoke-api.spec.ts",
+      "apps/lifecycle-manager/src/routes/revoke.ts",
+      "e2e/test/lifecycle-revoke-api.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts",
+      "apps/lifecycle-manager/test/ownership.spec.ts",
+      "apps/lifecycle-manager/src/index.ts",
+      "apps/lifecycle-manager/test/access-token.spec.ts",
+      "e2e/test/lifecycle/cleanup.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。POST /agents/{agent_id}/revoke is registered in index.ts with the other four routes, using assertAgentOwnership from ownership.ts and writeStatus from status-writer.ts.。The 'the revoke API' describe drives the real route through app.fetch with genuinely signed Access Tokens and DPoP proofs; ownership.spec.ts holds the 404/403 helper and access-token.spec.ts the eight-step refusals at that same route.。The route's own behaviour (202/200/403/404, audit lines, USER_STOP cleanup started) is already an in-process HTTP test in the 'the revoke API' describe, and what it starts — a USER_STOP cleanup against the real Agent OP — is asserted end to end by e2e/test/lifecycle/cleanup.spec.ts. A third file would repeat one of the two."
+  },
+  "T-LIFE-12": {
+    "declared": [
+      "apps/lifecycle-manager/test/quarantine.spec.ts",
+      "e2e/test/lifecycle-quarantine.spec.ts",
+      "apps/lifecycle-manager/src/routes/transition.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/routes-and-sweep.spec.ts",
+      "apps/lifecycle-manager/test/state-machine.spec.ts",
+      "e2e/test/lifecycle/quarantine.spec.ts",
+      "apps/lifecycle-manager/src/index.ts",
+      "apps/lifecycle-manager/src/quarantine.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。POST /internal/agents/{agent_id}/transition is registered in index.ts with its Ajv body schema; the QUARANTINED branch is quarantine.ts.。The 'quarantine' describe holds these cases, beside the tick endpoint they share a harness with. (The mechanical pass mapped this to e2e/test/security/quarantine.spec.ts, which is the Agent OP's side of the same contract and belongs to the security area.)。Created in this pass. e2e/test/security/quarantine.spec.ts covers the Agent OP refusing issuance for a quarantined registration; this one adds the Lifecycle Manager's transition route in front of it and the checkpoint write behind it, and was written additively without touching the security file."
+  },
+  "T-LIFE-13": {
+    "declared": [
+      "apps/lifecycle-manager/src/routes/reprovision.ts",
+      "apps/lifecycle-manager/src/clients/provisioner.ts",
+      "apps/lifecycle-manager/test/reprovision.spec.ts",
+      "e2e/test/lifecycle-reprovision.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/src/reprovision.ts",
+      "apps/security-detection/src/normalize/converters/provisioner.ts",
+      "apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts",
+      "e2e/test/lifecycle/reprovision.spec.ts",
+      "apps/lifecycle-manager/src/index.ts",
+      "apps/lifecycle-manager/src/clients/http.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。POST /internal/agents/{agent_id}/reprovision is registered in index.ts and delegates the four-step procedure to reprovision.ts.。ProvisionerClient.reprovision is implemented by createInternalClients (POST /internal/provisioning/reprovision). The mechanical pass matched apps/security-detection/src/normalize/converters/provisioner.ts, which is an unrelated log converter.。The 'reprovisioning' and 'the capability guard' describes hold these cases. The mechanical pass matched apps/provisioner/test/reprovision.spec.ts, which tests the Provisioner's side of the same call.。Created in this pass."
+  },
+  "T-LIFE-14": {
+    "declared": [
+      "apps/lifecycle-manager/test/reprovision-insufficient.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The capability guard and the abort path are tested beside the reprovision they interrupt, in the 'the capability guard' and 'reprovisioning' describes."
+  },
+  "T-LIFE-15": {
+    "declared": [
+      "apps/lifecycle-manager/test/identity-disabled.spec.ts",
+      "e2e/test/lifecycle-identity-disabled.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/lifecycle/identity-disabled.spec.ts",
+      "apps/lifecycle-manager/test/routes-and-sweep.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。The 'a disabled human identity' and 'the identity-disabled subscriber' describes hold these cases.。Created in this pass."
+  },
+  "T-LIFE-16": {
+    "declared": [
+      "apps/lifecycle-manager/test/events.spec.ts",
+      "e2e/test/lifecycle-events.spec.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts",
+      "e2e/test/activity/quarantine-event.spec.ts",
+      "e2e/test/lifecycle/events.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The 'lifecycle events' describe holds these cases, beside the reprovision that raises RE_PROVISIONED. The mechanical pass matched packages/xaa-logging/test/events.spec.ts, which is the logging package's own file.。Created in this pass. e2e/test/activity/quarantine-event.spec.ts covers Security Detection's own AGENT_QUARANTINED event, which is a different event from a different service."
+  },
+  "T-LIFE-17": {
+    "declared": [
+      "e2e/test/lifecycle-expired-demo.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/lifecycle/expired-demo.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。Same file under the directory this repository uses for lifecycle e2e."
+  },
+  "T-OP-01": {
+    "declared": [
+      "apps/agent-op/src/index.ts"
+    ],
+    "owner": [
+      "apps/agent-op/src/store/index.ts",
+      "apps/agent-op/src/server.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The listen entry point is server.ts (createApp stays free of it so integration tests can call app.fetch); the mechanical pass matched src/store/index.ts only by basename, which is the repository barrel and unrelated."
+  },
+  "T-OP-03": {
+    "declared": [
+      "apps/agent-op/.eslintrc.cjs",
+      "infra/tests/agent-op-roles.test.ts"
+    ],
+    "owner": [
+      "eslint.config.js",
+      "infra/tests/agent-op-roles.sh"
+    ],
+    "why": "ESLint 10 flat config: the repository has one root config, and the Agent OP restriction is the block scoped to apps/agent-op/**/*.ts.。Created as a shell check, like every other infra/tests entry, and registered in infra/tests/static-all.sh: vitest's globs never reach infra/tests, 00b §1 forbids the .test.ts extension, and terraform plan -json needs a live project while this must fail in review."
+  },
+  "T-OP-08": {
+    "declared": [
+      "packages/xaa-contracts/src/verify/verify-human-access-token.ts",
+      "packages/xaa-contracts/src/verify/verify-id-jag.ts",
+      "packages/xaa-contracts/src/verify/verify-google-service-identity.ts"
+    ],
+    "owner": [
+      "packages/xaa-crypto/src/verifiers.ts",
+      "packages/xaa-contracts/src/verify/index.ts"
+    ],
+    "why": "The three verifiers live beside the JWS code that implements them in xaa-crypto; verify/index.ts is the contract-level re-export and deliberately omits the internal verifyJwt.。Same module: verifyIdJag pins typ=oauth-id-jag+jwt and the issuer inside verifiers.ts.。Same module: verifyGoogleServiceIdentity pins iss=https://accounts.google.com there."
+  },
+  "T-OP-11": {
+    "declared": [
+      "apps/agent-op/test/dpop-violations.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/dpop-middleware.spec.ts",
+      "e2e/test/agent-op/dpop-validation.spec.ts"
+    ],
+    "why": "The mapping from each DPoP failure to its violation code is asserted where the middleware is exercised; src/validation/dpop-violations.ts has no behaviour of its own beyond that mapping."
+  },
+  "T-OP-13": {
+    "declared": [
+      "apps/agent-op/src/idjag/config.ts",
+      "apps/agent-op/test/actor-token-profile.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/src/config.ts",
+      "apps/agent-op/test/actor-token.spec.ts",
+      "apps/agent-op/src/idjag/pipeline.ts",
+      "apps/agent-op/src/store/xaa-config-repository.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。The per-request issuance context is assembled in pipeline.ts from the registration and the XaaStaticConfiguration the repository projects, so no process-wide allowedAudiences object exists to put in a config module.。One file holds the actor_token profile, its replay rules and its resolver tests."
+  },
+  "T-OP-16": {
+    "declared": [
+      "apps/agent-op/test/actor-token-replay.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/actor-token.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。Same file as the actor_token profile; the replay store tests are its second describe block."
+  },
+  "T-OP-19": {
+    "declared": [
+      "apps/agent-op/src/store/registration-cache.ts"
+    ],
+    "owner": [
+      "apps/agent-op/src/idjag/verify-agent-state.ts",
+      "apps/agent-op/src/store/agent-registration-repository.ts"
+    ],
+    "why": "No cache is implemented: the repository reads agents/{id}/meta on every request, which satisfies the ten-second ceiling by construction. REGISTRATION_CACHE_TTL_SECONDS = 10 stays in verify-agent-state.ts as the documented bound and is pinned by step-order.spec.ts::names the registration cache TTL once, as ten seconds."
+  },
+  "T-OP-22": {
+    "declared": [
+      "apps/agent-op/test/id-jag-cnf.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/signing-typ.spec.ts",
+      "apps/agent-op/test/dpop-middleware.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。cnf attachment is inseparable from signing (signIdJag refuses claims without it), so it is asserted next to the signing tests; the thumbprint equality lives with the DPoP middleware that computes it."
+  },
+  "T-OP-24": {
+    "declared": [
+      "apps/agent-op/src/idp-connection/types.ts"
+    ],
+    "owner": [
+      "apps/agent-op/src/store/types.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。IdpConnection is one of the four store types and lives with them; T-OP-02 already declares store/types.ts."
+  },
+  "T-OP-26": {
+    "declared": [
+      "apps/agent-op/test/callback-no-token.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/xaa-callback.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The negative assertions are made against the same responses the callback tests already build, in one file."
+  },
+  "T-OP-28": {
+    "declared": [
+      "apps/agent-op/test/rotation-revoke.spec.ts",
+      "apps/agent-op/src/idp-connection/rotate.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/subject-token-endpoint.spec.ts",
+      "apps/agent-op/test/idp-connection-log.spec.ts",
+      "apps/agent-op/src/routes/xaa-subject-token.ts",
+      "apps/agent-op/src/store/idp-connection-repository.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。Rotation is one step of the reissue route — remember the retired token's hash, then replace the ciphertext — and the write itself is the repository's update / revokeAndForgetToken; a separate module would only hold the two calls.。Rotation and revocation are both driven through the routes exercised in that file."
+  },
+  "T-OP-30": {
+    "declared": [
+      "e2e/test/agent-op/token-exchange-log.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/token-exchange-log.spec.ts",
+      "e2e/test/security/quarantine.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The fourteen fields are asserted on both the issued and the refused path in the unit file; the e2e assertions on the same record live where the state that produces them is set."
+  },
+  "T-OP-31": {
+    "declared": [
+      "e2e/test/agent-op/idp-connection-log.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/idp-connection-log.spec.ts",
+      "e2e/test/agent-op/refresh-reuse.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。All three paths are driven through the real routes in the unit file; the reuse path's record is asserted again at the e2e level."
+  },
+  "T-OP-32": {
+    "declared": [
+      "apps/agent-op/test/issuance-ledger.spec.ts",
+      "e2e/test/agent-op/issuance-ledger.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/token-exchange-log.spec.ts",
+      "e2e/test/agent-op/native-xaa-issuance.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The ledger's shape and its distinct-jti property are asserted beside the exchange log they must not be merged into; the e2e issuance test covers the same records end to end.。The ledger is asserted in its own describe block beside the exchange log it must stay separate from, so both shapes move together when the trace changes."
+  },
+  "T-OP-33": {
+    "declared": [
+      "e2e/test/activity/protocol-violation-event.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-op/test/protocol-violation-event.spec.ts",
+      "e2e/test/agent-op/delegation-mismatch.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The event's fixed shape is asserted at the unit level; that exactly one is published per violation is asserted end to end in the delegation-mismatch spec."
+  },
+  "T-PKG-29": {
+    "declared": [
+      "infra-static-checks"
+    ],
+    "owner": [
+      ".github/workflows/ci.yml"
+    ],
+    "why": "ファイルではなく CI ジョブ名で、.github/workflows/ci.yml に `infra-static-checks` ジョブが `bash infra/tests/run-static-checks.sh` を走らせる形で実在する（同じ検査は .github/workflows/infra-static.yml の static-all.sh 経由でも回る）。"
+  },
+  "T-PKG-30": {
+    "declared": [
+      "docs-deviations"
+    ],
+    "owner": [
+      ".github/workflows/ci.yml",
+      "package.json"
+    ],
+    "why": "ファイルではなく CI ジョブ名で、挙動は ci.yml の `docs` ジョブ（`pnpm check:deviations`）と `docs-strict` ジョブ（`pnpm check:deviations:strict`）が持ち、同じ検査を root package.json の `docs:deviations` スクリプトからも呼べるようにした。00b-conventions §5 は `.github/workflows/ci.yml` の所有を T-PKG-27 とし『T-PKG-30 は削除する』、`docs:deviations` の集約先を T-DOCS-16 の `.github/workflows/docs.yml` と定めているので、この名前のジョブを ci.yml に増やすことはしていない。"
+  },
+  "T-PROV-01": {
+    "declared": [
+      "packages/xaa-contracts/src/names.ts",
+      "packages/xaa-contracts/src/schemas/catalog-connector.schema.json",
+      "packages/xaa-contracts/src/schemas/catalog-tool.schema.json",
+      "packages/xaa-contracts/test/names.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/identifiers.ts",
+      "packages/xaa-contracts/src/catalog-types.ts",
+      "packages/xaa-contracts/test/identifiers.spec.ts",
+      "packages/xaa-contracts/test/tool-catalog.spec.ts"
+    ],
+    "why": "00b §5 が定数表の所有を T-PKG-16 の identifiers.ts に置き、Connector 側の CONNECTOR_IDS は Catalog 型と同じ catalog-types.ts にある。スキーマは `catalogConnectorSchema` として TypeScript の const で持ち、型を json-schema-to-ts ではなく同一ファイルの interface と併置している（DEC-APP-05 の Ajv strict / additionalProperties: false は保っている）。同上、`catalogToolSchema`。定数の検査は identifiers.spec.ts（件数・形式・スキーマの閉じ）、実カタログとの突き合わせは tool-catalog.spec.ts が持つ"
+  },
+  "T-PROV-02": {
+    "declared": [
+      "apps/provisioner/seed/connectors.yaml",
+      "apps/provisioner/seed/tools.yaml",
+      "apps/provisioner/src/seed/main.ts",
+      "apps/provisioner/test/seed.spec.ts"
+    ],
+    "owner": [
+      "infra/seed/connectors/internal-docs-api.yaml",
+      "infra/seed/connectors/internal-finance-api.yaml",
+      "infra/seed/connectors/stub-saas-calendar.yaml",
+      "infra/seed/tools/internal.document.list.yaml",
+      "infra/seed/tools/internal.document.get.yaml",
+      "infra/seed/tools/internal.document.create.yaml",
+      "infra/seed/tools/internal.document.update.yaml",
+      "infra/seed/tools/internal.finance.payment.list.yaml",
+      "infra/seed/tools/internal.finance.payment.get.yaml",
+      "infra/seed/tools/internal.finance.payment.approve.yaml",
+      "infra/seed/tools/stub.calendar.events.list.yaml",
+      "apps/seed/src/index.ts",
+      "apps/seed/src/resolve.ts",
+      "apps/seed/src/validate.ts",
+      "apps/seed/src/server.ts",
+      "apps/seed/test/validate.spec.ts"
+    ],
+    "why": "00b §5 が T-PROV-02 を削除し、YAML の中身を T-IAC-26 の infra/seed へ吸収した。Connector は1ファイル1件に分かれている。同上、Tool も1ファイル1件。00b §5 により投入ジョブは独立アプリ apps/seed になった。Provisioner は Catalog を読むだけで書かない。投入ジョブのテストは同アプリに置いた。実 YAML の解決・検証、未解決プレースホルダ、不正 Capability 名、Bridge 無効時の除外をここで固定する"
+  },
+  "T-PROV-03": {
+    "declared": [
+      "apps/provisioner/test/catalog-repository.spec.ts"
+    ],
+    "owner": [
+      "apps/provisioner/test/catalog.spec.ts"
+    ],
+    "why": "Catalog の解決系（repository / resolve-tools / build-xaa-config / build-manifest）は同じ1枚のカタログを入力に取るため1ファイルにまとめてある。Repository の検査は describe('the catalogue repository')"
+  },
+  "T-PROV-04": {
+    "declared": [
+      "apps/provisioner/test/resolve-tools.spec.ts"
+    ],
+    "owner": [
+      "apps/provisioner/test/catalog.spec.ts"
+    ],
+    "why": "describe('resolving capabilities to tools')。T-PROV-03 と同じ理由で1ファイルに集約"
+  },
+  "T-PROV-05": {
+    "declared": [
+      "apps/provisioner/test/build-xaa-config.spec.ts"
+    ],
+    "owner": [
+      "apps/provisioner/test/catalog.spec.ts",
+      "e2e/test/provisioning/provisioning-flow.spec.ts"
+    ],
+    "why": "単体は describe('building the static XAA configuration')、Registration と Manifest と Job env の一致は e2e 側"
+  },
+  "T-PROV-06": {
+    "declared": [
+      "apps/provisioner/test/build-manifest.spec.ts",
+      "packages/xaa-contracts/src/schemas/tool-manifest.schema.json"
+    ],
+    "owner": [
+      "apps/provisioner/test/catalog.spec.ts",
+      "packages/xaa-contracts/src/catalog-types.ts",
+      "apps/agent-runtime/test/manifest.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。`toolManifestSchema` として同ファイルに置き、生成側（buildToolManifest）と消費側（Runtime の loadToolManifest）が同じ定数を通す。生成側は describe('building the tool manifest')、スキーマ違反の拒否は消費側のローダのテストが持つ"
+  },
+  "T-PROV-07": {
+    "declared": [
+      "packages/xaa-contracts/src/schemas/agent-registration.schema.json"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/schema/agent-registration.schema.ts",
+      "apps/provisioner/src/agent/registration.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。Provisioner が書き込み前に通すスキーマは registration.ts の `agentRegistrationSchema`。xaa-contracts 側の同名スキーマは Agent OP が読み出すときの形を持つ"
+  },
+  "T-PROV-08": {
+    "declared": [
+      "apps/provisioner/src/index.ts",
+      "apps/provisioner/src/config.ts",
+      "apps/provisioner/src/middleware/human-token.ts"
+    ],
+    "owner": [
+      "apps/provisioner/src/app.ts",
+      "apps/provisioner/src/deps.ts",
+      "apps/provisioner/src/runtime.ts",
+      "packages/xaa-control-plane-auth/src/access-token.ts",
+      "packages/xaa-control-plane-auth/src/dpop.ts",
+      "packages/xaa-control-plane-auth/src/index.ts"
+    ],
+    "why": "DEC-APP-07 の `createApp()` を default export するファイル。listen は server.ts。設定の型は deps.ts の `ProvisionerConfig`、環境変数からの読み出しは runtime.ts の `loadConfig`。両者を分けたのはテストが GCP クライアントを持たずに設定を組めるようにするため。00b §5 が Control Plane の Access Token と DPoP の検証を T-AUTHZ-05 の共有パッケージに置いた。Provisioner は app.ts で `controlPlaneAuth` を組み立てるだけで、検証順序と応答コードは3アプリで共通"
+  },
+  "T-PROV-09": {
+    "declared": [
+      "apps/provisioner/src/middleware/subject-binding.ts"
+    ],
+    "owner": [
+      "packages/xaa-control-plane-auth/src/human-subject.ts"
+    ],
+    "why": "共有チェーンの8段目。ボディの human_subject を照合し、通ったあとは validatedBody から取り除いて渡すため、ハンドラは読みたくても読めない"
+  },
+  "T-PROV-10": {
+    "declared": [
+      "packages/xaa-contracts/src/schemas/agent-definition.schema.json"
+    ],
+    "owner": [
+      "apps/provisioner/src/routes/agent-definition.ts"
+    ],
+    "why": "Provisioner が受け取るのは docs 02 §4 の Agent Definition ではなく決定 ID を含む3フィールドなので、スキーマは受け口と同じファイルに置いてある。権限系フィールドの禁止表は packages/xaa-contracts/src/forbidden-fields.ts が共有する"
+  },
+  "T-PROV-11": {
+    "declared": [
+      "apps/provisioner/test/decision-match.spec.ts",
+      "apps/provisioner/src/authz/decision.ts"
+    ],
+    "owner": [
+      "apps/provisioner/test/provisioning.spec.ts",
+      "apps/provisioner/src/routes/provisioning.ts",
+      "apps/provisioner/test/authz-order.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。決定の読み直しと所有者照合はルートの先頭で行う。Transaction 作成より前であることが T-PROV-14 の要求そのものなので、別モジュールへ出さずハンドラの最初の数行に置いた。応答コードは provisioning.spec.ts、書き込み0件は authz-order.spec.ts"
+  },
+  "T-PROV-12": {
+    "declared": [
+      "apps/provisioner/test/capability-subset.spec.ts",
+      "apps/provisioner/src/authz/human-permission.ts"
+    ],
+    "owner": [
+      "apps/provisioner/test/provisioning.spec.ts",
+      "apps/provisioner/src/provisioning/flow.ts",
+      "apps/provisioner/test/authz-order.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。包含検査は `provisionAgent` の先頭にある。Re-Provisioning も同じ関数を通るため、Lifecycle 経由の要求でも同じ再検査が必ず走る。T-PROV-11 と同じ"
+  },
+  "T-PROV-13": {
+    "declared": [
+      "packages/xaa-contracts/src/schemas/provisioning-transaction.schema.json"
+    ],
+    "owner": [
+      "apps/provisioner/src/transaction/store.ts"
+    ],
+    "why": "`provisioningTransactionSchema` として store と同じファイルに置き、create と advance が必ず通す。このコレクションを書くのは Provisioner だけなので契約パッケージへ出す理由がない"
+  },
+  "T-PROV-15": {
+    "declared": [
+      "apps/provisioner/test/one-time-code.spec.ts"
+    ],
+    "owner": [
+      "apps/provisioner/test/transaction.spec.ts"
+    ],
+    "why": "one-time code は Transaction の一部として同じファイルに置いた（describe('one-time completion code') と describe('a code redeemed twice')）"
+  },
+  "T-PROV-16": {
+    "declared": [
+      "apps/provisioner/src/transaction/consent-response.ts",
+      "packages/xaa-contracts/src/schemas/consent-required.schema.json"
+    ],
+    "owner": [
+      "apps/provisioner/src/routes/consent-response.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。`consentRequiredSchema` として応答を組み立てる関数と同じファイルにある。返すのは Provisioner だけで、Automation App は素通しする"
+  },
+  "T-PROV-19": {
+    "declared": [
+      "apps/provisioner/src/agent/registration-writer.ts"
+    ],
+    "owner": [
+      "apps/provisioner/src/agent/registration.ts"
+    ],
+    "why": "作成・更新・削除の唯一の窓口はこのファイル。更新は `updateRegistrationFields` 1本に閉じ、`status` と `job_execution_name` 以外を `forbidden_registration_write` で拒否する"
+  },
+  "T-PROV-20": {
+    "declared": [
+      "apps/provisioner/src/agent/expires-at.ts"
+    ],
+    "owner": [
+      "apps/provisioner/src/agent/expiry.ts"
+    ],
+    "why": "`HARD_CAP_SECONDS` / `computeExpiresAt` / `inheritExpiresAt` / `toRfc3339Seconds` を持つ"
+  },
+  "T-PROV-21": {
+    "declared": [
+      "apps/provisioner/src/agent/lifetime-propagation.ts"
+    ],
+    "owner": [
+      "apps/provisioner/src/provisioning/flow.ts",
+      "apps/provisioner/src/agent/expiry.ts"
+    ],
+    "why": "期限は flow の先頭で1度だけ計算した `expiry` を、Registration・IdP Connection 作成要求・Job env・Manifest へそのまま渡す。渡すだけの層を1枚作ると、再計算する場所が増える"
+  },
+  "T-PROV-22": {
+    "declared": [
+      "apps/provisioner/src/agent/client-credential.ts"
+    ],
+    "owner": [
+      "apps/provisioner/src/agent/identity.ts"
+    ],
+    "why": "agent_id の採番と鍵ペア生成は同じ一意性の話なので同じファイルに置いた（`newAgentId` と `createAgentClientCredential`）"
+  },
+  "T-PROV-24": {
+    "declared": [
+      "apps/provisioner/src/dedicated-names.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/runtime-names.ts"
+    ],
+    "why": "00b §5 が `assertRuntimeName` と命名規約を共有パッケージへ置いた。Lifecycle も同じ関数を import して消す対象を判定する"
+  },
+  "T-PROV-28": {
+    "declared": [
+      "apps/provisioner/src/orchestrator-steps.ts"
+    ],
+    "owner": [
+      "apps/provisioner/src/orchestrator.ts",
+      "apps/provisioner/src/provisioning/flow.ts"
+    ],
+    "why": "ステップ表と実行器・補償器は orchestrator.ts、各ステップの run と compensate の中身は flow.ts。分けたのは実行器を Provisioning と Re-Provisioning で共有し、ステップの並びを1か所に持つため"
+  },
+  "T-PROV-30": {
+    "declared": [
+      "packages/xaa-contracts/src/client-ids.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/identifiers.ts"
+    ],
+    "why": "00b §1 が `PLATFORM_CLIENT_ID` の定義を T-PKG-16 の identifiers.ts に置いた"
+  },
+  "T-PROV-32": {
+    "declared": [
+      "packages/xaa-contracts/src/schemas/activity-event.schema.json"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/activity-event.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。スキーマと `validateActivityEvent` と発行ヘルパを同じファイルに置き、発行側と購読側が同じ検証を通る"
+  },
+  "T-RES-01": {
+    "declared": [
+      "apps/resource-docs-as/src/index.ts",
+      "scripts/generate-oidc.sh"
+    ],
+    "owner": [
+      "apps/resource-docs-as/src/server.ts",
+      "apps/resource-docs-as/src/app.ts",
+      "scripts/regenerate-oidc.sh"
+    ],
+    "why": "エントリポイントの確定名はリポジトリ全体で src/server.ts で、serve() だけを呼ぶ。createApp() を default export する工場は src/app.ts（DEC-APP-07）。。00b 第5節の一意所有者表で 02-packages が持つ名前。今回この1本に --check を実装した。"
+  },
+  "T-RES-04": {
+    "declared": [
+      "packages/gcp/src/kms-envelope.ts"
+    ],
+    "owner": [
+      "apps/resource-docs-as/src/runtime.ts",
+      "apps/resource-finance-as/src/runtime.ts",
+      "apps/human-idp/src/gcp.ts"
+    ],
+    "why": "封筒暗号は KMS クライアントを1つ抱える10行の関数で、各アプリの runtime 組み立てに置かれている。共有パッケージへ寄せると鍵名の選択が @xaa/gcp の関心事になるため寄せていない。"
+  },
+  "T-RES-07": {
+    "declared": [
+      "apps/resource-docs-as/src/auth/dpop-client-binding.ts",
+      "apps/resource-finance-as/src/auth/dpop-client-binding.ts"
+    ],
+    "owner": [
+      "packages/xaa-resource-guard/src/redeem.ts"
+    ],
+    "why": "bindClientByCnf として受領パイプラインと同じファイルに在る。docs と finance の2アプリが同一実装を使うため DEC-APP-03 に従って共有パッケージ側に置かれている。。同上。finance 専用の分岐は無い。"
+  },
+  "T-RES-08": {
+    "declared": [
+      "apps/resource-docs-as/src/idjag/issue-access-token.ts",
+      "apps/resource-finance-as/src/idjag/issue-access-token.ts"
+    ],
+    "owner": [
+      "apps/resource-docs-as/src/idjag/redeem.ts",
+      "apps/resource-finance-as/src/idjag/redeem.ts"
+    ],
+    "why": "発行は redeemHandler の後半（buildAccessTokenAudience → buildAccessTokenPayload → createJwtAccessTokenIssuer → ストア書き込み）。受領の成功経路と同じ関数に在る。。同上。"
+  },
+  "T-RES-09": {
+    "declared": [
+      "tests/unit/resource/registered-scope.test.ts"
+    ],
+    "owner": [
+      "packages/xaa-resource-guard/test/registered-scope.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。00b で unit glob は packages/*/test と apps/*/test、拡張子は .spec.ts。tests/unit/** はどの glob にも入らない。"
+  },
+  "T-RES-10": {
+    "declared": [
+      "apps/resource-docs-as/src/log/as-log.ts",
+      "apps/resource-finance-as/src/log/as-log.ts",
+      "tests/e2e/specs/resource/finance-as-log.spec.ts",
+      "tests/e2e/specs/resource/docs-as-log.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-resource-guard/src/as-log.ts",
+      "e2e/test/resource/finance-as-log.spec.ts",
+      "e2e/test/resource/docs-as-log.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。docs と finance で同一の12項目を出すため共有パッケージに1本。。同上。。今回作成した。00b の e2e glob は e2e/test/**（tests/e2e/specs/** は採用しない別名）。。今回作成した。同上。"
+  },
+  "T-RES-11": {
+    "declared": [
+      "packages/xaa-resource-guard/src/access-token.ts",
+      "apps/resource-docs-api/src/middleware/protect.ts",
+      "apps/resource-finance-api/src/middleware/protect.ts"
+    ],
+    "owner": [
+      "packages/xaa-control-plane-auth/src/access-token.ts",
+      "packages/xaa-resource-guard/src/protect.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。Access Token の検証10手順は protect.ts の中に1本の順序として書かれている。機械照合が指した packages/xaa-control-plane-auth/src/access-token.ts は Control Plane 側の別実装。。2アプリが同じ手順で検証するため共有パッケージに1本（createResourceProtection）。。同上。"
+  },
+  "T-RES-12": {
+    "declared": [
+      "tests/e2e/specs/resource/api-log.spec.ts",
+      "apps/resource-docs-api/src/middleware/access-log.ts",
+      "apps/resource-finance-api/src/middleware/access-log.ts"
+    ],
+    "owner": [
+      "e2e/test/resource/api-log.spec.ts",
+      "packages/xaa-resource-guard/src/api-log.ts",
+      "apps/resource-docs-api/src/app.ts",
+      "apps/resource-finance-api/src/app.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。出力関数 logApiAccess は共有パッケージ、7項目を組み立てて包む accessLog ミドルウェアは各アプリの app.ts に在る（operation をルートへ静的に紐づけるため、アプリ側に置く必要がある）。。同上。。今回作成した。00b の e2e glob に合わせたパス。"
+  },
+  "T-RES-13": {
+    "declared": [
+      "packages/xaa-contracts/schema/document.schema.json"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/document.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。JSON Schema を TypeScript の as const で持ち、json-schema-to-ts で型を導出する形に統一されている（.json ファイルは置かない）。"
+  },
+  "T-RES-14": {
+    "declared": [
+      "packages/xaa-contracts/schema/document-create.schema.json",
+      "packages/xaa-contracts/schema/document-patch.schema.json",
+      "apps/resource-docs-api/test/documents.spec.ts",
+      "tests/e2e/specs/resource/docs-api.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/document.ts",
+      "apps/resource-docs-api/test/documents-store.spec.ts",
+      "e2e/test/resource/docs-flow.spec.ts"
+    ],
+    "why": "documentCreateSchema として同ファイルに在る。。documentPatchSchema として同ファイルに在る。。スキーマとリポジトリの単体は documents-store.spec.ts、4エンドポイントの通しは docs-flow.spec.ts。。00b の e2e glob に合わせたパス。Document API 4本の e2e はこの1ファイル。"
+  },
+  "T-RES-15": {
+    "declared": [
+      "scripts/seed/tools-docs.json",
+      "scripts/seed/connectors-docs.json",
+      "packages/xaa-contracts/src/tool-ids.ts",
+      "tests/unit/resource/tool-catalog-docs.test.ts"
+    ],
+    "owner": [
+      "infra/seed/tools/internal.document.list.yaml",
+      "infra/seed/tools/internal.document.get.yaml",
+      "infra/seed/tools/internal.document.create.yaml",
+      "infra/seed/tools/internal.document.update.yaml",
+      "infra/seed/connectors/internal-docs-api.yaml",
+      "packages/xaa-contracts/src/identifiers.ts",
+      "packages/xaa-contracts/test/tool-catalog.spec.ts"
+    ],
+    "why": "00b 第5節で infra/seed/** は T-IAC-26 が所有し、seed は Tool 1件1 YAML。。同上。。TOOL_IDS は CAPABILITIES と RESOURCE_SCOPES と同じファイルに在る（00b は「T-PKG-16 の TOOL_IDS」とだけ定める）。。docs と finance の Tool Catalog を1ファイルで検査している。tests/unit/** は 00b の unit glob の外。"
+  },
+  "T-RES-16": {
+    "declared": [
+      "packages/xaa-contracts/schema/payment.schema.json",
+      "scripts/seed/payments-demo.json"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/payment.ts",
+      "infra/seed/payments-demo.yaml",
+      "apps/seed/src/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。T-RES-13 と同じ理由で TypeScript の as const。。今回作成した。seed 資材は infra/seed/**（YAML）に集約されており、投入するのは apps/seed の demoPayments()。"
+  },
+  "T-RES-17": {
+    "declared": [
+      "apps/resource-finance-api/test/payments.spec.ts",
+      "tests/e2e/specs/resource/finance-api.spec.ts"
+    ],
+    "owner": [
+      "apps/resource-finance-api/test/payments-store.spec.ts",
+      "e2e/test/resource/finance-flow.spec.ts"
+    ],
+    "why": "スキーマと状態遷移の単体は payments-store.spec.ts、3エンドポイントの通しは finance-flow.spec.ts。。00b の e2e glob に合わせたパス。"
+  },
+  "T-RES-18": {
+    "declared": [
+      "scripts/seed/tools-finance.json",
+      "scripts/seed/connectors-finance.json",
+      "scripts/seed/resource-sensitivity.json",
+      "packages/xaa-contracts/src/tool-ids.ts",
+      "tests/unit/resource/tool-catalog-finance.test.ts"
+    ],
+    "owner": [
+      "infra/seed/tools/internal.finance.payment.list.yaml",
+      "infra/seed/tools/internal.finance.payment.get.yaml",
+      "infra/seed/tools/internal.finance.payment.approve.yaml",
+      "infra/seed/connectors/internal-finance-api.yaml",
+      "infra/seed/resource-sensitivity.yaml",
+      "packages/xaa-contracts/src/identifiers.ts",
+      "packages/xaa-contracts/test/tool-catalog.spec.ts"
+    ],
+    "why": "T-RES-15 と同じ。。同上。。同上。内容は internal-finance-api の high 1件のみ。。docs と finance を1ファイルで検査している。"
+  },
+  "T-RES-19": {
+    "declared": [
+      "apps/resource-finance-as/src/idjag/isolation.ts",
+      "apps/resource-finance-as/test/isolation.spec.ts",
+      "apps/resource-finance-api/test/isolation.spec.ts",
+      "tests/e2e/specs/resource/finance-isolation.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-resource-guard/src/redeem.ts",
+      "apps/resource-finance-as/src/idjag/redeem.ts",
+      "apps/resource-finance-as/test/redeem-step-order.spec.ts",
+      "e2e/test/resource/finance-flow.spec.ts"
+    ],
+    "why": "受領パイプラインの isolation 手順は redeemIdJag の中に在り、requireIsolationLevel が設定された時だけ実行される。docs 側にはこの手順自体が現れない。。手順の位置は step-order、403 の中身は finance-flow の『Finance requires full isolation』。。API 側の門は、AS が実際に発行したトークンと AS の実鍵で署名した偽造トークンの両方で finance-flow が固定している。。00b の e2e glob に合わせたパス。isolation の e2e はこのファイルの1 describe。"
+  },
+  "T-RES-20": {
+    "declared": [
+      "apps/resource-finance-as/src/idjag/constraints.ts",
+      "apps/resource-finance-api/test/constraints.spec.ts",
+      "tests/e2e/specs/resource/finance-constraint.spec.ts"
+    ],
+    "owner": [
+      "apps/resource-finance-api/src/middleware/constraints.ts",
+      "apps/resource-finance-as/src/idjag/redeem.ts",
+      "e2e/test/resource/finance-flow.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。AS 側の絞り込み（承認 Tool のエントリだけを xaa_constraints へ引き継ぐ narrowConstraints）は redeem.ts、API 側の2段判定は middleware/constraints.ts。。上限は「AS が載せた値」と「サーバ既定値」の2経路なので、ID-JAG から通す e2e でしか両方を同時に固定できない。。00b の e2e glob に合わせたパス。『Amount ceilings』の3件。"
+  },
+  "T-RES-21": {
+    "declared": [
+      "apps/resource-finance-api/test/approval-subjects.spec.ts",
+      "tests/e2e/specs/resource/finance-approval-subject.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/resource/finance-flow.spec.ts"
+    ],
+    "why": "主体は Access Token の sub と act.sub から来るので、ID-JAG から通す e2e（describe『the two subjects of an approval』）でしか本物を固定できない。。00b の e2e glob に合わせたパス。"
+  },
+  "T-RES-22": {
+    "declared": [
+      "apps/resource-docs-api/src/routes/internal-revoke.ts",
+      "apps/resource-finance-api/src/routes/internal-revoke.ts",
+      "tests/e2e/specs/resource/revoke-by-actor.spec.ts",
+      "apps/resource-docs-as/src/idjag/revocation-check.ts",
+      "apps/resource-finance-as/src/idjag/revocation-check.ts"
+    ],
+    "owner": [
+      "packages/xaa-resource-guard/src/internal-revoke.ts",
+      "e2e/test/resource/revoke-by-actor.spec.ts",
+      "packages/xaa-resource-guard/src/revocation.ts",
+      "packages/xaa-resource-guard/src/redeem.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。2アプリが同一のエンドポイントを持つため共有パッケージに1本。。同上。。台帳の引き方は revocation.ts の isActorRevoked、受領パイプラインからの参照は redeem.ts の revocation 手順。。同上。台帳は docs と finance で1コレクション。。今回作成した。00b の e2e glob に合わせたパス。"
+  },
+  "T-RES-23": {
+    "declared": [
+      "tests/integration/resource/docs-flow.spec.ts",
+      "tests/integration/resource/finance-flow.spec.ts",
+      "tests/integration/resource/negative.spec.ts",
+      "tests/integration/resource/harness.ts"
+    ],
+    "owner": [
+      "e2e/test/resource/docs-flow.spec.ts",
+      "e2e/test/resource/finance-flow.spec.ts",
+      "e2e/test/resource/negative.spec.ts",
+      "e2e/harness/resource.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。6アプリの createApp() を同一プロセスで結線するハーネス。00b で tests/integration/** は glob の外なので、この領域の通し試験は e2e プロジェクトに在る。。同上。"
+  },
+  "T-RUN-01": {
+    "declared": [
+      "packages/xaa-contracts/src/schemas/runtime-env.schema.json",
+      "apps/agent-runtime/test/no-http-listen.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/runtime-env.ts",
+      "apps/agent-runtime/test/env.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。RUNTIME_ENV_KEYS, FORBIDDEN_ENV_KEYS and RUNTIME_EXIT_CODES are TypeScript constants imported by both the Runtime and the Provisioner; there is no separate JSON Schema file.。The describe block 'the runtime listens on nothing' (no server/port/route, no hono dependency, no Cloud Run Service) lives beside the startup-contract tests."
+  },
+  "T-RUN-02": {
+    "declared": [
+      "apps/agent-runtime/test/token-store.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/execution-context.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The describe block 'the token store' (exposes only get/set/clear, skew window, three key shapes, cleared at the end) is in the execution-context spec."
+  },
+  "T-RUN-03": {
+    "declared": [
+      "apps/agent-runtime/test/credential-boundary.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/execution-context.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The describe block 'the agent client key' holds the non-serialisable, jwk-removed-from-env and never-named-by-a-resource-builder assertions."
+  },
+  "T-RUN-04": {
+    "declared": [
+      "apps/agent-runtime/test/runtime-store.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/execution-context.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The describe block 'the runtime store' holds the denied-write, denied-idp_connections and allowed-operations table."
+  },
+  "T-RUN-05": {
+    "declared": [
+      "apps/agent-runtime/src/state/checkpoint-schema.json",
+      "apps/agent-runtime/test/checkpoint-sanitizer.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/src/state/checkpoint.ts",
+      "apps/agent-runtime/test/state-and-telemetry.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。The six-key, additionalProperties:false schema is an inline Ajv schema in checkpoint.ts rather than a separate JSON file.。The describe block 'the checkpoint sanitiser' holds all four conditions of T-RUN-05."
+  },
+  "T-RUN-06": {
+    "declared": [
+      "apps/agent-runtime/test/manifest-load.spec.ts",
+      "packages/xaa-contracts/src/schemas/tool-manifest.schema.json",
+      "packages/xaa-contracts/src/tool-manifest.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/manifest.spec.ts",
+      "packages/xaa-contracts/src/catalog-types.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。`toolManifestSchema` (top level agent_id/expires_at/tools, additionalProperties:false, response_schema required, tool_id restricted to TOOL_IDS) is exported from catalog-types.ts as an `as const` object; the package keeps schemas as TypeScript constants, not JSON files.。The `ToolManifest` interface sits next to its schema in catalog-types.ts and is what apps/agent-runtime/src/manifest/load.ts imports.。The describe block 'loading the tool manifest' holds sha256 mismatch, missing response_schema, deep freeze and the bridge-off assertion."
+  },
+  "T-RUN-07": {
+    "declared": [
+      "apps/agent-runtime/test/allowed-tools.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The seven steps are tested in one spec, one describe per step: 'step2, allowed tools'."
+  },
+  "T-RUN-08": {
+    "declared": [
+      "apps/agent-runtime/test/expiration.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'step3, expiration'."
+  },
+  "T-RUN-11": {
+    "declared": [
+      "apps/agent-runtime/test/token-exchange.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'step4, token exchange'."
+  },
+  "T-RUN-12": {
+    "declared": [
+      "apps/agent-runtime/test/redeem-id-jag.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'step5, redemption at the resource AS'."
+  },
+  "T-RUN-13": {
+    "declared": [
+      "apps/agent-runtime/test/select-redeemer.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the redeemer is chosen once, from the manifest'."
+  },
+  "T-RUN-14": {
+    "declared": [
+      "apps/agent-runtime/test/redeem-via-bridge.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/manifest.spec.ts",
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the bridged path' — not manifest.spec.ts as the artifact map says; the bridge-off manifest assertion is the only part that lives in manifest.spec.ts."
+  },
+  "T-RUN-15": {
+    "declared": [
+      "apps/agent-runtime/test/resource-authorization.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the authorization header a resource sees' (added) plus 'the invoker token on internal calls' in manifest.spec.ts."
+  },
+  "T-RUN-16": {
+    "declared": [
+      "apps/agent-runtime/test/verify-constraints.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'step5.5, constraints'."
+  },
+  "T-RUN-17": {
+    "declared": [
+      "apps/agent-runtime/test/build-api-request.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'step6, building the request'."
+  },
+  "T-RUN-18": {
+    "declared": [
+      "apps/agent-runtime/test/project-response.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'step7, projecting the response'."
+  },
+  "T-RUN-19": {
+    "declared": [
+      "apps/agent-runtime/test/parse-tool-call.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/tool-executor.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the tool call the model is allowed to make'."
+  },
+  "T-RUN-20": {
+    "declared": [
+      "apps/agent-runtime/test/tool-declarations.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/reasoning-loop.spec.ts",
+      "apps/agent-runtime/test/manifest.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the tool declarations offered to the model' is in manifest.spec.ts, not reasoning-loop.spec.ts as the artifact map says; only ::stops at MAX_REASONING_STEPS is in reasoning-loop.spec.ts."
+  },
+  "T-RUN-21": {
+    "declared": [
+      "apps/agent-runtime/test/allowed-hosts.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/manifest.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the reachable host set' holds the frozen set, the refused host, the absent IdP/Provisioner and the exported-signature check."
+  },
+  "T-RUN-22": {
+    "declared": [
+      "apps/agent-runtime/test/read-pending-instructions.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/reasoning-loop.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'pending instructions' holds all four conditions of T-RUN-22."
+  },
+  "T-RUN-24": {
+    "declared": [
+      "apps/agent-runtime/test/stage-log.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/state-and-telemetry.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the stage log'."
+  },
+  "T-RUN-25": {
+    "declared": [
+      "packages/xaa-contracts/src/schemas/activity-event.schema.json",
+      "apps/agent-runtime/test/activity-events.spec.ts"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/activity-event.ts",
+      "apps/agent-runtime/test/state-and-telemetry.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）。The 14-key Activity Event schema and its Ajv validator are TypeScript constants in activity-event.ts.。describe 'activity events'."
+  },
+  "T-RUN-26": {
+    "declared": [
+      "apps/agent-runtime/test/task-outcome.spec.ts"
+    ],
+    "owner": [
+      "apps/agent-runtime/test/state-and-telemetry.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。describe 'the terminal event'."
+  },
+  "T-SEC-05": {
+    "declared": [
+      "packages/xaa-logging/test/events-identity.spec.ts",
+      "apps/human-idp/src/logging.ts",
+      "apps/agent-op/src/logging.ts",
+      "apps/google-bridge/src/logging.ts",
+      "apps/resource-docs-as/src/logging.ts",
+      "apps/resource-finance-as/src/logging.ts"
+    ],
+    "owner": [
+      "packages/xaa-logging/test/events.spec.ts",
+      "apps/human-idp/src/log/audit-log.ts",
+      "apps/agent-op/src/log/token-exchange-log.ts",
+      "apps/agent-op/src/log/idp-connection-log.ts",
+      "apps/agent-op/src/log/issuance-ledger.ts",
+      "apps/google-bridge/src/log/bridge-log.ts",
+      "packages/xaa-resource-guard/src/as-log.ts",
+      "apps/resource-docs-as/src/idjag/redeem.ts",
+      "apps/resource-finance-as/src/idjag/redeem.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The Human IdP's log record type, its three emission points and the trace-id helper live there; the file was placed under src/log/ rather than at src/logging.ts.。Agent OP writes three separate records — the Token Exchange trace, the IdP Connection line and the issuance ledger — and they are kept apart because only the ledger correlates by jti and only the connection line deliberately omits agent_id.。Holds BRIDGE_LOG_FIELDS, the token-exchange record and the protocol-validation emitter for the Bridge.。Both Resource AS apps redeem through the shared guard, so the `resource_as.redeem` record is defined once in the package and filled at the two call sites.。Same shared record as the docs AS; duplicating it per app is what would let the two drift.。One spec covers both halves of the docs 09 §2 table plus the expectLogFields helper that reads them."
+  },
+  "T-SEC-06": {
+    "declared": [
+      "packages/xaa-logging/test/events-control-plane.spec.ts",
+      "apps/authorization/src/logging.ts",
+      "apps/provisioner/src/logging.ts",
+      "apps/resource-docs-api/src/logging.ts",
+      "apps/resource-finance-api/src/logging.ts",
+      "apps/agent-runtime/src/logging.ts"
+    ],
+    "owner": [
+      "packages/xaa-logging/test/events.spec.ts",
+      "apps/authorization/src/log/ai-log.ts",
+      "apps/authorization/src/log/policy-log.ts",
+      "apps/provisioner/src/logging/provisioning-log.ts",
+      "packages/xaa-resource-guard/src/api-log.ts",
+      "apps/resource-docs-api/src/app.ts",
+      "apps/resource-finance-api/src/app.ts",
+      "apps/agent-runtime/src/telemetry/stage-log.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The Authorization AI and Policy Engine rows of docs 09 §2 are two log sources with different field sets, so they are two modules beside the pipeline that produces them.。Same content, placed at the top of src/ rather than under a logging.ts name.。`logApiAccess` writes the seven fields once for both Resource APIs; the app wires it as middleware around the guard so a refusal is logged like a success.。The same shared writer, wired the same way.。The Runtime's per-stage record, including agent_age_seconds and expires_at, is written from there."
+  },
+  "T-SEC-07": {
+    "declared": [
+      "infra/tests/audit-iam.test.ts"
+    ],
+    "owner": [
+      "infra/tests/audit-iam.sh"
+    ],
+    "why": "No vitest project globs infra/tests, and 00b §1 fixes the extension at .spec.ts, so the audit-IAM property is a shell check run by infra/tests/static-all.sh in CI."
+  },
+  "T-SEC-10": {
+    "declared": [
+      ".github/workflows/e2e.yml"
+    ],
+    "owner": [
+      ".github/workflows/ci.yml"
+    ],
+    "why": "00b §5 keeps one CI workflow; the e2e job there now runs scripts/collect-logs.ts and uploads e2e/artifacts/logs.jsonl."
+  },
+  "T-SEC-11": {
+    "declared": [
+      "packages/xaa-contracts/schema/protocol-validation-event.schema.json"
+    ],
+    "owner": [
+      "packages/xaa-contracts/src/protocol-violation.ts"
+    ],
+    "why": "`protocolValidationEventSchema` is declared `as const` beside the type it validates, so the compiler keeps the two in step and `compile()` can derive the type guard; a detached JSON file could disagree with the interface silently."
+  },
+  "T-SEC-12": {
+    "declared": [
+      "apps/automation-app/src/middleware/protect.ts",
+      "apps/authorization/src/middleware/protect.ts",
+      "apps/provisioner/src/middleware/protect.ts",
+      "apps/lifecycle/src/middleware/protect.ts"
+    ],
+    "owner": [
+      "packages/xaa-resource-guard/src/protect.ts",
+      "packages/xaa-control-plane-auth/src/index.ts",
+      "packages/xaa-control-plane-auth/src/protocol-validation.ts",
+      "apps/lifecycle-manager/src/index.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。The four Control Plane apps mount the shared `controlPlaneAuth` chain rather than each writing a protect.ts; note the todo's map pointed at packages/xaa-resource-guard/src/protect.ts, which is the Resource API guard, not this one.。Same shared chain; the app supplies the logger-backed emitter that turns its refusals into protocol_validation lines.。Same shared chain.。Same shared chain; the app directory is apps/lifecycle-manager (00b §1)."
+  },
+  "T-SEC-13": {
+    "declared": [
+      "apps/agent-op/src/validation-steps.ts"
+    ],
+    "owner": [
+      "apps/agent-op/src/idjag/pipeline.ts"
+    ],
+    "why": "`STEP_NAMES` and the single `for`-free ordered walk over the steps live in the pipeline module that runs them, so the order and its execution cannot drift apart."
+  },
+  "T-SEC-14": {
+    "declared": [
+      "apps/agent-op/src/idp-connection/rotation.ts"
+    ],
+    "owner": [
+      "apps/agent-op/src/routes/xaa-subject-token.ts",
+      "apps/agent-op/src/idp-connection/reuse-detection.ts"
+    ],
+    "why": "Rotation happens inside the /xaa/subject-token handler because it is one transaction with the upstream refresh; the reuse memory (`RotationHistory`) is the part worth its own module."
+  },
+  "T-SEC-15": {
+    "declared": [
+      "e2e/test/security/signing-key-misuse.spec.ts",
+      "apps/agent-op/src/ledger.ts"
+    ],
+    "owner": [
+      "apps/security-detection/test/signing-key-misuse.spec.ts",
+      "apps/agent-op/src/log/issuance-ledger.ts",
+      "e2e/test/saved-sql.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。`buildLedgerRecord` / `emitIssuanceLedger` are there, called from the pipeline's onIssued hook between signing and the response.。The batch's own cases (unrecorded jti, wrong typ, no double detection) are unit-level; the join-direction and end-to-end row assertions are in the saved-SQL spec."
+  },
+  "T-SEC-16": {
+    "declared": [
+      "apps/security-detection/test/normalize.spec.ts",
+      "apps/security-detection/schema/normalized-event.schema.json"
+    ],
+    "owner": [
+      "apps/security-detection/test/fixtures.spec.ts",
+      "apps/security-detection/test/detection.spec.ts",
+      "apps/security-detection/src/normalize/schema.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。`normalizedEventSchema` is declared `as const` next to the NormalizedEvent interface so `compile()` derives the assertion from the same literal."
+  },
+  "T-SEC-17": {
+    "declared": [
+      "apps/security-detection/test/pipeline.spec.ts"
+    ],
+    "owner": [
+      "apps/security-detection/test/detection.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）"
+  },
+  "T-SEC-18": {
+    "declared": [
+      "apps/security-detection/eslint.config.js"
+    ],
+    "owner": [
+      "eslint.config.js"
+    ],
+    "why": "same basename; path moved/renamed (auto)"
+  },
+  "T-SEC-19": {
+    "declared": [
+      "apps/security-detection/test/rules-token.spec.ts",
+      "apps/security-detection/src/rules/token.ts"
+    ],
+    "owner": [
+      "apps/security-detection/test/detection.spec.ts",
+      "apps/security-detection/src/rules/index.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。The Token classification (`TOKEN_METRIC_SOURCE` and `tokenHits`) sits in the rules entry point because it is the one classification that needs the per-agent baseline lookup the entry point already performs; the candidates the audit offered (apps/*/src/oidc/routes/token.ts) are OIDC endpoints and unrelated."
+  },
+  "T-SEC-25": {
+    "declared": [
+      "apps/security-detection/test/baseline.spec.ts"
+    ],
+    "owner": [
+      "e2e/test/security/baseline.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)"
+  },
+  "T-SEC-26": {
+    "declared": [
+      "apps/security-detection/test/baseline-deviation.spec.ts"
+    ],
+    "owner": [
+      "apps/security-detection/test/detection.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）"
+  },
+  "T-SEC-27": {
+    "declared": [
+      "apps/security-detection/schema/finding.schema.json",
+      "apps/security-detection/test/correlation.spec.ts"
+    ],
+    "owner": [
+      "apps/security-detection/src/correlate/finding.ts",
+      "apps/security-detection/test/detection.spec.ts"
+    ],
+    "why": "same basename; path moved/renamed (auto)。テストは同領域の既存 spec に置いた（条件の検証先）"
+  },
+  "T-SEC-29": {
+    "declared": [
+      "apps/security-detection/test/scoring.spec.ts"
+    ],
+    "owner": [
+      "apps/security-detection/test/detection.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）"
+  },
+  "T-SEC-30": {
+    "declared": [
+      "apps/security-detection/test/risk-level.spec.ts"
+    ],
+    "owner": [
+      "apps/security-detection/test/detection.spec.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）"
+  },
+  "T-SEC-32": {
+    "declared": [
+      "apps/security-detection/schema/security-ai-input.schema.json"
+    ],
+    "owner": [
+      "apps/security-detection/src/ai/input.ts"
+    ],
+    "why": "`securityAiInputSchema` is built from AI_INPUT_KEYS in the same module, so the required list cannot fall out of step with the type."
+  },
+  "T-SEC-33": {
+    "declared": [
+      "apps/security-detection/test/ai-output.spec.ts",
+      "apps/security-detection/schema/security-ai-output.schema.json"
+    ],
+    "owner": [
+      "apps/security-detection/test/detection.spec.ts",
+      "apps/security-detection/src/ai/output.ts"
+    ],
+    "why": "テストは同領域の既存 spec に置いた（条件の検証先）。`securityAiOutputSchema` is exported from there and handed to both the parser and the Vertex client as the response schema."
+  },
+  "T-SEC-34": {
+    "declared": [
+      "apps/lifecycle/src/routes/internal-security.ts"
+    ],
+    "owner": [
+      "apps/lifecycle-manager/src/index.ts",
+      "apps/lifecycle-manager/src/quarantine.ts",
+      "apps/lifecycle-manager/src/status-writer.ts"
+    ],
+    "why": "The app directory is apps/lifecycle-manager (00b §1) and the route is `POST /internal/agents/{agent_id}/transition` (00b §4 retired /internal/security/transition), mounted inline beside the other internal routes that share its caller check."
+  },
+  "T-SEC-35": {
+    "declared": [
+      "apps/security-detection/src/routes/internal-review.ts"
+    ],
+    "owner": [
+      "apps/security-detection/src/index.ts",
+      "apps/security-detection/src/response/review.ts"
+    ],
+    "why": "`POST /internal/review/{finding_id}` is mounted inline in the app factory because it shares the reviewer check and the transition sender with the ingestion path; the hold-for-a-person decision (`needsHumanReview`) is the part factored out."
   }
 }
