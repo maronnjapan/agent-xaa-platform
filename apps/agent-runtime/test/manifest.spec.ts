@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ManifestIntegrityError, deepFreeze, loadToolManifest, manifestSha256 } from '../src/manifest/load.js';
 import { buildToolDeclarations } from '../src/reasoning/tool-declarations.js';
 import { buildAllowedHosts, assertHostAllowed, HostNotAllowed, PLATFORM_HOSTS } from '../src/http/allowed-hosts.js';
@@ -106,7 +108,85 @@ describe('the reachable host set', () => {
     expect(Object.isFrozen(hosts)).toBe(true);
     expect(() => (hosts as Set<string>).add('evil.example.test')).toThrow();
   });
+
+  /**
+   * REQ-04-015: an audience or a scope is a value the provisioning decided, so nothing
+   * in the Runtime offers a door to pass a different one in. The check reads the
+   * exported signatures rather than the call sites, because a call site can be changed
+   * and a signature is the thing that would have to be widened first.
+   */
+  it('no exported function takes audience or scope', async () => {
+    // The reader itself, checked on a signature that should be caught and one that
+    // should not, so an empty result below means "none", not "read nothing".
+    const forbidden = ['audience', 'resource', 'scope'];
+    const namesOf = (source: string): string[] =>
+      exportedParameterLists(source).flatMap((entry) => topLevelParameterNames(entry.list));
+    expect(namesOf('export function widen(audience: string, key: DpopKey): void {}'))
+      .toEqual(['audience', 'key']);
+    expect(namesOf('export function narrow(input: { audience: string; scope: string }): void {}'))
+      .toEqual(['input']);
+
+    const offenders: string[] = [];
+    let scanned = 0;
+    for (const file of await sourceFiles()) {
+      for (const parameters of exportedParameterLists(file.text)) {
+        scanned += 1;
+        for (const name of topLevelParameterNames(parameters.list)) {
+          if (forbidden.includes(name)) {
+            offenders.push(`${file.path.split('/src/')[1]}: ${parameters.name}(${name})`);
+          }
+        }
+      }
+    }
+    expect(scanned).toBeGreaterThan(15);
+    expect(offenders).toEqual([]);
+
+    // The values do travel — inside the manifest's own `authorization` object, which
+    // is what the token store key and the exchange body are built from.
+    const [tool] = docsManifest().tools;
+    expect(Object.keys(tool!.authorization).sort()).toEqual(['audience', 'resource', 'scope', 'type']);
+  });
 });
+
+async function sourceFiles(): Promise<Array<{ path: string; text: string }>> {
+  const root = new URL('../src', import.meta.url).pathname;
+  const found: Array<{ path: string; text: string }> = [];
+  const walk = async (path: string): Promise<void> => {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const full = join(path, entry.name);
+      if (entry.isDirectory()) { await walk(full); continue; }
+      if (entry.name.endsWith('.ts')) found.push({ path: full, text: await readFile(full, 'utf8') });
+    }
+  };
+  await walk(root);
+  return found;
+}
+
+/** Every `export function name(...)`, with the text between its outermost parentheses. */
+function exportedParameterLists(text: string): Array<{ name: string; list: string }> {
+  const found: Array<{ name: string; list: string }> = [];
+  const declaration = /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = declaration.exec(text)) !== null) {
+    let depth = 1;
+    let index = declaration.lastIndex;
+    while (index < text.length && depth > 0) {
+      if ('([{'.includes(text[index]!)) depth += 1;
+      if (')]}'.includes(text[index]!)) depth -= 1;
+      index += 1;
+    }
+    found.push({ name: match[1]!, list: text.slice(declaration.lastIndex, index - 1) });
+  }
+  return found;
+}
+
+/** Parameter names only: a nested type literal's members are not parameters. */
+function topLevelParameterNames(list: string): string[] {
+  const flattened = list.replace(/\{[^{}]*\}/g, '{}');
+  return flattened.split(',')
+    .map((part) => part.trim().split(':')[0]!.trim().replace(/[?]$/, ''))
+    .filter((name) => /^[A-Za-z0-9_]+$/.test(name));
+}
 
 /**
  * Cloud Run refuses a call to an INTERNAL_ONLY service before the app sees it, so the

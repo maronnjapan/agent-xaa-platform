@@ -17,7 +17,7 @@ import { createTerminalEmitter, decideTaskOutcome } from './telemetry/task-outco
  * DEC-APP-02: the only app in the platform that is not an HTTP service.
  *
  * An Agent Runtime is one Cloud Run Job Execution running one agent. It listens on
- * nothing — there is no port, no route and no `serve()` anywhere in this package —
+ * nothing — no port, no route, and no HTTP server started anywhere in this package —
  * because an agent that accepted requests would be a place to send instructions that
  * bypassed the Automation App, and with it the record of who asked for what.
  *

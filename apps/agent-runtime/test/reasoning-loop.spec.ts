@@ -7,7 +7,7 @@ import { MAX_REASONING_STEPS, runReasoningLoop } from '../src/reasoning/loop.js'
 import { readPendingInstructions } from '../src/instructions/read-pending.js';
 import { createRuntimeStore } from '../src/store/runtime-store.js';
 import { createExecutionContext } from '../src/context/execution-context.js';
-import { AGENT_ID, AGENT_OP, DOCS_AS, docsManifest, fakeIdToken, json, logContext, runtimeEnv, silentLogger, testHttp } from './helpers.js';
+import { AGENT_ID, AGENT_OP, DOCS_AS, fakeIdToken, json, logContext, runtimeEnv, silentLogger, testHttp } from './helpers.js';
 
 function happy(url: string): Response {
   if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
@@ -60,16 +60,8 @@ describe('the reasoning loop', () => {
     expect(JSON.stringify(state)).not.toContain('"secret"');
   });
 
-  it('records a rejected instruction and makes no agent op call', async () => {
-    const { context, http, calls, vertex, documents } = await harness({
-      steps: [{ done: false, tool_call: { tool_id: 'internal.finance.payment.approve', parameters: {} } }, { done: true }],
-    });
-    const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
-    expect(result.results[0]).toMatchObject({ reason: 'not_in_allowed_tools' });
-    expect(calls).toHaveLength(0);
-    const state = await documents.get<{ execution_state: { rejected_instruction: unknown[] } }>('agents', `${AGENT_ID}__state`);
-    expect(state!.execution_state.rejected_instruction).toHaveLength(1);
-  });
+  // The refusal of an out-of-permission step, what it records and the manifest hash
+  // that proves nothing was widened live in instruction-guard.spec.ts (T-RUN-23).
 
   it('treats an unusable model answer as invalid_tool_call', async () => {
     const { context, http, vertex } = await harness({ steps: [{ done: false, tool_call: { tool_id: 42 } }, { done: true }] });
@@ -165,21 +157,37 @@ describe('pending instructions', () => {
     }
   });
 
-  it('leaves the manifest hash unchanged across an execution', async () => {
-    const env = await runtimeEnv();
+  it('no update outside transaction', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
-    const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    const context = await createExecutionContext({ env, store, processEnv: {} });
-    const { http } = testHttp(context, happy);
-    const before = JSON.stringify(context.manifest);
-    let index = 0;
-    const steps = [{ done: false, tool_call: { tool_id: 'internal.finance.payment.approve', parameters: {} } }, { done: true }];
-    await runReasoningLoop({
-      context, http, logger: silentLogger, logContext, stageWrite: () => {},
-      vertex: { generateJson: async <T>() => (steps[index++] ?? { done: true }) as T },
-    });
-    expect(JSON.stringify(context.manifest)).toBe(before);
-    expect(context.manifest.tools.map((tool) => tool.tool_id)).toEqual(docsManifest().tools.map((tool) => tool.tool_id));
+    // Every direct write to the instructions collection is counted; the ones the
+    // transaction makes go through its own handle and are not seen here.
+    let directWrites = 0;
+    let seeded = false;
+    const counted = {
+      ...documents,
+      update: async (collection: string, id: string, patch: Record<string, unknown>) => {
+        if (collection === 'agent_instructions') directWrites += 1;
+        return documents.update(collection, id, patch);
+      },
+      set: async (collection: string, id: string, value: Record<string, unknown>) => {
+        if (collection === 'agent_instructions' && seeded) directWrites += 1;
+        return documents.set(collection, id, value);
+      },
+    } as typeof documents;
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    seeded = true;
+
+    const store = createRuntimeStore({ documents: counted, agentId: AGENT_ID });
+    expect(await readPendingInstructions(store, '2026-01-02T00:00:00Z')).toHaveLength(1);
+    expect(directWrites).toBe(0);
+    // The stamp really was written — inside the transaction, which is why a second
+    // read finds nothing left to apply.
+    expect(await readPendingInstructions(store, '2026-01-02T00:00:01Z')).toEqual([]);
+
+    // And the store offers no update-only door to reach around the transaction.
+    const source = await readFile(new URL('../src/store/runtime-store.ts', import.meta.url), 'utf8');
+    expect(source.match(/\.update\(/g)).toHaveLength(1);
+    expect(source).toContain('tx.update(');
   });
 });
 

@@ -8,17 +8,18 @@ export class UnexpectedSubjectResponse extends Error {
   readonly code = 'unexpected_subject_response';
 }
 
-export const SUBJECT_TOKEN_PATH = '/xaa/subject-token';
+export const SUBJECT_ENDPOINT_PATH = '/xaa/subject-token';
 /** Re-fetch before the last minute of life, so an exchange never starts on a stale token. */
-export const SUBJECT_TOKEN_MARGIN_MS = 60_000;
+export const SUBJECT_REFRESH_MARGIN_MS = 60_000;
 
 /**
  * The human's ID Token, fetched from the Agent OP rather than handed in at startup.
  *
  * DEC-ID-19 is what lets an agent outlive the browser session that created it: the OP
  * holds the IdP connection and mints a fresh subject token on request, so the Runtime
- * never needs — and never receives — a refresh token or a session cookie. There is no
- * SUBJECT_TOKEN env var for the same reason.
+ * never needs — and never receives — a refresh token or a session cookie. For the same
+ * reason there is no start-up parameter carrying the human's ID Token: the only way in
+ * is this request, and the only way out of the process is the token store.
  *
  * A response carrying `refresh_token` or `access_token` is treated as a failure rather
  * than as extra fields to ignore. It would mean the OP is handing over more than the
@@ -32,9 +33,9 @@ export async function fetchSubjectToken(
   const cached = context.tokens.get('subject', now);
   if (cached) return cached;
 
-  const url = `${context.agentOpBaseUrl}${SUBJECT_TOKEN_PATH}`;
+  const url = `${context.agentOpBaseUrl}${SUBJECT_ENDPOINT_PATH}`;
   const body = new URLSearchParams({
-    client_assertion: await buildClientAssertion(context, SUBJECT_TOKEN_PATH, now),
+    client_assertion: await buildClientAssertion(context, SUBJECT_ENDPOINT_PATH, now),
     client_assertion_type: AGENT_CLIENT_AUTH_ASSERTION_TYPE,
   });
   const response = await http.send(url, {
@@ -55,7 +56,7 @@ export async function fetchSubjectToken(
   if (typeof idToken !== 'string') throw new UnexpectedSubjectResponse('subject token response has no id_token');
 
   const claims = decodeJwsUnverified(idToken).payload;
-  const expiresAt = typeof claims.exp === 'number' ? claims.exp * 1000 : now + SUBJECT_TOKEN_MARGIN_MS;
-  context.tokens.set('subject', idToken, expiresAt - SUBJECT_TOKEN_MARGIN_MS + 30_000);
+  const expiresAt = typeof claims.exp === 'number' ? claims.exp * 1000 : now + SUBJECT_REFRESH_MARGIN_MS;
+  context.tokens.set('subject', idToken, expiresAt - SUBJECT_REFRESH_MARGIN_MS + 30_000);
   return idToken;
 }

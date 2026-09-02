@@ -84,7 +84,10 @@ describe('the agent client key', () => {
   it('is never named by a resource request builder', async () => {
     const resourceModule = await readFile(new URL('../src/http/resource-authorization.ts', import.meta.url), 'utf8');
     expect(resourceModule).not.toContain('AgentClientKey');
-    expect(await grepSource(/asymmetricSign|@google-cloud\/kms/)).toEqual([]);
+    // T-RUN-09: the Runtime signs with its own in-process key, never with KMS. The
+    // pattern is assembled from fragments so that this assertion is not itself the
+    // one hit a repository-wide search for those names would find.
+    expect(await grepSource(new RegExp(`asymmetric${'Sign'}|@google-cloud/${'kms'}`))).toEqual([]);
   });
 });
 

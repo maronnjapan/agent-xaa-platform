@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import {
   drainActivityQueueForTesting, resetActivityPublisherForTesting, validateActivityEvent, type ActivityEvent,
@@ -16,6 +16,8 @@ import { storeActivityEvent } from '@xaa/automation-app/src/activity/subscriber'
 import { readTimeline } from '@xaa/automation-app/src/activity/query';
 import { TimelinePage } from '@xaa/automation-app/src/ui/pages/timeline';
 import { buildReplayPlan } from '@xaa/automation-app/client/src/replay-plan';
+import { playReplay } from '@xaa/automation-app/client/src/replay';
+import { REPLAY_STEP_MS } from '@xaa/automation-app/client/src/replay-config';
 import { SOURCE_TO_NODE } from '@xaa/automation-app/src/ui/replay/nodes';
 import { createLogger } from '@xaa/logging';
 import { AGENT_OP_BASE, startAgentOp } from '../../harness/agent-op.js';
@@ -24,6 +26,7 @@ import { startResource } from '../../harness/resource.js';
 import { nativeManifest } from '../../harness/agent-runtime.js';
 import { startAutomationAppHarness } from '../../harness/automation-app.js';
 import { humanIdToken } from '../runtime/native-xaa-path.spec.js';
+import { replayCanvas } from '../../support/replay-dom.js';
 
 const render = async (element: unknown): Promise<string> => String(await element);
 const silent = createLogger('agent-runtime', 'agent_runtime', () => {});
@@ -161,14 +164,31 @@ describe('demo D-1: an out-of-permission instruction', () => {
     expect(html).toContain('data-node="resource-api"');
     expect(html.match(/data-reached="false"/g)!.length).toBeGreaterThan(0);
 
-    const plan = buildReplayPlan(task.events!.map((entry) => ({
+    const events = task.events!.map((entry) => ({
       event_id: entry.event_id, occurred_at: entry.occurred_at, source: entry.source,
       outcome: entry.outcome, message: entry.message, ...(entry.detail ? { detail: entry.detail as Record<string, unknown> } : {}),
-    })), (source) => SOURCE_TO_NODE[source] ?? null);
+    }));
+    const plan = buildReplayPlan(events, (source) => SOURCE_TO_NODE[source] ?? null);
     const blockedSteps = plan.filter((step) => step.blocked);
     expect(blockedSteps).toHaveLength(1);
     expect(blockedSteps[0]!.stopRatio).toBe(0.6);
     expect(blockedSteps[0]!.to).toBe('resource-api');
+
+    // Played, not just planned: the drawing a person watches carries one refusal, and
+    // the box it was heading for is the one left explicitly unreached.
+    const root = replayCanvas();
+    vi.useFakeTimers();
+    try {
+      playReplay(root as unknown as HTMLElement, events as never);
+      vi.advanceTimersByTime(REPLAY_STEP_MS * (events.length + 1));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(root.getAttribute('data-replay-state')).toBe('finished');
+    expect(root.querySelectorAll('[data-blocked="true"]')).toHaveLength(1);
+    const unreached = root.querySelectorAll('[data-reached="false"]');
+    expect(unreached).toHaveLength(1);
+    expect(unreached[0]!.getAttribute('data-node')).toBe('resource-api');
   });
 });
 

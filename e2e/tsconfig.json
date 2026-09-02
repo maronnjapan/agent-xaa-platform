@@ -8,7 +8,8 @@
   },
   "include": [
     "test/**/*.ts",
-    "harness/**/*.ts"
+    "harness/**/*.ts",
+    "support/**/*.ts"
   ],
   "references": [
     {

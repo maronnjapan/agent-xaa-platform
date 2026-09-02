@@ -38,3 +38,17 @@ export async function buildResourceAuthorization(
   });
   return { Authorization: `DPoP ${token}`, DPoP: proof };
 }
+
+/**
+ * The header for an external SaaS call on the bridged path.
+ *
+ * DEC-ID-13: DPoP is a binding this platform issues and this platform checks. A SaaS
+ * that never saw the execution key would reject — or worse, ignore — a proof, so the
+ * token the Bridge obtained is presented the way its issuer expects. It lives beside
+ * the DPoP builder because both take the same branded type: whichever header a call
+ * ends up with, the token in it came from a Resource AS or the Bridge and never from
+ * the metadata server.
+ */
+export function buildExternalAuthorization(token: ResourceAccessToken): { Authorization: string } {
+  return { Authorization: `Bearer ${token}` };
+}

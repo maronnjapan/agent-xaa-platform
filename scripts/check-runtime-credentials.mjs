@@ -16,7 +16,10 @@ const FORBIDDEN = [
 ];
 const METADATA = ['metadata.google.internal', '169.254.169.254'];
 const METADATA_FILE = 'http/internal-invoker-token.ts';
-const BEARER_FILE = 'http/internal-invoker-token.ts';
+// The two modules allowed to name a Bearer header: the Cloud Run invoker header, and
+// the external-SaaS header of the bridged path. Both take a branded token type, so a
+// Service Account ID Token cannot reach either one.
+const BEARER_FILES = new Set(['http/internal-invoker-token.ts', 'http/resource-authorization.ts']);
 
 // Two files name these values in order to refuse them: the checkpoint sanitiser
 // denylists the key, and the subject-token parser fails when the OP sends one. They
@@ -45,7 +48,7 @@ async function walk(directory) {
         violations.push([relativePath, needle, `metadata server is only reachable from ${METADATA_FILE}`]);
       }
     }
-    if (/Authorization['"]?\s*:\s*[`'"]Bearer/.test(text) && relativePath !== BEARER_FILE) {
+    if (/Authorization['"]?\s*:\s*[`'"]Bearer/.test(text) && !BEARER_FILES.has(relativePath)) {
       violations.push([relativePath, 'Authorization: Bearer', 'build resource authorization through resource-authorization.ts']);
     }
   }
