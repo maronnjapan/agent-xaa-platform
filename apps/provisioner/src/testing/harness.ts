@@ -130,6 +130,12 @@ export async function createProvisionerHarness(options: {
   idpPublicJwk?: JsonWebKey;
   /** Resolves an `/internal/*` bearer token to a caller email; defaults to sa-lifecycle. */
   verifyInternalCaller?: (token: string, audience: string) => Promise<string | null>;
+  /**
+   * Overrides the default recording stub, which never leaves this process. Pass the
+   * real `publishActivityEvent` from `@xaa/contracts` for a test that needs the events
+   * to travel the same in-process queue production's Pub/Sub subscriber drains.
+   */
+  publishActivity?: (event: ActivityEvent) => Promise<void>;
 } = {}): Promise<ProvisionerHarness> {
   const firestore = options.shared ?? createFirestoreDouble();
   const documents = createFirestoreDocumentStore(firestore, 'provisioner');
@@ -155,7 +161,7 @@ export async function createProvisionerHarness(options: {
     clock: { now },
     jtiStore: new InMemoryJtiStore(now),
     logger: createLogger('provisioner', 'provisioner', (line) => { logs.push(line); }),
-    publishActivity: async (event) => { activity.push(event); },
+    publishActivity: options.publishActivity ?? (async (event) => { activity.push(event); }),
     // The token itself is never checked in tests: what matters is that a caller who is
     // not on the allow-list is refused, and that is the email, not the signature.
     verifyInternalCaller: options.verifyInternalCaller
