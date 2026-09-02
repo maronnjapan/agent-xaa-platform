@@ -94,9 +94,9 @@ export function createInternalApp(deps: BridgeDeps): Hono {
     // Seven fields, every one of them filled in — including for a request that stops at
     // the first check. `skipped` is a fact; a missing field is a question.
     const log: BridgeTokenLog = {
-      id_jag_issuer: 'skipped', id_jag_validation: 'skipped', connection_id: 'skipped',
-      requested: { resource: 'skipped', scope: 'skipped' },
-      binding_expiry_check: 'skipped', saas_refresh_result: 'skipped', token_issue_result: 'denied',
+      id_jag_iss: 'skipped', id_jag_verify_result: 'skipped', connection_id: 'skipped',
+      requested_resource: 'skipped', requested_scope: 'skipped',
+      agent_expiry_check: 'skipped', google_refresh_result: 'skipped', access_token_issue_result: 'denied',
     };
     try {
       const form = await context.req.parseBody() as Record<string, string>;
@@ -110,9 +110,10 @@ export function createInternalApp(deps: BridgeDeps): Hono {
         sharedIssuer: deps.config.sharedIssuer,
         expectedAudience: deps.config.bridgeInternalBaseUrl,
       });
-      log.id_jag_issuer = verified.issuer;
-      log.id_jag_validation = 'ok';
-      log.requested = { resource: verified.resource, scope: verified.scope };
+      log.id_jag_iss = verified.issuer;
+      log.id_jag_verify_result = 'ok';
+      log.requested_resource = verified.resource;
+      log.requested_scope = verified.scope;
 
       await verifyCnfBinding({
         request: context.req.raw, verified, jtiStore: deps.jtiStore,
@@ -123,12 +124,12 @@ export function createInternalApp(deps: BridgeDeps): Hono {
         verified, bindings: wiring.bindings, connections: wiring.connections,
         connectors: wiring.connectors, now: new Date(wiring.now()),
         onValidation: (validation, fields) => {
-          log.binding_expiry_check = validation === 'expired_bridge_connection' ? 'expired_binding' : 'ok';
+          log.agent_expiry_check = validation === 'expired_bridge_connection' ? 'expired_binding' : 'ok';
           emitProtocolValidation(wiring.logger, wiring.logContext, validation, fields);
         },
       });
       log.connection_id = resolved.connection.connection_id;
-      log.binding_expiry_check = 'ok';
+      log.agent_expiry_check = 'ok';
 
       const scope = resolveEffectiveScope({
         requestedScope: form.scope,
@@ -149,9 +150,9 @@ export function createInternalApp(deps: BridgeDeps): Hono {
       }).catch(async (error: unknown) => {
         if (error instanceof BridgeError && error.code === 'connection_revoked') {
           await wiring.connections.setStatus(resolved.connection.connection_id, 'REVOKED');
-          log.saas_refresh_result = 'revoked';
+          log.google_refresh_result = 'revoked';
         } else {
-          log.saas_refresh_result = 'error';
+          log.google_refresh_result = 'error';
         }
         throw error;
       });
@@ -162,7 +163,7 @@ export function createInternalApp(deps: BridgeDeps): Hono {
           await cipher.encryptRefreshToken(grant.newRefreshToken),
         );
       }
-      log.saas_refresh_result = grant.rotated ? 'rotated' : 'ok';
+      log.google_refresh_result = grant.rotated ? 'rotated' : 'ok';
 
       // The remaining life of the delegation, never more than the SaaS allows.
       const remaining = Math.floor((resolved.effectiveExpiry - wiring.now()) / 1000);
@@ -171,7 +172,7 @@ export function createInternalApp(deps: BridgeDeps): Hono {
         expiresIn: Math.max(1, Math.min(grant.expiresIn, remaining)),
         scope,
       });
-      log.token_issue_result = 'issued';
+      log.access_token_issue_result = 'issued';
       return context.json(body, 200);
     } catch (error) {
       if (error instanceof BridgeError) return context.json({ error: error.code }, error.status as 400);

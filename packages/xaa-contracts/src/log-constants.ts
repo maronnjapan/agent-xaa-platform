@@ -1,5 +1,6 @@
 /**
- * Value domain of the `dpop_status` log field.
+ * Value domain of the `dpop_result` log field (Human IdP) and the `dpop_result`
+ * field on Agent OP's Token Exchange record.
  *
  * - `valid`          a proof was presented and every check in DEC-ID-12 passed
  * - `invalid`        a proof was presented and some check failed

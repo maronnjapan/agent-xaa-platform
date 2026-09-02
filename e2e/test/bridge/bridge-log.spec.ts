@@ -10,7 +10,7 @@ interface Line { event: string; fields: Record<string, unknown> }
  *
  * docs 09 §2 names seven things per token exchange, and the reason they are all present
  * on a refusal as well as on a success is that the interesting requests are the refused
- * ones. A log that omitted `saas_refresh_result` when the request never got that far
+ * ones. A log that omitted `google_refresh_result` when the request never got that far
  * would look identical, in a query, to a log where the field was lost — and the
  * difference is exactly what someone investigating is trying to establish.
  */
@@ -36,9 +36,9 @@ describeBridge('the bridge token log', () => {
       expect(Object.keys(line.fields).sort()).toEqual([...BRIDGE_LOG_FIELDS].sort());
       for (const value of Object.values(line.fields)) expect(value).not.toBeUndefined();
     }
-    expect(lines[0]!.fields.token_issue_result).toBe('issued');
-    expect(lines[1]!.fields.token_issue_result).toBe('denied');
-    expect(lines[1]!.fields.binding_expiry_check).toBe('expired_binding');
+    expect(lines[0]!.fields.access_token_issue_result).toBe('issued');
+    expect(lines[1]!.fields.access_token_issue_result).toBe('denied');
+    expect(lines[1]!.fields.agent_expiry_check).toBe('expired_binding');
 
     // One event for one refusal: a duplicate would make a single expired binding look
     // like a campaign against the platform.

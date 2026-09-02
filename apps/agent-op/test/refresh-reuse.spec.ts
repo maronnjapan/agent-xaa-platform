@@ -94,8 +94,8 @@ describe('refresh token reuse', () => {
     // Uppercase is this collection's convention for `status` (00b §3); the point is that
     // the connection is no longer usable and nothing rolls that back.
     expect((await storedConnection(fixture))!.status).toBe('REVOKED');
-    const line = JSON.parse(fixture.connectionLogs.at(-1)!) as { fields: { reuse_detected: boolean; revoke_result: string } };
-    expect(line.fields.reuse_detected).toBe(true);
+    const line = JSON.parse(fixture.connectionLogs.at(-1)!) as { fields: { refresh_reuse_detected: boolean; revoke_result: string } };
+    expect(line.fields.refresh_reuse_detected).toBe(true);
     expect(line.fields.revoke_result).toBe('ok');
   });
 

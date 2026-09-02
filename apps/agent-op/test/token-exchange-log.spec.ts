@@ -4,9 +4,9 @@ import { buildLedgerRecord, emitIssuanceLedger, LEDGER_FIELDS } from '../src/log
 import { createFixture, exchange, subjectToken } from './helpers.js';
 
 /** docs 09 §2: the fixed shape, on the rejected path as much as the issued one. */
-const EXCHANGE_FIELDS = ['op_runtime_id', 'op_kind', 'requested_audience', 'requested_resource', 'requested_scope',
+const EXCHANGE_FIELDS = ['op_runtime_id', 'isolation_kind', 'requested_audience', 'requested_resource', 'requested_scope',
   'subject_token_iss', 'subject_token_aud', 'subject_token_sub', 'actor_token_sub', 'actor_token_jti',
-  'delegation_check', 'dpop_result', 'issued_id_jag', 'agent_expiry_check', 'error_code'];
+  'delegation_match', 'dpop_result', 'issued_jti', 'issued_kid', 'issued_jkt', 'expiry_check', 'error_code'];
 
 describe('token exchange log', () => {
   it('emits exactly one record per request', async () => {
@@ -16,7 +16,7 @@ describe('token exchange log', () => {
     expect(fixture.exchangeLogs).toHaveLength(2);
   });
 
-  it('success emits all 14 fields', async () => {
+  it('emits all seventeen fields on success and on a RULE-49 violation', async () => {
     const ok = await createFixture();
     await exchange(ok);
     const line = JSON.parse(ok.exchangeLogs[0]!) as Record<string, unknown>;
@@ -29,12 +29,12 @@ describe('token exchange log', () => {
     expect(success.error_code).toBeNull();
   });
 
-  it('RULE-49 violation emits all 14 fields with delegation_check=false', async () => {
+  it('RULE-49 violation emits all seventeen fields with delegation_match=false', async () => {
     const bad = await createFixture({ registration: { human_subject: 'user-B' } });
     await exchange(bad, { form: { subject_token: await subjectToken(bad, { sub: 'user-A' }) } });
     const failure = (JSON.parse(bad.exchangeLogs[0]!) as { fields: Record<string, unknown> }).fields;
     for (const field of EXCHANGE_FIELDS) expect(Object.keys(failure)).toContain(field);
-    expect(failure.delegation_check).toBe(false);
+    expect(failure.delegation_match).toBe(false);
     expect(failure.error_code).toBe('invalid_grant');
   });
 

@@ -35,8 +35,8 @@ describe('the bridge token log', () => {
     const line = parsed(harness.logs).find((entry) => entry.event === 'bridge_token_exchange')!;
     // `skipped` is a fact about the request; a missing key is a question about the log.
     expect(line.fields.connection_id).toBe('skipped');
-    expect(line.fields.saas_refresh_result).toBe('skipped');
-    expect(line.fields.token_issue_result).toBe('denied');
+    expect(line.fields.google_refresh_result).toBe('skipped');
+    expect(line.fields.access_token_issue_result).toBe('denied');
   });
 
   it('keeps state and code out of the callback face log', async () => {

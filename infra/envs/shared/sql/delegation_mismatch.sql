@@ -11,7 +11,7 @@ SELECT
   jsonPayload.trace_id AS trace_id,
   'delegation_mismatch' AS detection_code,
   TO_JSON_STRING(STRUCT(
-    jsonPayload.fields.idjag_sub AS idjag_sub,
+    jsonPayload.fields.id_jag_sub AS id_jag_sub,
     jsonPayload.fields.registration_human_subject AS registration_human_subject
   )) AS detail
 FROM `${project_id}.security_audit.run_googleapis_com_stdout`

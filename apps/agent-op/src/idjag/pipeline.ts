@@ -106,14 +106,14 @@ export async function runIdJagIssuance(input: IssuanceInput): Promise<IdJagIssua
   verifyDelegation({
     subjectSub: subject.sub, actorSub: actor.sub, registration: input.registration,
     onMismatch: (detail) => {
-      input.trace.delegation_check = false;
+      input.trace.delegation_match = false;
       input.onViolation?.('delegation_mismatch', detail);
     },
   });
-  input.trace.delegation_check = true;
+  input.trace.delegation_match = true;
 
   step('agent_state');
-  input.trace.agent_expiry_check = agentExpiryCheck(input.registration, input.now);
+  input.trace.expiry_check = agentExpiryCheck(input.registration, input.now);
   verifyAgentState(input.registration, input.now);
 
   step('validate_audience');
@@ -137,7 +137,9 @@ export async function runIdJagIssuance(input: IssuanceInput): Promise<IdJagIssua
 
   step('sign');
   const idJag = await signIdJag(capped, input.signer);
-  input.trace.issued_id_jag = { jti: String(capped.jti), kid: input.signer.kid, cnf_jkt: input.dpopJkt };
+  input.trace.issued_jti = String(capped.jti);
+  input.trace.issued_kid = input.signer.kid;
+  input.trace.issued_jkt = input.dpopJkt;
   input.onIssued?.(capped, input.signer.kid);
 
   step('build_response');

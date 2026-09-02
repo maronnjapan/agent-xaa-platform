@@ -161,7 +161,7 @@ describe('rule detection', () => {
   const METRIC_ENTRY: Readonly<Record<string, Parameters<typeof logEntry>[0]>> = {
     token_request: { log_source: 'agent_op', app: 'agent-op' },
     id_jag_issued: { log_source: 'agent_op', app: 'agent-op', fields: { result: 'issued' } },
-    google_refresh_failure: { log_source: 'google_bridge', app: 'google-bridge', fields: { token_issue_result: 'error' } },
+    google_refresh_failure: { log_source: 'google_bridge', app: 'google-bridge', fields: { access_token_issue_result: 'error' } },
     subject_token_refetch: { log_source: 'agent_op', app: 'agent-op', fields: { grant_type: 'subject_token' } },
     auth_failure: { severity: 'WARNING' },
   };

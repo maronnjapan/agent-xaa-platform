@@ -52,8 +52,8 @@ export async function redeemHandler(context: Context, params: Record<string, str
   if (!deps) throw new Error('redeem is not configured');
   const inspected = inspectAssertion(params.assertion);
   const entry: IdJagRedemptionLog = {
-    ...inspected, scope: params.scope ?? null, cnf_jkt_match: null, token_issued: false,
-    authorization_decision: 'deny:unknown', validation_name: null,
+    ...inspected, scope: params.scope ?? null, cnf_jkt: null, dpop_binding_result: null, token_issue_result: false,
+    authz_decision: 'deny:unknown', validation_name: null,
   };
   const logContext = { request_id: '', trace_id: context.req.header('X-Cloud-Trace-Context')?.split('/')[0] ?? '', agent_id: null, human_subject: null };
 
@@ -70,7 +70,8 @@ export async function redeemHandler(context: Context, params: Record<string, str
       ...(deps.now ? { now: deps.now } : {}),
       ...(deps.recordStep ? { recordStep: deps.recordStep } : {}),
     });
-    entry.cnf_jkt_match = true;
+    entry.dpop_binding_result = true;
+    entry.cnf_jkt = result.jkt;
     entry.scope = result.scope.join(' ');
 
     const issuedAt = Math.floor((deps.now?.() ?? Date.now()) / 1000);
@@ -99,8 +100,8 @@ export async function redeemHandler(context: Context, params: Record<string, str
       cnf_jkt: result.jkt, idpIssuer: result.assertion.iss, idJagJti: result.assertion.jti,
     });
 
-    entry.token_issued = true;
-    entry.authorization_decision = 'allow';
+    entry.token_issue_result = true;
+    entry.authz_decision = 'allow';
     context.header('Cache-Control', 'no-store');
     context.header('Pragma', 'no-cache');
     // RFC 9449 §5: a key-bound token is presented with the DPoP scheme. No refresh
@@ -113,9 +114,9 @@ export async function redeemHandler(context: Context, params: Record<string, str
     });
   } catch (error) {
     const mapped = toError(error);
-    entry.authorization_decision = `deny:${mapped.body.error}`;
+    entry.authz_decision = `deny:${mapped.body.error}`;
     entry.validation_name = mapped.validationName;
-    if (mapped.body.error === 'invalid_grant') entry.cnf_jkt_match = entry.cnf_jkt_match ?? false;
+    if (mapped.body.error === 'invalid_grant') entry.dpop_binding_result = entry.dpop_binding_result ?? false;
     context.header('Cache-Control', 'no-store');
     context.header('Pragma', 'no-cache');
     return context.json(mapped.body, mapped.status);

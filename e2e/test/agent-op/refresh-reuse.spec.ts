@@ -62,7 +62,7 @@ describe('refresh token reuse at /xaa/subject-token', () => {
     expect(stored!.status).toBe('REVOKED');
     // And the connection log says why, without naming the token or its hash.
     const record = (JSON.parse(agentOp.connectionLogs.at(-1)!) as { fields: Record<string, unknown> }).fields;
-    expect(record.reuse_detected).toBe(true);
+    expect(record.refresh_reuse_detected).toBe(true);
     expect(agentOp.connectionLogs.join('\n')).not.toContain('rt-1');
     expect(agentOp.connectionLogs.join('\n')).not.toContain('rt-2');
   });

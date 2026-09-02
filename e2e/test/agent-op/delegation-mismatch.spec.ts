@@ -52,7 +52,7 @@ describe('delegation mismatch at /xaa/token', () => {
     expect(violations[0]!.phase).toBe('security');
     expect(violations[0]!.outcome).toBe('blocked');
     // The exchange log carries the same verdict, and no grant was written to the ledger.
-    expect((JSON.parse(agentOp.exchangeLogs.at(-1)!) as { fields: { delegation_check: boolean } }).fields.delegation_check).toBe(false);
+    expect((JSON.parse(agentOp.exchangeLogs.at(-1)!) as { fields: { delegation_match: boolean } }).fields.delegation_match).toBe(false);
     expect(agentOp.ledgerLogs).toHaveLength(0);
   });
 });

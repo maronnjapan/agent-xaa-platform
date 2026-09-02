@@ -20,16 +20,18 @@ describe('RULE-49 delegation check', () => {
     expect(violations[0]!.outcome).toBe('blocked');
   });
 
+  // Title kept verbatim: docs/rule-traceability.md's RULE-49 row names this exact
+  // test string, and the field it now checks is `delegation_match` (T-SEC-05).
   it('records delegation_check=true on match', async () => {
     const fixture = await createFixture();
     await exchange(fixture);
-    expect((JSON.parse(fixture.exchangeLogs[0]!) as { fields: { delegation_check: boolean } }).fields.delegation_check).toBe(true);
+    expect((JSON.parse(fixture.exchangeLogs[0]!) as { fields: { delegation_match: boolean } }).fields.delegation_match).toBe(true);
   });
 
-  it('records delegation_check=false on mismatch', async () => {
+  it('records delegation_match=false on mismatch', async () => {
     const fixture = await createFixture({ registration: { human_subject: 'user-B' } });
     await exchange(fixture, { form: { subject_token: await subjectToken(fixture, { sub: 'user-A' }) } });
-    expect((JSON.parse(fixture.exchangeLogs[0]!) as { fields: { delegation_check: boolean } }).fields.delegation_check).toBe(false);
+    expect((JSON.parse(fixture.exchangeLogs[0]!) as { fields: { delegation_match: boolean } }).fields.delegation_match).toBe(false);
   });
 
 });

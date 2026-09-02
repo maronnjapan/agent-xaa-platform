@@ -6,6 +6,7 @@ import {
   type Es256KeyPair,
 } from '@xaa/crypto';
 import { JWT_BEARER_GRANT_TYPE, JWT_TYP, PLATFORM_CLIENT_ID, toAgentUrn } from '@xaa/contracts';
+import { expectLogFields } from '@xaa/logging';
 import { createInternalApp, createCallbackApp } from '../src/index.js';
 import { difference, isSubset, parseScope } from '../src/scope/subset.js';
 import { buildTokenResponse } from '../src/token/response.js';
@@ -554,19 +555,20 @@ describe('the token response', () => {
 });
 
 describe('the log line', () => {
-  it('carries all seven fields whether the request succeeded or not', async () => {
+  it('carries all eight fields whether the request succeeded or not', async () => {
     const { harness, dpopKey } = await ready();
     await exchange(harness, { idJag: await mintIdJag({ dpopKey }), dpopKey });
     await exchange(harness, { idJag: await mintIdJag({ dpopKey, typ: 'at+jwt' }), dpopKey });
-    const lines = harness.logs
-      .map((line) => JSON.parse(line) as { event: string; fields: Record<string, unknown> })
-      .filter((entry) => entry.event === 'bridge_token_exchange');
+    const rawLines = harness.logs.filter((line) => (JSON.parse(line) as { event: string }).event === 'bridge_token_exchange');
+    const lines = rawLines.map((line) => JSON.parse(line) as { event: string; fields: Record<string, unknown> });
     expect(lines).toHaveLength(2);
     for (const line of lines) {
       expect(Object.keys(line.fields).sort()).toEqual([...BRIDGE_LOG_FIELDS].sort());
     }
     // The stage a failed request never reached says so, rather than being absent.
     expect(lines[1]!.fields.connection_id).toBe('skipped');
+    // T-SEC-05: the shared helper checks the same line against `IDENTITY_EVENT_FIELDS`.
+    expectLogFields(rawLines[0]!, 'bridge.token');
   });
 
   it('drops a credential-named field and refuses an unplanned one', async () => {

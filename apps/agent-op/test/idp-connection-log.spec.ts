@@ -7,7 +7,7 @@ import {
 } from './helpers.js';
 
 const PATH = '/xaa/subject-token';
-const FIELDS = ['idp_connection_id', 'rotation_result', 'reuse_detected', 'subject_token_reissue', 'revoke_result'];
+const FIELDS = ['idp_connection_id', 'refresh_rotation_result', 'refresh_reuse_detected', 'subject_token_refetch_result', 'revoke_result'];
 
 async function seedConnection(fixture: Fixture): Promise<void> {
   await fixture.documents.set('idp_connections', fixture.registration.idp_connection_id, {
@@ -62,16 +62,16 @@ describe('IdP connection log', () => {
     expect(Object.keys(record).sort()).toEqual([...FIELDS].sort());
     expect(record).toMatchObject({
       idp_connection_id: fixture.registration.idp_connection_id,
-      rotation_result: 'rotated',
-      reuse_detected: false,
-      subject_token_reissue: 'ok',
+      refresh_rotation_result: 'rotated',
+      refresh_reuse_detected: false,
+      subject_token_refetch_result: 'ok',
       revoke_result: 'n/a',
     });
     expect(record).not.toHaveProperty('agent_id');
     expect(record).not.toHaveProperty('human_subject');
   });
 
-  it('reuse path emits reuse_detected=true', async () => {
+  it('reuse path emits refresh_reuse_detected=true', async () => {
     const fixture = await createFixture();
     await seedConnection(fixture);
     fixture.humanIdpResponses.push(Response.json({ id_token: 'a.b.c', refresh_token: 'rt-new' }));
@@ -87,8 +87,8 @@ describe('IdP connection log', () => {
 
     const record = fieldsOf(fixture.connectionLogs[1]!);
     expect(Object.keys(record).sort()).toEqual([...FIELDS].sort());
-    expect(record.reuse_detected).toBe(true);
-    expect(record.subject_token_reissue).toBe('failed');
+    expect(record.refresh_reuse_detected).toBe(true);
+    expect(record.subject_token_refetch_result).toBe('failed');
   });
 
   it('revoke path emits revoke_result', async () => {
@@ -99,8 +99,8 @@ describe('IdP connection log', () => {
     const ok = fieldsOf(fixture.connectionLogs[0]!);
     expect(Object.keys(ok).sort()).toEqual([...FIELDS].sort());
     expect(ok.revoke_result).toBe('ok');
-    expect(ok.rotation_result).toBe('not_rotated');
-    expect(ok.subject_token_reissue).toBe('n/a');
+    expect(ok.refresh_rotation_result).toBe('not_rotated');
+    expect(ok.subject_token_refetch_result).toBe('n/a');
 
     const failing = await createFixture();
     await seedConnection(failing);

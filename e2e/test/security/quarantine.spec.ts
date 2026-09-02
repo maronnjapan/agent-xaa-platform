@@ -58,9 +58,9 @@ describe('quarantine stops issuance', () => {
     await quarantine(agentOp);
     await requestIdJag(agentOp, { subjectToken: token });
     const trace = (JSON.parse(agentOp.exchangeLogs.at(-1)!) as {
-      fields: { agent_expiry_check: string; error_code: string };
+      fields: { expiry_check: string; error_code: string };
     }).fields;
-    expect(trace.agent_expiry_check).toBe('not_active');
+    expect(trace.expiry_check).toBe('not_active');
     expect(trace.error_code).toBe('invalid_grant');
   });
 
@@ -73,7 +73,7 @@ describe('quarantine stops issuance', () => {
     const response = await requestIdJag(agentOp, { subjectToken: token });
     expect(response.status).toBe(400);
     expect((JSON.parse(agentOp.exchangeLogs.at(-1)!) as {
-      fields: { agent_expiry_check: string };
-    }).fields.agent_expiry_check).toBe('expired');
+      fields: { expiry_check: string };
+    }).fields.expiry_check).toBe('expired');
   });
 });

@@ -7,8 +7,8 @@ import { mintIdJag, redeemForAccessToken, startResource, type ResourceHarness } 
 
 /** REQ-09-011: the twelve fields every redemption must carry, allowed or denied. */
 const REDEMPTION_FIELDS = [
-  'idjag_iss', 'idjag_sub', 'idjag_act_sub', 'idjag_client_id', 'idjag_jti', 'received_kid', 'received_typ',
-  'audience', 'resource', 'scope', 'cnf_jkt_match', 'token_issued',
+  'id_jag_iss', 'id_jag_sub', 'id_jag_act', 'id_jag_client_id', 'idjag_jti', 'received_kid', 'received_typ',
+  'audience', 'resource', 'scope', 'dpop_binding_result', 'token_issue_result',
 ];
 
 interface LogLine { event: string; fields: Record<string, unknown> }
@@ -53,10 +53,10 @@ describe('the finance Authorization Server logs every redemption', () => {
     for (const field of REDEMPTION_FIELDS) expect(Object.keys(entry.fields)).toContain(field);
     expect(entry.fields.received_typ).toBe('oauth-id-jag+jwt');
     expect(entry.fields.received_kid).toBe('op-shared-1');
-    expect(entry.fields.idjag_act_sub).toBe(`urn:xaa:agent:${agentOp.agentId}`);
-    expect(entry.fields.cnf_jkt_match).toBe(true);
-    expect(entry.fields.token_issued).toBe(true);
-    expect(entry.fields.authorization_decision).toBe('allow');
+    expect(entry.fields.id_jag_act).toBe(`urn:xaa:agent:${agentOp.agentId}`);
+    expect(entry.fields.dpop_binding_result).toBe(true);
+    expect(entry.fields.token_issue_result).toBe(true);
+    expect(entry.fields.authz_decision).toBe('allow');
   });
 
   it('records the same twelve fields when the confirmation binding fails', async () => {
@@ -72,9 +72,9 @@ describe('the finance Authorization Server logs every redemption', () => {
 
     const entry = redemptions(docs).at(-1)!;
     for (const field of REDEMPTION_FIELDS) expect(Object.keys(entry.fields)).toContain(field);
-    expect(entry.fields.cnf_jkt_match).toBe(false);
-    expect(entry.fields.token_issued).toBe(false);
-    expect(entry.fields.authorization_decision).toBe('deny:invalid_grant');
+    expect(entry.fields.dpop_binding_result).toBe(false);
+    expect(entry.fields.token_issue_result).toBe(false);
+    expect(entry.fields.authz_decision).toBe('deny:invalid_grant');
     expect(entry.fields.validation_name).toBe('dpop_key_binding_mismatch');
   });
 

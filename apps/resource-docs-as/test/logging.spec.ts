@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expectNoRawToken } from '@xaa/logging';
+import { expectLogFields, expectNoRawToken } from '@xaa/logging';
 import { createTestAs } from './helpers.js';
 
 /**
@@ -32,18 +32,20 @@ async function redeem(assertion: string) {
 
 describe('the Resource AS redemption log', () => {
   it('logs received kid and typ on verification failure', async () => {
-    const { response, entry } = await redeem(forgedIdJag(
+    const { response, entry, line } = await redeem(forgedIdJag(
       { alg: 'ES256', kid: 'idjag-abcdefghijkl-1', typ: 'oauth-id-jag+jwt' },
       { iss: 'https://shared-agent-op.test', sub: 'testuser', jti: 'jti-forged' },
     ));
 
     expect(response.status).toBe(400);
     expect(entry.event).toBe('resource_as.redeem');
+    // Every field of the table in docs 09 §2 is present, under the table's own names (T-SEC-05).
+    expectLogFields(line, 'resource_as.redeem');
     // The signature never verified, and the join keys are recorded all the same.
     expect(entry.fields.received_kid).toBe('idjag-abcdefghijkl-1');
     expect(entry.fields.received_typ).toBe('oauth-id-jag+jwt');
     expect(entry.fields.idjag_jti).toBe('jti-forged');
-    expect(entry.fields.token_issued).toBe(false);
+    expect(entry.fields.token_issue_result).toBe(false);
   });
 
   it('records a wrong typ rather than normalising it away', async () => {

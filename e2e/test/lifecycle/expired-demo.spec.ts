@@ -69,7 +69,7 @@ describe('a three minute agent, after four minutes', () => {
     // The refusal came from the connection's own expiry, before anything was decrypted
     // or sent: the reissue never started.
     expect(JSON.parse(agentOp.connectionLogs.at(-1)!).fields).toMatchObject({
-      idp_connection_id: connectionId, subject_token_reissue: 'n/a',
+      idp_connection_id: connectionId, subject_token_refetch_result: 'n/a',
     });
   });
 

@@ -4,7 +4,7 @@ import { authorize, tokenRequest } from '../../harness/oauth-flow.js';
 import { AUTOMATION_REDIRECT_URI, HUMAN_IDP_ISSUER, startHumanIdp } from '../../harness/human-idp.js';
 
 const COMMON = ['human_subject', 'agent_id', 'trace_id', 'timestamp'];
-const SPECIFIC = ['client_id', 'audience', 'scope', 'auth_result', 'failure_code', 'dpop_status', 'source_ip', 'user_agent'];
+const SPECIFIC = ['client_id', 'audience', 'scope', 'auth_result', 'failure_code', 'dpop_result', 'source_ip', 'user_agent'];
 
 describe('Human IdP audit log', () => {
   it('emits every field on success and on failure, and never a raw token', async () => {
@@ -50,7 +50,7 @@ describe('Human IdP audit log', () => {
     expect(['invalid_client', 'invalid_scope', 'invalid_target', 'invalid_dpop_proof']).toContain(failure[0]!.failure_code);
   });
 
-  it('reports dpop_status valid at /token and not_applicable at /authorize', async () => {
+  it('reports dpop_result valid at /token and not_applicable at /authorize', async () => {
     const lines: string[] = [];
     const idp = await startHumanIdp({}, lines);
     const keyPair = await generateEs256KeyPair();
@@ -67,9 +67,9 @@ describe('Human IdP audit log', () => {
       },
     });
     const statuses = lines.map((line) => (JSON.parse(line) as {
-      fields: { dpop_status: string; scope: string | null };
+      fields: { dpop_result: string; scope: string | null };
     }).fields);
-    expect(statuses.some((entry) => entry.dpop_status === 'not_applicable')).toBe(true);
-    expect(statuses.some((entry) => entry.dpop_status === 'valid')).toBe(true);
+    expect(statuses.some((entry) => entry.dpop_result === 'not_applicable')).toBe(true);
+    expect(statuses.some((entry) => entry.dpop_result === 'valid')).toBe(true);
   });
 });

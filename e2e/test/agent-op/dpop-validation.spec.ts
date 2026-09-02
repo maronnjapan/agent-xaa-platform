@@ -90,6 +90,6 @@ describe('DPoP validation at /xaa/token', () => {
     const records = docs.logs.map((line) => JSON.parse(line) as { fields?: Record<string, unknown> })
       .map((line) => line.fields ?? {});
     expect(records.at(-1)!.validation_name).toBe('dpop_key_binding_mismatch');
-    expect(records.at(-1)!.cnf_jkt_match).toBe(false);
+    expect(records.at(-1)!.dpop_binding_result).toBe(false);
   });
 });
