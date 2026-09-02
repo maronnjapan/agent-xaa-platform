@@ -7,8 +7,7 @@ resource "google_storage_bucket" "jwks" {
   public_access_prevention    = "inherited"
 }
 
-resource "google_storage_bucket_iam_member" "jwks_public" {
-  bucket = google_storage_bucket.jwks.name
-  role   = "roles/storage.objectViewer"
-  member = "allUsers"
-}
+# The anonymous read grant on this bucket is one of the deliberate public surfaces, so it
+# lives with the others in iam-public.tf (T-IAC-16). Every grant to everyone in this
+# state is written in exactly one file, which is what makes the public surface readable
+# in one place.
