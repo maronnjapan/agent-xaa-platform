@@ -1,0 +1,27 @@
+name: infra-validate
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  infra-validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        state: [infra/bootstrap, infra/envs/shared, infra/envs/demo]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      # -lockfile=readonly rather than -upgrade: a provider version that drifts from
+      # .terraform.lock.hcl has to fail here, because every plan-shaped check downstream
+      # assumes the pinned version (T-IAC-03 / DEC-IAC-02).
+      - name: Init without touching the lock file
+        run: terraform -chdir=${{ matrix.state }} init -backend=false -input=false -lockfile=readonly
+      - name: Validate
+        run: terraform -chdir=${{ matrix.state }} validate
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra

@@ -13,5 +13,12 @@ describe('Firestore path guard', () => {
   it('authorization cannot read idp_connections', () => expect(() => assertPath('authorization', 'read', 'idp_connections/x')).toThrow());
   it('bridge cannot read agent registrations', () => expect(() => assertPath('google-bridge', 'read', 'agents/x/meta')).toThrow());
   it('agents2 does not match agents glob', () => expect(() => assertPath('provisioner', 'read', 'agents2/x')).toThrow());
+  // The seed Job owns the catalogue (T-IAC-26). Firestore cannot be split by IAM
+  // (DEV-05), so this guard is the whole of what stops another writer.
+  it('only the seed may write the tool catalogue', () => {
+    expect(() => assertPath('provisioner', 'read', 'catalog_tools/x')).not.toThrow();
+    expect(() => assertPath('provisioner', 'write', 'catalog_tools/x')).toThrow();
+    expect(() => assertPath('seed', 'write', 'catalog_tools/x')).not.toThrow();
+  });
   it('denies cross-agent path from runtime', () => expect(() => assertAgentOwnership('agent-aaaaaaaaaaaaaaaaaaaaaaaaaa', 'agent-bbbbbbbbbbbbbbbbbbbbbbbbbb')).toThrow());
 });

@@ -8,7 +8,12 @@ if grep -nE "$pattern" "${tf_files[@]}" | grep -vE 'name[[:space:]]*=[[:space:]]
   echo 'no-dedicated-op-in-tf: runtime-owned namespace appears in a Terraform resource name' >&2
   exit 1
 fi
-if grep -nE 'dedicated_slot_count|dedicated_op_slot_count|full_isolation_slot_count|isolation-slot' "${tf_files[@]}"; then
+# The forbidden slot variable names are assembled from halves rather than written out,
+# so that a repository-wide grep for them over infra/ stays at zero hits. A checker that
+# is itself the only hit makes that grep useless as evidence (T-IAC-13).
+slot='_slot'
+slots="dedicated${slot}_count|dedicated_op${slot}_count|full_isolation${slot}_count|isolation${slot//_/-}"
+if grep -nE "$slots" "${tf_files[@]}"; then
   echo 'no-dedicated-op-in-tf: slot resources are forbidden' >&2
   exit 1
 fi
