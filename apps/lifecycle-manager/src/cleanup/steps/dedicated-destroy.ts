@@ -1,6 +1,6 @@
-import { assertRuntimeName, shortId } from '@xaa/contracts';
+import { assertRuntimeName } from '@xaa/contracts';
 import { deletionOrder, markDeleted, releaseIfDone, type DedicatedResourceRecord } from '../../dedicated.js';
-import type { CleanupContext } from '../../clients/types.js';
+import type { CleanupClients, CleanupContext } from '../../clients/types.js';
 
 /**
  * step8. Removes the four kinds of resource a FULL_ISOLATION agent was given.
@@ -22,8 +22,7 @@ export async function dedicatedDestroy(context: CleanupContext): Promise<'succee
 
   for (const resource of deletionOrder(record)) {
     if (resource.kind === 'service_account') continue;
-    assertRuntimeName(guardedName(resource.kind, resource.name));
-    await destroy(context, resource.kind, resource.name);
+    await destroyRuntimeResource(context.clients, resource.kind, resource.name);
     await markDeleted({ documents: context.documents, agentId: context.domain.agent_id, name: resource.name, now: context.now });
   }
   await releaseIfDone({ documents: context.documents, agentId: context.domain.agent_id });
@@ -43,8 +42,7 @@ export async function dedicatedSaDelete(context: CleanupContext): Promise<'succe
 
   for (const resource of deletionOrder(record)) {
     if (resource.kind !== 'service_account') continue;
-    assertRuntimeName(guardedName(resource.kind, resource.name));
-    await context.clients.iam.deleteServiceAccount(resource.name);
+    await destroyRuntimeResource(context.clients, resource.kind, resource.name);
     await markDeleted({ documents: context.documents, agentId: context.domain.agent_id, name: resource.name, now: context.now });
   }
   await releaseIfDone({ documents: context.documents, agentId: context.domain.agent_id });
@@ -67,15 +65,34 @@ function guardedName(kind: string, name: string): string {
   return member.slice('serviceAccount:'.length).split('@')[0]!;
 }
 
-async function destroy(context: CleanupContext, kind: string, name: string): Promise<void> {
-  if (kind === 'cloud_run_job') { await context.clients.cloudRun.deleteJob(name); return; }
-  if (kind === 'cloud_run_service') { await context.clients.cloudRun.deleteService(name); return; }
+/**
+ * Removing one runtime resource, whatever found it.
+ *
+ * The ledger walk above and the sweep's orphan collection (T-LIFE-10 stage (e)) delete
+ * exactly the same things by exactly the same rules; the only difference is how the
+ * name was discovered. One implementation means the `assertRuntimeName` guard and the
+ * "a CryptoKey's versions are scheduled, never the key itself" rule cannot drift apart
+ * between the two callers.
+ *
+ * A runtime key is created once and never rotated, so version 1 is all there is. The
+ * published JWKS entry is derived from the key's own name rather than from the agent
+ * id, so this works for a resource whose ledger row was never written.
+ */
+export async function destroyRuntimeResource(
+  clients: Pick<CleanupClients, 'cloudRun' | 'kms' | 'iam' | 'jwks'>, kind: string, name: string,
+): Promise<void> {
+  assertRuntimeName(guardedName(kind, name));
+  if (kind === 'cloud_run_job') { await clients.cloudRun.deleteJob(name); return; }
+  if (kind === 'cloud_run_service') { await clients.cloudRun.deleteService(name); return; }
+  if (kind === 'service_account') { await clients.iam.deleteServiceAccount(name); return; }
   if (kind === 'crypto_key') {
-    await context.clients.kms.destroyCryptoKeyVersion(`${name}/cryptoKeyVersions/1`);
-    await context.clients.jwks.deleteKey(`keys/idjag-${shortId(context.domain.agent_id)}-1.json`).catch(() => undefined);
+    await clients.kms.destroyCryptoKeyVersion(`${name}/cryptoKeyVersions/1`);
+    const leaf = name.split('/').pop() ?? name;
+    // Only the signing key is published; the connection key never had a JWKS entry.
+    if (leaf.startsWith('idjag-')) await clients.jwks.deleteKey(`keys/${leaf}-1.json`).catch(() => undefined);
     return;
   }
-  if (kind === 'iam_binding') { await context.clients.iam.removeBinding(name); return; }
+  if (kind === 'iam_binding') { await clients.iam.removeBinding(name); return; }
 }
 
 export const NO_DEDICATED_RESOURCES = 'no_dedicated_resources';
