@@ -68,8 +68,8 @@ function requestShapeHits(context: RuleContext): RuleHit[] {
       }
     }
 
-    // Byte equality, never a prefix (DEV-12): `https://resource-docs-as-x.run.app.evil`
-    // shares a prefix with the registered audience and is a different host.
+    // Byte equality, never a prefix (DEV-12): a host built by appending a further
+    // label to the registered audience shares a prefix with it and is a different host.
     hits.push(...exactMatchHits({
       event, ruleId: 'authorization.unknown_audience',
       observed: asList(event.attributes.requested_audience), expected: registration?.allowed_audiences,

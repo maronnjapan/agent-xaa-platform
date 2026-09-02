@@ -36,6 +36,7 @@ describe('shared JWKS cache', () => {
     const { fetchImpl } = counter(await jwksBody());
     const cache = createJwksCache({ url: 'https://jwks.test/jwks.json', fetchImpl, allowedKidPrefixes: ['idp-'] });
     await expect(cache.getKey('idp-1')).resolves.toBeDefined();
+    await expect(cache.getKey('op-shared-1')).rejects.toMatchObject({ code: 'invalid_jwk' });
     await expect(cache.getKey('op-shared-1')).rejects.toBeInstanceOf(XaaCryptoError);
   });
 

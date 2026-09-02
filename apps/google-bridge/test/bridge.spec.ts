@@ -271,7 +271,9 @@ describe('the token exchange', () => {
     const { harness, dpopKey } = await ready();
     const response = await exchange(harness, {
       idJag: await mintIdJag({ dpopKey }), dpopKey,
-      grantType: 'urn:ietf:params:oauth:grant-type:jwt-dpop',
+      // Any grant this Bridge does not implement. The draft's non-existent DPoP grant
+      // name is not written anywhere in the repository, not even as a fixture (DEV-06).
+      grantType: 'urn:ietf:params:oauth:grant-type:device_code',
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'unsupported_grant_type' });

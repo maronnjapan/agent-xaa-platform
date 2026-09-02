@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSignerFromEnv, encodeBase64Url, generateEs256KeyPair, signCompactJws, verifyCompactJws } from '../src/index.js';
 import { exportPrivateJwk } from '../src/testing/private-jwk.js';
+
+// The record of dynamic imports the local branch must leave empty. The factory runs
+// once, the first time anything pulls in the KMS SDK.
+const { kmsModuleLoads } = vi.hoisted(() => ({ kmsModuleLoads: [] as string[] }));
+vi.mock('@google-cloud/kms', () => {
+  kmsModuleLoads.push('@google-cloud/kms');
+  return { KeyManagementServiceClient: class { } };
+});
 
 async function localEnv(extra: NodeJS.ProcessEnv = {}): Promise<NodeJS.ProcessEnv> {
   const pair = await generateEs256KeyPair();
@@ -36,9 +44,14 @@ describe('signer factory', () => {
 
   it('does not load the KMS client in local mode', async () => {
     await createSignerFromEnv(await localEnv());
-    const loaded = process.getBuiltinModule === undefined ? [] : [];
-    expect(loaded).toHaveLength(0);
+    expect(kmsModuleLoads).toEqual([]);
     const rootSurface = await import('../src/index.js');
     expect(Object.keys(rootSurface)).not.toContain('createKmsEs256Signer');
+    // The probe is not vacuous: the kms branch does reach the SDK.
+    await createSignerFromEnv({
+      SIGNER_MODE: 'kms', KID_PREFIX: 'op-shared',
+      KMS_KEY_VERSION: 'projects/p/locations/l/keyRings/k/cryptoKeys/c/cryptoKeyVersions/1',
+    });
+    expect(kmsModuleLoads).toEqual(['@google-cloud/kms']);
   });
 });

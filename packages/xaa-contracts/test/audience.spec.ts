@@ -14,3 +14,7 @@ it('element match, no prefix/substring match', () => {
   expect(audienceIncludes(controlPlane, 'authorization-platform-x')).toBe(false);
   expect(audienceIncludes(controlPlane, 'authorization')).toBe(false);
 });
+
+it('rejects non-string non-array aud', () => {
+  for (const aud of [null, {}, 42]) expect(audienceIncludes(aud, 'https://a.example')).toBe(false);
+});

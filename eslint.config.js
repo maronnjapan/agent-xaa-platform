@@ -17,23 +17,27 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ['apps/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: ['@xaa/crypto/dist/verifiers-internal'],
+      }],
+    },
+  },
+  // Flat config merges rules by name and the last block wins, so this one has to
+  // repeat the ban above: naming only the security modules here would hand agent-op
+  // and agent-runtime back the internal verifier that every other app is denied.
+  {
     files: ['apps/agent-op/**/*.ts', 'apps/agent-runtime/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', {
         paths: [
+          '@xaa/crypto/dist/verifiers-internal',
           '@platform/security/rules',
           '@platform/security/correlation',
           '@platform/security/scoring',
           '@platform/security/ai',
         ],
-      }],
-    },
-  },
-  {
-    files: ['apps/**/*.ts'],
-    rules: {
-      'no-restricted-imports': ['error', {
-        paths: ['@xaa/crypto/dist/verifiers-internal'],
       }],
     },
   },

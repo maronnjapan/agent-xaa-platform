@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { FromSchema } from 'json-schema-to-ts';
 import {
+  AGENT_STATUSES,
   agentRegistrationSchema,
   compile,
   platformEndpointsSchema,
@@ -42,6 +44,25 @@ describe('schema validation', () => {
 
   it('rejects an agent_id that does not match the 26-character pattern', () => {
     expect(() => assertRegistration({ ...validRegistration, agent_id: 'agent-01hxyz1234' })).toThrow(SchemaValidationError);
+  });
+
+  it('status enum is exhaustive', () => {
+    // 00b-conventions pins the lifecycle at nine values; T-PKG-20 follows that table.
+    expect([...AGENT_STATUSES]).toEqual([
+      'CREATED', 'PROVISIONING', 'ACTIVE', 'EXPIRING', 'EXPIRED', 'SUSPICIOUS', 'QUARANTINED', 'REVOKED', 'DESTROYED',
+    ]);
+    for (const status of AGENT_STATUSES) {
+      expect(() => assertRegistration({ ...validRegistration, status }), status).not.toThrow();
+    }
+    for (const status of ['active', 'PENDING', 'DELETED', '']) {
+      expect(() => assertRegistration({ ...validRegistration, status }), status).toThrow(SchemaValidationError);
+    }
+    // The derived type carries the same nine and nothing else.
+    const derived: FromSchema<typeof agentRegistrationSchema>['status'] = 'DESTROYED';
+    expect(derived).toBe('DESTROYED');
+    // @ts-expect-error a tenth status is not part of the union
+    const outside: FromSchema<typeof agentRegistrationSchema>['status'] = 'ARCHIVED';
+    expect(outside).toBe('ARCHIVED');
   });
 
   it('rejects an isolation level outside the two-value domain', () => {

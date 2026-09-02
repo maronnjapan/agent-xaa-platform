@@ -1,5 +1,4 @@
-import type { Firestore } from '@google-cloud/firestore';
-import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
+import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore, type Firestore } from '@xaa/gcp';
 import { createLogger } from '@xaa/logging';
 import { CAPABILITIES, type ActivityEvent, type Characteristics } from '@xaa/contracts';
 import createApp, { type AuthorizationDeps } from '../src/app.js';
