@@ -1,0 +1,14 @@
+# What each person may do, and therefore the ceiling on what any agent of theirs may
+# do (RULE-11): Effective is always a subset of this.
+#
+# One row per (subject, capability). A permission is taken away by removing its row —
+# `pnpm perm:set <subject> <capability> revoke` — rather than by flipping a flag, so an
+# entitlement that is gone leaves no record a reader could forget to check.
+- { human_subject: user-123, capability_id: calendar.event.read }
+- { human_subject: user-123, capability_id: calendar.event.write }
+- { human_subject: user-123, capability_id: mail.message.read }
+- { human_subject: user-123, capability_id: mail.message.send }
+- { human_subject: user-456, capability_id: finance.payment.read }
+- { human_subject: user-456, capability_id: finance.payment.approve }
+- { human_subject: user-456, capability_id: document.read }
+- { human_subject: user-456, capability_id: document.write }

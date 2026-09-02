@@ -33,6 +33,12 @@ export interface ToolSeed {
   [key: string]: unknown;
 }
 
+export interface HumanPermissionSeed {
+  human_subject: string;
+  capability_id: string;
+  granted_at?: string;
+}
+
 export interface CapabilitySeed {
   capability_id: string;
   [key: string]: unknown;
@@ -48,11 +54,25 @@ export interface CapabilitySeed {
  * permission model that RULE-09 keeps out of it. Every violating row is reported, not
  * just the first, so one run tells the operator everything that has to change.
  */
-export function validateSeed(connectors: ConnectorSeed[], tools: ToolSeed[], capabilities: CapabilitySeed[] = []): void {
+export function validateSeed(
+  connectors: ConnectorSeed[],
+  tools: ToolSeed[],
+  capabilities: CapabilitySeed[] = [],
+  humanPermissions: HumanPermissionSeed[] = [],
+): void {
   const errors: string[] = [];
   for (const capability of capabilities) {
     try { assertValidCapabilityId(capability.capability_id); }
     catch { errors.push(`invalid capability_id: ${capability.capability_id}`); }
+  }
+  const known = new Set(capabilities.map((entry) => entry.capability_id));
+  for (const grant of humanPermissions) {
+    // A grant of something the taxonomy does not define would sit in the table
+    // forever, matching nothing and explaining nothing.
+    if (known.size > 0 && !known.has(grant.capability_id)) {
+      errors.push(`unknown capability_id in human permission: ${grant.capability_id}`);
+    }
+    if (!grant.human_subject) errors.push(`human permission without a subject: ${grant.capability_id}`);
   }
   const connectorIds = new Set(connectors.map((entry) => entry.connector_id));
   const toolIds = new Set(tools.map((entry) => entry.tool_id));
