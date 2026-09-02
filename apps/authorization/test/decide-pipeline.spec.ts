@@ -117,4 +117,17 @@ describe('the decision pipeline', () => {
   it('keeps the taxonomy list stable', () => {
     expect(TAXONOMY).toHaveLength(8);
   });
+
+  /**
+   * Every capability is listed in `delegatable_permissions`, including the ones that
+   * are refused: absence means "not delegatable", so a missing row and a deliberate
+   * `false` would look the same in the data and different in review.
+   */
+  it('seeds one delegation row per capability', async () => {
+    const harness = await fixture();
+    const rows = await harness.documents.listAll<{ capability_id: string; delegatable: boolean }>('delegatable_permissions');
+    expect(rows).toHaveLength(8);
+    expect(rows.filter(({ data }) => data.delegatable === false).map(({ data }) => data.capability_id))
+      .toEqual(['calendar.event.write']);
+  });
 });

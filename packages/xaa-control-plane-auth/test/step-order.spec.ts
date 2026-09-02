@@ -60,7 +60,9 @@ describe('the eight control plane steps', () => {
   it('step 2: a token this issuer did not sign is refused', async () => {
     const other = await generateEs256KeyPair();
     const token = await accessToken(other, { cnf: { jkt } });
-    expect((await call({ token, proof: await proofFor(token) })).response.status).toBe(401);
+    const { response } = await call({ token, proof: await proofFor(token) });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'invalid_token' });
   });
 
   it('step 3: a token without the scope is 403', async () => {
@@ -80,7 +82,9 @@ describe('the eight control plane steps', () => {
   it('step 5: a proof for another endpoint is 401', async () => {
     const token = await accessToken(issuer.pair, { cnf: { jkt } });
     const proof = await createDpopProof({ method: 'POST', url: `${BASE}/elsewhere`, keyPair, accessToken: token });
-    expect((await call({ token, proof })).response.status).toBe(401);
+    const { response } = await call({ token, proof });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'invalid_dpop_proof' });
   });
 
   it('step 6: a replayed proof is 401', async () => {
@@ -128,5 +132,70 @@ describe('the eight control plane steps', () => {
     const token = await accessToken(issuer.pair, { scope: 'openid', cnf: { jkt } });
     const { emitted } = await call({ token, proof: await proofFor(token) });
     expect(emitted).toEqual(['invalid_scope']);
+  });
+
+  /**
+   * One refusal, one line — for every step. A step that refuses without recording it
+   * leaves Security Detection reading a platform where nothing was ever refused
+   * (T-SEC-12), and a step that records twice inflates every rule counting them.
+   */
+  it('records exactly one validation for each of the eight refusals', async () => {
+    const good = await accessToken(issuer.pair, { cnf: { jkt } });
+    const foreign = await accessToken(await generateEs256KeyPair(), { cnf: { jkt } });
+    const unscoped = await accessToken(issuer.pair, { scope: 'openid', cnf: { jkt } });
+    const attacker = await generateEs256KeyPair();
+    const refusals: Array<Promise<{ emitted: string[] }>> = [
+      call({ token: good, scheme: 'Bearer', proof: await proofFor(good) }),
+      call({ token: foreign, proof: await proofFor(foreign) }),
+      call({ token: unscoped, proof: await proofFor(unscoped) }),
+      call({ token: good }),
+      call({ token: good, proof: await createDpopProof({ method: 'POST', url: `${BASE}/elsewhere`, keyPair, accessToken: good }) }),
+      (async () => {
+        // Replay needs the same app twice, so this one is built by hand.
+        const { app, emitted } = build();
+        const proof = await proofFor(good);
+        const send = () => app.request(`${BASE}${PATH}`, {
+          method: 'POST', headers: { 'content-type': 'application/json', Authorization: `DPoP ${good}`, DPoP: proof }, body: '{}',
+        });
+        await send();
+        await send();
+        return { emitted };
+      })(),
+      call({ token: good, proof: await proofFor(good, attacker) }),
+      call({ token: good, proof: await proofFor(good), body: { human_subject: 'someone-else' } }),
+    ];
+    const emissions = (await Promise.all(refusals)).map((result) => result.emitted);
+    expect(emissions.map((emitted) => emitted.length)).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(emissions.flat()).toEqual([
+      'invalid_signature', 'invalid_signature', 'invalid_scope', 'invalid_dpop_proof',
+      'invalid_dpop_proof', 'replayed_dpop_proof', 'dpop_key_binding_mismatch', 'human_subject_mismatch',
+    ]);
+  });
+
+  /**
+   * The eight steps are a sequence, not a menu: an app that reached for one of the
+   * halves could compose them in another order, or leave one out, and no test of that
+   * app would notice. `controlPlaneAuth` is the only entry point apps may use.
+   */
+  it('is used by apps only through controlPlaneAuth', async () => {
+    const { readdir, readFile } = await import('node:fs/promises');
+    const appsRoot = new URL('../../../apps/', import.meta.url).pathname;
+    const offenders: string[] = [];
+    const walk = async (directory: string): Promise<void> => {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = `${directory}${entry.name}`;
+        if (entry.isDirectory()) await walk(`${path}/`);
+        else if (entry.name.endsWith('.ts')) {
+          const source = await readFile(path, 'utf8');
+          for (const match of source.matchAll(/import\s*\{([^}]*)\}\s*from\s*'@xaa\/control-plane-auth'/g)) {
+            if (/accessTokenMiddleware|dpopMiddleware/.test(match[1]!)) offenders.push(path);
+          }
+        }
+      }
+    };
+    for (const app of await readdir(appsRoot, { withFileTypes: true })) {
+      if (app.isDirectory()) await walk(`${appsRoot}${app.name}/src/`);
+    }
+    expect(offenders).toEqual([]);
   });
 });

@@ -22,6 +22,7 @@
     "gen:design-rules": "node scripts/gen-design-rules.mjs",
     "gen:diagrams": "python3 docs/diagrams/generate.py",
     "lint": "eslint . && node scripts/check-deps.mjs",
+    "perm:set": "node apps/authorization/dist/perm-set-cli.js",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:e2e": "vitest --project e2e run",
     "test:integration": "vitest --project integration run --passWithNoTests",

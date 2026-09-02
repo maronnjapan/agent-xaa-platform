@@ -4,6 +4,15 @@ import { authorizationDecisionResponseSchema, DECISION_RESPONSE_KEYS, ROUTES } f
 import { loadConfig } from '../src/config.js';
 import { createAuthzHarness, testConfig } from './helpers.js';
 
+/** Everything Terraform injects, so a test can take exactly one thing away. */
+const COMPLETE_ENV: NodeJS.ProcessEnv = {
+  ISSUER: testConfig.issuer, JWKS_URL: testConfig.jwksUrl, AUTHZ_AUDIENCE: testConfig.authzAudience,
+  PUBLIC_BASE_URL: testConfig.authzPublicBaseUrl, PROJECT_ID: 'p', REGION: 'r',
+  VERTEX_MODEL: 'gemini-2.5-flash', VERTEX_LOCATION: 'us-central1',
+  LIFECYCLE_MANAGER_URL: 'https://lifecycle.test', ACTIVITY_TOPIC: 'agent-activity-stream',
+  TAXONOMY_VERSION: 'v1', AGENT_MAX_LIFETIME_SECONDS: '86400',
+};
+
 describe('route surface', () => {
   it('exposes no GET besides healthz', () => {
     expect(ROUTES.filter((route) => route.method === 'GET' && route.path !== '/healthz')).toEqual([]);
@@ -37,16 +46,20 @@ describe('route surface', () => {
   });
 
   it('refuses to start without ISSUER', () => {
-    const complete: NodeJS.ProcessEnv = {
-      ISSUER: testConfig.issuer, JWKS_URL: testConfig.jwksUrl, AUTHZ_AUDIENCE: testConfig.authzAudience,
-      PUBLIC_BASE_URL: testConfig.authzPublicBaseUrl, PROJECT_ID: 'p', REGION: 'r',
-      VERTEX_MODEL: 'gemini-2.5-flash', VERTEX_LOCATION: 'us-central1',
-      LIFECYCLE_MANAGER_URL: 'https://lifecycle.test', ACTIVITY_TOPIC: 'agent-activity-stream',
-      TAXONOMY_VERSION: 'v1', AGENT_MAX_LIFETIME_SECONDS: '86400',
-    };
-    expect(() => loadConfig(complete)).not.toThrow();
-    expect(() => loadConfig({ ...complete, ISSUER: undefined })).toThrow(/ISSUER/);
-    expect(() => loadConfig({ ...complete, VERTEX_MODEL: undefined })).toThrow(/VERTEX_MODEL/);
+    expect(() => loadConfig(COMPLETE_ENV)).not.toThrow();
+    expect(() => loadConfig({ ...COMPLETE_ENV, ISSUER: undefined })).toThrow(/ISSUER/);
+    expect(() => loadConfig({ ...COMPLETE_ENV, VERTEX_MODEL: undefined })).toThrow(/VERTEX_MODEL/);
+  });
+
+  /**
+   * `createApp` takes an already-checked config, so the environment is checked on the
+   * one path that reaches it: `server.ts` builds the dependencies and only then calls
+   * `createApp`. A missing ISSUER stops there — the app is never constructed, rather
+   * than constructed with an issuer nobody set.
+   */
+  it('never reaches createApp when ISSUER is unset', async () => {
+    const { createRuntimeDeps } = await import('../src/runtime.js');
+    await expect(createRuntimeDeps({ ...COMPLETE_ENV, ISSUER: undefined })).rejects.toThrow(/ISSUER/);
   });
 });
 

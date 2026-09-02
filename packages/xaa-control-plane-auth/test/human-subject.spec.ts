@@ -15,11 +15,15 @@ describe('human subject middleware', () => {
     const { instance, emitter } = app();
     const response = await instance.request('/x', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ human_subject: 'user-456' }) });
     expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'human_subject_mismatch' });
     expect(emitter).toHaveBeenCalledOnce();
+    expect(emitter.mock.calls[0]![0]).toMatchObject({ validation: 'human_subject_mismatch', outcome: 'denied' });
   });
   it('injects the verified subject when omitted', async () => {
     const { instance } = app();
     const response = await instance.request('/x', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    // The handler reads c.get('humanSubject') only; the body carried nothing to prefer.
+    expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ humanSubject: 'user-123' });
   });
 });

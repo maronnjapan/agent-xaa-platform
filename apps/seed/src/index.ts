@@ -3,7 +3,7 @@ import { COLLECTIONS, compile, platformEndpointsSchema, type PlatformEndpoints }
 import { getFirestore } from '@xaa/gcp';
 import { parse } from 'yaml';
 import { resolveSeedPlaceholders } from './resolve.js';
-import { validateSeed, type ConnectorSeed, type ToolSeed } from './validate.js';
+import { validateSeed, type CapabilitySeed, type ConnectorSeed, type ToolSeed } from './validate.js';
 
 const DATA_COLLECTIONS = [
   COLLECTIONS.CATALOG_CONNECTORS, COLLECTIONS.CATALOG_TOOLS, COLLECTIONS.CAPABILITY_TAXONOMY,
@@ -34,7 +34,10 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
     .filter((entry) => env.ENABLE_GOOGLE_BRIDGE === 'true' || entry.connector_id !== 'stub-saas-calendar');
   const tools = [...records].filter(([name]) => name.startsWith('tools/')).map(([, value]) => value as ToolSeed)
     .filter((entry) => env.ENABLE_GOOGLE_BRIDGE === 'true' || entry.connector_id !== 'stub-saas-calendar');
-  validateSeed(connectors, tools);
+  const capabilities = (records.get('capabilities.yaml') as CapabilitySeed[] | undefined) ?? [];
+  // The naming rule is checked before the deletion below: a taxonomy that would be
+  // refused must not first empty the collections it was going to replace.
+  validateSeed(connectors, tools, capabilities);
   const firestore = getFirestore({ signer: 'kms', vertex: 'live', pubsub: 'gcp', store: 'gcp' }, env);
   for (const collection of DATA_COLLECTIONS) {
     const snapshots = await firestore.collection(collection).listDocuments();
@@ -48,7 +51,7 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
     ...connectors.map((entry) => [COLLECTIONS.CATALOG_CONNECTORS, entry.connector_id, entry] as [string, string, unknown]),
     ...tools.map((entry) => [COLLECTIONS.CATALOG_TOOLS, entry.tool_id, entry] as [string, string, unknown]),
   ];
-  for (const entry of (records.get('capabilities.yaml') as Array<{ capability_id: string }> ?? [])) writes.push([COLLECTIONS.CAPABILITY_TAXONOMY, entry.capability_id, entry]);
+  for (const entry of capabilities) writes.push([COLLECTIONS.CAPABILITY_TAXONOMY, entry.capability_id, entry]);
   for (const entry of (records.get('policies/delegatable.yaml') as Array<{ capability_id: string }> ?? [])) writes.push([COLLECTIONS.DELEGATABLE_PERMISSIONS, entry.capability_id, entry]);
   for (const entry of (records.get('policies/organization.yaml') as Array<{ policy_id: string }> ?? [])) writes.push([COLLECTIONS.ORGANIZATION_POLICIES, entry.policy_id, entry]);
   for (const entry of (records.get('policies/risk.yaml') as Array<{ policy_id: string }> ?? [])) writes.push([COLLECTIONS.RISK_POLICIES, entry.policy_id, entry]);

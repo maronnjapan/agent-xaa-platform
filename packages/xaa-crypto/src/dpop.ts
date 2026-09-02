@@ -89,7 +89,9 @@ export async function verifyDpopProof(proof: string, input: {
   if (!publicJwk || decoded.header.typ !== 'dpop+jwt') return invalid();
   const { htm, htu, iat, jti, ath } = decoded.payload;
   if (htm !== input.method.toUpperCase()) return invalid();
-  if (htu !== normalizeHtu(input.url)) return invalid();
+  // RFC 9449 §4.3: the htu claim is matched ignoring query and fragment, so a proof
+  // whose htu carries them still binds to the same endpoint (both sides normalised).
+  if (typeof htu !== 'string' || normalizeHtu(htu) !== normalizeHtu(input.url)) return invalid();
   const now = Math.floor((input.now?.() ?? Date.now()) / 1000);
   const window = input.iatWindowSeconds ?? 60;
   if (typeof iat !== 'number' || iat < now - window || iat > now + window) return invalid();

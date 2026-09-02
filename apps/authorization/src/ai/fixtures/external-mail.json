@@ -1,0 +1,7 @@
+{
+  "operations": ["summarise_meeting", "send_summary"],
+  "targetResources": ["mail", "calendar"],
+  "capabilities": ["mail.message.send", "calendar.event.read", "document.write"],
+  "characteristics": { "external_communication": true, "write_operation": true },
+  "confidence": 0.9
+}

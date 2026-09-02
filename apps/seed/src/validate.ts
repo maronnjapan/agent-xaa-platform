@@ -33,8 +33,27 @@ export interface ToolSeed {
   [key: string]: unknown;
 }
 
-export function validateSeed(connectors: ConnectorSeed[], tools: ToolSeed[]): void {
+export interface CapabilitySeed {
+  capability_id: string;
+  [key: string]: unknown;
+}
+
+/**
+ * DEC-SCOPE-03 / REQ-03-019. Every capability id in the taxonomy is checked against
+ * the naming rule before anything is written.
+ *
+ * The rule exists because a capability id is the vocabulary the Authorization AI is
+ * given and the Policy Engine decides on: an id naming a vendor (`google.calendar.read`)
+ * or an HTTP method (`document.GET`) would put the implementation back into the
+ * permission model that RULE-09 keeps out of it. Every violating row is reported, not
+ * just the first, so one run tells the operator everything that has to change.
+ */
+export function validateSeed(connectors: ConnectorSeed[], tools: ToolSeed[], capabilities: CapabilitySeed[] = []): void {
   const errors: string[] = [];
+  for (const capability of capabilities) {
+    try { assertValidCapabilityId(capability.capability_id); }
+    catch { errors.push(`invalid capability_id: ${capability.capability_id}`); }
+  }
   const connectorIds = new Set(connectors.map((entry) => entry.connector_id));
   const toolIds = new Set(tools.map((entry) => entry.tool_id));
   for (const connector of connectors) {

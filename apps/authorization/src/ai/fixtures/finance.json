@@ -1,0 +1,7 @@
+{
+  "operations": ["list_payments", "approve_payment"],
+  "targetResources": ["finance"],
+  "capabilities": ["finance.payment.read", "finance.payment.approve"],
+  "characteristics": { "write_operation": true },
+  "confidence": 0.9
+}
