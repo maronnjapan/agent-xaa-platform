@@ -1,0 +1,14 @@
+# internal face (BRIDGE_FACE=internal)
+DELETE /bindings/:agent_id
+GET /healthz
+POST /bindings
+POST /bindings/:agent_id/disable
+POST /connections/:connection_id/revoke-upstream
+POST /connections/check
+POST /connections/verify
+POST /token
+
+# callback face (BRIDGE_FACE=callback)
+GET /:connector_id/oauth/callback
+GET /:connector_id/oauth/start
+GET /healthz

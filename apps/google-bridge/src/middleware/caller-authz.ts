@@ -41,7 +41,10 @@ export function callerAuthz(roles: readonly CallerRole[], options: CallerAuthzOp
       return refuse(null);
     }
     const allowed = roles.flatMap((role) => options.serviceAccounts[role]);
-    if (!email || !allowed.some((account) => account !== '' && email!.startsWith(account))) return refuse(email);
+    // Whole-string equality. A prefix or suffix test would let
+    // `sa-provisioner@xaa.iam.gserviceaccount.com.attacker.example` in, and a domain
+    // nobody controls is exactly the kind of caller this list exists to keep out.
+    if (!email || !allowed.some((account) => account !== '' && account === email)) return refuse(email);
     context.set('callerEmail' as never, email as never);
     await next();
     return undefined;

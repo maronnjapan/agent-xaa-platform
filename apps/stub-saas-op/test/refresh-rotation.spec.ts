@@ -67,6 +67,36 @@ describe('the stub SaaS authorization server', () => {
     expect(kept.refresh_token).toBeUndefined();
   });
 
+  it('reads STUB_ROTATE_REFRESH_TOKEN=always when no option is passed', async () => {
+    // Terraform sets the variable on the stub's Cloud Run service; nothing passes an
+    // option there, so the environment is the switch that has to work.
+    const previous = process.env.STUB_ROTATE_REFRESH_TOKEN;
+    try {
+      process.env.STUB_ROTATE_REFRESH_TOKEN = 'always';
+      const rotating = createApp();
+      const first = await consent(rotating);
+      const rotated = await (await refresh(rotating, first.refreshToken)).json() as { refresh_token?: string };
+      expect(rotated.refresh_token).toBeTruthy();
+      expect(rotated.refresh_token).not.toBe(first.refreshToken);
+
+      process.env.STUB_ROTATE_REFRESH_TOKEN = 'never';
+      const stable = createApp();
+      const second = await consent(stable);
+      const kept = await (await refresh(stable, second.refreshToken)).json() as { refresh_token?: string };
+      expect(kept.refresh_token).toBeUndefined();
+
+      delete process.env.STUB_ROTATE_REFRESH_TOKEN;
+      const byDefault = createApp();
+      const third = await consent(byDefault);
+      const unset = await (await refresh(byDefault, third.refreshToken)).json() as { refresh_token?: string };
+      // Unset means `never`: rotation is the behaviour a test asks for on purpose.
+      expect(unset.refresh_token).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.STUB_ROTATE_REFRESH_TOKEN;
+      else process.env.STUB_ROTATE_REFRESH_TOKEN = previous;
+    }
+  });
+
   it('answers invalid_grant after the refresh token is revoked', async () => {
     const app = createApp();
     const { refreshToken } = await consent(app);

@@ -9,7 +9,7 @@ describe('the redirect guard', () => {
     expect(FORBIDDEN_REDIRECT_KEYS).toHaveLength(6);
   });
 
-  it('refuses a key in the fragment as well as the query', () => {
+  it('refuses #access_token=... in the fragment as well as in the query', () => {
     expect(() => assertNoTokenInRedirect('https://app.test/back#access_token=abc')).toThrow(RedirectGuardError);
     expect(() => assertNoTokenInRedirect('https://app.test/back#a=1&refresh_token=abc')).toThrow(RedirectGuardError);
   });

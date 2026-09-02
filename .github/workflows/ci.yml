@@ -69,7 +69,12 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # The Bridge specs gate on this flag (T-BRIDGE-20 / DEC-SCOPE-04). A developer
+      # running `pnpm test:e2e` sees them skipped, matching the default deployment;
+      # CI turns them on so the bridged path is still exercised on every change.
       - run: pnpm test:e2e
+        env:
+          ENABLE_GOOGLE_BRIDGE: 'true'
   # The registers that describe the repository: which requirement each task answers,
   # which rules the platform deliberately does not keep, and what the terms mean. They
   # are checked on every change because a stale register is read as if it were current.

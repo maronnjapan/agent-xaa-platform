@@ -30,9 +30,10 @@ const assertResponse: (value: unknown) => asserts value is BridgeTokenResponse =
  * alongside the access token would otherwise hand the agent a long-lived credential,
  * which is the one thing the Bridge exists to prevent (RULE-22).
  *
- * `token_type` is `Bearer` and the type says so. DEC-ID-13: DPoP is how this platform
- * binds its own tokens, and a token minted by an external SaaS is presented the way
- * that SaaS expects. There is no `cnf` here and no branch that adds one.
+ * `token_type` is `Bearer` and the type says so. DEC-ID-13: proof of possession is how
+ * this platform binds its own tokens, and a token minted by an external SaaS is
+ * presented the way that SaaS expects. There is no `cnf` here and no branch that adds
+ * one.
  */
 export function buildTokenResponse(input: {
   accessToken: string;

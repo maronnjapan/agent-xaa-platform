@@ -1,0 +1,11 @@
+{
+  "$comment": "The tests, typechecked. The build project is rootDir src / outDir dist, so it cannot also compile test/ without changing what ships in dist. This project emits nothing and exists so that a test which hands saveEncryptedRefreshToken a plaintext refresh token is a compile error rather than a passing test (T-BRIDGE-04).",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
