@@ -6,6 +6,7 @@ import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore
 import createAutomationApp from '@xaa/automation-app/app';
 import type { AutomationAppConfig } from '@xaa/automation-app/src/config';
 import { createSessionStore } from '@xaa/automation-app/src/auth/session-store';
+import { PUSH_SERVICE_ACCOUNT_PREFIX } from '@xaa/automation-app/src/activity/oidc-verify';
 import type { Fetcher } from './oauth-flow.js';
 
 export const AUTOMATION_APP_BASE = 'https://automation-app.test';
@@ -131,5 +132,40 @@ export async function startAutomationAppHarness(options: {
       ...init,
       headers: { cookie, ...(init.headers as Record<string, string> | undefined) },
     })),
+  };
+}
+
+/**
+ * A Pub/Sub push delivery's own OIDC identity: an RS256 token, signed with a throwaway
+ * key and verified the way `verifyGoogleServiceIdentity` verifies the real one — against
+ * a JWKS served over `fetchImpl` rather than https://www.googleapis.com. Nothing here
+ * reaches Google; the point is to exercise `/internal/activity/push` the way Pub/Sub's
+ * own delivery would authenticate it.
+ */
+export async function mintPushIdentity(options: { audience: string; email?: string }): Promise<{
+  token: string;
+  jwks: { keys: Array<JsonWebKey & { kid: string; alg: 'RS256' }> };
+}> {
+  const pair = await webcrypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true, ['sign', 'verify'],
+  );
+  const publicJwk = await webcrypto.subtle.exportKey('jwk', pair.publicKey);
+  const kid = 'push-testkey';
+  const now = Math.floor(Date.now() / 1000);
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const signingInput = `${encode({ alg: 'RS256', typ: 'JWT', kid })}.${encode({
+    iss: 'https://accounts.google.com',
+    aud: options.audience,
+    email: options.email ?? `${PUSH_SERVICE_ACCOUNT_PREFIX}xaa-test.iam.gserviceaccount.com`,
+    iat: now,
+    exp: now + 300,
+  })}`;
+  const signature = await webcrypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(signingInput),
+  );
+  return {
+    token: `${signingInput}.${Buffer.from(signature).toString('base64url')}`,
+    jwks: { keys: [{ ...publicJwk, kid, alg: 'RS256' }] },
   };
 }
