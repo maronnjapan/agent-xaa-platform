@@ -20,6 +20,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 | `enable_lb_reservation` | bool | `false` | issuer 用の Global IP と証明書だけを予約する |
 | `expiring_window_seconds` | number | `60` | 期限の何秒前から Agent を EXPIRING にするかを決める |
 | `finance_absolute_max_amount` | number | `1000000` | Finance API が受理できる金額の絶対上限を決める |
+| `google_oauth_client_id` | string | `""` | Google Auth Platform が発行した OAuth client ID。seed が Bridge の接続先定義に書く |
 | `google_oauth_client_secret_value` | string or null | `null` | Google OAuth Client Secret の初期バージョンを任意で作る |
 | `image_tag` | string | なし | Cloud Run が参照する不変イメージタグを指定する |
 | `issuer_domain` | string | `issuer.example.invalid` | Load Balancer プロファイルの issuer ホストを指定する |
@@ -41,19 +42,26 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 
 `scripts/deploy-gcp-guide.sh` は、GCP 認証、プロジェクト作成、請求先の関連付け、Terraform、Secret Manager、イメージ配布、SSO 鍵の初期化、seed、デモ用 Human Permission の付与、IAM 検証を順に実行する。
 最後にログイン方法とコンソールの URL を表示して終わる。
+リポジトリ直下の [README.md](../README.md) が、この手順を初めて使う人向けの入口である。
+
+2回目以降の実行や `make destroy-all` の後の実行でも同じコマンドでよい。
+state バケットは GCP に問い合わせて有無を判断し、削除できない KMS リソースは `scripts/adopt-existing-kms.sh` で state に取り込んでから apply する。
 
 手でしかできない箇所は、スクリプトが URL と入力内容まで含めて画面に出す。
 前提ツールの不足、請求先アカウントの用意、組織ポリシーの例外、Google OAuth client の作成がこれにあたる。
 不足しているコマンドは1件ずつではなくまとめて報告するため、入れ直して実行し直す回数は1回で済む。
 
 通常の Google アカウントまたは Google Workspace の SSO を使う場合は、次のように実行する。
+未ログインならブラウザが開き、ログイン済みならそのアカウントを使う。
+`PROJECT_ID` と `BILLING_ACCOUNT_ID` を省くと、対話で尋ねるか一覧から選ばせる。
 
 ```bash
 PROJECT_ID=<globally-unique-project-id> \
 BILLING_ACCOUNT_ID=<XXXXXX-XXXXXX-XXXXXX> \
-GCP_AUTH_MODE=browser \
 scripts/deploy-gcp-guide.sh all
 ```
+
+demo state の変数は既定で `infra/tfvars/deploy.tfvars` を使い、main へのマージで配備する場合と同じ構成になる。
 
 Workforce Identity Federation を使う場合は、管理者から受け取った login config を指定する。
 
@@ -75,14 +83,24 @@ SSO 署名鍵は Human IdP が初回アクセス時に生成し、KMS で包ん�
 
 IAM 到達性検証では、実行者に不足している `roles/iam.serviceAccountTokenCreator` を対象 Service Account にだけ一時付与し、検証後に削除する。
 
+Bridge を有効にする場合、Bridge が読む `connector_definitions` の行は seed Job が書く。
+`saas_connector_mode=stub` では `stub-saas-calendar` の1件を配備した stub SaaS へ向けて書き、client secret は stub が受け付ける固定値をスクリプトが `stub-bridge-client-secret` に登録する。
+
+```bash
+ENABLE_GOOGLE_BRIDGE=true \
+scripts/deploy-gcp-guide.sh all
+```
+
 外部 Google OAuth を有効にする場合は、Google Auth Platform で Web application の OAuth client を作り、secret をファイルから渡す。
 `GOOGLE_OAUTH_CLIENT_SECRET_FILE` を指定しなければ、スクリプトが端末から secret を読み取って Secret Manager へ渡す。
 承認済みリダイレクト URI は project number と region から決まるため、スクリプトが確定した値を表示する。
-Bridge が読む `connector_definitions` の行を書き込む経路は現時点の実装に無く、`ENABLE_GOOGLE_BRIDGE=true` は Bridge の配備と secret の登録までを行う。
+client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡すか、省いた場合は端末から読み取り、Terraform 変数 `google_oauth_client_id` を通して seed が `google-workspace` の行に書く。
+catalog には Google Calendar を呼ぶ Tool を定義していないため、`google` モードで動くのは Bridge の同意と接続の保持までである。
 
 ```bash
 ENABLE_GOOGLE_BRIDGE=true \
 SAAS_CONNECTOR_MODE=google \
+GOOGLE_OAUTH_CLIENT_ID=<client-id>.apps.googleusercontent.com \
 GOOGLE_OAUTH_CLIENT_SECRET_FILE=/secure/path/client-secret.txt \
 scripts/deploy-gcp-guide.sh all
 ```
@@ -136,7 +154,7 @@ deploy はその検査を繰り返さず、apply だけを行う。
 
 Terraform は Secret の値を持たないため、version の無い Secret を Cloud Run が mount するとリビジョンが起動せず apply が失敗する。
 `make ensure-secrets` は version の無い Secret にだけ生成した値を追加し、既存の version はそのまま使う。
-`google-oauth-client-secret` は Google Auth Platform で発行する値なので補充しない。
+`google-oauth-client-secret` は Google Auth Platform で発行する値なので補充せず、`stub-bridge-client-secret` は Bridge を有効にする配備だけが使う。
 Bridge を有効にする配備は `scripts/deploy-gcp-guide.sh` から行う。
 
 deploy と infra-destroy は同じ concurrency group を使うため、apply と destroy が同時に走ることはない。

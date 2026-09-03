@@ -35,6 +35,23 @@ resource "google_secret_manager_secret" "human_idp_client" {
   depends_on = [google_project_service.required]
 }
 
+# The stub SaaS the Bridge talks to in `saas_connector_mode = "stub"` checks a fixed client
+# secret, and the Bridge reads every connector's secret from Secret Manager by name (T-BRIDGE-09).
+# The container therefore exists whenever the shared state does; the deployment guide adds
+# the one version, so the value is never in a tfvars file or in Terraform state.
+resource "google_secret_manager_secret" "stub_bridge_client_secret" {
+  project   = var.project_id
+  secret_id = "stub-bridge-client-secret"
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+  depends_on = [google_project_service.required]
+}
+
 # Refresh tokens are KMS-encrypted in Firestore; Secret Manager stores only the OAuth client secret.
 resource "google_secret_manager_secret_version" "google_oauth_client_secret" {
   count       = var.google_oauth_client_secret_value == null ? 0 : 1

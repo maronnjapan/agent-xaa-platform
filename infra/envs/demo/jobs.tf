@@ -41,11 +41,17 @@ module "seed" {
   image                = "${data.terraform_remote_state.shared.outputs.repository_path}/seed:${var.image_tag}"
   service_account      = module.service_accounts["seed"].email
   task_timeout_seconds = 600
-  env = {
+  env = merge({
     PROJECT_ID             = var.project_id
     FIRESTORE_DATABASE     = "xaa"
     PLATFORM_ENDPOINTS_URI = "gs://${google_storage_bucket.platform_config.name}/platform-endpoints.json"
     SEED_BUCKET            = google_storage_bucket.platform_config.name
     ENABLE_GOOGLE_BRIDGE   = tostring(var.enable_google_bridge)
-  }
+    # What the seed writes into connector_definitions for the Bridge (T-BRIDGE-02): the
+    # stub's fixed client or the Google client. Secret names only; values stay in
+    # Secret Manager.
+    SAAS_CONNECTOR_MODE    = var.saas_connector_mode
+    STUB_BRIDGE_SECRET_ID  = data.terraform_remote_state.shared.outputs.stub_bridge_client_secret_id
+    GOOGLE_OAUTH_SECRET_ID = data.terraform_remote_state.shared.outputs.google_oauth_client_secret_id
+  }, var.google_oauth_client_id == "" ? {} : { GOOGLE_OAUTH_CLIENT_ID = var.google_oauth_client_id })
 }

@@ -61,10 +61,15 @@ function catalogue(): Record<string, string> {
   return files;
 }
 
+/** What infra/envs/demo/jobs.tf gives the Job, with the Bridge on and pointed at the stub. */
 const env = {
+  PROJECT_ID: 'demo',
   SEED_BUCKET: 'demo-platform-config',
   PLATFORM_ENDPOINTS_URI: 'gs://demo-platform-config/platform-endpoints.json',
   ENABLE_GOOGLE_BRIDGE: 'true',
+  SAAS_CONNECTOR_MODE: 'stub',
+  STUB_BRIDGE_SECRET_ID: 'stub-bridge-client-secret',
+  GOOGLE_OAUTH_SECRET_ID: 'google-oauth-client-secret',
 } as NodeJS.ProcessEnv;
 
 beforeEach(() => {
@@ -86,6 +91,11 @@ describe('the seed Job on bad input', () => {
     state.files[path] = state.files[path]!.replace('method: GET', 'method: FETCH');
 
     await expect(runSeed(env)).rejects.toThrow(/api\.method/);
+    expect(state.firestoreRequests).toBe(0);
+  });
+
+  it('refuses a google connector mode without a client id and never opens Firestore', async () => {
+    await expect(runSeed({ ...env, SAAS_CONNECTOR_MODE: 'google' })).rejects.toThrow(/GOOGLE_OAUTH_CLIENT_ID/);
     expect(state.firestoreRequests).toBe(0);
   });
 

@@ -198,6 +198,7 @@
 | `provisioning_transactions/{transaction_id}` | 8値の `status` と許可遷移表 | T-PROV-13 | T-PROV-16 / T-OP-25 |
 | `catalog_connectors/{connector_id}` | `resource_type` `authorization_audience` `authorization_resource` `bridge_audience` `status` `risk_level` `tools` | T-IAC-26 の seed のみ | T-PROV-03 / T-BRIDGE-03 |
 | `catalog_tools/{tool_id}` | `tool_id` `connector_id` `description` `required_capability` `authorization`（map、キーは `type` `audience` `resource` `scope`）`token_provider` `api`（map、キーは `base_url` `method` `path`）`parameters` `constraints` `response_schema` `risk_level` の11キーの入れ子形 | T-IAC-26 の seed のみ | T-PROV-03 / T-PROV-05 / T-AUTHZ-17 |
+| `connector_definitions/{connector_id}` | Bridge が読む接続先の12キー（`connector_id` `display_name` `authorization_endpoint` `token_endpoint` `revocation_endpoint` `userinfo_endpoint` `client_id` `secret_name` `default_scopes` `subject_claim` `connection_max_age_seconds` `resource_uris`）。`client_secret` を持たず `secret_name` で Secret Manager を指す。`enable_google_bridge=true` のときだけ行があり、`saas_connector_mode` に応じて `stub-saas-calendar` か `google-workspace` の1件 | T-IAC-26 の seed のみ | T-BRIDGE-02 |
 | `capability_taxonomy/{capability_id}` | `resource` `object` `action` `description` `default_characteristics` | T-IAC-26 の seed のみ | T-AUTHZ |
 | `human_permissions/{human_subject}__{capability_id}` | `human_subject` `capability_id` `granted_at` の1行1ドキュメント | T-IAC-26 の seed | T-PROV-12 が `where('human_subject','==',humanSubject)` で引く、T-AUTHZ-03 |
 | `delegatable_permissions/{capability_id}` | 委譲可能 Capability | T-IAC-26 の seed | T-AUTHZ |
@@ -220,7 +221,6 @@
 | `issuer_profiles` | 作らない | なし | issuer は環境変数 `ISSUER`、kid は `AGENT_ID` から導出する |
 | `agent_registrations` | 作らない | なし | `agents/{agent_id}/meta` に統一 |
 | `connector_bindings` | 作らない | なし | `agent_bindings` に統一 |
-| `connector_definitions` | 作らない | なし | `catalog_connectors` に統一 |
 | `jti_locks` | 作らない | なし | `dpop_jti` と `assertion_jti` に統一（DEC-IAC-22） |
 | `bridge_dpop_jti` | 作らない | なし | `dpop_jti` の名前空間 `dpop` に統一 |
 | `isolation_slots` | 作らない | なし | `dedicated_resources` に統一 |

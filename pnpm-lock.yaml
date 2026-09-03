@@ -755,6 +755,9 @@ importers:
       hono:
         specifier: 4.13.5
         version: 4.13.5
+      seed:
+        specifier: workspace:*
+        version: link:../apps/seed
     devDependencies:
       '@types/node':
         specifier: 22.18.1

@@ -6,6 +6,16 @@ resource "google_secret_manager_secret_iam_member" "bridge" {
   member    = module.service_accounts["google_bridge"].member
 }
 
+# The stub SaaS's client secret, readable by the Bridge alone and only while the stub is
+# the connector it talks to.
+resource "google_secret_manager_secret_iam_member" "bridge_stub" {
+  count     = var.enable_google_bridge && var.saas_connector_mode == "stub" ? 1 : 0
+  project   = var.project_id
+  secret_id = data.terraform_remote_state.shared.outputs.stub_bridge_client_secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = module.service_accounts["google_bridge"].member
+}
+
 resource "google_secret_manager_secret_iam_member" "human_idp_client" {
   for_each  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids
   project   = var.project_id
