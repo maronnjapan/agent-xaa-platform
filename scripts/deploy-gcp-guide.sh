@@ -2,6 +2,14 @@
 set -Eeuo pipefail
 umask 077
 
+# gcloud can interactively ask "Would you like to enable and retry (this will take a few
+# minutes)? (y/N)" when a command depends on an API that is not yet enabled (e.g. org-policies
+# describe needing orgpolicy.googleapis.com). Several call sites below redirect gcloud's
+# stderr away to stay quiet on expected failures, which hides that prompt while gcloud keeps
+# blocking on stdin for an answer that never comes — an invisible hang. Disabling prompts makes
+# gcloud take the default (proceed) action instead of asking, so no wrapped call can hang this way.
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
 # macOS ships bash 3.2, which rejects the empty arrays this script expands under set -u.
 # A newer bash from Homebrew is used when present; otherwise the reader is told how to get one.
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
