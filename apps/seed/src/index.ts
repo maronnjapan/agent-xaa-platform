@@ -6,13 +6,14 @@ import {
 } from '@xaa/contracts';
 import { getFirestore } from '@xaa/gcp';
 import { parse } from 'yaml';
+import { BRIDGED_CONNECTOR_ID, CONNECTOR_DEFINITIONS, bridgeConnectorDefinitions } from './connector-definitions.js';
 import { resolveSeedPlaceholders } from './resolve.js';
 import { validateSeed, type CapabilitySeed, type ConnectorSeed, type HumanPermissionSeed, type ToolSeed } from './validate.js';
 
 const DATA_COLLECTIONS = [
   COLLECTIONS.CATALOG_CONNECTORS, COLLECTIONS.CATALOG_TOOLS, COLLECTIONS.CAPABILITY_TAXONOMY,
   COLLECTIONS.HUMAN_PERMISSIONS, COLLECTIONS.DELEGATABLE_PERMISSIONS,
-  COLLECTIONS.ORGANIZATION_POLICIES, COLLECTIONS.RISK_POLICIES,
+  COLLECTIONS.ORGANIZATION_POLICIES, COLLECTIONS.RISK_POLICIES, CONNECTOR_DEFINITIONS,
 ] as const;
 
 async function downloadJson(storage: Storage, uri: string): Promise<unknown> {
@@ -34,7 +35,7 @@ export function withoutBridgedRows<T extends { connector_id: string }>(rows: T[]
   return bridgeEnabled ? rows : rows.filter((row) => row.connector_id !== BRIDGED_CONNECTOR_ID);
 }
 
-export const BRIDGED_CONNECTOR_ID = 'stub-saas-calendar';
+export { BRIDGED_CONNECTOR_ID } from './connector-definitions.js';
 
 export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   if (!env.SEED_BUCKET || !env.PLATFORM_ENDPOINTS_URI) throw new Error('seed environment is incomplete');
@@ -60,6 +61,9 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
   // refused must not first empty the collections it was going to replace.
   const humanPermissions = (records.get('human-permissions.yaml') as HumanPermissionSeed[] | undefined) ?? [];
   validateSeed(connectors, tools, capabilities, humanPermissions);
+  // Resolved here, before Firestore is opened: a missing client id must not first empty
+  // the collections the rows below were going to replace.
+  const connectorDefinitions = bridgeConnectorDefinitions(env, endpoints);
   const firestore = getFirestore({ signer: 'kms', vertex: 'live', pubsub: 'gcp', store: 'gcp' }, env);
   for (const collection of DATA_COLLECTIONS) {
     const snapshots = await firestore.collection(collection).listDocuments();
@@ -72,6 +76,7 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
   const writes: Array<[string, string, unknown]> = [
     ...connectors.map((entry) => [COLLECTIONS.CATALOG_CONNECTORS, entry.connector_id, entry] as [string, string, unknown]),
     ...tools.map((entry) => [COLLECTIONS.CATALOG_TOOLS, entry.tool_id, entry] as [string, string, unknown]),
+    ...connectorDefinitions.map((entry) => [CONNECTOR_DEFINITIONS, entry.connector_id, entry] as [string, string, unknown]),
   ];
   for (const entry of capabilities) writes.push([COLLECTIONS.CAPABILITY_TAXONOMY, entry.capability_id, entry]);
   // One document per (subject, capability), keyed the way the Provisioner and the

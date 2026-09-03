@@ -17,6 +17,7 @@ output "repository_path" { value = "${var.region}-docker.pkg.dev/${var.project_i
 output "security_audit_dataset" { value = google_bigquery_dataset.security_audit.dataset_id }
 output "agent_lifecycle_audit_table" { value = google_bigquery_table.agent_lifecycle_audit.table_id }
 output "google_oauth_client_secret_id" { value = google_secret_manager_secret.google_oauth_client_secret.secret_id }
+output "stub_bridge_client_secret_id" { value = google_secret_manager_secret.stub_bridge_client_secret.secret_id }
 output "human_idp_client_secret_ids" {
   value = { for name, secret in google_secret_manager_secret.human_idp_client : name => secret.secret_id }
 }

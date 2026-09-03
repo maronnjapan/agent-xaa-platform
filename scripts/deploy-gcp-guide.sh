@@ -2,6 +2,21 @@
 set -Eeuo pipefail
 umask 077
 
+# macOS ships bash 3.2, which rejects the empty arrays this script expands under set -u.
+# A newer bash from Homebrew is used when present; otherwise the reader is told how to get one.
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
+  for candidate in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    if [[ -x "$candidate" && -z ${DEPLOY_GUIDE_REEXEC:-} ]]; then
+      DEPLOY_GUIDE_REEXEC=1 exec "$candidate" "$0" "$@"
+    fi
+  done
+  printf '[deploy-guide] ERROR: bash 4.4 以上が必要です（いまは %s）。\n' "$BASH_VERSION" >&2
+  printf '  macOS: `brew install bash` を実行し、もう一度同じコマンドを実行してください。\n' >&2
+  printf '  Windows: WSL2 の Ubuntu を開き、その中でこのリポジトリを clone して実行してください。\n' >&2
+  printf '    https://learn.microsoft.com/ja-jp/windows/wsl/install\n' >&2
+  exit 1
+fi
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/.." && pwd)
 cd "$repo_root"
@@ -34,8 +49,19 @@ usage() {
   cat <<'USAGE'
 GCP プロジェクトの作成から Agent XAA Platform のデプロイまでを案内します。
 
+前提知識は要りません。足りないツールや手で行う操作は、URL と入力内容まで画面に出します。
+macOS と Linux はそのまま、Windows は WSL2 の Ubuntu の中で実行してください。
+初回の所要時間は 30〜60 分、費用は放置で月額約 $0.5、1日動かして $1.1〜1.5 です。
+
 Usage:
   scripts/deploy-gcp-guide.sh [all|doctor|auth|project|deploy|verify] [options]
+
+  all      doctor → 品質ゲート → 認証 → プロジェクト → デプロイ → 検証 → 使い方の表示（既定）
+  doctor   ローカルのツールがそろっているかだけを確認する
+  auth     gcloud と Terraform 用の認証だけを行う
+  project  プロジェクトの作成と請求先の関連付けまでを行う
+  deploy   デプロイまでを行い、IAM 検証は行わない
+  verify   配備済みの環境に対して IAM 検証だけを行う
 
 Options:
   --dry-run             外部状態を変更せず、実行予定のコマンドを表示する
@@ -51,12 +77,14 @@ Options:
   ORGANIZATION_ID            プロジェクトの親 Organization。任意
   FOLDER_ID                  プロジェクトの親 Folder。任意
   REGION                     既定値は asia-northeast1
-  GCP_AUTH_MODE              existing、browser、workforce のいずれか
+  GCP_AUTH_MODE              auto（既定）、existing、browser、workforce のいずれか。
+                             auto はログイン済みならそれを使い、未ログインならブラウザを開く
   WORKFORCE_LOGIN_CONFIG     workforce 認証の login config JSON
   IMPERSONATE_SERVICE_ACCOUNT Terraform の ADC で偽装する SA。任意
   IMAGE_TAG                  既定値は Git commit SHA
   ENABLE_GOOGLE_BRIDGE       既定値は false
   SAAS_CONNECTOR_MODE        既定値は stub
+  GOOGLE_OAUTH_CLIENT_ID     SAAS_CONNECTOR_MODE=google のとき seed が接続先定義に書く client ID
   GOOGLE_OAUTH_CLIENT_SECRET_FILE Google OAuth secret を読むファイル。任意
   ROTATE_INTERNAL_SECRETS    1 のとき Human IdP client secret を追加する
   ROTATE_GOOGLE_OAUTH_SECRET 1 のとき Google OAuth secret を追加する
@@ -66,6 +94,7 @@ Options:
   DEMO_LOGIN_USER            権限を付与するログインユーザー。testuser または otheruser
   GRANT_DEMO_PERMISSIONS     0 のときデモ用 Human Permission の付与を省く
   SKIP_ORG_POLICY_CHECK      1 のとき組織ポリシーの事前確認を省く
+  DEMO_TFVARS                demo state の変数ファイル。既定値は infra/tfvars/deploy.tfvars
 
 Terraform は ADC を使います。
 サービスアカウント鍵 JSON は作成も読み込みもしません。
@@ -229,16 +258,18 @@ select_toolchains() {
 validate_settings() {
   REGION=${REGION:-asia-northeast1}
   PROJECT_NAME=${PROJECT_NAME:-Agent XAA Demo}
-  GCP_AUTH_MODE=${GCP_AUTH_MODE:-existing}
+  GCP_AUTH_MODE=${GCP_AUTH_MODE:-auto}
   ENABLE_GOOGLE_BRIDGE=${ENABLE_GOOGLE_BRIDGE:-false}
   SAAS_CONNECTOR_MODE=${SAAS_CONNECTOR_MODE:-stub}
-  DEMO_TFVARS=${DEMO_TFVARS:-infra/tfvars/verify.tfvars}
+  # The same profile the deploy workflow applies on a merge to main, so a laptop run and
+  # a merge produce the same deployment.
+  DEMO_TFVARS=${DEMO_TFVARS:-infra/tfvars/deploy.tfvars}
   CREATE_PROJECT=${CREATE_PROJECT:-auto}
   DEMO_LOGIN_USER=${DEMO_LOGIN_USER:-testuser}
   GRANT_DEMO_PERMISSIONS=${GRANT_DEMO_PERMISSIONS:-1}
   GOOGLE_CONNECTOR_ID=${GOOGLE_CONNECTOR_ID:-google-workspace}
 
-  [[ "$GCP_AUTH_MODE" =~ ^(existing|browser|workforce)$ ]] || die 'GCP_AUTH_MODE は existing、browser、workforce のいずれかです。'
+  [[ "$GCP_AUTH_MODE" =~ ^(auto|existing|browser|workforce)$ ]] || die 'GCP_AUTH_MODE は auto、existing、browser、workforce のいずれかです。'
   [[ "$ENABLE_GOOGLE_BRIDGE" =~ ^(true|false)$ ]] || die 'ENABLE_GOOGLE_BRIDGE は true または false です。'
   [[ "$SAAS_CONNECTOR_MODE" =~ ^(stub|google)$ ]] || die 'SAAS_CONNECTOR_MODE は stub または google です。'
   [[ "$CREATE_PROJECT" =~ ^(auto|true|false)$ ]] || die 'CREATE_PROJECT は auto、true、false のいずれかです。'
@@ -310,20 +341,50 @@ quality_gate() {
   fi
 }
 
+# Both halves are needed: gcloud commands use the account, Terraform and the permission
+# CLI use Application Default Credentials.
+gcloud_session_ready() {
+  [[ -n $(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n 1) ]] \
+    && gcloud auth application-default print-access-token >/dev/null 2>&1
+}
+
+browser_login() {
+  manual_step 'ブラウザで Google アカウントにログインする' \
+    'これからブラウザが開きます（開かない場合は端末に表示される URL を開いてください）。' \
+    '  1. GCP を使う Google アカウントを選ぶ。会社の Google Workspace アカウントでも構いません。' \
+    '  2. 「Google Cloud SDK が Google アカウントへのアクセスをリクエストしています」で［許可］を押す。' \
+    '  3. 端末に戻り、次の段階が始まるのを待つ。' \
+    '' \
+    '  ブラウザの無いマシンで実行している場合は Ctrl+C で止め、' \
+    '  `gcloud auth login --update-adc --no-browser` の案内に従ってから実行し直してください。'
+  run gcloud auth login --update-adc
+}
+
 authenticate() {
   say 'gcloud CLI と Terraform 用 ADC を設定します。'
   case "$GCP_AUTH_MODE" in
+    auto)
+      if ((dry_run)); then
+        print_command gcloud auth list --filter=status:ACTIVE --format='value(account)'
+        print_command gcloud auth application-default print-access-token
+      elif gcloud_session_ready; then
+        say "ログイン済みの $(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1) を使います。"
+      elif [[ -t 0 ]]; then
+        browser_login
+      else
+        die '未ログインです。対話端末で実行するか、GCP_AUTH_MODE=workforce と WORKFORCE_LOGIN_CONFIG を指定してください。'
+      fi
+      ;;
     existing)
       if ((dry_run)); then
         print_command gcloud auth list --filter=status:ACTIVE --format='value(account)'
         print_command gcloud auth application-default print-access-token
       else
-        [[ -n $(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1) ]] || die '有効な gcloud アカウントがありません。GCP_AUTH_MODE=browser または workforce を指定してください。'
-        gcloud auth application-default print-access-token >/dev/null || die 'ADC がありません。GCP_AUTH_MODE=browser または workforce を指定してください。'
+        gcloud_session_ready || die '有効な gcloud アカウントか ADC がありません。GCP_AUTH_MODE=browser または workforce を指定してください。'
       fi
       ;;
     browser)
-      run gcloud auth login --update-adc
+      browser_login
       ;;
     workforce)
       [[ -n ${WORKFORCE_LOGIN_CONFIG:-} && -f "$WORKFORCE_LOGIN_CONFIG" ]] || die 'workforce 認証には WORKFORCE_LOGIN_CONFIG が必要です。'
@@ -437,7 +498,21 @@ configure_project() {
     local -a parent=()
     [[ -z ${ORGANIZATION_ID:-} ]] || parent+=(--organization="$ORGANIZATION_ID")
     [[ -z ${FOLDER_ID:-} ]] || parent+=(--folder="$FOLDER_ID")
-    run gcloud projects create "$PROJECT_ID" --name="$PROJECT_NAME" "${parent[@]}"
+    if ((dry_run)); then
+      print_command gcloud projects create "$PROJECT_ID" --name="$PROJECT_NAME" "${parent[@]}"
+    else
+      print_command gcloud projects create "$PROJECT_ID" --name="$PROJECT_NAME" "${parent[@]}"
+      gcloud projects create "$PROJECT_ID" --name="$PROJECT_NAME" "${parent[@]}" || {
+        manual_step 'プロジェクトを作成できませんでした' \
+          'よくある原因は次の2つです。' \
+          "  1. project ID は世界中で一意です。$PROJECT_ID が他の人に使われている場合は、" \
+          '     PROJECT_ID=<別の名前> を指定して実行し直してください。' \
+          '  2. 組織に属するアカウントでは、プロジェクトの作成権限（roles/resourcemanager.projectCreator）が' \
+          '     要ります。管理者に付与を依頼するか、作成済みのプロジェクトの ID を PROJECT_ID に指定してください。' \
+          '     https://cloud.google.com/resource-manager/docs/creating-managing-projects?hl=ja'
+        die 'gcloud projects create が失敗しました。'
+      }
+    fi
     run gcloud billing projects link "$PROJECT_ID" --billing-account="$BILLING_ACCOUNT_ID"
   else
     say '既存プロジェクトを使用します。'
@@ -469,7 +544,9 @@ configure_project() {
 
 confirm_mutations() {
   ((dry_run)) && return
-  printf '\n対象 project: %s\nregion: %s\nimage tag: %s\n' "$PROJECT_ID" "$REGION" "$IMAGE_TAG"
+  printf '\n対象 project: %s\nregion: %s\nimage tag: %s\ndemo tfvars: %s\n' "$PROJECT_ID" "$REGION" "$IMAGE_TAG" "$DEMO_TFVARS"
+  printf 'ここから先は GCP に課金対象のリソースを作ります。初回は 30〜60 分かかります。\n'
+  printf '費用の目安は放置で月額約 $0.5、1日動かして $1.1〜1.5 です（tasks/README.md の DEC-COST-01）。\n'
   printf 'demo destroy 後も state bucket、KMS、Artifact Registry などが残ります。\n'
   if ((assume_yes)); then
     [[ ${CONFIRM_PROJECT_ID:-} == "$PROJECT_ID" ]] || die '--yes では CONFIRM_PROJECT_ID を PROJECT_ID と同じ値にしてください。'
@@ -491,14 +568,23 @@ terraform_plan_apply() {
 }
 
 apply_bootstrap_and_shared() {
-  say 'Terraform state bucket を作成します。'
-  run "${tf_command[@]}" -chdir=infra/bootstrap init -input=false -lockfile=readonly
-  terraform_plan_apply infra/bootstrap bootstrap \
-    -var="project_id=$PROJECT_ID" -var="region=$REGION"
+  say 'Terraform state bucket を用意します。'
+  # bootstrap keeps its state on the machine that ran it, so a second run from another
+  # clone cannot tell from state that the bucket exists; GCP is asked instead.
+  if ((!dry_run)) && gcloud storage buckets describe "gs://$PROJECT_ID-tfstate" >/dev/null 2>&1; then
+    say "gs://$PROJECT_ID-tfstate は既にあるため作成を省きます。"
+  else
+    run "${tf_command[@]}" -chdir=infra/bootstrap init -input=false -lockfile=readonly
+    terraform_plan_apply infra/bootstrap bootstrap \
+      -var="project_id=$PROJECT_ID" -var="region=$REGION"
+  fi
 
   say '共有リソースを作成します。'
   run "${tf_command[@]}" -chdir=infra/envs/shared init -input=false -lockfile=readonly -reconfigure \
     -backend-config="bucket=$PROJECT_ID-tfstate"
+  # GCP never deletes KMS key rings or keys. After a destroy-all the project still holds
+  # them while the state does not, and creating them again answers 409; adopt them first.
+  run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash scripts/adopt-existing-kms.sh
   terraform_plan_apply infra/envs/shared shared \
     -var="project_id=$PROJECT_ID" -var="region=$REGION"
 }
@@ -579,28 +665,50 @@ add_google_oauth_secret_version() {
     die 'Google OAuth client secret の version がありません。GOOGLE_OAUTH_CLIENT_SECRET_FILE を指定してください。'
   fi
 
-  # ここから先は現時点の実装に経路が無い。黙って進めると、Bridge が配備された状態で
-  # 接続だけが動かず、原因が分からないまま止まる。
-  manual_step 'Bridge の connector 定義について' \
-    'Bridge は Firestore の connector_definitions/<connector_id> を読んで接続先を決めます。' \
-    'この行を書き込む経路は現時点の実装に含まれていません。' \
-    'ENABLE_GOOGLE_BRIDGE=true は Bridge サービスの配備と secret の登録までを行い、' \
-    '外部 SaaS への実接続はここで止まります。' \
-    '' \
-    '  行に必要な値:' \
-    "    connector_id  = $GOOGLE_CONNECTOR_ID" \
-    '    client_id     = 作成した OAuth client の client ID' \
-    "    secret_name   = $secret_name" \
-    '    各 endpoint   = https://accounts.google.com/o/oauth2/v2/auth などの Google の値' \
-    '  詳細は docs/06-oauth-bridge.md と apps/google-bridge/src/connectors/types.ts にあります。'
+}
+
+# The Bridge reads the connector's secret_name from Secret Manager on every call, and
+# the stub SaaS checks one fixed client secret (apps/stub-saas-op/src/index.ts). The value
+# is a test constant that the stub's source already states, not a secret of this deployment.
+add_stub_bridge_secret_version() {
+  local secret_name=stub-bridge-client-secret
+  if ((!dry_run)) && [[ ${ROTATE_INTERNAL_SECRETS:-0} != 1 ]] && secret_has_enabled_version "$secret_name"; then
+    say "$secret_name には有効な version があるため再利用します。"
+    return
+  fi
+  say "$secret_name に stub SaaS が受け付ける固定の client secret を登録します。"
+  if ((dry_run)); then
+    print_command gcloud secrets versions add "$secret_name" --project="$PROJECT_ID" --data-file=-
+  else
+    printf '%s' stub-bridge-secret | gcloud secrets versions add "$secret_name" --project="$PROJECT_ID" --data-file=- >/dev/null
+  fi
+}
+
+# The seed writes the Google connector definition with this id (apps/seed/src/connector-definitions.ts).
+# Only the id: the secret is the version added above.
+require_google_oauth_client_id() {
+  [[ -n ${GOOGLE_OAUTH_CLIENT_ID:-} ]] && return 0
+  ((dry_run)) && { GOOGLE_OAUTH_CLIENT_ID='<google-oauth-client-id>'; return 0; }
+  [[ -t 0 ]] || die 'SAAS_CONNECTOR_MODE=google では GOOGLE_OAUTH_CLIENT_ID が必要です。'
+  printf 'OAuth client の client ID は https://console.cloud.google.com/auth/clients?project=%s で確認できます。\n' "$PROJECT_ID"
+  while :; do
+    read -r -p 'Google OAuth client ID（xxxx.apps.googleusercontent.com）: ' GOOGLE_OAUTH_CLIENT_ID
+    [[ "$GOOGLE_OAUTH_CLIENT_ID" == *.apps.googleusercontent.com ]] && return 0
+    warn 'client ID は .apps.googleusercontent.com で終わる値です。'
+  done
 }
 
 provision_secret_values() {
   say 'アプリの Secret version を用意します。'
   add_generated_secret_version human-idp-automation-client-secret
   add_generated_secret_version human-idp-agent-platform-client-secret
-  if [[ "$ENABLE_GOOGLE_BRIDGE" == true && "$SAAS_CONNECTOR_MODE" == google ]]; then
-    add_google_oauth_secret_version
+  if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
+    if [[ "$SAAS_CONNECTOR_MODE" == google ]]; then
+      add_google_oauth_secret_version
+      require_google_oauth_client_id
+    else
+      add_stub_bridge_secret_version
+    fi
   fi
 }
 
@@ -621,7 +729,8 @@ apply_demo() {
   terraform_plan_apply infra/envs/demo demo \
     -var-file="../../../$DEMO_TFVARS" \
     -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="image_tag=$IMAGE_TAG" \
-    -var="enable_google_bridge=$ENABLE_GOOGLE_BRIDGE" -var="saas_connector_mode=$SAAS_CONNECTOR_MODE"
+    -var="enable_google_bridge=$ENABLE_GOOGLE_BRIDGE" -var="saas_connector_mode=$SAAS_CONNECTOR_MODE" \
+    -var="google_oauth_client_id=${GOOGLE_OAUTH_CLIENT_ID:-}"
 }
 
 wait_for_services() {
@@ -651,14 +760,22 @@ wait_for_services() {
 
 bootstrap_sso_and_seed() {
   say 'Human IdP の SSO 署名鍵を初期化します。'
-  local issuer
+  # The Human IdP generates the key on its first request (apps/human-idp/src/keys/self-bootstrap.ts),
+  # and its own JWKS lives at the OIDC well-known path; /jwks.json is the aggregate on GCS,
+  # which does not exist until jwks-publish runs below.
+  local issuer jwks_url attempt
   if ((dry_run)); then
     issuer="https://<human-idp-url>"
-    print_command curl -fsS "$issuer/jwks.json"
+    print_command curl -fsS "$issuer/.well-known/jwks.json"
     print_command gcloud storage ls "gs://$PROJECT_ID-platform-config/sso-signing/current.json"
   else
     issuer=$("${tf_command[@]}" -chdir=infra/envs/demo output -json platform_endpoints | jq -r .issuer)
-    curl -fsS "$issuer/jwks.json" | jq -e '.keys | length >= 1' >/dev/null
+    jwks_url="$issuer/.well-known/jwks.json"
+    for attempt in {1..24}; do
+      if curl -fsS "$jwks_url" 2>/dev/null | jq -e '.keys | length >= 1' >/dev/null 2>&1; then break; fi
+      ((attempt < 24)) || die "$jwks_url が鍵を返しません。gcloud run services logs read human-idp --project=$PROJECT_ID --region=$REGION で確認してください。"
+      sleep 5
+    done
     gcloud storage ls "gs://$PROJECT_ID-platform-config/sso-signing/current.json" >/dev/null
     say 'SSO 秘密鍵は KMS で包まれたオブジェクトとして存在します。平文は取得しません。'
   fi
@@ -722,6 +839,26 @@ print_next_steps() {
       '."human-idp" // $fallback' <<<"$urls")
   fi
 
+  local -a bridge_lines=()
+  if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
+    if [[ "$SAAS_CONNECTOR_MODE" == stub ]]; then
+      bridge_lines=(
+        '' \
+        '  Bridge（stub）: カレンダーを読む自動化を承認すると、Provisioner が同意 URL を返します。' \
+        '    stub SaaS はログイン画面を持たず、開くだけで同意が完了します。' \
+        ''
+      )
+    else
+      bridge_lines=(
+        '' \
+        '  Bridge（Google）: カレンダーを読む自動化を承認すると、Provisioner が Google の同意 URL を返します。' \
+        '    OAuth client のテストユーザーに登録した Google アカウントで同意してください。' \
+        '    Google Calendar を呼ぶ Tool は catalog に定義していないため、同意までが動作範囲です（infra/README.md）。' \
+        ''
+      )
+    fi
+  fi
+
   manual_step 'デプロイ後にアプリを操作する' \
     "  1. ブラウザで Automation App を開く: $automation_app_url" \
     "  2. Human IdP ($issuer_url) のログイン画面で次を入力する。" \
@@ -732,6 +869,7 @@ print_next_steps() {
     '  3. 画面の対話で自動化したい内容を書き、提示された Agent Definition を承認する。' \
     '  4. 実行の様子は同じ画面の Activity タイムラインで追えます。' \
     '' \
+    "${bridge_lines[@]}" \
     "  Cloud Run:  https://console.cloud.google.com/run?project=$PROJECT_ID" \
     "  Firestore:  https://console.cloud.google.com/firestore/databases/xaa/data?project=$PROJECT_ID" \
     "  ログ:       https://console.cloud.google.com/logs/query?project=$PROJECT_ID" \
@@ -777,6 +915,26 @@ prepare_verify_impersonation() {
       --role=roles/iam.serviceAccountTokenCreator --quiet
     temporary_verify_bindings+=("$service_account"$'\t'"$principal")
   done < <(jq -r 'to_entries[].value.member | sub("^serviceAccount:"; "")' <<<"$edges" | sort -u)
+  wait_for_verify_bindings
+}
+
+# A new IAM binding takes up to a couple of minutes to take effect. Verifying before it
+# does reports every edge as unreachable, which reads like a broken deployment.
+wait_for_verify_bindings() {
+  ((${#temporary_verify_bindings[@]})) || return 0
+  say '追加した binding が有効になるのを待ちます。'
+  local entry service_account principal attempt
+  for entry in "${temporary_verify_bindings[@]}"; do
+    IFS=$'\t' read -r service_account principal <<<"$entry"
+    for attempt in {1..36}; do
+      if gcloud auth print-identity-token --project="$PROJECT_ID" \
+        --impersonate-service-account="$service_account" --audiences="https://$PROJECT_ID.invalid" >/dev/null 2>&1; then
+        break
+      fi
+      ((attempt < 36)) || die "$service_account の偽装が有効になりません。数分待ってから verify を実行し直してください。"
+      sleep 5
+    done
+  done
 }
 
 deploy() {
