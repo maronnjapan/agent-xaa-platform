@@ -85,17 +85,91 @@ scripts/deploy-gcp-guide.sh all
 
 監査結果を確認したうえで検証用デプロイを続ける場合に限り、`--allow-unverified` を付ける。
 
+### main へのマージで配備する
+
+`.github/workflows/deploy.yml` は、Pull Request が main にマージされたときの push で起動する。
+state バケットの用意、既存 KMS リソースの import、`shared` の apply、Secret version の補充、イメージの build と push、`demo` の apply と IAM 検証、seed をこの順で実行する。
+`workflow_dispatch` からも同じ手順を起動でき、`image_tag` を渡した場合はビルド済みイメージへの差し替えだけになる。
+
+Pull Request では ci、infra-static、infra-validate が動くため、main に届いたコミットはすでにそれらを通っている。
+deploy はその検査を繰り返さず、apply だけを行う。
+
+必要な設定は次の五つで、`GCP_PROJECT_ID` が無い場合は GCP へ触れる前に停止する。
+
+| 種別 | 名前 | 効果 |
+|---|---|---|
+| Variable | `GCP_PROJECT_ID` | 配備先の GCP プロジェクトを指定する |
+| Variable | `GCP_REGION` | リージョンを指定する。既定値は `asia-northeast1` |
+| Variable | `DEMO_TFVARS` | demo state の変数ファイルを指定する。既定値は `infra/tfvars/deploy.tfvars` |
+| Secret | `GCP_WORKLOAD_IDENTITY_PROVIDER` | GitHub Actions が使う Workload Identity 連携先を指定する |
+| Secret | `GCP_DEPLOY_SERVICE_ACCOUNT` | Actions が偽装する配備用 Service Account を指定する |
+
+配備用 Service Account には、Terraform が作るリソースの管理権限に加えて、`make demo-apply` が続けて実行する到達性検証のために呼び出し元 Service Account への `roles/iam.serviceAccountTokenCreator` が必要になる。
+
+Terraform は Secret の値を持たないため、version の無い Secret を Cloud Run が mount するとリビジョンが起動せず apply が失敗する。
+`make ensure-secrets` は version の無い Secret にだけ生成した値を追加し、既存の version はそのまま使う。
+`google-oauth-client-secret` は Google Auth Platform で発行する値なので補充しない。
+Bridge を有効にする配備は `scripts/deploy-gcp-guide.sh` から行う。
+
+deploy と infra-destroy は同じ concurrency group を使うため、apply と destroy が同時に走ることはない。
+
+`make all PROJECT_ID=<id>` はこのワークフローと同じ順序をローカルで実行する。
+
 ### 個別の Make ターゲットを使う
 
 `make bootstrap PROJECT_ID=<id>` は state バケットを作る初回専用操作であり、通常は数分で終わる。
+`make state-bucket PROJECT_ID=<id>` はバケットが無い場合だけ `bootstrap` を呼ぶ。
+bootstrap の state は実行したマシンに残るため、無人実行では GCP へ問い合わせて判断する。
+`make adopt-kms PROJECT_ID=<id>` は、プロジェクトに残っていて state に無い Key Ring と CryptoKey を import する。
 `make shared-apply PROJECT_ID=<id>` は共有 API と永続リソースを作り、初回の API 有効化を含む場合は十数分かかることがある。
+`make ensure-secrets PROJECT_ID=<id>` は version の無い Secret にだけ生成した値を追加する。
 `make images PROJECT_ID=<id> REGISTRY=<region>-docker.pkg.dev/<id>/xaa` は全アプリをビルドして、Git commit 由来のタグで push する。
 `make demo-apply PROJECT_ID=<id> DEMO_TFVARS=infra/tfvars/demo.tfvars` は demo state を apply し、三つの IAM 実測を続けて実行する。
 `reachability.sh` が Service Account を偽装するため、実行者には対象 SA に対する `roles/iam.serviceAccountTokenCreator` が必要になる。
 `make seed PROJECT_ID=<id>` は JWKS 集約 Job の完了後に seed Job を実行する。
 `make demo-destroy PROJECT_ID=<id>` は runtime 所有リソースを先に回収し、その後で demo state を破棄する。
+`make destroy-all PROJECT_ID=<id>` は demo と shared の両方を破棄し、state バケットまで削除する。
+
+### 作ったリソースを全て破壊する
+
+`.github/workflows/infra-destroy.yml` は手動実行専用で、GCP プロジェクト自体を除く全てのリソースを削除する。
+起動時に `confirm_project_id` へ `GCP_PROJECT_ID` と同じ値を入力する必要があり、一致しない場合は認証の前に停止する。
+`delete_state_bucket` を false にすると state バケットだけを残す。
+
+同じ処理はローカルからも実行できる。
+
+```bash
+PROJECT_ID=<id> TF=terraform make destroy-all
+```
+
+`scripts/destroy-all-resources.sh` は次の順で実行する。
+
+1. `scripts/purge-runtime-resources.sh` で Provisioner が作った Dedicated OP のリソースを削除する
+2. `demo` state を destroy する
+3. `shared` state から KMS のリソースを `terraform state rm` で外し、残りを destroy する
+4. `destroy_kms_key_versions` が true の場合だけ、残っている KMS 鍵バージョンの破棄を予約する
+5. state が把握していないリソースを gcloud で掃除する
+6. state バケットを削除する
+7. `infra/tests/destroy-all-residue.sh` で残存を実測する
+
+3 は、GCP が Key Ring と CryptoKey を削除できず `prevent_destroy` が付いているため、この二つを含む plan が必ず失敗することへの対処になる。
+
+4 は既定で実行しない。
+GCP は Key Ring も CryptoKey も削除できず、同じ鍵を作り直すこともできない。
+DEC-IAC-04 はプラットフォームが使う鍵バージョンを 1 に固定しているため、バージョン 1 を破棄予約から復元できる 24 時間を過ぎると、そのプロジェクトでは二度とプラットフォームを動かせなくなる。
+残る 5 バージョンの費用は月数十円であり、それがプロジェクトを再配備可能に保つ対価になる。
+プロジェクトごと捨てる場合に限り `destroy_kms_key_versions` を true にする。
+
+5 は、state を失った、または apply が途中で止まったプロジェクトでも空にできるようにするためにある。
+2 と 3 が成功した後であれば削除対象は残っていない。
+
+7 が一つでも残存を見つけた場合、ジョブは失敗する。
 
 ## destroy 後に残るもの
+
+残るものは、どちらの destroy を使ったかで変わる。
+
+### `make demo-destroy` の場合
 
 GCP の KMS Key Ring と CryptoKey は削除できないため、`shared` state を破棄せずに残す。
 再 apply では既存の `shared` state をそのまま使用するため、KMS リソースの import は不要になる。
@@ -103,6 +177,21 @@ GCP の KMS Key Ring と CryptoKey は削除できないため、`shared` state 
 state バケットは Terraform state の履歴を保持するために残す。
 Artifact Registry は次の apply で同じイメージを再利用できるように残す。
 既存の Cloud Logging ログもサービス削除とは独立した保持期間に従って残る。
+
+### `make destroy-all` の場合
+
+削除できない KMS の Key Ring と CryptoKey、およびその鍵バージョンだけが残る。
+Provisioner が作った Agent ごとの鍵バージョンは手順 1 で破棄予約するため、残るのは `shared` state が作った 5 バージョンになる。
+
+`shared` state が有効化した API は有効なままになる。
+`disable_on_destroy = false` を指定しており、有効な API はリソースでも課金対象でもないためである。
+
+Cloud Logging のログは削除しない。
+サービスの削除とは独立した保持期間に従って消える。
+
+この状態から再び配備する場合、deploy ワークフローは state バケットの作成からやり直す。
+`make adopt-kms` が残った Key Ring と CryptoKey を state へ import するため、apply は既存の鍵をそのまま使う。
+Firestore のデータと Human IdP の client secret は作り直しになる。
 
 ## 費用の目安
 
