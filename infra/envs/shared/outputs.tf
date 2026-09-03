@@ -16,6 +16,11 @@ output "registry_host" { value = "${var.region}-docker.pkg.dev" }
 output "repository_path" { value = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.xaa.repository_id}" }
 output "security_audit_dataset" { value = google_bigquery_dataset.security_audit.dataset_id }
 output "agent_lifecycle_audit_table" { value = google_bigquery_table.agent_lifecycle_audit.table_id }
+# The demo state binds sa-security to three of these per table, and it can only do that
+# for tables this state has already created.
+output "audit_tables" {
+  value = { for name, table in google_bigquery_table.audit : name => table.table_id }
+}
 output "google_oauth_client_secret_id" { value = google_secret_manager_secret.google_oauth_client_secret.secret_id }
 output "stub_bridge_client_secret_id" { value = google_secret_manager_secret.stub_bridge_client_secret.secret_id }
 output "human_idp_client_secret_ids" {

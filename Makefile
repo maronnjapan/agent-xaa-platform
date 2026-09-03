@@ -1,7 +1,7 @@
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 REGISTRY ?= xaa
 
-.PHONY: install typecheck lint test test-integration images ci bootstrap state-bucket adopt-kms shared-apply ensure-secrets demo-apply seed verify purge-runtime demo-destroy destroy-all all
+.PHONY: install typecheck lint test test-integration images ci bootstrap state-bucket adopt-kms shared-apply audit-views ensure-secrets demo-apply seed verify purge-runtime demo-destroy destroy-all all
 install:
 	pnpm install --frozen-lockfile
 typecheck:
@@ -51,7 +51,20 @@ shared-apply:
 	@echo "Apply APIs, KMS, Artifact Registry, Secret Manager, and the audit dataset"
 	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
 	$(TF) -chdir=infra/envs/shared init -input=false -reconfigure -backend-config="bucket=$(PROJECT_ID)-tfstate"
-	$(TF) -chdir=infra/envs/shared apply -input=false -auto-approve -var="project_id=$(PROJECT_ID)" -var="region=$(REGION)"
+	$(TF) -chdir=infra/envs/shared apply -input=false -auto-approve -var="project_id=$(PROJECT_ID)" -var="region=$(REGION)" \
+		-var="audit_views_enabled=$$(PROJECT_ID="$(PROJECT_ID)" bash scripts/audit-log-table.sh)"
+
+# The five saved detections read the table Cloud Logging creates from the first Cloud Run
+# stdout line, so they cannot be part of the apply above on a project that has never run
+# a service. This is the same shared state applied once more, after there is something to
+# read. It is a no-op on every run after the first.
+audit-views:
+	@echo "Create the saved detection views once the Log Sink has produced its destination table"
+	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
+	@test "$$(PROJECT_ID="$(PROJECT_ID)" bash scripts/audit-log-table.sh 300)" = true \
+		|| { echo "security_audit.run_googleapis_com_stdout does not exist yet; run this again once a service has logged" >&2; exit 1; }
+	$(TF) -chdir=infra/envs/shared init -input=false -reconfigure -backend-config="bucket=$(PROJECT_ID)-tfstate"
+	$(TF) -chdir=infra/envs/shared apply -input=false -auto-approve -var="project_id=$(PROJECT_ID)" -var="region=$(REGION)" -var="audit_views_enabled=true"
 
 ensure-secrets:
 	@echo "Give every Secret Manager container Cloud Run mounts a version, without printing one"
@@ -101,7 +114,7 @@ destroy-all:
 # do the same thing. state-bucket, adopt-kms, and ensure-secrets are no-ops on a project
 # that already has all three; they are what makes a run after destroy-all work.
 all:
-	@echo "Apply shared state, build immutable images, apply and verify demo state, then seed definition data"
+	@echo "Apply shared state, build immutable images, apply and verify demo state, seed definition data, then add the detection views"
 	$(MAKE) state-bucket PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
 	$(MAKE) adopt-kms PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
 	$(MAKE) shared-apply PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
@@ -109,3 +122,4 @@ all:
 	$(MAKE) images REGISTRY="$(REGION)-docker.pkg.dev/$(PROJECT_ID)/xaa"
 	$(MAKE) demo-apply PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" DEMO_TFVARS="$(DEMO_TFVARS)"
 	$(MAKE) seed PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
+	$(MAKE) audit-views PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"

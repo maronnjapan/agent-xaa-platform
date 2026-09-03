@@ -78,6 +78,11 @@ jobs:
         run: make demo-apply TF=terraform
       - name: Publish the aggregate JWKS and the definition data
         run: make seed
+      # The five saved detections read the table Cloud Logging creates from the first Cloud
+      # Run stdout line, so the shared apply above leaves them out on a project that has
+      # never run a service. By here it has, and this is the same state applied once more.
+      - name: Create the saved detection views
+        run: make audit-views TF=terraform
       - name: Report the endpoints this deploy produced
         if: always()
         run: |

@@ -138,7 +138,7 @@ while (($#)); do
 done
 
 # command_name ごとに呼ばれる phase の数を固定で持つ。数え方は各関数の定義を参照。
-declare -A total_phases=([doctor]=1 [auth]=2 [project]=3 [deploy]=12 [verify]=4 [all]=13)
+declare -A total_phases=([doctor]=1 [auth]=2 [project]=3 [deploy]=13 [verify]=4 [all]=14)
 current_phase=0
 
 elapsed() { printf '%02d:%02d' $((SECONDS / 60)) $((SECONDS % 60)); }
@@ -700,7 +700,40 @@ apply_bootstrap_and_shared() {
   say '削除できない KMS リソースが残っていないかを確認します。残っていれば1件ずつ state へ取り込みます。'
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash scripts/adopt-existing-kms.sh
   terraform_plan_apply infra/envs/shared shared \
-    -var="project_id=$PROJECT_ID" -var="region=$REGION"
+    -var="project_id=$PROJECT_ID" -var="region=$REGION" \
+    -var="audit_views_enabled=$(audit_views_enabled)"
+}
+
+# The saved detections read the table Cloud Logging creates from the first Cloud Run
+# stdout line, which on a new project is long after this apply. GCP is asked rather than
+# a flag remembered, so the answer is false exactly once — on the deploy that has not run
+# a service yet — and a later run cannot delete the views an earlier one created.
+audit_views_enabled() {
+  if ((dry_run)); then
+    printf 'false'
+    return
+  fi
+  PROJECT_ID="$PROJECT_ID" bash scripts/audit-log-table.sh
+}
+
+# Applied last, and separately, for the reason above: by now the services are serving and
+# both jobs have run, so the table the five views read exists or is seconds away.
+apply_audit_views() {
+  phase '保存済み検知 SQL を BigQuery View として作成します。'
+  if ((dry_run)); then
+    print_command bash scripts/audit-log-table.sh 300
+    print_command "${tf_command[@]}" -chdir=infra/envs/shared apply -input=false \
+      -var="project_id=$PROJECT_ID" -var="region=$REGION" -var=audit_views_enabled=true
+    return
+  fi
+  printf '  Log Sink の宛先テーブル security_audit.run_googleapis_com_stdout を待ちます（最大5分） ' >&2
+  if [[ $(PROJECT_ID="$PROJECT_ID" bash scripts/audit-log-table.sh 300) != true ]]; then
+    warn 'Log Sink の宛先テーブルがまだ無いため、検知 View を作成していません。デプロイ自体は成功しています。'
+    printf '  数分おいて次を実行すると作成されます: PROJECT_ID=%s REGION=%s make audit-views\n' "$PROJECT_ID" "$REGION" >&2
+    return 0
+  fi
+  terraform_plan_apply infra/envs/shared audit-views \
+    -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="audit_views_enabled=true"
 }
 
 secret_has_enabled_version() {
@@ -1088,6 +1121,7 @@ deploy() {
   wait_for_services
   bootstrap_sso_and_seed
   grant_demo_permissions
+  apply_audit_views
 }
 
 doctor

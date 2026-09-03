@@ -12,6 +12,10 @@ cd "$(dirname "$0")/../.."
 status=0
 shared=infra/envs/shared/audit.tf
 tables=infra/envs/shared/audit-tables.tf
+# The detector's per-table write access lives with sa-security, in the demo state: a
+# setIamPolicy naming a service account that does not exist yet is rejected, and the
+# shared state is applied before that account is created.
+writer=infra/envs/demo/iam-audit.tf
 
 for expected in 'unique_writer_identity = true' 'roles/bigquery.dataEditor' 'delete_contents_on_destroy  = true'; do
   grep -qF "$expected" "$shared" || { echo "audit-iam: missing $expected" >&2; status=1; }
@@ -33,13 +37,23 @@ if grep -qE 'google_bigquery_dataset_iam_(member|binding)' "$tables"; then
   echo 'audit-iam: the detector gets table bindings, never a dataset-wide one' >&2
   status=1
 fi
+if grep -qE 'google_bigquery_dataset_iam_binding' "$writer"; then
+  echo 'audit-iam: the detector keeps per-table write access wherever the binding lives' >&2
+  status=1
+fi
+# The shared state may not name a service account it does not create; that is what made
+# the audit tables fail to apply on a project that had never run a deploy.
+if grep -qE 'serviceAccount:sa-' infra/envs/shared/*.tf; then
+  echo 'audit-iam: the shared state may not name a demo service account as a literal' >&2
+  status=1
+fi
 # Read plus per-table write, and the ledger is not among the tables it may write: the
 # Agent OP writes that one and a detector that could edit it could erase its own alibi.
-if ! grep -qF 'toset(["normalized_events", "findings", "rule_hits"])' "$tables"; then
+if ! grep -qF 'toset(["normalized_events", "findings", "rule_hits"])' "$writer"; then
   echo 'audit-iam: the detector may write exactly the three tables it produces' >&2
   status=1
 fi
-if grep -nE 'google_bigquery_table_iam_binding' "$tables" | grep -q 'id_jag_ledger'; then
+if grep -nE 'google_bigquery_table_iam_binding' "$writer" | grep -q 'id_jag_ledger'; then
   echo 'audit-iam: the detector may not write the issuance ledger' >&2
   status=1
 fi

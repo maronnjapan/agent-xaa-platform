@@ -15,6 +15,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 | 名前 | 型 | 既定値 | 効果 |
 |---|---|---|---|
 | `agent_max_lifetime_seconds` | number | `86400` | Agent の Job timeout と全期限の上限を決める |
+| `audit_views_enabled` | bool | `true` | 保存済み検知 View を作る。Log Sink の宛先テーブルがまだ無い初回 apply でだけ false にする |
 | `enable_deny_policy` | bool | `false` | 監査データ削除を拒否する IAM Deny Policy を有効にする |
 | `enable_google_bridge` | bool | `false` | Google Bridge の内部面と Callback 面を配備する |
 | `enable_lb_reservation` | bool | `false` | issuer 用の Global IP と証明書だけを予約する |
@@ -40,7 +41,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 
 ### プロジェクト作成から一括実行する
 
-`scripts/deploy-gcp-guide.sh` は、GCP 認証、プロジェクト作成、請求先の関連付け、Terraform、Secret Manager、イメージ配布、SSO 鍵の初期化、seed、デモ用 Human Permission の付与、IAM 検証を順に実行する。
+`scripts/deploy-gcp-guide.sh` は、GCP 認証、プロジェクト作成、請求先の関連付け、Terraform、Secret Manager、イメージ配布、SSO 鍵の初期化、seed、デモ用 Human Permission の付与、保存済み検知 View の作成、IAM 検証を順に実行する。
 最後にログイン方法とコンソールの URL を表示して終わる。
 リポジトリ直下の [README.md](../README.md) が、この手順を初めて使う人向けの入口である。
 
@@ -144,7 +145,7 @@ Automation App と Human IdP は `allUsers` へ公開され、ログイン情報
 ### main へのマージで配備する
 
 `.github/workflows/deploy.yml` は、Pull Request が main にマージされたときの push で起動する。
-state バケットの用意、既存 KMS リソースの import、`shared` の apply、Secret version の補充、イメージの build と push、`demo` の apply と IAM 検証、seed をこの順で実行する。
+state バケットの用意、既存 KMS リソースの import、`shared` の apply、Secret version の補充、イメージの build と push、`demo` の apply と IAM 検証、seed、保存済み検知 View の作成をこの順で実行する。
 `workflow_dispatch` からも同じ手順を起動でき、`image_tag` を渡した場合はビルド済みイメージへの差し替えだけになる。
 
 Pull Request では ci、infra-static、infra-validate が動くため、main に届いたコミットはすでにそれらを通っている。
@@ -185,6 +186,10 @@ import する件数と1件ごとの進行は標準出力に出る。
 `make demo-apply PROJECT_ID=<id> DEMO_TFVARS=infra/tfvars/demo.tfvars` は demo state を apply し、三つの IAM 実測を続けて実行する。
 `reachability.sh` が Service Account を偽装するため、実行者には対象 SA に対する `roles/iam.serviceAccountTokenCreator` が必要になる。
 `make seed PROJECT_ID=<id>` は JWKS 集約 Job の完了後に seed Job を実行する。
+`make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
+View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。
+BigQuery は存在しないテーブルを参照する View を作成時に拒否するため、`shared-apply` はテーブルの有無を GCP に問い合わせ、無ければ View を作らずに進み、このターゲットが後から作る。
+最大5分待ってもテーブルが現れない場合は失敗して終わるので、サービスがログを出したあとで実行し直す。
 `make demo-destroy PROJECT_ID=<id>` は runtime 所有リソースを先に回収し、その後で demo state を破棄する。
 `make destroy-all PROJECT_ID=<id>` は demo と shared の両方を破棄し、state バケットまで削除する。
 

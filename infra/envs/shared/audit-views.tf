@@ -10,7 +10,9 @@ locals {
 }
 
 resource "google_bigquery_table" "audit_view" {
-  for_each = toset(local.audit_views)
+  # Held back on a project whose sink has not produced its destination table yet; see
+  # var.audit_views_enabled for why a view cannot simply wait for its source.
+  for_each = var.audit_views_enabled ? toset(local.audit_views) : toset([])
 
   project             = var.project_id
   dataset_id          = google_bigquery_dataset.security_audit.dataset_id

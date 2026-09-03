@@ -28,14 +28,8 @@ resource "google_bigquery_table" "audit" {
   }
 }
 
-# Only the three tables the detector writes. The ledger is written by the Agent OP and
-# read here, so the detector gets no editor role on it (RULE-42).
-resource "google_bigquery_table_iam_binding" "detection_writer" {
-  for_each = toset(["normalized_events", "findings", "rule_hits"])
-
-  project    = var.project_id
-  dataset_id = google_bigquery_dataset.security_audit.dataset_id
-  table_id   = google_bigquery_table.audit[each.key].table_id
-  role       = "roles/bigquery.dataEditor"
-  members    = ["serviceAccount:sa-security@${var.project_id}.iam.gserviceaccount.com"]
-}
+# The detector's write access to three of them is granted by the demo state
+# (infra/envs/demo/iam-audit.tf), which is where sa-security is created. Naming that
+# account here as a literal string made this state apply before the account existed, and
+# GCP answers a setIamPolicy for a principal it cannot resolve with 400, not with a
+# binding that starts working once the account appears.

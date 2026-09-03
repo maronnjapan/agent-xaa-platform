@@ -34,5 +34,13 @@ for view in delegation_mismatch signing_key_misuse cross_agent_access dpop_repla
   fi
 done
 
+# The views read the table Cloud Logging creates from the first Cloud Run stdout line,
+# which does not exist while a new project's shared state is first applied. BigQuery
+# rejects such a view at creation, so the set has to be able to stay empty for one apply.
+if ! grep -q 'var.audit_views_enabled ? toset(local.audit_views) : toset(\[\])' infra/envs/shared/audit-views.tf; then
+  echo 'audit-views: the views must be held back until the sink has produced its table' >&2
+  status=1
+fi
+
 [ "$status" -eq 0 ] && echo "ok: five saved detections, same six columns"
 exit "$status"
