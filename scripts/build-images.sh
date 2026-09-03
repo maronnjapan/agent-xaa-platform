@@ -8,7 +8,11 @@ set -euo pipefail
 # at start time, so the platform is pinned here rather than left to the host.
 platform=${DOCKER_PLATFORM:-linux/amd64}
 apps=(human-idp automation-app authorization provisioner lifecycle-manager agent-op security-detection resource-docs-as resource-docs-api resource-finance-as resource-finance-api agent-runtime jwks-publish seed google-bridge stub-saas-op stub-saas-api)
+total=${#apps[@]}
+index=0
 for app in "${apps[@]}"; do
+  index=$((index + 1))
+  printf '\n[build-images] [%d/%d] %s\n' "$index" "$total" "$app"
   commands=(
     "docker build --platform $platform --build-arg APP=$app -t $REGISTRY/$app:$IMAGE_TAG ."
     "docker push $REGISTRY/$app:$IMAGE_TAG"

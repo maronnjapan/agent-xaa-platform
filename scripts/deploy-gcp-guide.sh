@@ -114,9 +114,24 @@ while (($#)); do
   shift
 done
 
-say() { printf '\n[%s] %s\n' "deploy-guide" "$*"; }
+# command_name ごとに呼ばれる phase の数を固定で持つ。数え方は各関数の定義を参照。
+declare -A total_phases=([doctor]=1 [auth]=2 [project]=3 [deploy]=12 [verify]=4 [all]=13)
+current_phase=0
+
+elapsed() { printf '%02d:%02d' $((SECONDS / 60)) $((SECONDS % 60)); }
+say() { printf '\n[%s +%s] %s\n' "deploy-guide" "$(elapsed)" "$*"; }
 warn() { printf '[deploy-guide] WARNING: %s\n' "$*" >&2; }
 die() { printf '[deploy-guide] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# all は初回 30〜60 分かかる。今どの段階で、始めてから何分経ったかが見えないと、
+# 読み手には止まっているのか動いているのか区別できない。
+phase() {
+  current_phase=$((current_phase + 1))
+  printf '\n════════════════════════════════════════════════════════════════\n'
+  printf '[deploy-guide] STEP %d/%d ・ 経過 %s ・ %s\n' \
+    "$current_phase" "${total_phases[$command_name]}" "$(elapsed)" "$*"
+  printf '════════════════════════════════════════════════════════════════\n'
+}
 
 print_command() {
   printf '+'
@@ -295,7 +310,7 @@ validate_settings() {
 }
 
 doctor() {
-  say 'ローカル実行環境を確認します。'
+  phase 'ローカル実行環境を確認します。'
   select_toolchains
   validate_settings
   printf 'Terraform: %s\n' "$("${tf_command[@]}" version -json | jq -r .terraform_version)"
@@ -318,8 +333,8 @@ doctor() {
 }
 
 quality_gate() {
+  phase 'コード、文書、Terraform のローカル品質ゲートを実行します。'
   ((skip_quality_gate)) && { warn 'ローカル品質ゲートを省略します。'; return; }
-  say 'コード、文書、Terraform のローカル品質ゲートを実行します。'
   run "${pnpm_command[@]}" install --frozen-lockfile
   run "${pnpm_command[@]}" typecheck
   run "${pnpm_command[@]}" lint
@@ -361,7 +376,7 @@ browser_login() {
 }
 
 authenticate() {
-  say 'gcloud CLI と Terraform 用 ADC を設定します。'
+  phase 'gcloud CLI と Terraform 用 ADC を設定します。'
   case "$GCP_AUTH_MODE" in
     auto)
       if ((dry_run)); then
@@ -480,7 +495,7 @@ check_domain_restricted_sharing() {
 }
 
 configure_project() {
-  say "GCP プロジェクト $PROJECT_ID を確認します。"
+  phase "GCP プロジェクト $PROJECT_ID を確認します。"
   local exists=0
   if ((dry_run)); then
     case "$CREATE_PROJECT" in
@@ -568,7 +583,7 @@ terraform_plan_apply() {
 }
 
 apply_bootstrap_and_shared() {
-  say 'Terraform state bucket を用意します。'
+  phase 'Terraform state bucket を用意します。'
   # bootstrap keeps its state on the machine that ran it, so a second run from another
   # clone cannot tell from state that the bucket exists; GCP is asked instead.
   if ((!dry_run)) && gcloud storage buckets describe "gs://$PROJECT_ID-tfstate" >/dev/null 2>&1; then
@@ -699,7 +714,7 @@ require_google_oauth_client_id() {
 }
 
 provision_secret_values() {
-  say 'アプリの Secret version を用意します。'
+  phase 'アプリの Secret version を用意します。'
   add_generated_secret_version human-idp-automation-client-secret
   add_generated_secret_version human-idp-agent-platform-client-secret
   if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
@@ -713,17 +728,18 @@ provision_secret_values() {
 }
 
 build_and_push_images() {
-  say 'コンテナイメージをビルドして Artifact Registry へ push します。'
+  phase 'コンテナイメージをビルドして Artifact Registry へ push します。'
   if ((!dry_run)) && [[ -n $(git status --porcelain) && ${ALLOW_DIRTY:-0} != 1 ]]; then
     die 'worktree に未コミット変更があります。commit するか ALLOW_DIRTY=1 を指定してください。'
   fi
   local registry="$REGION-docker.pkg.dev/$PROJECT_ID/xaa"
   run gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+  say '17 個のイメージを順に build と push します。アプリごとの進み具合は build-images 自身が表示します。'
   run env REGISTRY="$registry" IMAGE_TAG="$IMAGE_TAG" bash scripts/build-images.sh
 }
 
 apply_demo() {
-  say 'Cloud Run、Firestore、Pub/Sub、Scheduler と IAM を apply します。'
+  phase 'Cloud Run、Firestore、Pub/Sub、Scheduler と IAM を apply します。'
   run "${tf_command[@]}" -chdir=infra/envs/demo init -input=false -lockfile=readonly -reconfigure \
     -backend-config="bucket=$PROJECT_ID-tfstate"
   terraform_plan_apply infra/envs/demo demo \
@@ -734,36 +750,47 @@ apply_demo() {
 }
 
 wait_for_services() {
-  say 'Cloud Run Service の Ready 状態を待ちます。'
+  phase 'Cloud Run Service の Ready 状態を待ちます。'
   local -a services=(human-idp automation-app authorization provisioner lifecycle shared-agent-op agent-op-callback security-detection resource-finance-as resource-finance-api resource-docs-as resource-docs-api)
   if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
     services+=(google-bridge google-bridge-callback)
     [[ "$SAAS_CONNECTOR_MODE" != stub ]] || services+=(stub-saas-op stub-saas-api)
   fi
+  say "${#services[@]} 個の Service を確認します。1件あたり最大5分待ちます。"
+  local service index=0 ready attempt
   for service in "${services[@]}"; do
+    index=$((index + 1))
     if ((dry_run)); then
       print_command gcloud run services describe "$service" --project="$PROJECT_ID" --region="$REGION" --format=json
       continue
     fi
-    local ready=false
-    for _ in {1..60}; do
+    printf '  [%d/%d] %s ' "$index" "${#services[@]}" "$service"
+    ready=false
+    for attempt in {1..60}; do
       if gcloud run services describe "$service" --project="$PROJECT_ID" --region="$REGION" --format=json \
         | jq -e '.status.conditions[]? | select(.type=="Ready" and .status=="True")' >/dev/null; then
         ready=true
         break
       fi
+      printf '.'
+      ((attempt < 60)) || break
       sleep 5
     done
-    [[ "$ready" == true ]] || die "$service が Ready になりません。gcloud run services logs read $service で確認してください。"
+    if [[ "$ready" == true ]]; then
+      printf ' Ready（経過 %s）\n' "$(elapsed)"
+    else
+      printf ' NG\n'
+      die "$service が Ready になりません。gcloud run services logs read $service で確認してください。"
+    fi
   done
 }
 
 bootstrap_sso_and_seed() {
-  say 'Human IdP の SSO 署名鍵を初期化します。'
+  phase 'Human IdP の SSO 署名鍵を初期化します。'
   # The Human IdP generates the key on its first request (apps/human-idp/src/keys/self-bootstrap.ts),
   # and its own JWKS lives at the OIDC well-known path; /jwks.json is the aggregate on GCS,
   # which does not exist until jwks-publish runs below.
-  local issuer jwks_url attempt
+  local issuer jwks_url attempt jwks_ready
   if ((dry_run)); then
     issuer="https://<human-idp-url>"
     print_command curl -fsS "$issuer/.well-known/jwks.json"
@@ -771,11 +798,23 @@ bootstrap_sso_and_seed() {
   else
     issuer=$("${tf_command[@]}" -chdir=infra/envs/demo output -json platform_endpoints | jq -r .issuer)
     jwks_url="$issuer/.well-known/jwks.json"
+    printf '  %s の鍵を待ちます ' "$jwks_url"
+    jwks_ready=false
     for attempt in {1..24}; do
-      if curl -fsS "$jwks_url" 2>/dev/null | jq -e '.keys | length >= 1' >/dev/null 2>&1; then break; fi
-      ((attempt < 24)) || die "$jwks_url が鍵を返しません。gcloud run services logs read human-idp --project=$PROJECT_ID --region=$REGION で確認してください。"
+      if curl -fsS "$jwks_url" 2>/dev/null | jq -e '.keys | length >= 1' >/dev/null 2>&1; then
+        jwks_ready=true
+        break
+      fi
+      printf '.'
+      ((attempt < 24)) || break
       sleep 5
     done
+    if [[ "$jwks_ready" == true ]]; then
+      printf ' OK（経過 %s）\n' "$(elapsed)"
+    else
+      printf ' NG\n'
+      die "$jwks_url が鍵を返しません。gcloud run services logs read human-idp --project=$PROJECT_ID --region=$REGION で確認してください。"
+    fi
     gcloud storage ls "gs://$PROJECT_ID-platform-config/sso-signing/current.json" >/dev/null
     say 'SSO 秘密鍵は KMS で包まれたオブジェクトとして存在します。平文は取得しません。'
   fi
@@ -786,7 +825,7 @@ bootstrap_sso_and_seed() {
 }
 
 verify_deployment() {
-  say 'IAM 到達性と権限を検証します。'
+  phase 'IAM 到達性と権限を検証します。'
   prepare_verify_impersonation
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash infra/tests/verify-all.sh
   cleanup_verify_bindings
@@ -802,11 +841,11 @@ verify_deployment() {
 # Human IdP がパスワードを持つ testuser と otheruser のものではない。
 # 付けずに終わると、ログインはできるのに権限が空で、自動化を1つも定義できない。
 grant_demo_permissions() {
+  phase "ログインユーザー $DEMO_LOGIN_USER への Human Permission 付与を確認します。"
   if [[ "$GRANT_DEMO_PERMISSIONS" != 1 ]]; then
     warn 'デモ用 Human Permission の付与を省きます。ログインしても権限は空のままです。'
     return 0
   fi
-  say "ログインユーザー $DEMO_LOGIN_USER へ Human Permission を付与します。"
   # Bridge を配備していないときに calendar を付けても、seed が対応する Tool を落とすため
   # Capability だけが宙に浮く。配備した分だけ付ける。
   local -a capabilities=(document.read document.write finance.payment.read finance.payment.approve)
@@ -824,6 +863,7 @@ grant_demo_permissions() {
 }
 
 print_next_steps() {
+  phase 'デプロイ後の使い方を表示します。'
   local automation_app_url issuer_url
   if ((dry_run)); then
     print_command "${tf_command[@]}" -chdir=infra/envs/demo output -json service_urls
@@ -922,18 +962,28 @@ prepare_verify_impersonation() {
 # does reports every edge as unreachable, which reads like a broken deployment.
 wait_for_verify_bindings() {
   ((${#temporary_verify_bindings[@]})) || return 0
-  say '追加した binding が有効になるのを待ちます。'
-  local entry service_account principal attempt
+  say "追加した ${#temporary_verify_bindings[@]} 件の binding が有効になるのを待ちます。1件あたり最大3分待ちます。"
+  local entry service_account principal attempt ready
   for entry in "${temporary_verify_bindings[@]}"; do
     IFS=$'\t' read -r service_account principal <<<"$entry"
+    printf '  %s ' "$service_account"
+    ready=false
     for attempt in {1..36}; do
       if gcloud auth print-identity-token --project="$PROJECT_ID" \
         --impersonate-service-account="$service_account" --audiences="https://$PROJECT_ID.invalid" >/dev/null 2>&1; then
+        ready=true
         break
       fi
-      ((attempt < 36)) || die "$service_account の偽装が有効になりません。数分待ってから verify を実行し直してください。"
+      printf '.'
+      ((attempt < 36)) || break
       sleep 5
     done
+    if [[ "$ready" == true ]]; then
+      printf ' OK（経過 %s）\n' "$(elapsed)"
+    else
+      printf ' NG\n'
+      die "$service_account の偽装が有効になりません。数分待ってから verify を実行し直してください。"
+    fi
   done
 }
 
