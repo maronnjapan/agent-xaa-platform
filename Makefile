@@ -1,7 +1,7 @@
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 REGISTRY ?= xaa
 
-.PHONY: install typecheck lint test test-integration images ci bootstrap shared-apply demo-apply seed verify purge-runtime demo-destroy all
+.PHONY: install typecheck lint test test-integration images ci bootstrap state-bucket adopt-kms shared-apply ensure-secrets demo-apply seed verify purge-runtime demo-destroy destroy-all all
 install:
 	pnpm install --frozen-lockfile
 typecheck:
@@ -31,11 +31,32 @@ bootstrap:
 	$(TF) -chdir=infra/bootstrap init -input=false
 	$(TF) -chdir=infra/bootstrap apply -input=false -auto-approve -var="project_id=$(PROJECT_ID)" -var="region=$(REGION)"
 
+# bootstrap keeps its state on the machine that ran it, so an unattended deploy cannot
+# tell an existing bucket from a missing one by looking at state. It asks GCP instead,
+# which also lets a deploy follow a destroy-all without a manual step in between.
+state-bucket:
+	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
+	@if gcloud storage buckets describe "gs://$(PROJECT_ID)-tfstate" >/dev/null 2>&1; then \
+		echo "gs://$(PROJECT_ID)-tfstate already exists"; \
+	else \
+		$(MAKE) bootstrap PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"; \
+	fi
+
+adopt-kms:
+	@echo "Import the KMS rings and keys the project already holds, which GCP will not let apply recreate"
+	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
+	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" TF="$(TF)" bash scripts/adopt-existing-kms.sh
+
 shared-apply:
 	@echo "Apply APIs, KMS, Artifact Registry, Secret Manager, and the audit dataset"
 	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
 	$(TF) -chdir=infra/envs/shared init -input=false -reconfigure -backend-config="bucket=$(PROJECT_ID)-tfstate"
 	$(TF) -chdir=infra/envs/shared apply -input=false -auto-approve -var="project_id=$(PROJECT_ID)" -var="region=$(REGION)"
+
+ensure-secrets:
+	@echo "Give every Secret Manager container Cloud Run mounts a version, without printing one"
+	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
+	PROJECT_ID="$(PROJECT_ID)" bash scripts/ensure-secret-versions.sh
 
 demo-apply:
 	@echo "Apply the demo services, jobs, IAM, Firestore, Pub/Sub, and Scheduler, then verify IAM reachability"
@@ -65,9 +86,26 @@ demo-destroy:
 	$(MAKE) purge-runtime PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
 	$(TF) -chdir=infra/envs/demo destroy -input=false -auto-approve -var-file="../../../$(DEMO_TFVARS)" -var="project_id=$(PROJECT_ID)" -var="region=$(REGION)" -var="image_tag=$(IMAGE_TAG)"
 
+DELETE_STATE_BUCKET ?= 1
+# Irreversible, and off by default: see the comment in scripts/destroy-all-resources.sh.
+DESTROY_KMS_KEY_VERSIONS ?= 0
+
+destroy-all:
+	@echo "Delete every resource this repository creates in the project and leave only the project"
+	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
+	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" TF="$(TF)" DEMO_TFVARS="$(DEMO_TFVARS)" \
+	IMAGE_TAG="$(IMAGE_TAG)" DELETE_STATE_BUCKET="$(DELETE_STATE_BUCKET)" \
+	DESTROY_KMS_KEY_VERSIONS="$(DESTROY_KMS_KEY_VERSIONS)" bash scripts/destroy-all-resources.sh
+
+# The same sequence the deploy workflow runs, so a merge to main and a local run of this
+# do the same thing. state-bucket, adopt-kms, and ensure-secrets are no-ops on a project
+# that already has all three; they are what makes a run after destroy-all work.
 all:
 	@echo "Apply shared state, build immutable images, apply and verify demo state, then seed definition data"
+	$(MAKE) state-bucket PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
+	$(MAKE) adopt-kms PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
 	$(MAKE) shared-apply PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
+	$(MAKE) ensure-secrets PROJECT_ID="$(PROJECT_ID)"
 	$(MAKE) images REGISTRY="$(REGION)-docker.pkg.dev/$(PROJECT_ID)/xaa"
 	$(MAKE) demo-apply PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" DEMO_TFVARS="$(DEMO_TFVARS)"
 	$(MAKE) seed PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"

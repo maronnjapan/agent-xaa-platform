@@ -1,0 +1,84 @@
+name: infra-destroy
+# Manual only, and deliberately not reachable from a push: it deletes every resource this
+# repository creates in the GCP project and leaves only the project. Run it to stop the
+# demo from costing anything, or to start the next deploy from an empty project.
+#
+# What survives is what GCP will not delete. KMS key rings and crypto keys stay for the
+# life of the project, and by default so do the five key versions the shared state made:
+# destroying one cannot be undone and cannot be compensated for, because the key it
+# belongs to can never be recreated either, and DEC-IAC-04 pins the platform to version 1.
+# destroy_kms_key_versions is there for a project that is being abandoned rather than
+# emptied. The APIs the shared state enabled stay enabled, because disable_on_destroy is
+# false and an enabled API is neither a resource nor a charge.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_project_id:
+        description: Type the project id to destroy. It has to match GCP_PROJECT_ID.
+        required: true
+      delete_state_bucket:
+        description: Delete the Terraform state bucket too
+        type: boolean
+        required: false
+        default: true
+      destroy_kms_key_versions:
+        description: >-
+          Destroy the shared KMS key versions. Irreversible: GCP cannot delete or replace
+          the key, so the project can never run the platform again. Only for a project
+          that is being abandoned.
+        type: boolean
+        required: false
+        default: false
+# Shared with deploy: a destroy that overlaps an apply would race it for the state lock
+# and leave half of each behind.
+concurrency:
+  group: gcp-${{ vars.GCP_PROJECT_ID }}
+  cancel-in-progress: false
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'asia-northeast1' }}
+      DEMO_TFVARS: ${{ vars.DEMO_TFVARS || 'infra/tfvars/deploy.tfvars' }}
+      DELETE_STATE_BUCKET: ${{ inputs.delete_state_bucket }}
+      DESTROY_KMS_KEY_VERSIONS: ${{ inputs.destroy_kms_key_versions }}
+    steps:
+      - uses: actions/checkout@v4
+      # The typed id is the whole confirmation. Reading it before authenticating means a
+      # run started against the wrong repository stops before it holds any credential.
+      - name: Refuse a project id that was not typed out
+        env:
+          CONFIRM_PROJECT_ID: ${{ inputs.confirm_project_id }}
+        run: |
+          test -n "$PROJECT_ID" || { echo 'Set the GCP_PROJECT_ID repository variable' >&2; exit 1; }
+          if [ "$CONFIRM_PROJECT_ID" != "$PROJECT_ID" ]; then
+            echo "confirm_project_id does not match GCP_PROJECT_ID" >&2
+            exit 1
+          fi
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      # The script destroys the runtime-owned resources, then the demo state, then the
+      # shared state, then the state bucket, and finally measures what is left with
+      # infra/tests/destroy-all-residue.sh. Anything still standing fails the job.
+      - name: Destroy everything but the project
+        run: make destroy-all TF=terraform
+      - name: Record what the project keeps
+        if: always()
+        run: |
+          {
+            echo "## ${PROJECT_ID}"
+            echo 'KMS key rings and crypto keys remain, because GCP does not delete them.'
+            echo "Their key versions were destroyed: ${DESTROY_KMS_KEY_VERSIONS}."
+            echo 'The APIs the shared state enabled remain enabled.'
+          } >> "$GITHUB_STEP_SUMMARY"

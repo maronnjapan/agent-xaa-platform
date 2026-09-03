@@ -1,0 +1,89 @@
+name: deploy
+# A pull request merged into main arrives here as a push, and this is what turns that
+# merge into a changed project: the shared state first, then the images this commit
+# builds, then the demo state that points Cloud Run at those images, then the seed data.
+#
+# The gate is the pull request itself. ci, infra-static, and infra-validate all run on
+# every pull request, so a commit that reaches main has already passed them; running them
+# again here would only delay the apply without adding an answer.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      demo_tfvars:
+        description: Terraform variable file the demo state applies
+        required: false
+        default: infra/tfvars/deploy.tfvars
+      image_tag:
+        description: Image tag to deploy. Leave empty to build this commit.
+        required: false
+        default: ''
+# One project, one Terraform state lock: a second apply would sit on the lock until it
+# timed out. Queueing instead of cancelling keeps a half-finished apply from being killed
+# between the images and the services that reference them.
+concurrency:
+  group: gcp-${{ vars.GCP_PROJECT_ID }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'asia-northeast1' }}
+      DEMO_TFVARS: ${{ inputs.demo_tfvars || vars.DEMO_TFVARS || 'infra/tfvars/deploy.tfvars' }}
+      # Cloud Run resolves an immutable tag, so the commit is what identifies the image.
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the deployment target before touching GCP
+        run: |
+          test -n "$PROJECT_ID" || { echo 'Set the GCP_PROJECT_ID repository variable' >&2; exit 1; }
+          test -f "$DEMO_TFVARS" || { echo "$DEMO_TFVARS does not exist" >&2; exit 1; }
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          # verify-all.sh reads `terraform output -json`; the wrapper prints around it.
+          terraform_wrapper: false
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Create the state bucket when the project has none
+        run: make state-bucket TF=terraform
+      # GCP does not delete KMS key rings or crypto keys, so a project that has been
+      # through infra-destroy still holds them while the state that described them is
+      # gone. The apply below would answer 409 on every one of them.
+      - name: Adopt the KMS resources the project already holds
+        run: make adopt-kms TF=terraform
+      - name: Shared apply
+        run: make shared-apply TF=terraform
+      # Terraform owns the Secret containers and never their values, so a project that has
+      # never been deployed has containers with no version. Cloud Run mounts two of them,
+      # and a revision cannot start without them, which would fail the demo apply below.
+      - name: Fill in the Secret Manager versions Cloud Run mounts
+        run: make ensure-secrets
+      - name: Build and push the images this commit describes
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          make images REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/xaa"
+      # This also runs verify-all.sh, so the deploy fails when the IAM edges it measures
+      # stop matching the invoker matrix. The deploy service account needs
+      # roles/iam.serviceAccountTokenCreator on the calling service accounts for it.
+      - name: Demo apply and IAM verification
+        run: make demo-apply TF=terraform
+      - name: Publish the aggregate JWKS and the definition data
+        run: make seed
+      - name: Report the endpoints this deploy produced
+        if: always()
+        run: |
+          {
+            echo "## ${PROJECT_ID} / ${IMAGE_TAG}"
+            echo '```json'
+            terraform -chdir=infra/envs/demo output -json platform_endpoints 2>/dev/null || echo '{}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
