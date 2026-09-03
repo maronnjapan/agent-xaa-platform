@@ -46,14 +46,24 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 
 2回目以降の実行や `make destroy-all` の後の実行でも同じコマンドでよい。
 state バケットは GCP に問い合わせて有無を判断し、削除できない KMS リソースは `scripts/adopt-existing-kms.sh` で state に取り込んでから apply する。
+取り込む対象があるかどうかは GCP への2回の問い合わせで決めるため、KMS リソースを持たないプロジェクト（初回の配備）では Terraform を起動せずに数秒で終わる。
+
+このスクリプトは端末からの入力を待たない。
+`exec </dev/null` で自身の標準入力を外し、`CLOUDSDK_CORE_DISABLE_PROMPTS` と `TF_INPUT` を固定するため、gcloud や Terraform が内部で尋ねようとしても即座に EOF を受け取る。
+出力を伏せた呼び出しの中で無言のまま入力を待ち続ける状態は起こらない。
+
+後半で必要になる設定は、GCP を1つも変更していない起動直後にまとめて検査する。
+`WORKFORCE_LOGIN_CONFIG`、`GOOGLE_OAUTH_CLIENT_ID`、OAuth client secret の渡し方、worktree が綺麗かどうかがこれにあたる。
+足りないものは1件ずつではなく全部並べて報告して終わるため、指定し直して実行するのは1回で済む。
 
 手でしかできない箇所は、スクリプトが URL と入力内容まで含めて画面に出す。
-前提ツールの不足、請求先アカウントの用意、組織ポリシーの例外、Google OAuth client の作成がこれにあたる。
-不足しているコマンドは1件ずつではなくまとめて報告するため、入れ直して実行し直す回数は1回で済む。
+前提ツールの不足、請求先アカウントの作成、Google OAuth client の作成がこれにあたる。
+組織ポリシー「ドメインの制限された共有」の例外は、まず `gcloud org-policies set-policy` でプロジェクト単位の上書きを試み、権限が無い場合だけコンソールの手順を出す（`AUTO_FIX_ORG_POLICY=0` で自動化を止める）。
 
 通常の Google アカウントまたは Google Workspace の SSO を使う場合は、次のように実行する。
 未ログインならブラウザが開き、ログイン済みならそのアカウントを使う。
-`PROJECT_ID` と `BILLING_ACCOUNT_ID` を省くと、対話で尋ねるか一覧から選ばせる。
+`PROJECT_ID` を省くと `gcloud config` の project を使い、それも無ければ指定を促して終わる。
+`BILLING_ACCOUNT_ID` を省くと、開いている請求先アカウントを自動で選ぶ。複数ある場合は先頭を使い、一覧と指定方法を表示する。
 
 ```bash
 PROJECT_ID=<globally-unique-project-id> \
@@ -92,9 +102,9 @@ scripts/deploy-gcp-guide.sh all
 ```
 
 外部 Google OAuth を有効にする場合は、Google Auth Platform で Web application の OAuth client を作り、secret をファイルから渡す。
-`GOOGLE_OAUTH_CLIENT_SECRET_FILE` を指定しなければ、スクリプトが端末から secret を読み取って Secret Manager へ渡す。
+secret は `GOOGLE_OAUTH_CLIENT_SECRET_FILE`、または値を直接渡す `GOOGLE_OAUTH_CLIENT_SECRET` で受け取る。どちらも無く、Secret Manager にも有効な version が無ければ、起動直後の検査がそれを指摘して終わる。
 承認済みリダイレクト URI は project number と region から決まるため、スクリプトが確定した値を表示する。
-client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡すか、省いた場合は端末から読み取り、Terraform 変数 `google_oauth_client_id` を通して seed が `google-workspace` の行に書く。
+client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡し、Terraform 変数 `google_oauth_client_id` を通して seed が `google-workspace` の行に書く。
 catalog には Google Calendar を呼ぶ Tool を定義していないため、`google` モードで動くのは Bridge の同意と接続の保持までである。
 
 ```bash
@@ -167,6 +177,8 @@ deploy と infra-destroy は同じ concurrency group を使うため、apply と
 `make state-bucket PROJECT_ID=<id>` はバケットが無い場合だけ `bootstrap` を呼ぶ。
 bootstrap の state は実行したマシンに残るため、無人実行では GCP へ問い合わせて判断する。
 `make adopt-kms PROJECT_ID=<id>` は、プロジェクトに残っていて state に無い Key Ring と CryptoKey を import する。
+`cloudkms.googleapis.com` が未有効か Key Ring が1つも無ければ、Terraform を起動せずに終わる。
+import する件数と1件ごとの進行は標準出力に出る。
 `make shared-apply PROJECT_ID=<id>` は共有 API と永続リソースを作り、初回の API 有効化を含む場合は十数分かかることがある。
 `make ensure-secrets PROJECT_ID=<id>` は version の無い Secret にだけ生成した値を追加する。
 `make images PROJECT_ID=<id> REGISTRY=<region>-docker.pkg.dev/<id>/xaa` は全アプリをビルドして、Git commit 由来のタグで push する。

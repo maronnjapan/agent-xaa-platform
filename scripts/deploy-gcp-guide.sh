@@ -2,13 +2,18 @@
 set -Eeuo pipefail
 umask 077
 
-# gcloud can interactively ask "Would you like to enable and retry (this will take a few
-# minutes)? (y/N)" when a command depends on an API that is not yet enabled (e.g. org-policies
-# describe needing orgpolicy.googleapis.com). Several call sites below redirect gcloud's
-# stderr away to stay quiet on expected failures, which hides that prompt while gcloud keeps
-# blocking on stdin for an answer that never comes — an invisible hang. Disabling prompts makes
-# gcloud take the default (proceed) action instead of asking, so no wrapped call can hang this way.
+# このスクリプトは端末からの入力を一切待たない。all を始めたら、成功して使い方が出るか、
+# 何が足りないかを言って落ちるかの二つしか終わり方が無い。途中で人を待つ設計だと、
+# 席を外した30分がまるごと無駄になり、CI からも実行できない。
+#
+# 待たないためには、呼び出す側だけでなく呼ばれる側も黙らせる必要がある。
+# gcloud は API 未有効時に "Would you like to enable and retry? (y/N)" を聞くことがあり、
+# その問いを stderr ごと捨てている呼び出しでは、画面に何も出ないまま stdin を待ち続ける。
+# terraform も変数が足りなければ同じことをする。まず両方を非対話に固定する。
 export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+export TF_IN_AUTOMATION=1
+export TF_INPUT=0
+export GIT_TERMINAL_PROMPT=0
 
 # macOS ships bash 3.2, which rejects the empty arrays this script expands under set -u.
 # A newer bash from Homebrew is used when present; otherwise the reader is told how to get one.
@@ -25,13 +30,18 @@ if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); 
   exit 1
 fi
 
+# 環境変数の設定は「聞かれても既定で答える」までで、聞く実装そのものは残る。
+# ここで端末そのものを外す。以降どの子プロセスも stdin から読めば即座に EOF を受け取り、
+# 待ち続けることができない。パイプ、ヒアストリング、プロセス置換は明示的な接続なので影響しない。
+# ブラウザでのログインは localhost で待ち受ける仕組みなので、これでも成立する。
+exec </dev/null
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/.." && pwd)
 cd "$repo_root"
 
 command_name=all
 dry_run=0
-assume_yes=0
 skip_quality_gate=0
 allow_unverified=0
 declare -a tf_command pnpm_command
@@ -61,6 +71,8 @@ GCP プロジェクトの作成から Agent XAA Platform のデプロイまで�
 macOS と Linux はそのまま、Windows は WSL2 の Ubuntu の中で実行してください。
 初回の所要時間は 30〜60 分、費用は放置で月額約 $0.5、1日動かして $1.1〜1.5 です。
 
+入力待ちで止まることはありません。足りない設定は最初にまとめて指摘して終わります。
+
 Usage:
   scripts/deploy-gcp-guide.sh [all|doctor|auth|project|deploy|verify] [options]
 
@@ -73,15 +85,16 @@ Usage:
 
 Options:
   --dry-run             外部状態を変更せず、実行予定のコマンドを表示する
-  --yes                 対話確認を省略する（CONFIRM_PROJECT_ID が必要）
   --skip-quality-gate   テストを省略する
   --allow-unverified    tasks/done の未完了監査を承知して続行する
+  --yes                 受け付けるが何もしない。確認待ちは元から無い
   -h, --help            この説明を表示する
 
 主な環境変数:
-  PROJECT_ID                 作成または利用する一意な GCP project ID
+  PROJECT_ID                 作成または利用する一意な GCP project ID。
+                             省略時は gcloud config の project を使う
   PROJECT_NAME               表示名。既定値は Agent XAA Demo
-  BILLING_ACCOUNT_ID         請求先アカウント ID。新規作成時に必要
+  BILLING_ACCOUNT_ID         請求先アカウント ID。省略時は開いているものを自動で選ぶ
   ORGANIZATION_ID            プロジェクトの親 Organization。任意
   FOLDER_ID                  プロジェクトの親 Folder。任意
   REGION                     既定値は asia-northeast1
@@ -93,15 +106,17 @@ Options:
   ENABLE_GOOGLE_BRIDGE       既定値は false
   SAAS_CONNECTOR_MODE        既定値は stub
   GOOGLE_OAUTH_CLIENT_ID     SAAS_CONNECTOR_MODE=google のとき seed が接続先定義に書く client ID
-  GOOGLE_OAUTH_CLIENT_SECRET_FILE Google OAuth secret を読むファイル。任意
+  GOOGLE_OAUTH_CLIENT_SECRET_FILE Google OAuth secret を読むファイル
+  GOOGLE_OAUTH_CLIENT_SECRET Google OAuth secret を直接渡す。FILE の代わりに使う
   ROTATE_INTERNAL_SECRETS    1 のとき Human IdP client secret を追加する
   ROTATE_GOOGLE_OAUTH_SECRET 1 のとき Google OAuth secret を追加する
   GOOGLE_CONNECTOR_ID        OAuth client の redirect URI に使う connector id。既定値は google-workspace
   ALLOW_DIRTY                1 のとき dirty worktree のイメージ作成を許可する
-  CONFIRM_PROJECT_ID         --yes 時の誤操作防止。PROJECT_ID と同じ値にする
+  CONFIRM_PROJECT_ID         指定した場合だけ PROJECT_ID との一致を検査する誤操作防止
   DEMO_LOGIN_USER            権限を付与するログインユーザー。testuser または otheruser
   GRANT_DEMO_PERMISSIONS     0 のときデモ用 Human Permission の付与を省く
   SKIP_ORG_POLICY_CHECK      1 のとき組織ポリシーの事前確認を省く
+  AUTO_FIX_ORG_POLICY        既定は1。ドメイン制限共有の例外をプロジェクトへ自動で追加する
   DEMO_TFVARS                demo state の変数ファイル。既定値は infra/tfvars/deploy.tfvars
 
 Terraform は ADC を使います。
@@ -113,7 +128,7 @@ while (($#)); do
   case "$1" in
     all|doctor|auth|project|deploy|verify) command_name=$1 ;;
     --dry-run) dry_run=1 ;;
-    --yes) assume_yes=1 ;;
+    --yes) ;;  # 互換のために受け取るだけ。待つ確認はもう無い
     --skip-quality-gate) skip_quality_gate=1 ;;
     --allow-unverified) allow_unverified=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -129,7 +144,15 @@ current_phase=0
 elapsed() { printf '%02d:%02d' $((SECONDS / 60)) $((SECONDS % 60)); }
 say() { printf '\n[%s +%s] %s\n' "deploy-guide" "$(elapsed)" "$*"; }
 warn() { printf '[deploy-guide] WARNING: %s\n' "$*" >&2; }
-die() { printf '[deploy-guide] ERROR: %s\n' "$*" >&2; exit 1; }
+# 止まるときは、何が足りないかと、次に打つコマンドまでを1回で出す。
+# 2行目以降は補足として字下げして続ける。
+die() {
+  printf '[deploy-guide] ERROR: %s\n' "$1" >&2
+  shift
+  local line
+  for line in "$@"; do printf '  %s\n' "$line" >&2; done
+  exit 1
+}
 
 # all は初回 30〜60 分かかる。今どの段階で、始めてから何分経ったかが見えないと、
 # 読み手には止まっているのか動いているのか区別できない。
@@ -303,10 +326,22 @@ validate_settings() {
   [[ -f "$DEMO_TFVARS" ]] || die "$DEMO_TFVARS が見つかりません。"
 
   if [[ "$command_name" =~ ^(project|deploy|verify|all)$ ]]; then
-    if [[ -z ${PROJECT_ID:-} && -t 0 && $dry_run -eq 0 ]]; then
-      read -r -p 'GCP project ID: ' PROJECT_ID
+    # 尋ねずに、既に答えのある場所を見る。gcloud で作業しているなら config に入っている。
+    if [[ -z ${PROJECT_ID:-} ]] && ((!dry_run)); then
+      PROJECT_ID=$(gcloud config get-value project 2>/dev/null) || PROJECT_ID=''
+      [[ "$PROJECT_ID" == '(unset)' ]] && PROJECT_ID=''
+      [[ -n "$PROJECT_ID" ]] && say "PROJECT_ID を gcloud config から取りました: $PROJECT_ID"
     fi
-    [[ ${PROJECT_ID:-} =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || die 'PROJECT_ID は6〜30文字の小文字、数字、ハイフンで指定してください。'
+    if [[ -z ${PROJECT_ID:-} ]]; then
+      die 'PROJECT_ID が決まりません。世界中で一意な名前を決めて指定してください。' \
+        '6〜30文字の小文字、数字、ハイフンで、先頭は小文字です。既存プロジェクトの ID でも構いません。' \
+        "例: PROJECT_ID=agent-xaa-$(date +%Y%m%d) scripts/deploy-gcp-guide.sh $command_name"
+    fi
+    [[ "$PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || die "PROJECT_ID ($PROJECT_ID) は6〜30文字の小文字、数字、ハイフンで指定してください。"
+    # 指定された場合だけ検査する。誤ったプロジェクトを触らせないための任意の保険。
+    if [[ -n ${CONFIRM_PROJECT_ID:-} && "$CONFIRM_PROJECT_ID" != "$PROJECT_ID" ]]; then
+      die "CONFIRM_PROJECT_ID ($CONFIRM_PROJECT_ID) が PROJECT_ID ($PROJECT_ID) と一致しません。"
+    fi
   fi
 
   if [[ -n ${IMAGE_TAG:-} ]]; then
@@ -315,6 +350,47 @@ validate_settings() {
     IMAGE_TAG=$(git rev-parse --short=12 HEAD)
   fi
   [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_.-]{1,128}$ ]] || die 'IMAGE_TAG に OCI tag で使えない文字があります。'
+
+  preflight_runtime_inputs
+}
+
+# 途中で人に尋ねない代わりに、後半で必要になる入力が全部そろっているかを、
+# GCP を1つも変更していないこの時点で見る。20分 apply したあとで
+# 「client secret を入力してください」と言われるのが、いちばん時間を捨てる止まり方だった。
+preflight_runtime_inputs() {
+  local -a missing=()
+
+  if [[ "$GCP_AUTH_MODE" == workforce ]]; then
+    [[ -n ${WORKFORCE_LOGIN_CONFIG:-} && -f "${WORKFORCE_LOGIN_CONFIG:-}" ]] \
+      || missing+=('WORKFORCE_LOGIN_CONFIG に login config JSON のパスを指定してください（GCP_AUTH_MODE=workforce のため）。')
+  fi
+
+  if [[ "$command_name" =~ ^(deploy|all)$ && "$ENABLE_GOOGLE_BRIDGE" == true && "$SAAS_CONNECTOR_MODE" == google ]] && ((!dry_run)); then
+    [[ -n ${GOOGLE_OAUTH_CLIENT_ID:-} ]] \
+      || missing+=('GOOGLE_OAUTH_CLIENT_ID に <xxxx>.apps.googleusercontent.com を指定してください（SAAS_CONNECTOR_MODE=google のため）。')
+    if [[ -n ${GOOGLE_OAUTH_CLIENT_SECRET_FILE:-} ]]; then
+      [[ -f "$GOOGLE_OAUTH_CLIENT_SECRET_FILE" ]] \
+        || missing+=("GOOGLE_OAUTH_CLIENT_SECRET_FILE ($GOOGLE_OAUTH_CLIENT_SECRET_FILE) が見つかりません。")
+    elif [[ -z ${GOOGLE_OAUTH_CLIENT_SECRET:-} ]] && ! secret_has_enabled_version google-oauth-client-secret; then
+      missing+=('GOOGLE_OAUTH_CLIENT_SECRET_FILE か GOOGLE_OAUTH_CLIENT_SECRET のどちらかで OAuth client secret を渡してください。')
+    fi
+    ((${#missing[@]})) && guide_google_oauth_client
+  fi
+
+  # イメージのタグは commit SHA なので、未コミットの変更はどのイメージにも入らない。
+  # 気づくのが build 段（20分後）では遅いため、ここで見る。
+  if [[ "$command_name" =~ ^(deploy|all)$ ]] && ((!dry_run)) \
+    && [[ -n $(git status --porcelain) && ${ALLOW_DIRTY:-0} != 1 ]]; then
+    missing+=('worktree に未コミットの変更があります。commit するか ALLOW_DIRTY=1 を指定してください。')
+  fi
+
+  ((${#missing[@]})) || return 0
+  printf '\n[deploy-guide] ERROR: 実行前に決めておく設定が %d 件そろっていません。\n' "${#missing[@]}" >&2
+  printf '入力待ちで止まらないよう、GCP を変更する前にまとめて報告します。\n' >&2
+  local item
+  for item in "${missing[@]}"; do printf '  - %s\n' "$item" >&2; done
+  printf '\n' >&2
+  exit 1
 }
 
 doctor() {
@@ -378,8 +454,8 @@ browser_login() {
     '  2. 「Google Cloud SDK が Google アカウントへのアクセスをリクエストしています」で［許可］を押す。' \
     '  3. 端末に戻り、次の段階が始まるのを待つ。' \
     '' \
-    '  ブラウザの無いマシンで実行している場合は Ctrl+C で止め、' \
-    '  `gcloud auth login --update-adc --no-browser` の案内に従ってから実行し直してください。'
+    '  ブラウザの無いマシンで実行している場合は、この段でそのまま失敗します。' \
+    '  別の端末で `gcloud auth login --update-adc --no-browser` の案内に従ってから、同じコマンドを実行し直してください。'
   run gcloud auth login --update-adc
 }
 
@@ -392,10 +468,9 @@ authenticate() {
         print_command gcloud auth application-default print-access-token
       elif gcloud_session_ready; then
         say "ログイン済みの $(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1) を使います。"
-      elif [[ -t 0 ]]; then
-        browser_login
       else
-        die '未ログインです。対話端末で実行するか、GCP_AUTH_MODE=workforce と WORKFORCE_LOGIN_CONFIG を指定してください。'
+        # 端末かどうかで分岐しない。ブラウザが開けなければ gcloud がその場で理由を言って落ちる。
+        browser_login || die '未ログインのままです。先に `gcloud auth login --update-adc` を済ませるか、GCP_AUTH_MODE=workforce と WORKFORCE_LOGIN_CONFIG を指定してください。'
       fi
       ;;
     existing)
@@ -439,34 +514,30 @@ guide_billing_account_creation() {
     '    https://cloud.google.com/billing/docs/how-to/billing-access'
 }
 
+# 選ばせずに、このアカウントから見えているものを使う。1件しか無いのが普通で、
+# 複数ある場合も既定を決めて進み、違うものを使いたい人には BILLING_ACCOUNT_ID を案内する。
 choose_billing_account() {
   [[ -n ${BILLING_ACCOUNT_ID:-} ]] && return 0
   ((dry_run)) && die 'dry-run で新規作成を表示するには BILLING_ACCOUNT_ID を指定してください。'
-  local ids
+  local ids count
   ids=$(open_billing_account_ids)
-  # 見えないまま先へ進めても gcloud billing projects link で落ちるだけなので、
-  # ここで作り終わるまで待つ。実行し直しは求めない。
-  while [[ -z "$ids" ]]; do
+  if [[ -z "$ids" ]]; then
+    # 無いものは待っても現れない。作り方を出して、作れたら同じコマンドを実行してもらう。
     guide_billing_account_creation
-    [[ -t 0 ]] || die '使える請求先アカウントがありません。BILLING_ACCOUNT_ID を指定して実行し直してください。'
-    read -r -p '用意できたら Enter を押してください（中止する場合は Ctrl+C）: ' _
-    ids=$(open_billing_account_ids)
-  done
+    die '使える請求先アカウントが1件も見えません。' \
+      '上のページで作成するか、管理者から roles/billing.user をもらってから、同じコマンドを実行し直してください。' \
+      '会社の請求先アカウントを使う場合は BILLING_ACCOUNT_ID=XXXXXX-XXXXXX-XXXXXX を指定してください。'
+  fi
 
-  if [[ $(printf '%s\n' "$ids" | wc -l) -eq 1 ]]; then
-    BILLING_ACCOUNT_ID=$ids
+  count=$(printf '%s\n' "$ids" | wc -l | tr -d ' ')
+  BILLING_ACCOUNT_ID=$(printf '%s\n' "$ids" | head -n 1)
+  if ((count == 1)); then
     say "請求先アカウント $BILLING_ACCOUNT_ID を使用します。"
     return 0
   fi
-
-  say '使える請求先アカウントは次のとおりです。'
+  say "請求先アカウントが $count 件あります。先頭の $BILLING_ACCOUNT_ID を使用します。"
   gcloud billing accounts list --filter=open=true --format='table(name.basename(),displayName)'
-  [[ -t 0 ]] || die '請求先アカウントが複数あります。BILLING_ACCOUNT_ID を指定してください。'
-  while :; do
-    read -r -p 'Billing account ID: ' BILLING_ACCOUNT_ID
-    printf '%s\n' "$ids" | grep -qxF "$BILLING_ACCOUNT_ID" && return 0
-    warn '一覧に無い ID です。XXXXXX-XXXXXX-XXXXXX の形式で、上の表から選んでください。'
-  done
+  warn "別のものを使う場合は BILLING_ACCOUNT_ID=<上の表の ID> を指定して実行し直してください。"
 }
 
 # この構成は Automation App と Human IdP と Agent OP Callback を allUsers へ公開する。
@@ -484,10 +555,18 @@ check_domain_restricted_sharing() {
   jq -e '[(.spec.rules[]?.values.allowedValues[]?), (.listPolicy.allowedValues[]?)] | length > 0' \
     <<<"$policy" >/dev/null || return 0
 
+  # 人にコンソールを開かせる前に、同じことを API でやってみる。
+  # 権限があれば数秒で済み、無ければ下の手順を出す。どちらでも人を待たない。
+  if [[ ${AUTO_FIX_ORG_POLICY:-1} == 1 ]] && override_domain_restricted_sharing; then
+    say "$PROJECT_ID に iam.allowedPolicyMemberDomains の例外を追加しました。反映まで数分かかることがあります。"
+    return 0
+  fi
+
   manual_step '組織ポリシー「ドメインの制限された共有」に例外を追加する' \
     'iam.allowedPolicyMemberDomains が許可ドメインを列挙しています。' \
     'このままだと allUsers への公開が拒否され、demo の apply が' \
     '"One or more users named in the policy do not belong to a permitted customer" で落ちます。' \
+    'スクリプトから例外を追加しようとしましたが、権限が足りず書き込めませんでした。' \
     '' \
     "  設定ページ: https://console.cloud.google.com/iam-admin/orgpolicies/iam-allowedPolicyMemberDomains?project=$PROJECT_ID" \
     '    1. 上のページを開き、［ポリシーを管理］を押す。' \
@@ -500,6 +579,21 @@ check_domain_restricted_sharing() {
     '' \
     '  この確認を飛ばす場合は SKIP_ORG_POLICY_CHECK=1 を指定してください。'
   die '組織ポリシーが allUsers への公開を拒否する設定のままです。'
+}
+
+# プロジェクト単位の上書きだけを書く。親（組織やフォルダ）のポリシーには触らない。
+override_domain_restricted_sharing() {
+  local policy_file applied=0
+  policy_file="${TMPDIR:-/tmp}/agent-xaa-orgpolicy-$PROJECT_ID-$$.yaml"
+  {
+    printf 'name: projects/%s/policies/iam.allowedPolicyMemberDomains\n' "$PROJECT_ID"
+    printf 'spec:\n  rules:\n    - allowAll: true\n'
+  } >"$policy_file"
+  say "組織ポリシーの例外を $PROJECT_ID へ追加します。"
+  print_command gcloud org-policies set-policy "$policy_file" --project="$PROJECT_ID"
+  gcloud org-policies set-policy "$policy_file" --project="$PROJECT_ID" >/dev/null 2>&1 && applied=1
+  rm -f -- "$policy_file"
+  ((applied))
 }
 
 configure_project() {
@@ -565,20 +659,16 @@ configure_project() {
     --project="$PROJECT_ID"
 }
 
-confirm_mutations() {
+# 何を作るのかは見せるが、答えは待たない。取り消したい人は Ctrl+C で止められるし、
+# 中身を先に見たい人には --dry-run がある。ここで入力を求めると、
+# 「実行して席を外す」という all のいちばん普通の使い方ができなくなる。
+announce_mutations() {
   ((dry_run)) && return
   printf '\n対象 project: %s\nregion: %s\nimage tag: %s\ndemo tfvars: %s\n' "$PROJECT_ID" "$REGION" "$IMAGE_TAG" "$DEMO_TFVARS"
   printf 'ここから先は GCP に課金対象のリソースを作ります。初回は 30〜60 分かかります。\n'
   printf '費用の目安は放置で月額約 $0.5、1日動かして $1.1〜1.5 です（tasks/README.md の DEC-COST-01）。\n'
   printf 'demo destroy 後も state bucket、KMS、Artifact Registry などが残ります。\n'
-  if ((assume_yes)); then
-    [[ ${CONFIRM_PROJECT_ID:-} == "$PROJECT_ID" ]] || die '--yes では CONFIRM_PROJECT_ID を PROJECT_ID と同じ値にしてください。'
-    return
-  fi
-  [[ -t 0 ]] || die '非対話実行では --yes と CONFIRM_PROJECT_ID が必要です。'
-  local answer
-  read -r -p "続行するには project ID ($PROJECT_ID) を再入力してください: " answer
-  [[ "$answer" == "$PROJECT_ID" ]] || die 'project ID が一致しません。'
+  printf '中止する場合はいま Ctrl+C を押してください。作るものだけを見る場合は --dry-run を付けます。\n'
 }
 
 terraform_plan_apply() {
@@ -607,6 +697,7 @@ apply_bootstrap_and_shared() {
     -backend-config="bucket=$PROJECT_ID-tfstate"
   # GCP never deletes KMS key rings or keys. After a destroy-all the project still holds
   # them while the state does not, and creating them again answers 409; adopt them first.
+  say '削除できない KMS リソースが残っていないかを確認します。残っていれば1件ずつ state へ取り込みます。'
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash scripts/adopt-existing-kms.sh
   terraform_plan_apply infra/envs/shared shared \
     -var="project_id=$PROJECT_ID" -var="region=$REGION"
@@ -659,7 +750,8 @@ guide_google_oauth_client() {
     '       アプリケーションの種類に「ウェブ アプリケーション」を選ぶ。' \
     '       「承認済みのリダイレクト URI」へ次の値をそのまま貼り付ける。' \
     "         $redirect_uri" \
-    '       作成すると client ID と client secret が表示されます。secret はこのあと入力してもらいます。' \
+    '       作成すると client ID と client secret が表示されます。' \
+    '       この2つは GOOGLE_OAUTH_CLIENT_ID と GOOGLE_OAUTH_CLIENT_SECRET_FILE で渡します。' \
     '' \
     "  redirect URI の connector id を変える場合は GOOGLE_CONNECTOR_ID=<id> を指定して実行し直してください。" \
     "  作成済みの client は https://console.cloud.google.com/auth/clients?project=$PROJECT_ID で見られます。"
@@ -672,22 +764,20 @@ add_google_oauth_secret_version() {
     return
   fi
   guide_google_oauth_client
+  # 値は環境から受け取る。端末から読むと、その1行のために実行全体が人を待つことになる。
+  # ここへ来る前に preflight_runtime_inputs がどちらか片方の存在を確かめている。
   if [[ -n ${GOOGLE_OAUTH_CLIENT_SECRET_FILE:-} ]]; then
-    [[ -f "$GOOGLE_OAUTH_CLIENT_SECRET_FILE" ]] || die 'GOOGLE_OAUTH_CLIENT_SECRET_FILE が見つかりません。'
+    [[ -f "$GOOGLE_OAUTH_CLIENT_SECRET_FILE" ]] || die "GOOGLE_OAUTH_CLIENT_SECRET_FILE ($GOOGLE_OAUTH_CLIENT_SECRET_FILE) が見つかりません。"
     run gcloud secrets versions add "$secret_name" --project="$PROJECT_ID" --data-file="$GOOGLE_OAUTH_CLIENT_SECRET_FILE"
   elif ((dry_run)); then
-    printf '+ read -s GOOGLE_OAUTH_CLIENT_SECRET | gcloud secrets versions add %q --project=%q --data-file=-  # value redacted\n' "$secret_name" "$PROJECT_ID"
-  elif [[ -t 0 ]]; then
-    local secret_value
-    read -r -s -p 'Google OAuth client secret: ' secret_value
-    printf '\n'
-    [[ -n "$secret_value" ]] || die 'Google OAuth client secret が空です。'
-    printf '%s' "$secret_value" | gcloud secrets versions add "$secret_name" --project="$PROJECT_ID" --data-file=- >/dev/null
-    unset secret_value
+    printf '+ printf %%s "$GOOGLE_OAUTH_CLIENT_SECRET" | gcloud secrets versions add %q --project=%q --data-file=-  # value redacted\n' "$secret_name" "$PROJECT_ID"
+  elif [[ -n ${GOOGLE_OAUTH_CLIENT_SECRET:-} ]]; then
+    say "$secret_name を GOOGLE_OAUTH_CLIENT_SECRET から登録します。値は表示しません。"
+    printf '%s' "$GOOGLE_OAUTH_CLIENT_SECRET" | gcloud secrets versions add "$secret_name" --project="$PROJECT_ID" --data-file=- >/dev/null
   else
-    die 'Google OAuth client secret の version がありません。GOOGLE_OAUTH_CLIENT_SECRET_FILE を指定してください。'
+    die 'Google OAuth client secret の version がありません。' \
+      'GOOGLE_OAUTH_CLIENT_SECRET_FILE=<secret を書いたファイル> か GOOGLE_OAUTH_CLIENT_SECRET=<secret> を指定してください。'
   fi
-
 }
 
 # The Bridge reads the connector's secret_name from Secret Manager on every call, and
@@ -712,13 +802,9 @@ add_stub_bridge_secret_version() {
 require_google_oauth_client_id() {
   [[ -n ${GOOGLE_OAUTH_CLIENT_ID:-} ]] && return 0
   ((dry_run)) && { GOOGLE_OAUTH_CLIENT_ID='<google-oauth-client-id>'; return 0; }
-  [[ -t 0 ]] || die 'SAAS_CONNECTOR_MODE=google では GOOGLE_OAUTH_CLIENT_ID が必要です。'
-  printf 'OAuth client の client ID は https://console.cloud.google.com/auth/clients?project=%s で確認できます。\n' "$PROJECT_ID"
-  while :; do
-    read -r -p 'Google OAuth client ID（xxxx.apps.googleusercontent.com）: ' GOOGLE_OAUTH_CLIENT_ID
-    [[ "$GOOGLE_OAUTH_CLIENT_ID" == *.apps.googleusercontent.com ]] && return 0
-    warn 'client ID は .apps.googleusercontent.com で終わる値です。'
-  done
+  die 'SAAS_CONNECTOR_MODE=google では GOOGLE_OAUTH_CLIENT_ID が必要です。' \
+    "client ID は https://console.cloud.google.com/auth/clients?project=$PROJECT_ID で確認できます。" \
+    'GOOGLE_OAUTH_CLIENT_ID=<xxxx>.apps.googleusercontent.com を指定して実行し直してください。'
 }
 
 provision_secret_values() {
@@ -737,9 +823,8 @@ provision_secret_values() {
 
 build_and_push_images() {
   phase 'コンテナイメージをビルドして Artifact Registry へ push します。'
-  if ((!dry_run)) && [[ -n $(git status --porcelain) && ${ALLOW_DIRTY:-0} != 1 ]]; then
-    die 'worktree に未コミット変更があります。commit するか ALLOW_DIRTY=1 を指定してください。'
-  fi
+  # worktree が綺麗かどうかは preflight_runtime_inputs が実行前に見ている。
+  # ここまで来てから止めると、その時点で共有リソースの apply が終わってしまっている。
   local registry="$REGION-docker.pkg.dev/$PROJECT_ID/xaa"
   run gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
   say '17 個のイメージを順に build と push します。アプリごとの進み具合は build-images 自身が表示します。'
@@ -1010,7 +1095,7 @@ case "$command_name" in
   doctor) ;;
   auth) authenticate ;;
   project) authenticate; configure_project ;;
-  deploy) quality_gate; authenticate; confirm_mutations; configure_project; deploy; print_next_steps ;;
+  deploy) quality_gate; authenticate; announce_mutations; configure_project; deploy; print_next_steps ;;
   verify) authenticate; verify_deployment; print_next_steps ;;
-  all) quality_gate; authenticate; confirm_mutations; configure_project; deploy; verify_deployment; print_next_steps ;;
+  all) quality_gate; authenticate; announce_mutations; configure_project; deploy; verify_deployment; print_next_steps ;;
 esac
