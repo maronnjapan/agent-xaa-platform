@@ -39,7 +39,12 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 
 ### プロジェクト作成から一括実行する
 
-`scripts/deploy-gcp-guide.sh` は、GCP 認証、プロジェクト作成、請求先の関連付け、Terraform、Secret Manager、イメージ配布、SSO 鍵の初期化、seed、IAM 検証を順に実行する。
+`scripts/deploy-gcp-guide.sh` は、GCP 認証、プロジェクト作成、請求先の関連付け、Terraform、Secret Manager、イメージ配布、SSO 鍵の初期化、seed、デモ用 Human Permission の付与、IAM 検証を順に実行する。
+最後にログイン方法とコンソールの URL を表示して終わる。
+
+手でしかできない箇所は、スクリプトが URL と入力内容まで含めて画面に出す。
+前提ツールの不足、請求先アカウントの用意、組織ポリシーの例外、Google OAuth client の作成がこれにあたる。
+不足しているコマンドは1件ずつではなくまとめて報告するため、入れ直して実行し直す回数は1回で済む。
 
 通常の Google アカウントまたは Google Workspace の SSO を使う場合は、次のように実行する。
 
@@ -71,6 +76,9 @@ SSO 署名鍵は Human IdP が初回アクセス時に生成し、KMS で包ん�
 IAM 到達性検証では、実行者に不足している `roles/iam.serviceAccountTokenCreator` を対象 Service Account にだけ一時付与し、検証後に削除する。
 
 外部 Google OAuth を有効にする場合は、Google Auth Platform で Web application の OAuth client を作り、secret をファイルから渡す。
+`GOOGLE_OAUTH_CLIENT_SECRET_FILE` を指定しなければ、スクリプトが端末から secret を読み取って Secret Manager へ渡す。
+承認済みリダイレクト URI は project number と region から決まるため、スクリプトが確定した値を表示する。
+Bridge が読む `connector_definitions` の行を書き込む経路は現時点の実装に無く、`ENABLE_GOOGLE_BRIDGE=true` は Bridge の配備と secret の登録までを行う。
 
 ```bash
 ENABLE_GOOGLE_BRIDGE=true \
@@ -78,6 +86,26 @@ SAAS_CONNECTOR_MODE=google \
 GOOGLE_OAUTH_CLIENT_SECRET_FILE=/secure/path/client-secret.txt \
 scripts/deploy-gcp-guide.sh all
 ```
+
+### デプロイ後にアプリを操作する
+
+Automation App の URL はスクリプトが最後に表示する。
+
+ログインできるのは Human IdP が持つ固定ユーザーの `testuser` と `otheruser` の2人で、パスワードはどちらも `password` である。
+seed が投入する `human_permissions` は `user-123` と `user-456` のもので、ログインする本人のものではない。
+そのためスクリプトは `DEMO_LOGIN_USER`（既定は `testuser`）へ `document.read` `document.write` `finance.payment.read` `finance.payment.approve` を付与する。
+Bridge を有効にした場合は `calendar.event.read` も付ける。
+
+付与を省く場合は `GRANT_DEMO_PERMISSIONS=0` を指定する。
+あとから増減する場合は次を実行する。
+
+```bash
+GOOGLE_CLOUD_PROJECT=<id> STORE_MODE=gcp PUBSUB_MODE=gcp \
+  pnpm perm:set <user> <capability_id> <grant|revoke>
+```
+
+Automation App と Human IdP は `allUsers` へ公開され、ログイン情報は固定である。
+検証が終わったら `make demo-destroy` で破棄する。
 
 実行内容だけを確認する場合は `--dry-run` を付ける。
 

@@ -60,8 +60,12 @@ Options:
   GOOGLE_OAUTH_CLIENT_SECRET_FILE Google OAuth secret を読むファイル。任意
   ROTATE_INTERNAL_SECRETS    1 のとき Human IdP client secret を追加する
   ROTATE_GOOGLE_OAUTH_SECRET 1 のとき Google OAuth secret を追加する
+  GOOGLE_CONNECTOR_ID        OAuth client の redirect URI に使う connector id。既定値は google-workspace
   ALLOW_DIRTY                1 のとき dirty worktree のイメージ作成を許可する
   CONFIRM_PROJECT_ID         --yes 時の誤操作防止。PROJECT_ID と同じ値にする
+  DEMO_LOGIN_USER            権限を付与するログインユーザー。testuser または otheruser
+  GRANT_DEMO_PERMISSIONS     0 のときデモ用 Human Permission の付与を省く
+  SKIP_ORG_POLICY_CHECK      1 のとき組織ポリシーの事前確認を省く
 
 Terraform は ADC を使います。
 サービスアカウント鍵 JSON は作成も読み込みもしません。
@@ -96,8 +100,101 @@ run() {
   ((dry_run)) || "$@"
 }
 
+# 手で操作するしかない箇所は、どこを開いて何を入力するかまで書く。
+# 「コンソールで設定してください」だけでは、読んだ人がここで止まってしまう。
+manual_step() {
+  local title=$1
+  shift
+  printf '\n────────────────────────────────────────────────────────────────\n'
+  printf '[手動操作] %s\n' "$title"
+  printf '────────────────────────────────────────────────────────────────\n'
+  local line
+  for line in "$@"; do printf '%s\n' "$line"; done
+  printf '\n'
+}
+
+declare -a missing_prerequisites=()
+
+prerequisite_guide() {
+  case "$1" in
+    gcloud)
+      cat <<'GUIDE'
+gcloud CLI (Google Cloud SDK) — 認証、プロジェクト作成、Cloud Run の操作に使います。
+  https://cloud.google.com/sdk/docs/install?hl=ja
+    1. 上のページから OS 用のアーカイブをダウンロードして展開する。
+    2. `./google-cloud-sdk/install.sh` を実行し、PATH への追加に y と答える。
+    3. シェルを開き直し、`gcloud version` が表示されることを確認する。
+  macOS で Homebrew を使う場合は `brew install --cask google-cloud-sdk` でも入ります。
+  Debian と Ubuntu の apt は https://cloud.google.com/sdk/docs/install#deb にあります。
+GUIDE
+      ;;
+    terraform)
+      cat <<'GUIDE'
+Terraform 1.9.8 — infra/ の状態を apply します。このリポジトリはこのバージョンに固定しています。
+  手順 A（mise で固定する。別バージョンが既に入っていてもそのまま使えるため推奨）
+  https://mise.jdx.dev/getting-started.html
+    1. `curl https://mise.run | sh`
+    2. シェルの設定に `eval "$(mise activate bash)"` を書き足して開き直す（zsh なら bash を zsh に）。
+    3. `mise use -g terraform@1.9.8`
+  手順 B（HashiCorp の配布物を直接置く）
+  https://developer.hashicorp.com/terraform/install
+    1. 1.9.8 のバイナリをダウンロードし、PATH の通ったディレクトリに置く。
+    2. `terraform version` が 1.9.8 を返すことを確認する。
+GUIDE
+      ;;
+    node)
+      cat <<'GUIDE'
+Node.js 22 と pnpm — 品質ゲートと Human Permission の付与に使います。
+  手順 A（mise。推奨）https://mise.jdx.dev/getting-started.html
+    1. `curl https://mise.run | sh` のあとシェルを開き直す。
+    2. `mise use -g node@22`
+    3. `corepack enable pnpm`
+  手順 B（公式インストーラ）https://nodejs.org/ja/download
+    1. Node.js 22 系をインストールする。
+    2. `corepack enable pnpm` を実行する（pnpm の入手方法は https://pnpm.io/ja/installation ）。
+  `node --version` が v22 で始まり、`pnpm --version` が表示されれば準備完了です。
+GUIDE
+      ;;
+    docker)
+      cat <<'GUIDE'
+Docker — 各アプリのイメージをビルドして Artifact Registry へ push します。
+  https://docs.docker.com/get-started/get-docker/
+    1. Docker Desktop（macOS と Windows）または Docker Engine（Linux）をインストールする。
+    2. Linux では `sudo usermod -aG docker "$USER"` を実行し、ログインし直す。
+    3. `docker info` がエラーなく表示されることを確認する。
+GUIDE
+      ;;
+    jq)
+      cat <<'GUIDE'
+jq — gcloud と Terraform の JSON 出力を読み取ります。
+  https://jqlang.github.io/jq/download/
+    macOS: `brew install jq` / Debian と Ubuntu: `sudo apt-get install -y jq`
+GUIDE
+      ;;
+    *)
+      printf '%s — OS のパッケージマネージャでインストールしてください。\n' "$1"
+      printf '  macOS: `brew install %s` / Debian と Ubuntu: `sudo apt-get install -y %s`\n' "$1" "$1"
+      ;;
+  esac
+}
+
+# 見つからないものを1件目で止めずに全部集めてから出す。
+# 1件ずつ落ちると、入れて実行し直すたびに次の1件が出てくることになる。
 require_command() {
-  command -v "$1" >/dev/null 2>&1 || die "$1 が見つかりません。"
+  command -v "$1" >/dev/null 2>&1 || missing_prerequisites+=("$1")
+}
+
+flush_prerequisites() {
+  ((${#missing_prerequisites[@]})) || return 0
+  printf '\n[deploy-guide] ERROR: 実行に必要なものが %d 件そろっていません。\n' "${#missing_prerequisites[@]}" >&2
+  printf '次の手順でインストールしてから、同じコマンドをもう一度実行してください。\n' >&2
+  local tool
+  for tool in "${missing_prerequisites[@]}"; do
+    printf '\n────────────────────────────────────────────────────────────────\n' >&2
+    prerequisite_guide "$tool" >&2
+  done
+  printf '\n' >&2
+  exit 1
 }
 
 select_toolchains() {
@@ -106,24 +203,27 @@ select_toolchains() {
   require_command curl
   require_command openssl
   require_command git
+  [[ "$command_name" =~ ^(deploy|all)$ ]] && require_command docker
 
   if command -v terraform >/dev/null 2>&1 && [[ $(terraform version -json 2>/dev/null | jq -r .terraform_version) == 1.9.8 ]]; then
     tf_command=(terraform)
-  elif command -v mise >/dev/null 2>&1; then
+  elif command -v mise >/dev/null 2>&1 && mise exec terraform@1.9.8 -- terraform version >/dev/null 2>&1; then
     tf_command=(mise exec terraform@1.9.8 -- terraform)
-    "${tf_command[@]}" version >/dev/null
   else
-    die 'Terraform 1.9.8 が必要です。mise または Terraform 1.9.8 をインストールしてください。'
+    missing_prerequisites+=(terraform)
   fi
 
-  if command -v node >/dev/null 2>&1 && [[ $(node -p 'process.versions.node.split(".")[0]' 2>/dev/null) == 22 ]]; then
+  # pnpm も一緒に見る。node だけ 22 で pnpm が無いと、品質ゲートまで進んでから落ちる。
+  if command -v node >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1 \
+    && [[ $(node -p 'process.versions.node.split(".")[0]' 2>/dev/null) == 22 ]]; then
     pnpm_command=(pnpm)
-  elif command -v mise >/dev/null 2>&1; then
+  elif command -v mise >/dev/null 2>&1 && mise exec node@22 -- pnpm --version >/dev/null 2>&1; then
     pnpm_command=(mise exec node@22 -- pnpm)
-    "${pnpm_command[@]}" --version >/dev/null
   else
-    die 'Node.js 22 と pnpm が必要です。'
+    missing_prerequisites+=(node)
   fi
+
+  flush_prerequisites
 }
 
 validate_settings() {
@@ -134,11 +234,17 @@ validate_settings() {
   SAAS_CONNECTOR_MODE=${SAAS_CONNECTOR_MODE:-stub}
   DEMO_TFVARS=${DEMO_TFVARS:-infra/tfvars/verify.tfvars}
   CREATE_PROJECT=${CREATE_PROJECT:-auto}
+  DEMO_LOGIN_USER=${DEMO_LOGIN_USER:-testuser}
+  GRANT_DEMO_PERMISSIONS=${GRANT_DEMO_PERMISSIONS:-1}
+  GOOGLE_CONNECTOR_ID=${GOOGLE_CONNECTOR_ID:-google-workspace}
 
   [[ "$GCP_AUTH_MODE" =~ ^(existing|browser|workforce)$ ]] || die 'GCP_AUTH_MODE は existing、browser、workforce のいずれかです。'
   [[ "$ENABLE_GOOGLE_BRIDGE" =~ ^(true|false)$ ]] || die 'ENABLE_GOOGLE_BRIDGE は true または false です。'
   [[ "$SAAS_CONNECTOR_MODE" =~ ^(stub|google)$ ]] || die 'SAAS_CONNECTOR_MODE は stub または google です。'
   [[ "$CREATE_PROJECT" =~ ^(auto|true|false)$ ]] || die 'CREATE_PROJECT は auto、true、false のいずれかです。'
+  # Human IdP がパスワードを知っているのはこの2人だけ（apps/human-idp/src/oidc/store.ts）。
+  # 他の名前へ権限を付けても、その名前ではログインできない。
+  [[ "$DEMO_LOGIN_USER" =~ ^(testuser|otheruser)$ ]] || die 'DEMO_LOGIN_USER は testuser または otheruser です。'
   [[ -z ${ORGANIZATION_ID:-} || -z ${FOLDER_ID:-} ]] || die 'ORGANIZATION_ID と FOLDER_ID は同時に指定できません。'
   [[ -f "$DEMO_TFVARS" ]] || die "$DEMO_TFVARS が見つかりません。"
 
@@ -165,9 +271,18 @@ doctor() {
   printf 'Node.js: %s\n' "$(if ((${#pnpm_command[@]} == 1)); then node --version; else mise exec node@22 -- node --version; fi)"
   printf 'pnpm: %s\n' "$("${pnpm_command[@]}" --version)"
   gcloud version | sed -n '1p'
-  if [[ "$command_name" =~ ^(deploy|all)$ ]]; then
-    require_command docker
-    ((dry_run)) || docker info >/dev/null 2>&1 || die 'Docker daemon に接続できません。'
+  if [[ "$command_name" =~ ^(deploy|all)$ ]] && ((!dry_run)) && ! docker info >/dev/null 2>&1; then
+    manual_step 'Docker daemon を起動する' \
+      'docker コマンドはありますが、daemon へ接続できません。イメージのビルドができない状態です。' \
+      '' \
+      '  macOS と Windows: Docker Desktop を起動し、鯨のアイコンが running になるまで待つ。' \
+      '    https://docs.docker.com/desktop/' \
+      '  Linux: `sudo systemctl start docker` を実行する。' \
+      '    権限で失敗する場合は `sudo usermod -aG docker "$USER"` のあとログインし直す。' \
+      '    https://docs.docker.com/engine/install/linux-postinstall/' \
+      '' \
+      '  `docker info` がエラーなく表示されるようになってから、同じコマンドを実行し直してください。'
+    die 'Docker daemon に接続できません。'
   fi
 }
 
@@ -221,14 +336,86 @@ authenticate() {
   fi
 }
 
+open_billing_account_ids() {
+  gcloud billing accounts list --filter=open=true --format='value(name.basename())' 2>/dev/null || true
+}
+
+guide_billing_account_creation() {
+  manual_step '請求先アカウントを用意する' \
+    'Cloud Run、Artifact Registry、Firestore を作るため、有効な請求先アカウントが要ります。' \
+    'いまこのアカウントからは、開いている請求先アカウントが1件も見えていません。' \
+    '' \
+    '  新しく作る場合: https://console.cloud.google.com/billing/create' \
+    '    1. 国と通貨を選ぶ。通貨はあとから変更できません。' \
+    '    2. アカウント名を入れ、支払い方法（クレジットカードなど）を登録する。' \
+    '    3. 初めての利用なら無料トライアルのクレジットが付きます: https://cloud.google.com/free' \
+    '    4. https://console.cloud.google.com/billing の一覧に出ることを確認する。' \
+    '' \
+    '  会社の請求先アカウントを使う場合: 管理者に roles/billing.user を依頼してください。' \
+    '    https://cloud.google.com/billing/docs/how-to/billing-access'
+}
+
 choose_billing_account() {
-  [[ -n ${BILLING_ACCOUNT_ID:-} ]] && return
+  [[ -n ${BILLING_ACCOUNT_ID:-} ]] && return 0
   ((dry_run)) && die 'dry-run で新規作成を表示するには BILLING_ACCOUNT_ID を指定してください。'
-  say '利用可能な有効な請求先アカウントを表示します。'
+  local ids
+  ids=$(open_billing_account_ids)
+  # 見えないまま先へ進めても gcloud billing projects link で落ちるだけなので、
+  # ここで作り終わるまで待つ。実行し直しは求めない。
+  while [[ -z "$ids" ]]; do
+    guide_billing_account_creation
+    [[ -t 0 ]] || die '使える請求先アカウントがありません。BILLING_ACCOUNT_ID を指定して実行し直してください。'
+    read -r -p '用意できたら Enter を押してください（中止する場合は Ctrl+C）: ' _
+    ids=$(open_billing_account_ids)
+  done
+
+  if [[ $(printf '%s\n' "$ids" | wc -l) -eq 1 ]]; then
+    BILLING_ACCOUNT_ID=$ids
+    say "請求先アカウント $BILLING_ACCOUNT_ID を使用します。"
+    return 0
+  fi
+
+  say '使える請求先アカウントは次のとおりです。'
   gcloud billing accounts list --filter=open=true --format='table(name.basename(),displayName)'
-  [[ -t 0 ]] || die 'BILLING_ACCOUNT_ID が必要です。'
-  read -r -p 'Billing account ID: ' BILLING_ACCOUNT_ID
-  [[ -n "$BILLING_ACCOUNT_ID" ]] || die 'BILLING_ACCOUNT_ID が空です。'
+  [[ -t 0 ]] || die '請求先アカウントが複数あります。BILLING_ACCOUNT_ID を指定してください。'
+  while :; do
+    read -r -p 'Billing account ID: ' BILLING_ACCOUNT_ID
+    printf '%s\n' "$ids" | grep -qxF "$BILLING_ACCOUNT_ID" && return 0
+    warn '一覧に無い ID です。XXXXXX-XXXXXX-XXXXXX の形式で、上の表から選んでください。'
+  done
+}
+
+# この構成は Automation App と Human IdP と Agent OP Callback を allUsers へ公開する。
+# 組織のドメイン制限共有が効いていると demo の apply が途中で落ちるため、
+# 15分かけて apply する前に見ておく。
+check_domain_restricted_sharing() {
+  ((dry_run)) && return 0
+  [[ ${SKIP_ORG_POLICY_CHECK:-0} == 1 ]] && return 0
+  local policy
+  policy=$(gcloud org-policies describe constraints/iam.allowedPolicyMemberDomains \
+    --project="$PROJECT_ID" --effective --format=json 2>/dev/null) \
+    || policy=$(gcloud resource-manager org-policies describe constraints/iam.allowedPolicyMemberDomains \
+      --project="$PROJECT_ID" --effective --format=json 2>/dev/null) \
+    || return 0
+  jq -e '[(.spec.rules[]?.values.allowedValues[]?), (.listPolicy.allowedValues[]?)] | length > 0' \
+    <<<"$policy" >/dev/null || return 0
+
+  manual_step '組織ポリシー「ドメインの制限された共有」に例外を追加する' \
+    'iam.allowedPolicyMemberDomains が許可ドメインを列挙しています。' \
+    'このままだと allUsers への公開が拒否され、demo の apply が' \
+    '"One or more users named in the policy do not belong to a permitted customer" で落ちます。' \
+    '' \
+    "  設定ページ: https://console.cloud.google.com/iam-admin/orgpolicies/iam-allowedPolicyMemberDomains?project=$PROJECT_ID" \
+    '    1. 上のページを開き、［ポリシーを管理］を押す。' \
+    '    2. ［親のポリシーをオーバーライドする］を選ぶ。' \
+    "    3. ［ルールを追加］で［すべて許可］を選び、$PROJECT_ID に適用する。" \
+    '    4. 保存し、反映まで数分待つ。' \
+    '' \
+    '  組織ポリシー管理者 (roles/orgpolicy.policyAdmin) が要ります。付与の手順は' \
+    '  https://cloud.google.com/resource-manager/docs/organization-policy/restricting-domains にあります。' \
+    '' \
+    '  この確認を飛ばす場合は SKIP_ORG_POLICY_CHECK=1 を指定してください。'
+  die '組織ポリシーが allUsers への公開を拒否する設定のままです。'
 }
 
 configure_project() {
@@ -273,6 +460,7 @@ configure_project() {
 
   run gcloud config set project "$PROJECT_ID"
   run gcloud auth application-default set-quota-project "$PROJECT_ID"
+  check_domain_restricted_sharing
   run gcloud services enable \
     serviceusage.googleapis.com cloudresourcemanager.googleapis.com \
     cloudbilling.googleapis.com storage.googleapis.com \
@@ -333,14 +521,48 @@ add_generated_secret_version() {
   fi
 }
 
+# Cloud Run の既定ホスト名は project number と region から決まるので、
+# apply の前でも redirect URI を確定して見せられる。
+bridge_callback_base_url() {
+  local number
+  number=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)' 2>/dev/null) || number=''
+  if [[ -z "$number" ]]; then
+    printf 'https://google-bridge-callback-<project-number>.%s.run.app' "$REGION"
+    return 0
+  fi
+  printf 'https://google-bridge-callback-%s.%s.run.app' "$number" "$REGION"
+}
+
+guide_google_oauth_client() {
+  local redirect_uri
+  redirect_uri="$(bridge_callback_base_url)/$GOOGLE_CONNECTOR_ID/oauth/callback"
+  manual_step 'Google OAuth client を作成する' \
+    'Google Bridge が外部 SaaS との OAuth 接続を持つため、ウェブアプリケーション種別の client が要ります。' \
+    'ブラウザで次の4ページを上から順に設定してください。' \
+    '' \
+    "  1. ブランディング: https://console.cloud.google.com/auth/branding?project=$PROJECT_ID" \
+    '       アプリ名、ユーザーサポートメール、デベロッパーの連絡先情報を入れて保存する。' \
+    "  2. 対象: https://console.cloud.google.com/auth/audience?project=$PROJECT_ID" \
+    '       ユーザーの種類に「外部」を選び、テストユーザーへ自分の Google アカウントを追加する。' \
+    "  3. データアクセス: https://console.cloud.google.com/auth/scopes?project=$PROJECT_ID" \
+    '       接続先 API のスコープを追加する（例 https://www.googleapis.com/auth/calendar.readonly）。' \
+    "  4. クライアント: https://console.cloud.google.com/auth/clients/create?project=$PROJECT_ID" \
+    '       アプリケーションの種類に「ウェブ アプリケーション」を選ぶ。' \
+    '       「承認済みのリダイレクト URI」へ次の値をそのまま貼り付ける。' \
+    "         $redirect_uri" \
+    '       作成すると client ID と client secret が表示されます。secret はこのあと入力してもらいます。' \
+    '' \
+    "  redirect URI の connector id を変える場合は GOOGLE_CONNECTOR_ID=<id> を指定して実行し直してください。" \
+    "  作成済みの client は https://console.cloud.google.com/auth/clients?project=$PROJECT_ID で見られます。"
+}
+
 add_google_oauth_secret_version() {
   local secret_name=google-oauth-client-secret
   if ((!dry_run)) && [[ ${ROTATE_GOOGLE_OAUTH_SECRET:-0} != 1 ]] && secret_has_enabled_version "$secret_name"; then
     say "$secret_name には有効な version があるため再利用します。"
     return
   fi
-  say 'Google Auth Platform で Web application の OAuth client を作成してください。'
-  printf 'Console: https://console.cloud.google.com/auth/clients?project=%s\n' "$PROJECT_ID"
+  guide_google_oauth_client
   if [[ -n ${GOOGLE_OAUTH_CLIENT_SECRET_FILE:-} ]]; then
     [[ -f "$GOOGLE_OAUTH_CLIENT_SECRET_FILE" ]] || die 'GOOGLE_OAUTH_CLIENT_SECRET_FILE が見つかりません。'
     run gcloud secrets versions add "$secret_name" --project="$PROJECT_ID" --data-file="$GOOGLE_OAUTH_CLIENT_SECRET_FILE"
@@ -356,6 +578,21 @@ add_google_oauth_secret_version() {
   else
     die 'Google OAuth client secret の version がありません。GOOGLE_OAUTH_CLIENT_SECRET_FILE を指定してください。'
   fi
+
+  # ここから先は現時点の実装に経路が無い。黙って進めると、Bridge が配備された状態で
+  # 接続だけが動かず、原因が分からないまま止まる。
+  manual_step 'Bridge の connector 定義について' \
+    'Bridge は Firestore の connector_definitions/<connector_id> を読んで接続先を決めます。' \
+    'この行を書き込む経路は現時点の実装に含まれていません。' \
+    'ENABLE_GOOGLE_BRIDGE=true は Bridge サービスの配備と secret の登録までを行い、' \
+    '外部 SaaS への実接続はここで止まります。' \
+    '' \
+    '  行に必要な値:' \
+    "    connector_id  = $GOOGLE_CONNECTOR_ID" \
+    '    client_id     = 作成した OAuth client の client ID' \
+    "    secret_name   = $secret_name" \
+    '    各 endpoint   = https://accounts.google.com/o/oauth2/v2/auth などの Google の値' \
+    '  詳細は docs/06-oauth-bridge.md と apps/google-bridge/src/connectors/types.ts にあります。'
 }
 
 provision_secret_values() {
@@ -441,9 +678,70 @@ verify_deployment() {
   else
     say '公開エンドポイントを表示します。'
     "${tf_command[@]}" -chdir=infra/envs/demo output -json platform_endpoints | jq '{issuer, authorization_url, provisioner_url, lifecycle_url}'
-    printf 'Console: https://console.cloud.google.com/run?project=%s\n' "$PROJECT_ID"
-    printf 'Destroy: PROJECT_ID=%q REGION=%q TF=%q make demo-destroy\n' "$PROJECT_ID" "$REGION" "${tf_command[*]}"
   fi
+}
+
+# seed が入れる human_permissions は user-123 と user-456 のもので、
+# Human IdP がパスワードを持つ testuser と otheruser のものではない。
+# 付けずに終わると、ログインはできるのに権限が空で、自動化を1つも定義できない。
+grant_demo_permissions() {
+  if [[ "$GRANT_DEMO_PERMISSIONS" != 1 ]]; then
+    warn 'デモ用 Human Permission の付与を省きます。ログインしても権限は空のままです。'
+    return 0
+  fi
+  say "ログインユーザー $DEMO_LOGIN_USER へ Human Permission を付与します。"
+  # Bridge を配備していないときに calendar を付けても、seed が対応する Tool を落とすため
+  # Capability だけが宙に浮く。配備した分だけ付ける。
+  local -a capabilities=(document.read document.write finance.payment.read finance.payment.approve)
+  [[ "$ENABLE_GOOGLE_BRIDGE" == true ]] && capabilities+=(calendar.event.read)
+  if ((!dry_run)); then
+    [[ -d node_modules ]] || run "${pnpm_command[@]}" install --frozen-lockfile
+    # perm:set は dist を実行する。依存パッケージも一緒に組み上がる filter を使う。
+    [[ -f apps/authorization/dist/perm-set-cli.js ]] || run "${pnpm_command[@]}" --filter '@xaa/authorization...' build
+  fi
+  local capability
+  for capability in "${capabilities[@]}"; do
+    run env GOOGLE_CLOUD_PROJECT="$PROJECT_ID" STORE_MODE=gcp PUBSUB_MODE=gcp \
+      "${pnpm_command[@]}" perm:set "$DEMO_LOGIN_USER" "$capability" grant
+  done
+}
+
+print_next_steps() {
+  local automation_app_url issuer_url
+  if ((dry_run)); then
+    print_command "${tf_command[@]}" -chdir=infra/envs/demo output -json service_urls
+    automation_app_url="https://automation-app-<project-number>.$REGION.run.app"
+    issuer_url="https://human-idp-<project-number>.$REGION.run.app"
+  else
+    # 案内の表示で全体を落とさない。output が読めなければ既定のホスト名の形を見せる。
+    local urls
+    urls=$("${tf_command[@]}" -chdir=infra/envs/demo output -json service_urls 2>/dev/null) || urls='{}'
+    automation_app_url=$(jq -r --arg fallback "https://automation-app-<project-number>.$REGION.run.app" \
+      '."automation-app" // $fallback' <<<"$urls")
+    issuer_url=$(jq -r --arg fallback "https://human-idp-<project-number>.$REGION.run.app" \
+      '."human-idp" // $fallback' <<<"$urls")
+  fi
+
+  manual_step 'デプロイ後にアプリを操作する' \
+    "  1. ブラウザで Automation App を開く: $automation_app_url" \
+    "  2. Human IdP ($issuer_url) のログイン画面で次を入力する。" \
+    "       ユーザー名: $DEMO_LOGIN_USER" \
+    '       パスワード: password' \
+    '     ログインできるのは testuser と otheruser の2人だけで、どちらもパスワードは password です。' \
+    '     この2人は apps/human-idp/src/oidc/store.ts が持つ固定ユーザーです。' \
+    '  3. 画面の対話で自動化したい内容を書き、提示された Agent Definition を承認する。' \
+    '  4. 実行の様子は同じ画面の Activity タイムラインで追えます。' \
+    '' \
+    "  Cloud Run:  https://console.cloud.google.com/run?project=$PROJECT_ID" \
+    "  Firestore:  https://console.cloud.google.com/firestore/databases/xaa/data?project=$PROJECT_ID" \
+    "  ログ:       https://console.cloud.google.com/logs/query?project=$PROJECT_ID" \
+    '' \
+    '  権限を足す、または外す:' \
+    "    GOOGLE_CLOUD_PROJECT=$PROJECT_ID STORE_MODE=gcp PUBSUB_MODE=gcp pnpm perm:set <user> <capability_id> <grant|revoke>" \
+    '  破棄:' \
+    "    PROJECT_ID=$PROJECT_ID REGION=$REGION DEMO_TFVARS=$DEMO_TFVARS TF='${tf_command[*]}' make demo-destroy"
+
+  warn 'Automation App と Human IdP はインターネットへ公開され、ログイン情報は固定です。検証が終わったら demo-destroy してください。'
 }
 
 prepare_verify_impersonation() {
@@ -488,6 +786,7 @@ deploy() {
   apply_demo
   wait_for_services
   bootstrap_sso_and_seed
+  grant_demo_permissions
 }
 
 doctor
@@ -495,7 +794,7 @@ case "$command_name" in
   doctor) ;;
   auth) authenticate ;;
   project) authenticate; configure_project ;;
-  deploy) quality_gate; authenticate; confirm_mutations; configure_project; deploy ;;
-  verify) authenticate; verify_deployment ;;
-  all) quality_gate; authenticate; confirm_mutations; configure_project; deploy; verify_deployment ;;
+  deploy) quality_gate; authenticate; confirm_mutations; configure_project; deploy; print_next_steps ;;
+  verify) authenticate; verify_deployment; print_next_steps ;;
+  all) quality_gate; authenticate; confirm_mutations; configure_project; deploy; verify_deployment; print_next_steps ;;
 esac
