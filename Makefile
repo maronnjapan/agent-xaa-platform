@@ -14,8 +14,10 @@ test-integration:
 	pnpm test:integration
 images:
 	REGISTRY=$(REGISTRY) IMAGE_TAG=$(IMAGE_TAG) DRY_RUN=$(DRY_RUN) bash scripts/build-images.sh
+# The Dockerfile is written for BuildKit, which has been the default since Docker 23.
+# Naming it here keeps a single-image build working on a daemon that has it turned off.
 image-%:
-	docker build --build-arg APP=$* -t $(REGISTRY)/$*:$(IMAGE_TAG) .
+	DOCKER_BUILDKIT=1 docker build --build-arg APP=$* -t $(REGISTRY)/$*:$(IMAGE_TAG) .
 	docker push $(REGISTRY)/$*:$(IMAGE_TAG)
 ci: typecheck lint test test-integration
 

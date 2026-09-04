@@ -4,3 +4,10 @@ infra
 e2e
 docs
 **/test
+# Everything below keeps a developer's working tree out of the image. The sources are now
+# copied after `pnpm install`, so a host node_modules would land on top of the one the
+# image installed; and a host .tsbuildinfo would tell `tsc` the outputs already exist
+# while its dist/ was never copied, leaving the image with no compiled code at all.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
