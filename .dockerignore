@@ -4,3 +4,20 @@ infra
 e2e
 docs
 **/test
+# Build output and its incremental state. `pnpm build` regenerates both inside the image,
+# so shipping a host copy in only makes the context bigger and the COPY layers churn on
+# changes the image never sees.
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+# Nothing below is copied into any stage; excluding it keeps the context transfer, which
+# happens once per image, down to what the build reads.
+.github
+.agents
+.claude
+.review
+generated-baseline
+scripts
+tasks
+tests
