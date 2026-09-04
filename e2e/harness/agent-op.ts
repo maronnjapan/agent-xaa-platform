@@ -117,7 +117,7 @@ export async function startAgentOp(options: StartAgentOpOptions): Promise<AgentO
   const deps: AgentOpAppDeps = {
     config: {
       mode: 'token', issuer: HUMAN_IDP_ISSUER, xaaClientId: 'agent-platform',
-      googleCloudProject: 'xaa-test', firestoreDatabase: 'xaa', jwksBucket: 'xaa-jwks', jwksObject: 'jwks.json',
+      googleCloudProject: 'xaa-test', firestoreDatabase: 'xaa-db', jwksBucket: 'xaa-jwks', jwksObject: 'jwks.json',
       kmsIdjagKey: 'projects/p/locations/l/keyRings/idjag-signing/cryptoKeys/shared/cryptoKeyVersions/1',
       kmsIdpConnectionKey: 'projects/p/locations/l/keyRings/idp-connection/cryptoKeys/shared',
       humanIdpAuthorizeUrl: `${HUMAN_IDP_ISSUER}/authorize`,

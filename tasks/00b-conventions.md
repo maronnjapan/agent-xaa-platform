@@ -99,7 +99,7 @@
 | `ISSUER` | T-IAC-09 | T-OP-01 / T-IDP-02 | Human IdP と Agent OP でバイト一致する1つの文字列 |
 | `XAA_CLIENT_ID` | T-IAC-09 | T-OP-01 | `agent-platform` |
 | `GOOGLE_CLOUD_PROJECT` | T-IAC-09 / T-IAC-12 / T-IAC-13 | T-OP-01 / T-RUN-01 | `var.project_id` |
-| `FIRESTORE_DATABASE` | T-IAC-09 | T-OP-01 / T-IDP-02 | `xaa` |
+| `FIRESTORE_DATABASE` | T-IAC-09 | T-OP-01 / T-IDP-02 | `xaa-db` |
 | `JWKS_BUCKET` | T-IAC-09 / T-IAC-10 | T-OP-01 / T-IDP-02 / T-RES | JWKS 公開バケット名 |
 | `JWKS_OBJECT` | T-IAC-09 | T-OP-01 | `jwks.json` |
 | `KMS_IDJAG_KEY` | T-IAC-09 / T-IAC-13 | T-OP-01 | `shared-agent-op-idjag` または `dedicated-op-<short>-idjag` の完全修飾名 |

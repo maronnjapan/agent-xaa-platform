@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import { buildAuthorizationRequest } from '@xaa/automation-app/src/auth/oidc-login';
 import { authorize, basicAuth, decodeJwtPayload } from '../harness/oauth-flow.js';
 import { AUTOMATION_REDIRECT_URI, HUMAN_IDP_ISSUER, startHumanIdp } from '../harness/human-idp.js';
 
 describe('login produces an ID Token addressed to automation-app', () => {
+  it('accepts the Automation App login request at the Human IdP boundary', async () => {
+    const idp = await startHumanIdp();
+    const request = await buildAuthorizationRequest({
+      issuer: HUMAN_IDP_ISSUER,
+      clientId: 'automation-app',
+      redirectUri: AUTOMATION_REDIRECT_URI,
+    });
+
+    const response = await idp.fetch(request.url, { redirect: 'manual' });
+    expect(response.status).toBe(302);
+    expect(new URL(response.headers.get('location')!).pathname).toBe('/login');
+  });
+
   it('aud is the string "automation-app"', async () => {
     const idp = await startHumanIdp();
     const result = await authorize({

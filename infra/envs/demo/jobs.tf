@@ -43,7 +43,7 @@ module "seed" {
   task_timeout_seconds = 600
   env = merge({
     PROJECT_ID             = var.project_id
-    FIRESTORE_DATABASE     = "xaa"
+    FIRESTORE_DATABASE     = local.firestore_database_id
     PLATFORM_ENDPOINTS_URI = "gs://${google_storage_bucket.platform_config.name}/platform-endpoints.json"
     SEED_BUCKET            = google_storage_bucket.platform_config.name
     ENABLE_GOOGLE_BRIDGE   = tostring(var.enable_google_bridge)

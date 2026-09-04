@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { CLIENT_ALLOWED_SCOPES, findUnregisteredScope, SUPPORTED_SCOPES } from '../src/config/scopes.js';
 
 describe('registered scopes', () => {
-  it('fixes the six supported scopes', () => {
-    expect([...SUPPORTED_SCOPES]).toEqual(['openid', 'offline_access', 'workdef:submit', 'agent:provision', 'agent:revoke', 'agent:operate']);
+  it('fixes the seven supported scopes', () => {
+    expect([...SUPPORTED_SCOPES]).toEqual(['openid', 'profile', 'offline_access', 'workdef:submit', 'agent:provision', 'agent:revoke', 'agent:operate']);
   });
 
   const cases = [
+    ['profile', 'automation-app', true],
+    ['profile', 'agent-platform', false],
     ['workdef:submit', 'automation-app', true],
     ['workdef:submit', 'agent-platform', false],
     ['agent:provision', 'automation-app', true],

@@ -46,6 +46,7 @@ skip_quality_gate=0
 allow_unverified=0
 declare -a tf_command pnpm_command
 temporary_verify_bindings=()
+login_registration_verified=0
 
 cleanup_verify_bindings() {
   ((${#temporary_verify_bindings[@]})) || return 0
@@ -675,9 +676,34 @@ terraform_plan_apply() {
   local directory=$1 label=$2
   shift 2
   local plan_file="${TMPDIR:-/tmp}/agent-xaa-${label}-${PROJECT_ID}-$$.tfplan"
-  run "${tf_command[@]}" -chdir="$directory" plan -input=false -out="$plan_file" "$@"
-  run "${tf_command[@]}" -chdir="$directory" apply -input=false "$plan_file"
-  if ((!dry_run)); then rm -f -- "$plan_file"; fi
+  local apply_log="${plan_file}.apply.log"
+  local attempt=1 max_attempts=4 retry_delay_seconds=65
+
+  if ((dry_run)); then
+    run "${tf_command[@]}" -chdir="$directory" plan -input=false -out="$plan_file" "$@"
+    run "${tf_command[@]}" -chdir="$directory" apply -input=false -parallelism=4 "$plan_file"
+    return
+  fi
+
+  while ((attempt <= max_attempts)); do
+    run "${tf_command[@]}" -chdir="$directory" plan -input=false -out="$plan_file" "$@"
+    print_command "${tf_command[@]}" -chdir="$directory" apply -input=false -parallelism=4 "$plan_file"
+    if "${tf_command[@]}" -chdir="$directory" apply -input=false -parallelism=4 "$plan_file" 2>&1 | tee "$apply_log"; then
+      rm -f -- "$plan_file" "$apply_log"
+      return 0
+    fi
+
+    if ! grep -Fq 'Service accounts created per minute per project' "$apply_log" \
+      || ((attempt == max_attempts)); then
+      rm -f -- "$apply_log"
+      return 1
+    fi
+
+    warn "Service Account 作成の分間 quota に達しました。${retry_delay_seconds} 秒後に state を反映した plan で再開します（${attempt}/${max_attempts}）。"
+    rm -f -- "$plan_file" "$apply_log"
+    sleep "$retry_delay_seconds"
+    attempt=$((attempt + 1))
+  done
 }
 
 apply_bootstrap_and_shared() {
@@ -909,6 +935,50 @@ wait_for_services() {
       die "$service が Ready になりません。gcloud run services logs read $service で確認してください。"
     fi
   done
+  verify_automation_login_registration
+}
+
+# Cloud Run が Ready でも、Automation App が要求する scope と Human IdP の
+# client allowlist が食い違っていれば、ブラウザは callback の invalid_scope へ
+# 戻される。実際の2段の redirect をたどり、ログイン画面へ進めるところまでを
+# デプロイの完了条件にする。
+verify_automation_login_registration() {
+  ((login_registration_verified == 0)) || return 0
+  say 'Automation App の OIDC client と scope 登録を検証します。'
+
+  if ((dry_run)); then
+    print_command curl -fsS -o /dev/null --max-redirs 0 -w '%{redirect_url}' \
+      "https://automation-app-<project-number>.$REGION.run.app/login"
+    print_command curl -fsS -o /dev/null --max-redirs 0 -w '%{redirect_url}' \
+      'https://<issuer>/authorize?<automation-app-login-request>'
+    login_registration_verified=1
+    return 0
+  fi
+
+  local urls automation_app_url authorization_url login_url
+  urls=$("${tf_command[@]}" -chdir=infra/envs/demo output -json service_urls)
+  automation_app_url=$(jq -er '."automation-app"' <<<"$urls")
+  authorization_url=$(curl -fsS -o /dev/null --max-redirs 0 -w '%{redirect_url}' \
+    "$automation_app_url/login")
+
+  [[ "$authorization_url" == *'/authorize?'* ]] || die \
+    'Automation App の /login が Human IdP の認可エンドポイントを返しません。' \
+    "redirect: ${authorization_url:-<empty>}"
+  [[ "$authorization_url" == *'scope=openid+profile'* || "$authorization_url" == *'scope=openid%20profile'* ]] || die \
+    'Automation App のログイン要求が登録対象の openid profile になっていません。' \
+    "redirect: $authorization_url"
+
+  login_url=$(curl -fsS -o /dev/null --max-redirs 0 -w '%{redirect_url}' "$authorization_url")
+  if [[ "$login_url" == *'error=invalid_scope'* ]]; then
+    die 'Human IdP で Automation App の profile scope が登録されていません。' \
+      'apps/human-idp/src/config/scopes.ts を含む Human IdP image を配備し直してください。'
+  fi
+  [[ "$login_url" == *'/login?transaction_id='* ]] || die \
+    'Human IdP が Automation App の認可要求をログイン画面へ進めません。' \
+    "redirect: ${login_url:-<empty>}"
+
+  login_registration_verified=1
+  say 'openid profile は Automation App client に登録済みです。'
 }
 
 bootstrap_sso_and_seed() {
@@ -952,6 +1022,7 @@ bootstrap_sso_and_seed() {
 
 verify_deployment() {
   phase 'IAM 到達性と権限を検証します。'
+  verify_automation_login_registration
   prepare_verify_impersonation
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash infra/tests/verify-all.sh
   cleanup_verify_bindings
@@ -979,11 +1050,11 @@ grant_demo_permissions() {
   if ((!dry_run)); then
     [[ -d node_modules ]] || run "${pnpm_command[@]}" install --frozen-lockfile
     # perm:set は dist を実行する。依存パッケージも一緒に組み上がる filter を使う。
-    [[ -f apps/authorization/dist/perm-set-cli.js ]] || run "${pnpm_command[@]}" --filter '@xaa/authorization...' build
+    run "${pnpm_command[@]}" --filter '@xaa/authorization...' build
   fi
   local capability
   for capability in "${capabilities[@]}"; do
-    run env GOOGLE_CLOUD_PROJECT="$PROJECT_ID" STORE_MODE=gcp PUBSUB_MODE=gcp \
+    run env GOOGLE_CLOUD_PROJECT="$PROJECT_ID" FIRESTORE_DATABASE=xaa-db STORE_MODE=gcp PUBSUB_MODE=gcp \
       "${pnpm_command[@]}" perm:set "$DEMO_LOGIN_USER" "$capability" grant
   done
 }
@@ -1037,7 +1108,7 @@ print_next_steps() {
     '' \
     "${bridge_lines[@]}" \
     "  Cloud Run:  https://console.cloud.google.com/run?project=$PROJECT_ID" \
-    "  Firestore:  https://console.cloud.google.com/firestore/databases/xaa/data?project=$PROJECT_ID" \
+    "  Firestore:  https://console.cloud.google.com/firestore/databases/xaa-db/data?project=$PROJECT_ID" \
     "  ログ:       https://console.cloud.google.com/logs/query?project=$PROJECT_ID" \
     '' \
     '  権限を足す、または外す:' \

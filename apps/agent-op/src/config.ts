@@ -61,7 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentOpConfig 
     issuer: required(env, 'ISSUER'),
     xaaClientId: env.XAA_CLIENT_ID ?? 'agent-platform',
     googleCloudProject: required(env, 'GOOGLE_CLOUD_PROJECT'),
-    firestoreDatabase: env.FIRESTORE_DATABASE ?? 'xaa',
+    firestoreDatabase: env.FIRESTORE_DATABASE ?? 'xaa-db',
     jwksBucket: required(env, 'JWKS_BUCKET'),
     jwksObject: env.JWKS_OBJECT ?? 'jwks.json',
     kmsIdjagKey: required(env, 'KMS_IDJAG_KEY'),

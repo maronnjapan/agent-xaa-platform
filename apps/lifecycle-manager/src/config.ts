@@ -22,7 +22,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): LifecycleConfi
   return {
     projectId: required(env, 'PROJECT_ID'),
     region: required(env, 'REGION'),
-    firestoreDatabaseId: env.FIRESTORE_DATABASE_ID ?? 'xaa',
+    firestoreDatabaseId: env.FIRESTORE_DATABASE_ID ?? 'xaa-db',
     issuer: required(env, 'ISSUER'),
     selfAudience: env.SELF_AUDIENCE ?? 'lifecycle-manager',
     platformEndpointsUri: required(env, 'PLATFORM_ENDPOINTS_URI'),

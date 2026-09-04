@@ -75,7 +75,21 @@ describe('the saved detections', () => {
     // `received_kid` and `received_typ` are what `logIdJagRedemption` emits (T-SEC-05);
     // reading a name nothing writes makes the detection silently always empty.
     for (const field of ['received_kid', 'received_typ', 'idjag_jti']) {
-      expect(sql, field).toContain(`jsonPayload.fields.${field}`);
+      expect(sql, field).toContain(`'$.fields.${field}'`);
+    }
+  });
+
+  it('reads optional log fields without requiring them in the initial sink schema', async () => {
+    const files = (await readdir(sqlDir)).filter((name) => name.endsWith('.sql')).sort();
+
+    for (const file of files) {
+      const sql = await readFile(`${sqlDir}${file}`, 'utf8');
+      // BigQuery exports jsonPayload as a STRUCT. A field that was absent when the Log
+      // Sink table was first inferred cannot be referenced with `.field_name`; converting
+      // the whole payload once and extracting JSON instead returns NULL for that key.
+      expect(sql, file).not.toMatch(/jsonPayload\.[A-Za-z_]/);
+      expect(sql, file).toContain('TO_JSON_STRING(jsonPayload) AS payload');
+      expect(sql, file).toMatch(/JSON_VALUE\((?:\w+\.)?payload/);
     }
   });
 });

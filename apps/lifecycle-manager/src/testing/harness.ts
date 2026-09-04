@@ -12,7 +12,7 @@ export const ISSUER = 'https://human-idp.test';
 export const AGENT_OP_URL = 'https://shared-agent-op.test';
 
 export const testConfig: LifecycleConfig = {
-  projectId: 'xaa-test', region: 'asia-northeast1', firestoreDatabaseId: 'xaa',
+  projectId: 'xaa-test', region: 'asia-northeast1', firestoreDatabaseId: 'xaa-db',
   issuer: ISSUER, selfAudience: 'lifecycle-manager',
   platformEndpointsUri: 'gs://xaa-config/platform-endpoints.json',
   agentMaxLifetimeSeconds: 86_400, expiringWindowSeconds: 60,

@@ -42,7 +42,7 @@ export function loadResourceAsEnv(env: NodeJS.ProcessEnv, expected: readonly str
     accessTokenExpiresIn: Number(env.ACCESS_TOKEN_EXPIRES_IN ?? '300'),
     registeredScopes: assertRegisteredScopes(env.REGISTERED_SCOPES, expected),
     signingKeyBucket: required(env, 'SIGNING_KEY_BUCKET'),
-    signingKeyObject: env.SIGNING_KEY_OBJECT ?? 'signing/current.json',
+    signingKeyObject: required(env, 'SIGNING_KEY_OBJECT'),
     signingKeyKmsKey: required(env, 'SIGNING_KEY_KMS_KEY'),
     jwksBucket: required(env, 'JWKS_BUCKET'),
     jwksKeyPrefix: required(env, 'JWKS_KEY_PREFIX'),

@@ -19,6 +19,13 @@ for file in infra/envs/shared/sql/*.sql; do
       status=1
     fi
   done
+  # The sink infers jsonPayload as a STRUCT from the first logs it sees. Optional keys
+  # must therefore be extracted as JSON; direct access makes view creation fail whenever
+  # that event kind has not reached a fresh environment yet.
+  if grep -qE 'jsonPayload\.[[:alpha:]_]' "$file"; then
+    echo "$file directly accesses an optional jsonPayload member" >&2
+    status=1
+  fi
 done
 
 # The four of DEC-SEC-01 plus refresh_token_reuse (T-SEC-14).

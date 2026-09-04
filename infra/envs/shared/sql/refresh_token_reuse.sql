@@ -8,17 +8,23 @@
 -- `refresh_token_reuse` is not one of the sixteen protocol violations — nothing about
 -- the request was malformed — so it travels under the extended code, and the six columns
 -- match the other saved detections so all of them can be UNION ALL'd into one feed.
+WITH audit_logs AS (
+  SELECT
+    timestamp,
+    TO_JSON_STRING(jsonPayload) AS payload
+  FROM `${project_id}.security_audit.run_googleapis_com_stdout`
+)
 SELECT
   timestamp AS occurred_at,
-  jsonPayload.agent_id AS agent_id,
-  jsonPayload.human_subject AS human_subject,
-  jsonPayload.trace_id AS trace_id,
+  JSON_VALUE(payload, '$.agent_id') AS agent_id,
+  JSON_VALUE(payload, '$.human_subject') AS human_subject,
+  JSON_VALUE(payload, '$.trace_id') AS trace_id,
   'refresh_token_reuse' AS detection_code,
   TO_JSON_STRING(STRUCT(
-    jsonPayload.fields.idp_connection_id AS idp_connection_id,
-    jsonPayload.fields.refresh_rotation_result AS refresh_rotation_result,
-    jsonPayload.fields.revoke_result AS revoke_result
+    JSON_VALUE(payload, '$.fields.idp_connection_id') AS idp_connection_id,
+    JSON_VALUE(payload, '$.fields.refresh_rotation_result') AS refresh_rotation_result,
+    JSON_VALUE(payload, '$.fields.revoke_result') AS revoke_result
   )) AS detail
-FROM `${project_id}.security_audit.run_googleapis_com_stdout`
-WHERE jsonPayload.log_source = 'agent_op_idp_connection'
-  AND jsonPayload.fields.refresh_reuse_detected = true
+FROM audit_logs
+WHERE JSON_VALUE(payload, '$.log_source') = 'agent_op_idp_connection'
+  AND SAFE_CAST(JSON_VALUE(payload, '$.fields.refresh_reuse_detected') AS BOOL) = true

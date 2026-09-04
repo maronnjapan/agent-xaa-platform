@@ -32,7 +32,7 @@ export function baseConfig(overrides: Partial<AgentOpConfig> = {}): AgentOpConfi
     issuer: ISSUER,
     xaaClientId: 'agent-platform',
     googleCloudProject: 'xaa-test',
-    firestoreDatabase: 'xaa',
+    firestoreDatabase: 'xaa-db',
     jwksBucket: 'xaa-jwks',
     jwksObject: 'jwks.json',
     kmsIdjagKey: 'projects/p/locations/l/keyRings/idjag-signing/cryptoKeys/shared/cryptoKeyVersions/1',

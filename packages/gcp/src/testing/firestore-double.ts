@@ -145,7 +145,7 @@ export function createFirestoreDouble(): Firestore {
 export async function firestoreUnderTest(): Promise<{ firestore: Firestore; label: string }> {
   if (process.env.FIRESTORE_EMULATOR_HOST) {
     const { Firestore } = await import('@google-cloud/firestore');
-    return { firestore: new Firestore({ projectId: 'xaa-test', databaseId: 'xaa' }), label: 'emulator' };
+    return { firestore: new Firestore({ projectId: 'xaa-test', databaseId: 'xaa-db' }), label: 'emulator' };
   }
   return { firestore: createFirestoreDouble(), label: 'double' };
 }

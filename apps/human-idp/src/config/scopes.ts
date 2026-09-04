@@ -7,6 +7,7 @@
  */
 export const SUPPORTED_SCOPES = [
   'openid',
+  'profile',
   'offline_access',
   'workdef:submit',
   'agent:provision',
@@ -20,7 +21,7 @@ export const OPERATION_SCOPES = ['workdef:submit', 'agent:provision', 'agent:rev
 export type OperationScope = (typeof OPERATION_SCOPES)[number];
 
 export const CLIENT_ALLOWED_SCOPES: Readonly<Record<string, readonly SupportedScope[]>> = {
-  'automation-app': ['openid', 'workdef:submit', 'agent:provision', 'agent:revoke', 'agent:operate'],
+  'automation-app': ['openid', 'profile', 'workdef:submit', 'agent:provision', 'agent:revoke', 'agent:operate'],
   'agent-platform': ['openid', 'offline_access'],
 };
 

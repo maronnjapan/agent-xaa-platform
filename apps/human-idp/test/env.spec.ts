@@ -13,7 +13,7 @@ const complete: NodeJS.ProcessEnv = {
   KMS_SSO_KEY_NAME: testEnv.kmsSsoKeyName,
   SIGNER_MODE: 'local',
   STORE_MODE: 'emulator',
-  FIRESTORE_DATABASE: 'xaa',
+  FIRESTORE_DATABASE: 'xaa-db',
   DPOP_REQUIRED: 'true',
   CLIENT_SECRET_AUTOMATION_APP: 'a',
   CLIENT_SECRET_AGENT_PLATFORM: 'b',

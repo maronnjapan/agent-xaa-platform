@@ -6,4 +6,4 @@ if ((${#matches[@]})); then
   printf 'no-firestore-rules: forbidden rules file %s\n' "${matches[@]}" >&2
   exit 1
 fi
-grep -qE 'name[[:space:]]*=[[:space:]]*"xaa"' infra/envs/demo/firestore.tf || { echo 'no-firestore-rules: named database xaa is missing' >&2; exit 1; }
+grep -qE 'firestore_database_id[[:space:]]*=[[:space:]]*"xaa-db"' infra/envs/demo/firestore.tf || { echo 'no-firestore-rules: named database xaa-db is missing' >&2; exit 1; }

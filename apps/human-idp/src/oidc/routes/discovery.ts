@@ -145,8 +145,9 @@ discoveryApp.get('/', (c) => {
   metadata.jwks_uri = `${(c.get('jwksPublicBaseUrl') as string | undefined) ?? issuer}/jwks.json`;
   // XAA-PATCH:REQ-08-018 end
   // XAA-PATCH:REQ-05-004 begin
-  // profile / email / address / phone are not implemented as claim scopes here, so
-  // only the six registered scopes are advertised, in their registration order.
+  // Only the scopes registered by this platform are advertised, in their registration
+  // order. `profile` is needed by Automation App login; the other optional OIDC claim
+  // scopes remain outside this deployment profile.
   metadata.scopes_supported = [...SUPPORTED_SCOPES];
   // XAA-PATCH:REQ-05-004 end
   // XAA-PATCH:REQ-05-028 begin

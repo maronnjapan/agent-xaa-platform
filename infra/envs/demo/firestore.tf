@@ -1,6 +1,10 @@
+locals {
+  firestore_database_id = "xaa-db"
+}
+
 resource "google_firestore_database" "xaa" {
   project                 = var.project_id
-  name                    = "xaa"
+  name                    = local.firestore_database_id
   location_id             = var.region
   type                    = "FIRESTORE_NATIVE"
   deletion_policy         = "DELETE"

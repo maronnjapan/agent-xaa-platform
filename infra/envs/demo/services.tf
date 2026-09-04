@@ -10,7 +10,7 @@ locals {
     VERTEX_MODE            = "live"
     VERTEX_MODEL           = var.vertex_model
     VERTEX_LOCATION        = var.vertex_location
-    FIRESTORE_DATABASE     = "xaa"
+    FIRESTORE_DATABASE     = local.firestore_database_id
   }
   service_specific_env = {
     "human-idp" = {
@@ -113,7 +113,7 @@ locals {
         ISSUER                     = local.platform_endpoints.issuer
         XAA_CLIENT_ID              = "agent-platform"
         GOOGLE_CLOUD_PROJECT       = var.project_id
-        FIRESTORE_DATABASE         = "xaa"
+        FIRESTORE_DATABASE         = local.firestore_database_id
         JWKS_BUCKET                = local.jwks_bucket
         JWKS_OBJECT                = "jwks.json"
         HUMAN_IDP_AUTHORIZE_URL    = "${local.run_url["human-idp"]}/authorize"
@@ -132,6 +132,7 @@ locals {
     "lifecycle" = {
       ISSUER                     = local.platform_endpoints.issuer
       PUBLIC_BASE_URL            = local.run_url["lifecycle"]
+      FIRESTORE_DATABASE_ID      = local.firestore_database_id
       AGENT_MAX_LIFETIME_SECONDS = tostring(var.agent_max_lifetime_seconds)
       EXPIRING_WINDOW_SECONDS    = tostring(var.expiring_window_seconds)
       ALLOWED_CALLER_SAS = join(",", [
@@ -170,6 +171,7 @@ locals {
       TRUSTED_IDP_JWKS_URI = local.platform_endpoints.jwks_url
       REGISTERED_SCOPES    = join(" ", local.resource_servers.docs.scopes)
       SIGNING_KEY_BUCKET   = google_storage_bucket.platform_config.name
+      SIGNING_KEY_OBJECT   = local.signing_key_objects.resource_docs_as
       SIGNING_KEY_KMS_KEY  = data.terraform_remote_state.shared.outputs.kms_keys.resource_docs_as
       JWKS_BUCKET          = local.jwks_bucket
       JWKS_KEY_PREFIX      = "docs-as"
@@ -194,6 +196,7 @@ locals {
       TRUSTED_IDP_JWKS_URI = local.platform_endpoints.jwks_url
       REGISTERED_SCOPES    = join(" ", local.resource_servers.finance.scopes)
       SIGNING_KEY_BUCKET   = google_storage_bucket.platform_config.name
+      SIGNING_KEY_OBJECT   = local.signing_key_objects.resource_finance_as
       SIGNING_KEY_KMS_KEY  = data.terraform_remote_state.shared.outputs.kms_keys.resource_finance_as
       JWKS_BUCKET          = local.jwks_bucket
       JWKS_KEY_PREFIX      = "fin-as"
@@ -303,9 +306,13 @@ module "services" {
   env             = each.value.env
   secret_env      = each.value.secret_env
   depends_on = [
+    google_kms_crypto_key_iam_member.application_keys,
     google_secret_manager_secret_iam_member.human_idp_client,
     google_secret_manager_secret_iam_member.automation_client,
     google_secret_manager_secret_iam_member.agent_op_client,
     google_secret_manager_secret_iam_member.bridge,
+    google_storage_bucket_iam_member.config_readers,
+    google_storage_bucket_iam_member.signing_key_writers,
+    google_storage_bucket_iam_member.jwks_writers,
   ]
 }

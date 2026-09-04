@@ -1,9 +1,11 @@
 FROM node:22-slim AS deps
 WORKDIR /workspace
 RUN corepack enable
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.base.json ./
 COPY packages ./packages
 COPY apps ./apps
+COPY security-rules ./security-rules
+COPY demo-scenarios ./demo-scenarios
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
@@ -27,4 +29,10 @@ FROM gcr.io/distroless/nodejs22-debian12 AS runtime
 ARG APP
 WORKDIR /app
 COPY --from=build /deploy ./
+# These files are read at module initialization. pnpm deploy only copies package
+# contents, so repository-level runtime data must be carried into the final image
+# explicitly. Keep security-rules at /security-rules because the emitted imports
+# resolve there; Automation App discovers demo-scenarios below its /app workdir.
+COPY --from=build /workspace/security-rules /security-rules
+COPY --from=build /workspace/demo-scenarios ./demo-scenarios
 CMD ["entry.js"]

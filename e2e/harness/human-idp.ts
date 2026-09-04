@@ -22,7 +22,7 @@ export const humanIdpEnv: HumanIdpEnv = {
   kmsSsoKeyName: 'projects/p/locations/l/keyRings/sso-signing/cryptoKeys/sso',
   signerMode: 'local',
   storeMode: 'emulator',
-  firestoreDatabase: 'xaa',
+  firestoreDatabase: 'xaa-db',
   dpopRequired: false,
   clientSecretAutomationApp: 'automation-secret',
   clientSecretAgentPlatform: 'agent-platform-secret',

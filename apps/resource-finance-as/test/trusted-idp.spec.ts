@@ -60,18 +60,19 @@ describe('trusted identity provider', () => {
   it('refuses to start without the trusted issuer configured', () => {
     const complete: NodeJS.ProcessEnv = {
       ISSUER: asEnv.issuer, TRUSTED_IDP_ISSUER: asEnv.trustedIdpIssuer, TRUSTED_IDP_JWKS_URI: asEnv.trustedIdpJwksUri,
-      REGISTERED_SCOPES: 'finance.tx.read finance.tx.write', SIGNING_KEY_BUCKET: 'b', SIGNING_KEY_KMS_KEY: 'k',
+      REGISTERED_SCOPES: 'finance.tx.read finance.tx.write', SIGNING_KEY_BUCKET: 'b', SIGNING_KEY_OBJECT: 'resource-as-signing/finance/current.json', SIGNING_KEY_KMS_KEY: 'k',
       JWKS_BUCKET: 'j', JWKS_KEY_PREFIX: 'fin-as', RESOURCE: asEnv.resourceUri,
     };
     expect(() => loadResourceAsEnv(complete)).not.toThrow();
     expect(() => loadResourceAsEnv({ ...complete, TRUSTED_IDP_ISSUER: undefined })).toThrow();
     expect(() => loadResourceAsEnv({ ...complete, TRUSTED_IDP_JWKS_URI: undefined })).toThrow();
+    expect(() => loadResourceAsEnv({ ...complete, SIGNING_KEY_OBJECT: undefined })).toThrow('SIGNING_KEY_OBJECT');
   });
 
   it('refuses to start when the registered scopes are widened', () => {
     const complete: NodeJS.ProcessEnv = {
       ISSUER: asEnv.issuer, TRUSTED_IDP_ISSUER: asEnv.trustedIdpIssuer, TRUSTED_IDP_JWKS_URI: asEnv.trustedIdpJwksUri,
-      REGISTERED_SCOPES: 'finance.tx.read finance.admin', SIGNING_KEY_BUCKET: 'b', SIGNING_KEY_KMS_KEY: 'k',
+      REGISTERED_SCOPES: 'finance.tx.read finance.admin', SIGNING_KEY_BUCKET: 'b', SIGNING_KEY_OBJECT: 'resource-as-signing/finance/current.json', SIGNING_KEY_KMS_KEY: 'k',
       JWKS_BUCKET: 'j', JWKS_KEY_PREFIX: 'fin-as', RESOURCE: asEnv.resourceUri,
     };
     expect(() => loadResourceAsEnv(complete)).toThrow('invalid_registered_scope');
