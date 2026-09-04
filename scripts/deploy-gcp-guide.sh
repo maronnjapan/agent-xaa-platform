@@ -104,6 +104,8 @@ Options:
   WORKFORCE_LOGIN_CONFIG     workforce 認証の login config JSON
   IMPERSONATE_SERVICE_ACCOUNT Terraform の ADC で偽装する SA。任意
   IMAGE_TAG                  既定値は Git commit SHA
+  BUILD_JOBS                 イメージを何個ずつ並列に build と push するか。
+                             既定値は CPU 数と 4 の小さい方。1 で逐次に戻す
   ENABLE_GOOGLE_BRIDGE       既定値は false
   SAAS_CONNECTOR_MODE        既定値は stub
   GOOGLE_OAUTH_CLIENT_ID     SAAS_CONNECTOR_MODE=google のとき seed が接続先定義に書く client ID
@@ -886,7 +888,7 @@ build_and_push_images() {
   # ここまで来てから止めると、その時点で共有リソースの apply が終わってしまっている。
   local registry="$REGION-docker.pkg.dev/$PROJECT_ID/xaa"
   run gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
-  say '17 個のイメージを順に build と push します。アプリごとの進み具合は build-images 自身が表示します。'
+  say '共有のビルド段を1回だけ作り、そのあと 17 個のイメージを並列に build と push します。アプリごとの進み具合は build-images 自身が表示します。'
   run env REGISTRY="$registry" IMAGE_TAG="$IMAGE_TAG" bash scripts/build-images.sh
 }
 
