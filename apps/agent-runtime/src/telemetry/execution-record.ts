@@ -208,7 +208,7 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
       sections.push({
         id: 'authorization',
         label: '使った権限',
-        message: 'ツールごとに Catalog で決まっている宛先と権限です。エージェントが選んだものではありません。',
+        message: 'ツールごとに Catalog で決まっている宛先と権限です。',
         fields: [
           { label: '要求先（audience）', value: audience },
           { label: '対象（resource）', value: resource },
@@ -252,7 +252,7 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
       sections.push({
         id: 'access_token',
         label: '受け取った Access Token',
-        message: 'Token そのものは記録しません。いつまで有効で、どう提示したかだけを残します。',
+        message: '残すのは、いつまで有効かと、どう提示したかだけです。',
         fields: [
           { label: '有効期限', value: expiresAt },
           { label: '提示方法', value: binding },
@@ -268,7 +268,7 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
       sections.push({
         id: 'request',
         label: '送ったリクエスト',
-        message: `${method} で ${url} を呼びました。宛先は Catalog が決めたもので、エージェントは組み立てていません。`,
+        message: `${method} で ${url} を呼びました。宛先は Catalog が決めたものです。`,
         fields: [
           { label: 'メソッド', value: method },
           { label: '宛先', value: redactRecordText(url) },
@@ -287,7 +287,7 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
 
     responseReceived({ status, latencyMs, body, allowlist }) {
       check('response_projection', '返り値を許可された項目だけに絞ったか', 'passed',
-        `応答から ${joinOrDash([...allowlist])} だけを取り出し、それ以外はエージェントに渡していません。`);
+        `応答から ${joinOrDash([...allowlist])} だけを取り出してエージェントに渡しました。`);
       sections.push({
         id: 'response',
         label: '返ってきた値',
@@ -349,7 +349,7 @@ function receivedSection(instructions: readonly string[] | undefined): ActivityR
   return {
     id: 'received',
     label: 'この手で読んだ指示',
-    message: `Agent Runtime が ${instructions.length} 件の指示を読み取り、会話に加えました。指示は言葉だけで、使えるツールを増やすことはありません。`,
+    message: `Agent Runtime が ${instructions.length} 件の指示を読み取り、会話に加えました。指示は言葉だけです。`,
     text: redactRecordText(instructions.join('\n\n')),
     format: 'text',
   };
@@ -423,7 +423,7 @@ export function taskSummaryRecord(input: {
     sections.push({
       id: 'final_note',
       label: 'エージェントが最後に述べたこと',
-      message: 'エージェント自身が書いた文章です。プラットフォームは内容に手を入れていません。',
+      message: 'エージェント自身が書いた文章そのままです。',
       text: redactRecordText(input.finalNote),
       format: 'text',
     });

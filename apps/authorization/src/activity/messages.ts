@@ -52,5 +52,5 @@ export function isolationDecidedMessage(isolationLevel: string, riskScore: numbe
  */
 export function permissionChangeIgnoredMessage(agentId: string, added: readonly string[]): string {
   const addedText = added.length > 0 ? added.join('、') : '追加された権限';
-  return `${addedText}は実行中のAgent（${agentId}）へ反映しません。次に作成するAgentから有効になります`;
+  return `${addedText}は、次に作成するAgentから有効になります。実行中のAgent（${agentId}）の権限は、作成した時のままです`;
 }

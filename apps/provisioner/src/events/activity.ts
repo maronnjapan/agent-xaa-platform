@@ -107,7 +107,7 @@ const HOPS: Readonly<Record<ProvisioningEventType, readonly ActivityRecordHop[]>
 
 /** The sentence each step's record opens with: what this step did, in its own words. */
 const RECORD_MESSAGES: Readonly<Record<ProvisioningEventType, string>> = {
-  'provisioning.started': '決定された権限を読み直し、Agent の作成に取りかかりました。ここで書かれた権限がこの Agent の全部で、あとから増えることはありません。',
+  'provisioning.started': '決定された権限を読み直し、Agent の作成に取りかかりました。ここで書かれた権限が、この Agent の全部です。',
   'provisioning.idp_consent_required': '利用者の同意画面へ進みます。同意が返ってくるまで、この作成は止まったままです。',
   'provisioning.idp_connection_created': 'Agent が利用者の代理でログインできる連携ができました。',
   'provisioning.external_consent_required': '外部サービスへの接続に、利用者の同意が必要です。同意が返ってくるまで、この作成は止まったままです。',

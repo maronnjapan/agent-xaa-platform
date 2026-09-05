@@ -101,7 +101,7 @@ function workDefinitionSection(input: DecisionRecordInput): ActivityRecordSectio
   return {
     id: 'work_definition',
     label: 'Authorization AI が読み取った作業',
-    message: '送られてきた業務の言葉から、想定される操作と対象を取り出しました。一覧に無い対象は取り上げていません。',
+    message: '送られてきた業務の言葉から、想定される操作と対象を取り出しました。取り上げたのは、一覧にある対象だけです。',
     fields: [
       { label: '目的', value: redactRecordText(input.purpose) },
       { label: '内容', value: redactRecordText(input.description) },
@@ -122,7 +122,7 @@ function proposalSection(input: DecisionRecordInput): ActivityRecordSection {
   return {
     id: 'proposal',
     label: 'Authorization AI の提案',
-    message: 'AI が必要だと考えた Capability です。これは提案であり、決定ではありません。決定は下の Policy Engine が行います。',
+    message: 'AI が必要だと考えた Capability です。これは提案で、決定は下の Policy Engine が行います。',
     fields: [
       { label: '提案した Capability', value: joined(input.proposal.capabilities) },
       { label: '確信度', value: String(input.proposal.confidence) },
@@ -149,7 +149,7 @@ function policySection(input: DecisionRecordInput): ActivityRecordSection {
   return {
     id: 'policy',
     label: 'Policy Engine の判断',
-    message: '提案 → 本人が持つ権限 → 委譲できるか → 組織ポリシー → リスクポリシー の順に絞り、残ったものだけを許可しました。AI の意見はここでは使っていません。',
+    message: '提案 → 本人が持つ権限 → 委譲できるか → 組織ポリシー → リスクポリシー の順に絞り、残ったものだけを許可しました。',
     fields,
   };
 }
@@ -169,7 +169,7 @@ function profileSection(input: DecisionRecordInput): ActivityRecordSection {
   return {
     id: 'security_profile',
     label: '分離レベルの決め方',
-    message: '性質とリスクポリシーの表から決めています。AI が分離レベルを言っても採用しません。',
+    message: '分離レベルは、性質とリスクポリシーの表だけで決めています。',
     fields: [
       { label: '分離レベル', value: input.securityProfile.isolation_level },
       { label: 'リスクスコア', value: String(input.securityProfile.risk_score) },

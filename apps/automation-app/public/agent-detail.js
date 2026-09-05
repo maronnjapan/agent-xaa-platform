@@ -18,7 +18,8 @@ function failureMessage(status, body) {
 }
 
 // client/src/agent-detail.ts
-function start(root = document, reload = () => root.location.reload()) {
+var STOP_ACCEPTED = "\u6B62\u3081\u307E\u3057\u305F\u3002Lifecycle Manager \u304C\u5B9F\u884C\u3092\u7D42\u4E86\u3057\u3001\u8CC7\u683C\u60C5\u5831\u3092\u5931\u52B9\u3055\u305B\u307E\u3059\u3002";
+function start(root = document) {
   const form = root.querySelector('[data-form="instruction"]');
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -26,7 +27,7 @@ function start(root = document, reload = () => root.location.reload()) {
   });
   const stop = root.querySelector('button[data-action="stop"]');
   stop?.addEventListener("click", () => {
-    void halt(root, stop, reload);
+    void halt(root, stop);
   });
 }
 async function instruct(root, form) {
@@ -45,7 +46,7 @@ async function instruct(root, form) {
   if (field) field.value = "";
   report(root, "\u6307\u793A\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002Agent \u304C\u6B21\u306E\u533A\u5207\u308A\u3067\u8AAD\u307F\u53D6\u308A\u307E\u3059\u3002", "done");
 }
-async function halt(root, button, reload) {
+async function halt(root, button) {
   const agentId = button.getAttribute("data-agent-id");
   if (!agentId) return;
   button.disabled = true;
@@ -58,7 +59,7 @@ async function halt(root, button, reload) {
     button.disabled = false;
     return report(root, failureMessage(response.status, body), "error");
   }
-  reload();
+  report(root, STOP_ACCEPTED, "done");
 }
 function report(root, message, state) {
   const field = root.querySelector('[data-field="control-status"]');
@@ -68,5 +69,6 @@ function report(root, message, state) {
 }
 if (typeof document !== "undefined") start();
 export {
+  STOP_ACCEPTED,
   start
 };

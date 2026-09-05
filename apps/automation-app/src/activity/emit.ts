@@ -146,7 +146,7 @@ export async function emitDraftRevised(context: EmitContext, input: {
         {
           id: 'revised',
           label: '書き直した下書き',
-          message: 'Automation Design AI が返した新しい下書きです。文面が変わっただけで、確定の状態は変わっていません。',
+          message: 'Automation Design AI が返した新しい下書きです。変わったのは文面だけです。',
           fields: draftFields(input.revised),
         },
       ],
@@ -202,7 +202,7 @@ export async function emitDecisionRequested(context: EmitContext, input: {
       sections: [{
         id: 'sent',
         label: '送った内容',
-        message: 'Automation App が送ったのは業務の言葉だけです。どの権限やツールが要るかは書いておらず、それを決めるのは Authorization Platform です。',
+        message: 'Automation App が送ったのは業務の言葉だけです。どの権限やツールが要るかは、Authorization Platform が決めます。',
         fields: [
           { label: '目的', value: redactRecordText(input.purpose) },
           { label: '内容', value: redactRecordText(input.description) },
@@ -287,7 +287,7 @@ export async function emitDecisionRefused(context: EmitContext, input: {
         label: '返ってきた答え',
         message: input.refusedByPlatform
           ? 'Authorization Platform が依頼を読んだうえで断りました。理由のコードは下のとおりです。'
-          : '呼び出しが Authorization Platform に届かなかったか、答えが読めませんでした。作業内容の問題ではありません。',
+          : '呼び出しが Authorization Platform に届かなかったか、答えが読めませんでした。',
         fields: [{ label: '理由', value: input.error }],
       }],
       hops: [{
@@ -434,7 +434,7 @@ export async function emitInstructionAdded(context: EmitContext, input: {
       sections: [{
         id: 'instruction',
         label: 'Agent に渡した指示',
-        message: '指示は言葉だけで、権限を変える力はありません。指示に含まれる操作が許可の外なら、Agent Runtime が実行の手前で止めます。',
+        message: '指示は言葉だけです。指示に含まれる操作が許可の外なら、Agent Runtime が実行の手前で止めます。',
         text: redactRecordText(input.text),
         format: 'text',
       }],

@@ -106,7 +106,7 @@ describe('what the decision record explains', () => {
     const proposal = sections[1]!;
     expect(proposal.fields).toContainEqual({ label: '提案した Capability', value: 'document.read、finance.payment.approve' });
     expect(proposal.fields).toContainEqual({ label: 'AI が述べた性質', value: 'write_operation=true' });
-    expect(proposal.message).toContain('決定ではありません');
+    expect(proposal.message).toContain('決定は下の Policy Engine が行います');
     const policy = sections[2]!;
     expect(policy.fields).toContainEqual({ label: '本人が持っている権限', value: 'document.read' });
     expect(policy.fields).toContainEqual({ label: 'document.read', value: '許可' });

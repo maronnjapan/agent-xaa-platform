@@ -111,9 +111,21 @@ button[disabled] { opacity: 0.5; cursor: progress; }
 }
 
 [data-field="action-status"][data-status="error"],
+[data-field="control-status"][data-status="error"],
 [data-field="form-status"][data-status="error"],
 [data-field="suggest-status"][data-status="error"] {
   color: #8a1f1f;
+}
+
+/*
+ * The agent screen's two operations answer in place, so their line has to say which of
+ * the two answers it is. Everywhere else a success is a reloaded page and only the
+ * refusals need a colour; here the same line carries both, and a success that looked
+ * exactly like a refusal would leave the person guessing at the one button they cannot
+ * press twice.
+ */
+[data-field="control-status"][data-status="done"] {
+  color: #1d5c33;
 }
 
 [data-field="suggestions"] { padding-left: 1.25rem; }
