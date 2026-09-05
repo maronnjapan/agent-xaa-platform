@@ -40,7 +40,7 @@ function createApp(deps: DocsApiDeps): Hono {
   const ledger = deps.revocationLedger ?? createRevocationLedger(deps.documents, deps.now);
 
   const app = new Hono<Env>();
-  app.get('/healthz', (context) => context.json({ status: 'ok' }));
+  app.get('/livez', (context) => context.json({ status: 'ok' }));
 
   if (deps.serviceIdentity && deps.lifecycleServiceAccount) {
     app.route('/internal/revoke-by-actor', createInternalRevokeRoute({

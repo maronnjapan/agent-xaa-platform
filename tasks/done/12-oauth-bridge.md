@@ -31,8 +31,8 @@ docs 06 §2 の「担当しない」を構成で強制するため、ルート�
 **実装方針**
 - `src/index.ts` は `createApp(): Hono` を default export する（DEC-APP-07）。
 - `createApp()` は環境変数 `BRIDGE_FACE`（`internal` | `callback`、既定なし、未設定は起動時に例外）で分岐し、`createInternalApp()` または `createCallbackApp()` を返す。両者は named export としても公開し、integration ハーネスが1プロセス内で両方を起動できるようにする。
-- internal 面のルートは `POST /token`、`POST /connections/check`、`POST /connections/verify`、`POST /bindings`、`POST /bindings/:agent_id/disable`、`DELETE /bindings/:agent_id`、`GET /healthz` の7本に固定する。
-- callback 面のルートは `GET /:connector_id/oauth/start`、`GET /:connector_id/oauth/callback`、`GET /healthz` の3本に固定する。
+- internal 面のルートは `POST /token`、`POST /connections/check`、`POST /connections/verify`、`POST /bindings`、`POST /bindings/:agent_id/disable`、`DELETE /bindings/:agent_id`、`GET /livez` の7本に固定する。
+- callback 面のルートは `GET /:connector_id/oauth/start`、`GET /:connector_id/oauth/callback`、`GET /livez` の3本に固定する。
 - `test/routes-snapshot.spec.ts` は `app.routes` を method と path のソート済み配列へ落として文字列スナップショットと比較する。スナップショットは `apps/google-bridge/test/__snapshots__/routes.snap` にコミットする。
 - `test/dependencies.spec.ts` は `package.json` の `dependencies` キー集合が許可リスト `hono`, `@hono/node-server`, `ajv`, `ajv-formats`, `@google-cloud/firestore`, `@google-cloud/kms`, `@google-cloud/secret-manager`, `@maronn-openid-connect/experimental`, `@xaa/contracts`, `@xaa/crypto`, `@xaa/gcp` と完全一致することを検査する。
 - Vertex AI SDK、LLM クライアント、HTTP プロキシ用ライブラリを依存に入れない。Gmail / Calendar / ドキュメント API を中継するルートを追加しない。
@@ -551,7 +551,7 @@ stub-saas-op は maronn の CLI 生成物を使い、stub-saas-api は Bearer �
 - `/token` は `authorization_code`（PKCE 必須、`code_challenge_method=S256` 以外を拒否）と `refresh_token` の2つの grant を受ける。`client_secret` の一致検証を行う。
 - Refresh Token の rotation は環境変数 `STUB_ROTATE_REFRESH_TOKEN`（`always` | `never`、既定 `never`）で切り替える。`always` のとき `/token` の応答へ新しい `refresh_token` を含める。
 - 失効の再現用に `POST /internal/revoke-refresh-token` を持たせ、以後の `refresh_token` grant が `{"error":"invalid_grant"}` を返すようにする。これは stub にだけ置き、Bridge 側に対応するコードを足さない。
-- stub-saas-api は `GET /calendar/events?from=&to=` の1本と `GET /healthz` のみ。`Authorization: Bearer <token>` を stub-saas-op の introspection ではなく共有の HMAC 検証で確認し、`scope` に `calendar.read` が含まれることを確認する。DPoP ヘッダを要求する分岐を実装しない（REQ-05-023）。
+- stub-saas-api は `GET /calendar/events?from=&to=` の1本と `GET /livez` のみ。`Authorization: Bearer <token>` を stub-saas-op の introspection ではなく共有の HMAC 検証で確認し、`scope` に `calendar.read` が含まれることを確認する。DPoP ヘッダを要求する分岐を実装しない（REQ-05-023）。
 - 応答は `{ events: [{ event_id, title, starts_at }] }` の固定3件。Tool ID `stub.calendar.events.list` の `response_schema` と一致させる。
 - 2つのアプリは `saas_connector_mode=stub` かつ `enable_google_bridge=true` のときだけデプロイされる。既定 apply では作られない。
 

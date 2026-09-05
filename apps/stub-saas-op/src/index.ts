@@ -39,7 +39,7 @@ function createApp(deps: StubSaasOpDeps = {}): Hono {
   const codes = new Map<string, AuthCode>();
   const refreshTokens = new Map<string, { scope: string; revoked: boolean }>();
 
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'stub-saas-op' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'stub-saas-op' }));
 
   app.get('/.well-known/openid-configuration', (context) => context.json({
     issuer: deps.issuer ?? 'https://stub-saas-op.test',

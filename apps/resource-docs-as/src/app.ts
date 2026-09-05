@@ -58,7 +58,7 @@ function createApp(deps: ResourceAsDeps): Hono {
   };
 
   const app = new Hono<{ Variables: Record<string, unknown> }>();
-  app.get('/healthz', (context) => context.json({ status: 'ok' }));
+  app.get('/livez', (context) => context.json({ status: 'ok' }));
   // Registered before applyOidc so the token route sees it (Hono runs handlers in
   // registration order).
   app.use('/token', redeemDepsMiddleware(redeemDeps));

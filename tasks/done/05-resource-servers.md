@@ -45,14 +45,14 @@ DEC-ID-01 の「4系統の OP のうち Resource AS 2種は生成物を使う」
 - `src/app.ts` は `createApp(): Hono` を default export する（DEC-APP-07 の統合テスト方式が要求する）。
 - `src/index.ts` は `@hono/node-server` の `serve` を呼ぶだけにし、環境変数 `PORT` を読む。
 - `/authorize` `/login` `/consent` `/userinfo` は Resource AS では使わない。生成ファイルは削除せず、`src/app.ts` の XAA-PATCH でルート登録だけを外す。
-- 無認証の `GET /healthz` を `src/app.ts` に追加し、固定 JSON `{"status":"ok"}` を返す。
+- 無認証の `GET /livez` を `src/app.ts` に追加し、固定 JSON `{"status":"ok"}` を返す。
 - コンテナはリポジトリ直下の単一 Dockerfile を `--build-arg APP=resource-docs-as` で切り替える。アプリ個別の Dockerfile を作らない。
 
 **完了条件**
 - [x] `bash scripts/regenerate-oidc.sh --check` が `generated-baseline/` と CLI 再生成物のバイト一致を報告し、終了コード0で終わる
 - [x] `pnpm -F resource-docs-as build` と `pnpm -F resource-finance-as build` が tsc エラー0で完了する
 - [x] `pnpm run check:patch-markers` が `apps/resource-*-as/src/oidc/` の baseline 差分をすべて XAA-PATCH マーカー内と判定する（実体は `package.json`）
-- [x] `createApp()` を import した vitest から `GET /healthz` を `app.fetch` で叩き 200 が返る（実体は `apps/resource-docs-as/test/discovery.spec.ts`）
+- [x] `createApp()` を import した vitest から `GET /livez` を `app.fetch` で叩き 200 が返る（実体は `apps/resource-docs-as/test/discovery.spec.ts`）
 
 ---
 

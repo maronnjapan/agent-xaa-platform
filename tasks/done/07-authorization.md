@@ -41,14 +41,14 @@ DEC-APP-02（Node 22 + Hono + ESM + tsc）と DEC-APP-07（`app.fetch` で結線
 - `src/app.ts` は `export default function createApp(deps: AppDeps): Hono` とし、`deps` に store と pubsub と vertex と clock を引数で渡す。モジュールスコープで GCP クライアントを生成しない。
 - `src/server.ts` は `@hono/node-server` の `serve` を呼ぶだけにする。ここに検証ロジックを書かない。
 - `src/routes/index.ts` に `export const ROUTES` を置き、このアプリが登録する全ルートを `{ method, path, scope }` の配列として1か所で宣言する。`app.get` や `app.post` を `ROUTES` 以外の場所から直接呼ばない。
-- 登録するルートは `GET /healthz`（無認証）、`POST /v1/authorization/decisions`、`POST /api/work-requests`、`POST /internal/events/human-permission-changed` の4本のみ。`/v1/authorization/decisions` を正とし、`/api/work-requests` は同じハンドラを別パスで登録した別名にする（リダイレクトにしない）。
+- 登録するルートは `GET /livez`（無認証）、`POST /v1/authorization/decisions`、`POST /api/work-requests`、`POST /internal/events/human-permission-changed` の4本のみ。`/v1/authorization/decisions` を正とし、`/api/work-requests` は同じハンドラを別パスで登録した別名にする（リダイレクトにしない）。
 - `GET /v1/capabilities`、`GET /v1/taxonomy`、`GET /v1/tools`、`GET /v1/resources` に相当するルートを作らない。
 - `packages/xaa-contracts/schemas/authorization-decision-response.schema.json` を `additionalProperties: false` で定義し、最上位キーを `decision_id` / `status` / `effective_capabilities` / `security_profile` / `denied` の5件に固定する。`status` の許可値は `decided` と `no_capability_inferred` の2値（REQ-03-006 が要求する状態をレスポンスで表すためのフィールドであり、Taxonomy や Resource の列挙には使わない）。
 - `src/config.ts` は環境変数を1か所で読む。`PORT` / `ISSUER` / `JWKS_URL` / `AUTHZ_AUDIENCE` / `PROJECT_ID` / `REGION` / `STORE_MODE` / `PUBSUB_MODE` / `VERTEX_MODE` / `VERTEX_MODEL` / `VERTEX_LOCATION` / `DPOP_IAT_SKEW_SECONDS` / `DPOP_JTI_TTL_SECONDS` / `LIFECYCLE_BASE_URL` / `ACTIVITY_TOPIC` / `TAXONOMY_VERSION`。未設定時に既定値へ落とさず起動時に例外を投げる（既定値を許すのは `DPOP_IAT_SKEW_SECONDS=60` と `DPOP_JTI_TTL_SECONDS=120` のみ）。
 
 **完了条件**
 - [x] `pnpm --filter @xaa/authorization build` が成功し、`dist/server.js` が生成される。
-- [x] `apps/authorization/test/routes-surface.test.ts` が `ROUTES` を列挙し、`method === 'GET'` かつ `path !== '/healthz'` のルートが0件であることを assert して green。（実体は `apps/authorization/test/routes-surface.spec.ts`）
+- [x] `apps/authorization/test/routes-surface.test.ts` が `ROUTES` を列挙し、`method === 'GET'` かつ `path !== '/livez'` のルートが0件であることを assert して green。（実体は `apps/authorization/test/routes-surface.spec.ts`）
 - [x] `apps/authorization/test/decision-response-schema.test.ts` が、`decision_id` / `status` / `effective_capabilities` / `security_profile` / `denied` 以外のキーを持つオブジェクトを Ajv が reject することを assert して green。（実体は `apps/authorization/test/routes-surface.spec.ts`）
 - [x] `ISSUER` を未設定にして `createApp` を呼ぶと例外が投げられるテストが green。（実体は `apps/authorization/test/routes-surface.spec.ts`）
 
@@ -236,7 +236,7 @@ RULE-06 と RULE-43 と RULE-44 をまとめて満たす入口を1か所に固�
 - `controlPlaneAuth(options: { issuer, jwksUrl, audience, requiredScope, iatSkewSeconds, jtiStore })` を export し、内部で `accessTokenMiddleware` → `dpopMiddleware` → `humanSubjectMiddleware` の順に合成する。
 - ステップ番号と失敗時のステータスの対応表をコード内の定数 `STEP_TABLE` として持ち、README にも同じ表を載せる。1（401）、2（401）、3（403）、4（401）、5（401）、6（401）、7（401）、8（403）。
 - 早期終了を守る。あるステップで失敗したら後続のステップを実行しない。テストは spy でステップ関数の呼び出し回数を数えて確認する。
-- Authorization Platform は `/v1/authorization/decisions` と `/api/work-requests` にこのミドルウェアを適用し、`/healthz` と `/internal/events/human-permission-changed` には適用しない。`/internal/*` は Cloud Run の run.invoker と Pub/Sub push の OIDC トークンで守る（DEC-IAC-14）。
+- Authorization Platform は `/v1/authorization/decisions` と `/api/work-requests` にこのミドルウェアを適用し、`/livez` と `/internal/events/human-permission-changed` には適用しない。`/internal/*` は Cloud Run の run.invoker と Pub/Sub push の OIDC トークンで守る（DEC-IAC-14）。
 - 8ステップを個別アプリで組み替えられないよう、`accessTokenMiddleware` と `dpopMiddleware` の単体 export は残すがアプリ側から直接使わない規約にし、CI で `apps/*/src` からの個別 import を検査する。
 
 **完了条件**

@@ -85,9 +85,12 @@ seed:
 	gcloud run jobs execute jwks-publish --project="$(PROJECT_ID)" --region="$(REGION)" --wait
 	gcloud run jobs execute seed --project="$(PROJECT_ID)" --region="$(REGION)" --wait
 
+# The measurement speaks as each calling Service Account, which the runner is not allowed
+# to do until it holds roles/iam.serviceAccountTokenCreator on them. The wrapper adds what
+# is missing, waits for it to take effect, and removes it again afterwards.
 verify:
 	@echo "Measure allowed and denied Cloud Run edges, forbidden roles, and the invoker matrix"
-	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" bash infra/tests/verify-all.sh
+	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" TF="$(TF)" bash scripts/verify-impersonation.sh bash infra/tests/verify-all.sh
 
 purge-runtime:
 	@echo "Delete runtime-owned Dedicated OP services, jobs, service accounts, and key versions"

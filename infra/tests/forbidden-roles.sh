@@ -28,7 +28,16 @@ check_policy() {
 
 project_policy=$(gcloud projects get-iam-policy "$project_id" --format=json) || exit 2
 check_policy "projects/$project_id" "$project_policy"
-dataset_policy=$(bq --project_id="$project_id" show --format=prettyjson "$project_id:security_audit" 2>/dev/null || printf '{"access":[]}')
+# bq answers with more than the policy: a runner that has never used it writes a first-run
+# notice to stdout ahead of the JSON, and a project without the dataset writes nothing at
+# all. Take the answer from its first brace and use it only if it parses, so an unusable
+# reply leaves the dataset unchecked instead of feeding jq a sentence.
+dataset_answer=$(bq --headless=true --project_id="$project_id" --format=prettyjson show "$project_id:security_audit" 2>/dev/null)
+dataset_policy=$(sed -n '/^[{[]/,$p' <<<"$dataset_answer")
+if [[ -z "${dataset_policy//[[:space:]]/}" ]] || ! jq -e 'type == "object"' <<<"$dataset_policy" >/dev/null 2>&1; then
+  [[ -z "${dataset_answer//[[:space:]]/}" ]] || echo 'forbidden-roles: the security_audit dataset answered something other than a policy; leaving it unchecked' >&2
+  dataset_policy='{"access":[]}'
+fi
 while IFS=$'\t' read -r role member; do
   check_policy "datasets/security_audit" "$(jq -nc --arg r "$role" --arg m "$member" '{bindings:[{role:$r,members:[$m]}]}')"
 done < <(jq -r '.access[]? | select(.userByEmail) | [.role, ("serviceAccount:"+.userByEmail)] | @tsv' <<<"$dataset_policy")

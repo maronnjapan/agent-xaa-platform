@@ -168,8 +168,8 @@ describe('the route surface', () => {
     // The callback face has no token route at all.
     expect((await harness.callback('/token', { method: 'POST' })).status).toBe(404);
     expect((await harness.callback('/connections/verify', { method: 'POST' })).status).toBe(404);
-    expect((await harness.internal('/healthz')).status).toBe(200);
-    expect((await harness.callback('/healthz')).status).toBe(200);
+    expect((await harness.internal('/livez')).status).toBe(200);
+    expect((await harness.callback('/livez')).status).toBe(200);
   });
 
   it('names no SaaS API path anywhere in its routes', async () => {

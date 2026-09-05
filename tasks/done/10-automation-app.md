@@ -40,7 +40,7 @@ DEC-ID-13 の経路(3)と DEC-ID-18 の typ 検査、DEC-APP-07 の `createApp()
 - [x] `pnpm vitest run apps/automation-app/test/session-store.spec.ts` が緑で、セッションスキーマに `refresh_token` キーを追加した fixture が型検査で落ちることをテストが示す。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 - [x] `pnpm vitest run apps/automation-app/test/require-user.spec.ts -t "rejects typ other than at+jwt"` が緑になる。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 - [x] `bash scripts/checks/no-offline-access-in-automation-app.sh` が終了コード 0 を返す。
-- [x] `apps/automation-app/src/app.ts` が `createApp` を default export し、`app.fetch(new Request('http://x/healthz'))` が 200 を返す単体テストが通る。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
+- [x] `apps/automation-app/src/app.ts` が `createApp` を default export し、`app.fetch(new Request('http://x/livez'))` が 200 を返す単体テストが通る。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 
 ### T-APP-02 Vertex AI 共通クライアントパッケージを実装する
 

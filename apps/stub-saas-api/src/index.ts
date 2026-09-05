@@ -28,7 +28,7 @@ function createApp(deps: StubSaasApiDeps = {}): Hono {
   const now = deps.now ?? (() => Date.now());
   const app = new Hono();
 
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'stub-saas-api' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'stub-saas-api' }));
 
   app.get('/calendar/events', (context) => {
     const header = context.req.header('authorization');

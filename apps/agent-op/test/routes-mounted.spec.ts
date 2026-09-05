@@ -24,10 +24,10 @@ describe('two modes, disjoint route surfaces', () => {
     }
   });
 
-  it('serves /healthz in both modes', async () => {
+  it('serves /livez in both modes', async () => {
     for (const mode of ['token', 'callback'] as const) {
       const fixture = await createFixture({ config: { mode } });
-      expect((await fixture.fetch('/healthz')).status).toBe(200);
+      expect((await fixture.fetch('/livez')).status).toBe(200);
     }
   });
 

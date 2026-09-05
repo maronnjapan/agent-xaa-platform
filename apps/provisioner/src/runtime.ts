@@ -195,7 +195,7 @@ function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
     async healthCheck(uri) {
       try {
         const token = await identityToken(new URL(uri).origin);
-        return (await fetch(`${uri}/healthz`, { headers: { Authorization: `Bearer ${token}` } })).ok;
+        return (await fetch(`${uri}/livez`, { headers: { Authorization: `Bearer ${token}` } })).ok;
       } catch { return false; }
     },
   };

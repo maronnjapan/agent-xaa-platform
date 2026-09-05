@@ -1,12 +1,12 @@
 /**
  * REQ-03-003. Every route this app exposes, declared once.
  *
- * There is deliberately no GET route besides /healthz: Automation App must not be
+ * There is deliberately no GET route besides /livez: Automation App must not be
  * able to read the Capability Taxonomy, the Tool Catalog or the resource list from
  * here, because holding that list is what would let it start deciding permissions.
  */
 export const ROUTES = [
-  { method: 'GET', path: '/healthz', scope: null },
+  { method: 'GET', path: '/livez', scope: null },
   { method: 'POST', path: '/v1/authorization/decisions', scope: 'workdef:submit' },
   { method: 'POST', path: '/api/work-requests', scope: 'workdef:submit' },
   { method: 'POST', path: '/internal/events/human-permission-changed', scope: null },

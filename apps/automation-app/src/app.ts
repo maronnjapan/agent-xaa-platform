@@ -89,7 +89,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     authorization: docsAuthorization,
   });
 
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'automation-app' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'automation-app' }));
   app.route('/', createLoginRoutes({
     config: deps.config,
     documents: deps.documents,

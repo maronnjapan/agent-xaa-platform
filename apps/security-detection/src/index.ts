@@ -61,7 +61,7 @@ export function createSecurityDetection(deps: SecurityDetectionDeps): { app: Hon
   const now = deps.now ?? (() => Date.now());
   const counters: DispatchCounters = { low_events_total: 0, unmapped_code_total: 0 };
 
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'security-detection' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'security-detection' }));
 
   /**
    * A person approving a quarantine is a request that moves an agent's state, so it is

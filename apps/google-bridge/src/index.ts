@@ -88,7 +88,7 @@ export function createInternalApp(deps: BridgeDeps): Hono {
   const jwks = createJwksCache({ url: deps.config.jwksUrl, ...(deps.send ? { fetchImpl: deps.send } : {}), now: wiring.now });
   const cipher = createConnectorCipher({ kms: deps.kms, keyName: deps.config.connectorEncryptionKey });
 
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'google-bridge' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'google-bridge' }));
 
   app.post('/token', callerAuthz(['runtime'], authz), async (context) => {
     // Seven fields, every one of them filled in — including for a request that stops at
@@ -330,7 +330,7 @@ export function createCallbackApp(deps: BridgeDeps): Hono {
   const app = new Hono();
   const cipher = createConnectorCipher({ kms: deps.kms, keyName: deps.config.connectorEncryptionKey });
 
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'google-bridge-callback' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'google-bridge-callback' }));
 
   app.get('/:connector_id/oauth/start', async (context) => {
     const connectorId = context.req.param('connector_id');

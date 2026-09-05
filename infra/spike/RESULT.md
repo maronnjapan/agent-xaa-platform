@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | (a) VPCなしの INTERNAL_ONLY への3経路 | 下記 | Cloud Run → Cloud Run のみ 404。Scheduler OIDC と Pub/Sub push は到達 | **一部不可** | DEC-IAC-14, DEC-IAC-15 |
 | (b) Cloud Run URL の決定性 | observed_uri と expected_uri の完全一致 | 未実測（`run.googleapis.com/urls` には `https://<service>-<project_number>.<region>.run.app` が含まれていた） | 未実測 | DEC-IAC-05 |
-| (c) allUsers invoker | caller_url /healthz | `/healthz` は Google Frontend が横取りし、コンテナへ届かない | **測れない経路がある** | DEC-IAC-14, DEC-IAC-15 |
+| (c) allUsers invoker | caller_url /healthz | `/healthz` は Google Frontend が横取りし、コンテナへ届かない。health ルートを `/livez` へ移して解いた | **測れない経路がある** | DEC-IAC-14, DEC-IAC-15 |
 | (d) standalone project の Deny Policy | gcloud iam policies get | 未実測 | 未実測 | DEC-IAC-11 |
 
 ## (a) の測り方と読み
@@ -53,12 +53,20 @@ authorization のように ingress=ALL にしたサービスでも `/` は 403 �
 
 影響: `infra/tests/reachability.sh` は全エッジを `/healthz` で叩き 200 か 403 を期待する。
 どのケースも 404 になるため `make verify` は通らず、`make demo-apply` がそれを連鎖して
-呼ぶので deploy workflow も止まる。直し方は2つあり、どちらを採るかは未決である。
+呼ぶので deploy workflow も止まる。
 
-- 各アプリの health ルートを `/healthz` 以外（例 `/livez`）へ移し、probe もそこへ向ける。
-  12 サービス分の変更になるが、意味は変わらない。
-- probe だけをコンテナへ届く別のパスへ向ける。到達を「アプリが返した 404」で判定する
-  ことになるため、成功の期待値が読みにくくなる。
+採ったのは health ルートを移す案である。横取りされるのは `/healthz` だけで、
+`/livez` `/readyz` `/health` `/_ah/health` はいずれもアプリの 404（text/plain、
+`server: Google Frontend` 付き）が返る。全アプリの health ルートを `/livez` へ移し、
+probe もそこへ向けた。
+
+probe だけを別パスへ向ける案は採らなかった。`/healthz` に届かないのは reachability だけの
+問題ではなく、`apps/provisioner/src/runtime.ts` の `healthCheck` も Dedicated OP の
+`*.run.app` URL へ `GET /healthz` を投げており、この経路では常に 404 を受け取る。
+probe を変えてもこちらは直らない。
+
+`apps/agent-op/src/routes/healthz.ts` はファイル名を変えていない。
+`tasks/done/04-agent-op.md` の成果物一覧が名指すパスであり、変えると監査の対象が動く。
 
 ## 起票
 

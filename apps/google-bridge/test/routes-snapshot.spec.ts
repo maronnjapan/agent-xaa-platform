@@ -33,7 +33,7 @@ describe('routes snapshot', () => {
     // as the eighth internal route, which the Lifecycle Manager's step5 calls.
     expect(harness.routes.internal).toEqual([
       'DELETE /bindings/:agent_id',
-      'GET /healthz',
+      'GET /livez',
       'POST /bindings',
       'POST /bindings/:agent_id/disable',
       'POST /connections/:connection_id/revoke-upstream',
@@ -44,7 +44,7 @@ describe('routes snapshot', () => {
     expect(harness.routes.callback).toEqual([
       'GET /:connector_id/oauth/callback',
       'GET /:connector_id/oauth/start',
-      'GET /healthz',
+      'GET /livez',
     ]);
   });
 

@@ -252,7 +252,7 @@ REQ-05-031 と REQ-08-014 に対応する。
 - [~] `gcloud run services describe shared-agent-op --format='value(spec.template.metadata.annotations)'` の ingress が `internal` を示す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 - [~] `gcloud run services describe agent-op-callback` の ingress が `all` を示す（デプロイ後に `infra/tests/verify-all.sh` が観測する）
 - [~] 認証なしのインターネット経由 `curl $(terraform output -raw xaa_token_url)/xaa/token` が 403 を返す（デプロイ後に `scripts/deploy-gcp-guide.sh` の deploy 段が観測する）
-- [~] 認証なしの `curl -o /dev/null -w '%{http_code}' <agent-op-callback URL>/healthz` が 200 を返す（デプロイ後に `infra/tests/reachability.sh` が観測する）
+- [~] 認証なしの `curl -o /dev/null -w '%{http_code}' <agent-op-callback URL>/livez` が 200 を返す（デプロイ後に `infra/tests/reachability.sh` が観測する）
 - [x] `human-idp` と `shared-agent-op` の `ISSUER` 環境変数の値がバイト一致する
 
 ---
@@ -1135,7 +1135,7 @@ DEC-IAC-15 と DEC-IAC-19 に対応する。
 **成果物** `infra/tests/reachability.sh`, `infra/tests/reachability-cases.json`
 
 **実装方針**
-- `reachability-cases.json` を `[{ "caller_sa": ..., "target": ..., "path": "/healthz", "expect": 200 or 403 }]` の配列にする。許可エッジは `terraform output -json invoker_edges` から生成し、拒否ケースは手書きで最低6件を固定する。
+- `reachability-cases.json` を `[{ "caller_sa": ..., "target": ..., "path": "/livez", "expect": 200 or 403 }]` の配列にする。許可エッジは `terraform output -json invoker_edges` から生成し、拒否ケースは手書きで最低6件を固定する。
 - 拒否ケースに必ず含めるのは、`sa-automation-app` → `shared-agent-op`、`sa-agent-runtime` → `authorization`、`sa-agent-runtime` → `dedicated-op-aaaaaaaaaaaa`、`sa-agent-aaaaaaaaaaaa` → `shared-agent-op`、`sa-agent-aaaaaaaaaaaa` → `dedicated-op-bbbbbbbbbbbb`、認証なし → `authorization` の6件。
 - 呼び出しは `gcloud auth print-identity-token --impersonate-service-account=<sa> --audiences=<url>` で ID Token を取り、`curl -o /dev/null -w '%{http_code}'` で status code だけを見る。レスポンス本文を評価しない。
 - 実行者に `roles/iam.serviceAccountTokenCreator` が必要な点を、スクリプトの冒頭コメントと `infra/README.md` に書く。権限が無い場合は前提不足として exit code 2 で終了し、テスト失敗（exit 1）と区別する。

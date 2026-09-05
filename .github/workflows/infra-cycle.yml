@@ -10,6 +10,9 @@ jobs:
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       REGION: asia-northeast1
+      # The IAM verification inside `make demo-apply` impersonates every calling Service
+      # Account, and this is the principal it grants that permission to while measuring.
+      VERIFY_PRINCIPAL: serviceAccount:${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3

@@ -1,11 +1,11 @@
 [
-  { "caller_sa": "sa-automation-app", "target": "shared-agent-op", "path": "/healthz", "expect": 403 },
-  { "caller_sa": "sa-agent-runtime", "target": "authorization", "path": "/healthz", "expect": 403 },
-  { "caller_sa": "sa-agent-runtime", "target": "dedicated-op-aaaaaaaaaaaa", "path": "/healthz", "expect": 403 },
-  { "caller_sa": "sa-agent-aaaaaaaaaaaa", "target": "shared-agent-op", "path": "/healthz", "expect": 403 },
-  { "caller_sa": "sa-agent-aaaaaaaaaaaa", "target": "dedicated-op-bbbbbbbbbbbb", "path": "/healthz", "expect": 403 },
-  { "caller_sa": "", "target": "authorization", "path": "/healthz", "expect": 403 },
+  { "caller_sa": "sa-automation-app", "target": "shared-agent-op", "path": "/livez", "expect": 403 },
+  { "caller_sa": "sa-agent-runtime", "target": "authorization", "path": "/livez", "expect": 403 },
+  { "caller_sa": "sa-agent-runtime", "target": "dedicated-op-aaaaaaaaaaaa", "path": "/livez", "expect": 403 },
+  { "caller_sa": "sa-agent-aaaaaaaaaaaa", "target": "shared-agent-op", "path": "/livez", "expect": 403 },
+  { "caller_sa": "sa-agent-aaaaaaaaaaaa", "target": "dedicated-op-bbbbbbbbbbbb", "path": "/livez", "expect": 403 },
+  { "caller_sa": "", "target": "authorization", "path": "/livez", "expect": 403 },
   { "caller_sa": "", "target": "shared-agent-op", "path": "/xaa/token", "expect": 403 },
   { "caller_sa": "", "target": "lifecycle", "path": "/internal/tick", "expect": 403 },
-  { "caller_sa": "", "target": "agent-op-callback", "path": "/healthz", "expect": 200 }
+  { "caller_sa": "", "target": "agent-op-callback", "path": "/livez", "expect": 200 }
 ]

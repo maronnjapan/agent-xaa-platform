@@ -52,7 +52,7 @@ function createApp(deps: AuthorizationDeps): Hono {
   };
 
   const app = new Hono<Env>();
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'authorization' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'authorization' }));
 
   const protect = controlPlaneAuth({
     issuer: deps.config.issuer,

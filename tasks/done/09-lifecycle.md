@@ -42,7 +42,7 @@ DEC-ID-13 が定める DPoP 適用経路の3番目（Automation App から Contr
 - `apps/lifecycle-manager/test/ownership.spec.ts`
 
 **実装方針**
-- ルートは `GET /healthz`（無認証）、`POST /agents/{agent_id}/revoke`、`POST /internal/tick`、`POST /internal/agents/{agent_id}/transition`、`POST /internal/agents/{agent_id}/reprovision` の5本だけを登録する。
+- ルートは `GET /livez`（無認証）、`POST /agents/{agent_id}/revoke`、`POST /internal/tick`、`POST /internal/agents/{agent_id}/transition`、`POST /internal/agents/{agent_id}/reprovision` の5本だけを登録する。
 - `access-token.ts` の `requireHumanAccessToken(scope: string)` は、(1) 署名と `iss` と `exp`、(2) `aud` に `lifecycle-manager` が要素として含まれるか、(3) `scope` に引数の値が含まれるか、(4) DPoP Proof の署名を Proof ヘッダの `jwk` で検証、(5) Access Token の `cnf.jkt` と `jwk` の thumbprint 一致、(6) `htm` と `htu` の一致、(7) `iat` 窓と `jti` 未使用、(8) ボディに `human_subject` があれば `sub` と一致、の順に実行する。失敗時のコードは1と2と4から7が 401、3と8が 403 とする。
 - `aud` の判定は `packages/xaa-contracts/src/audience.ts` の要素一致関数を使う（DEV-12）。部分一致と接頭辞一致を書かない。
 - 署名検証の直後に JOSE ヘッダの `typ` を検査し、`at+jwt` 以外は 401 `invalid_token` にする（DEC-ID-18）。
@@ -57,7 +57,7 @@ DEC-ID-13 が定める DPoP 適用経路の3番目（Automation App から Contr
 - [x] `pnpm --filter lifecycle-manager typecheck` と `pnpm --filter lifecycle-manager build` が成功する。
 - [x] `apps/lifecycle-manager/test/access-token.spec.ts::rejects wrong aud / missing scope / mismatched cnf.jkt / htu mismatch / replayed jti / non at+jwt typ` が緑で、6ケースそれぞれのステータスコードを assert している。
 - [x] `apps/lifecycle-manager/test/ownership.spec.ts::returns 404 for unknown agent / 403 for other subject` が緑。
-- [x] `curl -s localhost:8080/healthz` が 200 と `{"status":"ok"}` を返す。（実体は `apps/lifecycle-manager/test/access-token.spec.ts`）
+- [x] `curl -s localhost:8080/livez` が 200 と `{"status":"ok"}` を返す。（実体は `apps/lifecycle-manager/test/access-token.spec.ts`）
 - [x] `grep -rn "\.well-known\|run\.app" apps/lifecycle-manager/src --include=*.ts` の結果が `endpoints.ts` 以外に無い。
 
 ---

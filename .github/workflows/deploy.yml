@@ -27,6 +27,11 @@ jobs:
       DEMO_TFVARS: ${{ vars.DEMO_TFVARS || 'infra/tfvars/deploy.tfvars' }}
       # Cloud Run resolves an immutable tag, so the commit is what identifies the image.
       IMAGE_TAG: ${{ github.sha }}
+      # The IAM verification speaks as each calling Service Account, so it grants this
+      # principal roles/iam.serviceAccountTokenCreator on them while it measures and takes
+      # the grants away again. gcloud does not print the impersonated deploy account in the
+      # form IAM wants, so the workflow states it rather than letting the script guess.
+      VERIFY_PRINCIPAL: serviceAccount:${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
       - name: Check the deployment target before touching GCP
@@ -62,8 +67,9 @@ jobs:
           gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
           make images REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/xaa"
       # This also runs verify-all.sh, so the deploy fails when the IAM edges it measures
-      # stop matching the invoker matrix. The deploy service account needs
-      # roles/iam.serviceAccountTokenCreator on the calling service accounts for it.
+      # stop matching the invoker matrix. The impersonation the measurement needs is
+      # granted and removed by scripts/verify-impersonation.sh, which asks the deploy
+      # service account for iam.serviceAccounts.setIamPolicy on the callers.
       - name: Demo apply and IAM verification
         run: make demo-apply TF=terraform
       - name: Publish the aggregate JWKS and the definition data

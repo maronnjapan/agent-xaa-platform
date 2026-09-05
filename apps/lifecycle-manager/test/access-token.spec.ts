@@ -102,9 +102,9 @@ describe('the access token guard on the stop route', () => {
     expect(response.status).toBe(202);
   });
 
-  it('answers /healthz with 200 and {"status":"ok"} without any token', async () => {
+  it('answers /livez with 200 and {"status":"ok"} without any token', async () => {
     const harness = createLifecycleHarness();
-    const response = await harness.fetch('/healthz');
+    const response = await harness.fetch('/livez');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: 'ok' });
   });

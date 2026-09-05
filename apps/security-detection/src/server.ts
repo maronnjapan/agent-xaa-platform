@@ -97,7 +97,7 @@ const { app, runOnce } = createSecurityDetection({
 
 /**
  * Pull, not push (DEC-SEC-03). The subscription is named by Terraform and handed over in
- * the environment; without it this service would start, answer /healthz, and quietly
+ * the environment; without it this service would start, answer /livez, and quietly
  * read nothing — which is the one failure mode a detector must not have.
  */
 const subscriptionName = process.env.SECURITY_EVENTS_SUBSCRIPTION;

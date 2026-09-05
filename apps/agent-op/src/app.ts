@@ -28,7 +28,7 @@ export interface AgentOpAppDeps extends AgentOpDeps {
  */
 function createApp(deps: AgentOpAppDeps): Hono {
   const app = new Hono();
-  app.route('/healthz', healthzApp);
+  app.route('/livez', healthzApp);
 
   if (deps.config.mode === 'token') {
     const store = createAgentOpStore(deps.documents, deps.config, () => deps.signer.kid);

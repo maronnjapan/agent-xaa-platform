@@ -170,9 +170,9 @@ describe('resolving who is asking', () => {
 });
 
 describe('the app shell', () => {
-  it('answers healthz without a session', async () => {
+  it('answers livez without a session', async () => {
     const harness = await startAutomationApp();
-    const response = await harness.fetch('/healthz', { headers: { cookie: '' } });
+    const response = await harness.fetch('/livez', { headers: { cookie: '' } });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: 'ok', app: 'automation-app' });
   });

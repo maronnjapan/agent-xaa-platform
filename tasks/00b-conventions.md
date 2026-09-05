@@ -238,7 +238,7 @@
 | `POST /internal/agents/{agent_id}/credentials/revoke` | T-OP-01 | T-LIFE-08 | 同上 |
 | `POST /internal/agents/{agent_id}/delete` | T-OP-01 | T-LIFE-08 | 同上 |
 | `GET /xaa/callback` | T-OP-01（`MODE=callback`）/ T-OP-25 | ブラウザ | `state` と one_time_code |
-| `GET /healthz` | T-OP-01 ほか全アプリ | 監視 | 無認証 |
+| `GET /livez` | T-OP-01 ほか全アプリ | 監視 | 無認証。`/healthz` は Google Frontend が横取りしてコンテナへ届かないため使わない（`infra/spike/RESULT.md` (c)） |
 | `POST /internal/revoke-connection` | 提供しない | なし | `POST /internal/idp-connections/{idp_connection_id}/revoke` に統一 |
 | `/authorize` `/token` `/userinfo` `/logout` `/revoke` `/.well-known/openid-configuration` | T-IDP-01 | T-APP / T-OP-19 / ブラウザ | OIDC 標準 |
 | `POST /provisioning` | T-PROV-16 | T-APP-14 | Control Plane の `at+jwt` と DPoP、scope `agent:provision` |

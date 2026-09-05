@@ -125,8 +125,8 @@ describe('POST /v1/authorization/decisions', () => {
       .toEqual(['CAPABILITY_DECIDED', 'ISOLATION_DECIDED']);
   });
 
-  it('serves healthz without a token', async () => {
+  it('serves livez without a token', async () => {
     const authz = await startAuthorization({ idpPublicJwk: idpJwk, humanPermissions: [] });
-    expect((await authz.fetch('/healthz')).status).toBe(200);
+    expect((await authz.fetch('/livez')).status).toBe(200);
   });
 });

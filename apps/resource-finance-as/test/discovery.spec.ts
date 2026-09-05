@@ -21,8 +21,8 @@ describe('Resource AS discovery', () => {
     expect((await response.json() as { error: string }).error).toBe('unsupported_grant_type');
   });
 
-  it('serves healthz without authentication', async () => {
-    const response = await (await createTestAs()).fetch('/healthz');
+  it('serves livez without authentication', async () => {
+    const response = await (await createTestAs()).fetch('/livez');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: 'ok' });
   });

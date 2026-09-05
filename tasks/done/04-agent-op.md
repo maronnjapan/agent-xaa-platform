@@ -38,8 +38,8 @@ Cloud Run の ingress 設定はサービス単位であり、`/xaa/token` を内
 - `config.ts` で環境変数を読み、起動時に検証する。
   読む変数は `MODE`、`ISSUER`、`XAA_CLIENT_ID`（既定 `agent-platform`）、`GOOGLE_CLOUD_PROJECT`、`FIRESTORE_DATABASE`、`JWKS_BUCKET`、`JWKS_OBJECT`（既定 `jwks.json`）、`KMS_IDJAG_KEY`、`KMS_IDP_CONNECTION_KEY`、`HUMAN_IDP_AUTHORIZE_URL`、`HUMAN_IDP_TOKEN_URL`、`HUMAN_IDP_REVOKE_URL`、`ID_JAG_LIFETIME_SECONDS`（既定 300）、`AGENT_ID`（既定 `-1`）、`SIGNER_MODE`（`local|kms`）、`STORE_MODE`（`emulator|gcp`）の16個に限定する。
   `MODE` が `token` と `callback` のどちらでもなければ起動時に例外で落とす。
-- `MODE=token` のとき `POST /xaa/token`、`POST /xaa/subject-token`、`GET /healthz` の3ルートのみをマウントする。
-  `MODE=callback` のとき `GET /xaa/callback`、`GET /healthz` の2ルートのみをマウントする。
+- `MODE=token` のとき `POST /xaa/token`、`POST /xaa/subject-token`、`GET /livez` の3ルートのみをマウントする。
+  `MODE=callback` のとき `GET /xaa/callback`、`GET /livez` の2ルートのみをマウントする。
 - `/authorize`、`/userinfo`、`/logout`、`/introspect`、`/revoke`、`/.well-known/openid-configuration` のハンドラを1つも定義しない。
   Hono の既定 404 に落ちる形にし、明示的な 404 ハンドラでこれらのパスを列挙しない。
 - `MODE=callback` のプロセスは KMS の ID-JAG 署名鍵クライアントを初期化しない。

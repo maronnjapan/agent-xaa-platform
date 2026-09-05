@@ -56,7 +56,7 @@ function createApp(deps: HumanIdpDeps = {}): Hono {
   // typed with an open Variables map and narrowed back to Hono at the boundary.
   const auditHooks = createAuditHooks(deps.writeAuditLine);
   const app = new Hono<{ Variables: Record<string, unknown> }>();
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'human-idp' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'human-idp' }));
 
   // Everything the patched generated routes read is set here. Hono runs handlers in
   // registration order, so this must precede applyOidc: a middleware registered

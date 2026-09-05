@@ -102,7 +102,7 @@ function createApp(deps: LifecycleDeps): Hono<Env> {
   const cleanupDeps = (agentId: string): CleanupDeps => cleanupDepsFor(deps, logger, now, agentId);
   const runCleanup = (agentId: string, reason: CleanupReason) => cleanupAgent(agentId, reason, cleanupDeps(agentId));
 
-  app.get('/healthz', (context) => context.json({ status: 'ok' }));
+  app.get('/livez', (context) => context.json({ status: 'ok' }));
 
   /**
    * The stop button. Checks are ordered so the answer never depends on state the caller

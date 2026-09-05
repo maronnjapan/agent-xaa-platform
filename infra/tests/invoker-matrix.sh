@@ -47,11 +47,16 @@ report_diff() {
 report_diff private "$temp_dir/expected-private" "$temp_dir/actual-private"
 report_diff public "$temp_dir/expected-public" "$temp_dir/actual-public"
 
+# `sa-agent-runtime` is the one shared runtime identity and `sa-agent-<short>` is a
+# FULL_ISOLATION Agent's own: the two carry opposite rules, and the shared one is not a
+# case of the pattern that matches the per-Agent ones.
 while IFS=$'\t' read -r member target; do
   caller=${member#serviceAccount:}; caller=${caller%%@*}
+  agent_short=''
+  [[ "$caller" != sa-agent-runtime && "$caller" =~ ^sa-agent-(.+)$ ]] && agent_short=${BASH_REMATCH[1]}
   if { [[ "$caller" == sa-agent-runtime && "$target" == dedicated-op-* ]]; } ||
-     { [[ "$caller" == sa-agent-* && "$target" == shared-agent-op ]]; } ||
-     { [[ "$caller" =~ ^sa-agent-(.+)$ && "$target" == dedicated-idjag-* && "$target" != "dedicated-idjag-${BASH_REMATCH[1]}" ]]; }; then
+     { [[ -n "$agent_short" && "$target" == shared-agent-op ]]; } ||
+     { [[ -n "$agent_short" && "$target" == dedicated-idjag-* && "$target" != "dedicated-idjag-$agent_short" ]]; }; then
     printf 'forbidden-edge / %s / %s\n' "$caller" "$target" >&2
     status=1
   fi

@@ -26,7 +26,7 @@ export interface ProvisionerAppDeps extends ProvisionerDeps {
 function createApp(deps: ProvisionerAppDeps): Hono {
   const logger = deps.logger ?? createLogger('provisioner', 'provisioner');
   const app = new Hono<Env>();
-  app.get('/healthz', (context) => context.json({ status: 'ok', app: 'provisioner' }));
+  app.get('/livez', (context) => context.json({ status: 'ok', app: 'provisioner' }));
 
   const protect = controlPlaneAuth({
     issuer: deps.config.issuer,

@@ -14,13 +14,13 @@ const COMPLETE_ENV: NodeJS.ProcessEnv = {
 };
 
 describe('route surface', () => {
-  it('exposes no GET besides healthz', () => {
-    expect(ROUTES.filter((route) => route.method === 'GET' && route.path !== '/healthz')).toEqual([]);
+  it('exposes no GET besides livez', () => {
+    expect(ROUTES.filter((route) => route.method === 'GET' && route.path !== '/livez')).toEqual([]);
   });
 
   it('declares exactly the four documented routes', () => {
     expect(ROUTES.map((route) => route.path)).toEqual([
-      '/healthz', '/v1/authorization/decisions', '/api/work-requests', '/internal/events/human-permission-changed',
+      '/livez', '/v1/authorization/decisions', '/api/work-requests', '/internal/events/human-permission-changed',
     ]);
   });
 

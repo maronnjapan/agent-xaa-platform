@@ -161,7 +161,10 @@ deploy はその検査を繰り返さず、apply だけを行う。
 | Secret | `GCP_WORKLOAD_IDENTITY_PROVIDER` | GitHub Actions が使う Workload Identity 連携先を指定する |
 | Secret | `GCP_DEPLOY_SERVICE_ACCOUNT` | Actions が偽装する配備用 Service Account を指定する |
 
-配備用 Service Account には、Terraform が作るリソースの管理権限に加えて、`make demo-apply` が続けて実行する到達性検証のために呼び出し元 Service Account への `roles/iam.serviceAccountTokenCreator` が必要になる。
+配備用 Service Account には、Terraform が作るリソースの管理権限が必要になる。
+`make demo-apply` が続けて実行する到達性検証は呼び出し元 Service Account を偽装するため、`make verify` は `scripts/verify-impersonation.sh` を経由し、不足している `roles/iam.serviceAccountTokenCreator` を実測の間だけ付与して終了後に削除する。
+付与に要る `iam.serviceAccounts.setIamPolicy` は、Terraform が Service Account を作るために必要な `roles/iam.serviceAccountAdmin` に含まれるため、この検証のために足すロールは無い。
+すでに恒久的に付与されている Service Account には何もしない。
 
 Terraform は Secret の値を持たないため、version の無い Secret を Cloud Run が mount するとリビジョンが起動せず apply が失敗する。
 `make ensure-secrets` は version の無い Secret にだけ生成した値を追加し、既存の version はそのまま使う。
@@ -185,6 +188,9 @@ import する件数と1件ごとの進行は標準出力に出る。
 `make images PROJECT_ID=<id> REGISTRY=<region>-docker.pkg.dev/<id>/xaa` は全アプリをビルドして、Git commit 由来のタグで push する。
 `make demo-apply PROJECT_ID=<id> DEMO_TFVARS=infra/tfvars/demo.tfvars` は demo state を apply し、三つの IAM 実測を続けて実行する。
 `reachability.sh` が Service Account を偽装するため、実行者には対象 SA に対する `roles/iam.serviceAccountTokenCreator` が必要になる。
+`make verify` は `scripts/verify-impersonation.sh` を通り、不足している分だけを実測の間に付与して削除する。
+実行者を判別できない環境では `VERIFY_PRINCIPAL` に IAM member 形式で指定する。
+拒否ケースのうち FULL_ISOLATION の Agent 自身の Service Account と Dedicated OP を名指すものは、Provisioner が実行時に作る対象であり、まだ存在しないプロジェクトでは skipped と表示して測定しない。
 `make seed PROJECT_ID=<id>` は JWKS 集約 Job の完了後に seed Job を実行する。
 `make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
 View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。
