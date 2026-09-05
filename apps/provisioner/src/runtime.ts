@@ -6,9 +6,11 @@ import { GoogleAuth } from 'google-auth-library';
 import { assertRuntimeName, publishActivityEvent } from '@xaa/contracts';
 import { parseAdminPrincipals } from '@xaa/control-plane-auth';
 import { createFirestoreDocumentStore, createIdentityTokenProvider, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
+import { createLogger } from '@xaa/logging';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
 import { createAgentOpClient } from './agent/idp-connection.js';
+import { startedExecutionName } from './job/execution-name.js';
 import { qualifiedJobName } from './job/job-name.js';
 import { createTransactionStore } from './transaction/store.js';
 import { createDedicatedResources, type GcpAdmin } from './dedicated.js';
@@ -55,6 +57,9 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   const documents = createFirestoreDocumentStore(firestore, 'provisioner');
   const admin = createGcpAdmin(env);
   const identityToken = createIdentityTokenProvider();
+  // One logger for the process: `createApp` takes this one rather than making a second,
+  // so a line written from the job adapter reads the same as one written from a route.
+  const logger = createLogger('provisioner', 'provisioner');
 
   const agentOp = createAgentOpClient({ baseUrl: config.sharedAgentOpUrl, identityToken });
 
@@ -72,11 +77,23 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
           name: input.jobName,
           overrides: { containerOverrides: [{ env: input.env }] },
         });
-        return { executionName: operation.name ?? '' };
+        const executionName = startedExecutionName(operation);
+        if (!executionName) {
+          // Written down, not raised. The execution is already running by now, and
+          // failing here would compensate the registration out from under a job that
+          // keeps going — an agent nothing knows about is worse than one Lifecycle has
+          // to let time out. The operation's name is kept so that `job_execution_name`
+          // stays non-empty and a second execution is still refused (00b).
+          logger.warning('provisioner.execution_name_unreadable', {
+            request_id: '', trace_id: '', agent_id: agentIdOf(input.env), human_subject: null,
+          }, { job_name: input.jobName, operation_name: operation.name ?? null });
+        }
+        return { executionName: executionName ?? operation.name ?? '' };
       },
     },
     clock: { now: () => Date.now() },
     jtiStore: new FirestoreJtiStore(firestore),
+    logger,
     // The shared publisher validates against the canonical schema before it sends. A
     // raw topic write here would put events on the stream the subscriber then drops.
     publishActivity: publishActivityEvent,
@@ -99,6 +116,11 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
       taskTimeoutSeconds: input.taskTimeoutSeconds,
     }),
   };
+}
+
+/** The one override worth naming in a log line; the rest carry the agent's secrets. */
+function agentIdOf(env: ReadonlyArray<{ name: string; value: string }>): string | null {
+  return env.find((entry) => entry.name === 'AGENT_ID')?.value ?? null;
 }
 
 /**

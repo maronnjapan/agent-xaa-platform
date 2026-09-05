@@ -78,6 +78,25 @@ describe('step1 and step2', () => {
       .toBe(AGENT_OP_URL);
   });
 
+  /**
+   * The Provisioner used to record `runJob`'s operation name here, which names the
+   * request and no Execution. Cancelling it stops nothing, and the Executions API
+   * refuses it rather than answering 404 — so the step it fails is the first of every
+   * sweep, on every agent, ahead of the revocations that actually matter.
+   */
+  it('skips a recorded name that is not an execution', async () => {
+    const harness = createLifecycleHarness();
+    const agentId = await seedDomain(harness, {
+      jobExecutionName: 'projects/xaa-test/locations/asia-northeast1/operations/6a1f',
+    });
+
+    const outcome = await cleanupAgent(agentId, 'EXPIRED', deps(harness));
+
+    expect(outcome.results.find((entry) => entry.step === 'runtime_cancel')!.status).toBe('skipped');
+    expect(harness.clients.calls.find((entry) => entry.target === 'cancelExecution')).toBeUndefined();
+    expect(outcome.status).toBe('DESTROYED');
+  });
+
   it('cancels the execution named in the record, unchanged', async () => {
     const harness = createLifecycleHarness();
     const agentId = await seedDomain(harness);
