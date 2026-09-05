@@ -94,7 +94,12 @@ export async function sweep(deps: SweepDeps): Promise<SweepCounters> {
     'provisioning_transactions', 'created_at', '', '￿',
   ).catch(() => []);
   for (const row of transactions) {
-    const stale = ['WAITING_EXTERNAL_CONSENT', 'WAITING_IDP_CONSENT', 'IN_PROGRESS', 'PROVISIONING'].includes(row.data.status)
+    // `RESUMABLE` belongs here with the rest: a consent that came back leaves the
+    // transaction in that state only for as long as the resume request runs, so one
+    // still sitting there half an hour later is a resume that died partway and is not
+    // going to be presented again — the one-time code behind it is already spent.
+    const stale = ['WAITING_EXTERNAL_CONSENT', 'WAITING_IDP_CONSENT', 'RESUMABLE', 'IN_PROGRESS', 'PROVISIONING']
+      .includes(row.data.status)
       && nowMs - Date.parse(row.data.created_at) > TRANSACTION_TTL_SECONDS * 1000;
     if (!stale) continue;
     await deps.documents.update('provisioning_transactions', row.id, { status: 'ABANDONED' }).catch(() => undefined);

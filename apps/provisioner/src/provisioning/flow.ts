@@ -38,6 +38,31 @@ export interface ProvisionRequest {
   previousAgentId?: string | null;
 }
 
+/**
+ * The transaction a paused provisioning is picked back up on (T-PROV-17).
+ *
+ * Its presence is what tells the flow that the steps up to the consent already ran:
+ * the transaction exists, the isolation slot is reserved and the IdP connection was
+ * created, so re-running them would reserve a second slot and start a second consent.
+ */
+export interface ResumeContext {
+  transactionId: string;
+  agentId: string;
+}
+
+/**
+ * What a resume runs, and nothing before it.
+ *
+ * `verify_idp_connection` is where the pause left off, and every step after it is
+ * still undone. The steps before it are not repeated — see `ResumeContext` — with the
+ * single exception of the agent's key pair, which is minted below rather than here:
+ * the first request's private key never left its memory (RULE-20), so there is nothing
+ * to recover and nothing persisted to contradict a fresh one.
+ */
+const RESUMED_STEPS: readonly ProvisioningStep[] = [
+  'verify_idp_connection', 'create_dedicated_resources', 'register_agent', 'start_job_execution', 'activate',
+];
+
 export interface ProvisionResponse {
   status: 200 | 201 | 400 | 409 | 500 | 503;
   body: Record<string, unknown> | ConsentRequired;
@@ -60,7 +85,9 @@ class CapacityExhausted extends Error {
  * and the tool resolution are therefore done before the first step runs: a request that
  * will be refused leaves no transaction, no reservation and nothing to clean up.
  */
-export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest): Promise<ProvisionResponse> {
+export async function provisionAgent(
+  deps: FlowDeps, request: ProvisionRequest, resume?: ResumeContext,
+): Promise<ProvisionResponse> {
   // RULE-11 at the moment of provisioning: permissions may have been revoked since the
   // decision, and a re-provisioning is asked for precisely because they changed.
   const held = new Set((await deps.documents.queryEqual<{ capability_id: string }>(
@@ -91,10 +118,14 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     ...(deps.publishActivity ? { publish: deps.publishActivity } : {}),
   });
 
-  const agentId = newAgentId();
+  // A resume keeps the agent the consent was given for: the IdP connection the Agent
+  // OP wrote is named after it, and a new id would look for a connection nobody made.
+  const agentId = resume?.agentId ?? newAgentId();
   const idpConnectionId = `idpconn-${agentId}`;
   const xaaConfig = buildXaaConfig(resolved.tools);
-  const context: StepContext = { agentId, isolationLevel: request.isolationLevel, transactionId: '' };
+  const context: StepContext = {
+    agentId, isolationLevel: request.isolationLevel, transactionId: resume?.transactionId ?? '',
+  };
 
   const state: {
     credential?: AgentClientCredential;
@@ -117,6 +148,13 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     if (onlyIfCreating && record.status !== 'CREATING') return;
     await ledger.markFailed(agentId, message);
   };
+
+  /**
+   * RULE-51's undo. A connection that outlives the run it was created for is a refresh
+   * token for an agent that does not exist, and nothing else in the system is watching
+   * for one.
+   */
+  const revokeConnection = async (): Promise<void> => { await deps.agentOp.revokeIdpConnection?.(idpConnectionId); };
 
   const connectors = await deps.catalogue.connectors();
   let cachedManifest: ToolManifest | undefined;
@@ -155,6 +193,12 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
           isolation_level: request.isolationLevel,
           pending_step: 'resolve_tools',
           dedicated_short_id: request.isolationLevel === 'full_isolation' ? dedicatedNames(agentId).short : null,
+          // Written now because a consent may be about to take this request away: what
+          // comes back is a different process, and these three are what it needs to
+          // finish the agent this one started (T-PROV-17).
+          task_id: request.taskId,
+          constraints: request.constraints,
+          agent_expires_at: expiry.expiresAt,
         });
         context.transactionId = transaction.transaction_id;
         await emit({
@@ -225,7 +269,7 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
         }
         await deps.transactions.markStep(context.transactionId, 'verify_idp_connection');
       },
-      compensate: async () => { await deps.agentOp.revokeIdpConnection?.(idpConnectionId); },
+      compensate: revokeConnection,
     },
     {
       id: 'verify_idp_connection',
@@ -371,7 +415,19 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     },
   ];
 
-  const result = await runProvisioning(steps, context, deps.logger);
+  // Minted outside the step list because `generate_agent_identity` is not one of the
+  // steps a resume repeats: the step's only lasting effect is this credential, and the
+  // half that gets written down is registered further along, by `register_agent`.
+  if (resume) state.credential = await createAgentClientCredential(agentId);
+
+  // A resume runs the tail of the list, and takes the consent's own undo with it:
+  // `idp_consent` created the connection back in the request that paused, and that
+  // request is long over, so if this half fails there is no one else left to revoke it.
+  const plan = resume === undefined ? steps : steps
+    .filter((step) => RESUMED_STEPS.includes(step.id))
+    .map((step) => (step.id === 'verify_idp_connection' ? { ...step, compensate: revokeConnection } : step));
+
+  const result = await runProvisioning(plan, context, deps.logger);
 
   if (result.haltedAt !== undefined) return { status: 200, body: state.consent! };
 

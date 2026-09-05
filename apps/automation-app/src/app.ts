@@ -9,6 +9,7 @@ import { requireAgentOwner, type AgentOwnerVariables } from './agents/require-ow
 import { readAgentStatus } from './agents/status.js';
 import { stopAgent } from './agents/stop.js';
 import { addInstruction, AgentNotActive } from './agents/instructions.js';
+import { agentPagePath } from './agents/page-link.js';
 import { logAgentOperation } from './audit/logger.js';
 import { createWorkDefinitionStore } from './work-definition/store.js';
 import { confirm } from './work-definition/model.js';
@@ -134,8 +135,12 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
    * one-time code, because the Provisioner is internal-only and no browser can reach it
    * (RULE-37). This route is the only thing that can turn that return trip into a
    * resumed provisioning: it presents the code on the person's own session, and then
-   * either follows the next consent URL the Provisioner names or comes back to the
-   * dashboard.
+   * either follows the next consent URL the Provisioner names or shows the person the
+   * agent their consent produced.
+   *
+   * The three answers are the same three the button on the dashboard already knows
+   * (`afterProvision`), because they come from the same Provisioner: a consent URL is
+   * followed, an agent id is opened, and anything else falls back to the dashboard.
    */
   app.get(
     '/provisioning/resume',
@@ -167,8 +172,11 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
 
       // A second consent is answered the same way the first was: by following the URL
       // the Provisioner names. This app never builds one (RULE-37).
-      const body = await response.json().catch(() => ({})) as { consent_url?: unknown };
+      const body = await response.json().catch(() => ({})) as { consent_url?: unknown; agent_id?: unknown };
       if (typeof body.consent_url === 'string') return context.redirect(body.consent_url, 302);
+      if (typeof body.agent_id === 'string' && body.agent_id !== '') {
+        return context.redirect(agentPagePath(body.agent_id), 302);
+      }
       return context.redirect('/', 302);
     },
   );

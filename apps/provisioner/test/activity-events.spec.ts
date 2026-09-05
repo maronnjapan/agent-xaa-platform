@@ -100,6 +100,7 @@ describe('the Activity Events a provisioning produces', () => {
     const transaction = await target.deps.transactions.create({
       human_subject: 'testuser', agent_id: null, required_capabilities: [], required_connectors: [],
       isolation_level: 'standard', pending_step: null, dedicated_short_id: null,
+      task_id: 'wd-1', constraints: {}, agent_expires_at: '2026-03-01T01:00:00.000Z',
     });
     const published: unknown[] = [];
     await createActivityEmitter({

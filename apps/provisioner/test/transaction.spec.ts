@@ -17,6 +17,7 @@ const seed = {
   human_subject: 'testuser', agent_id: null, required_capabilities: ['document.read'],
   required_connectors: ['internal-docs-api'], isolation_level: 'standard' as const,
   pending_step: 'resolve_tools', dedicated_short_id: null,
+  task_id: 'wd-1', constraints: {}, agent_expires_at: '2026-03-01T01:00:00.000Z',
 };
 
 describe('provisioning transaction state', () => {

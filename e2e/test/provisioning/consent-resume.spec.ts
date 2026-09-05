@@ -14,6 +14,12 @@ import { startAgentOp } from '../../harness/agent-op.js';
  * Every hop here is a different app writing or reading the same one-time code, which is
  * exactly what a per-app test cannot check: the code used to be written to one
  * collection and looked for in another, and both sides' own tests passed.
+ *
+ * What the trip is for is the agent at the end of it. The one-time code arriving
+ * intact is only half the journey — the resume used to accept it, mark the transaction
+ * `RESUMABLE` and stop, spending the consent to reach a state nothing else advances,
+ * so a person who consented was returned to a dashboard with no agent on it and no
+ * error to explain why.
  */
 async function provisionerToken(): Promise<{ token: string; keyPair: Es256KeyPair }> {
   const idp = await startHumanIdp();
@@ -59,6 +65,13 @@ describe('coming back from the IdP consent', () => {
     const started = await paused.json() as { status: string; transaction_id: string };
     expect(started.status).toBe('IDP_CONSENT_REQUIRED');
 
+    // The consent is given for the agent the paused transaction named, and the
+    // connection the Agent OP writes belongs to that agent — not to whatever id this
+    // harness happens to have been started with.
+    const parked = (await provisioner.documents.get<{ agent_id: string; agent_expires_at: string }>(
+      'provisioning_transactions', started.transaction_id,
+    ))!;
+
     // The Agent OP finishes the consent over the same Firestore.
     const agentOp = await startAgentOp({
       shared, idpPublicJwk: idpJwk,
@@ -68,11 +81,12 @@ describe('coming back from the IdP consent', () => {
     const opStore = createFirestoreDocumentStore(shared, 'agent-op');
     await opStore.set('bridge_consent_states', 'state-1', {
       transaction_id: started.transaction_id,
-      agent_id: agentOp.agentId,
+      agent_id: parked.agent_id,
       human_subject: 'testuser',
       code_verifier: 'verifier-1',
-      idp_connection_id: `idpconn-${agentOp.agentId}`,
-      expires_at: new Date(Date.now() + 300_000).toISOString(),
+      idp_connection_id: `idpconn-${parked.agent_id}`,
+      // The agent's own expiry, which is what the Agent OP stores on the connection.
+      expires_at: parked.agent_expires_at,
       used: false,
     });
 
@@ -101,10 +115,36 @@ describe('coming back from the IdP consent', () => {
       body: JSON.stringify({ one_time_code: code }),
     });
 
-    expect(resumed.status).toBe(200);
-    expect(await resumed.json()).toMatchObject({ pending_step: 'verify_idp_connection' });
+    expect(resumed.status).toBe(201);
+    const provisioned = await resumed.json() as { status: string; agent_id: string; expires_at: string };
+    expect(provisioned.status).toBe('PROVISIONED');
+    // The agent the consent was given for, not a new one: the Agent OP wrote the
+    // connection under this id, and a different agent would hold no delegation.
+    expect(provisioned.agent_id).toBe(parked.agent_id);
+
+    const registration = (await provisioner.documents.get<{ status: string; expires_at: string }>(
+      'agents', `${provisioned.agent_id}__meta`,
+    ))!;
+    expect(registration.status).toBe('ACTIVE');
+    expect(provisioner.jobRuns).toHaveLength(1);
+
+    // RULE-26 across the pause. The expiry was fixed before the person was sent away,
+    // and the registration written after they came back carries the same string the
+    // connection does — recomputing it on the way back would have handed the agent
+    // however long the consent screen took.
+    const connection = (await opStore.get<{ expires_at: string }>(
+      'idp_connections', `idpconn-${provisioned.agent_id}`,
+    ))!;
+    expect(registration.expires_at).toBe(connection.expires_at);
+    expect(registration.expires_at).toBe(parked.agent_expires_at);
   });
 
+  /**
+   * One consent, one agent. The code is single-use and the transaction it names is
+   * finished by the first presentation, so a replayed redirect — a refresh, a back
+   * button, a copied URL — is refused rather than provisioning a second agent on the
+   * strength of a consent that was given once.
+   */
   it('refuses the same code a second time', async () => {
     const shared = createFirestoreDouble();
     const idpJwk = await idpPublicJwk();
@@ -157,9 +197,11 @@ describe('coming back from the IdP consent', () => {
       body: JSON.stringify({ one_time_code: code }),
     });
 
-    expect((await present()).status).toBe(200);
+    expect((await present()).status).toBe(201);
     const second = await present();
-    expect(second.status).toBe(400);
-    expect(await second.json()).toEqual({ error: 'code_already_used' });
+    expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({ error: 'transaction_not_resumable' });
+    // And the refusal is not merely a status: nothing ran twice.
+    expect(provisioner.jobRuns).toHaveLength(1);
   });
 });

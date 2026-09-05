@@ -412,7 +412,30 @@ describe('approval', () => {
  * 404 and the provisioning it paused is never resumed.
  */
 describe('returning from a consent screen', () => {
-  it('presents the one-time code to the Provisioner and comes back to the dashboard', async () => {
+  /**
+   * The consent produced an agent, so the person is shown it. Landing back on the
+   * dashboard instead is the answer to a resume that named no agent, not to the
+   * ordinary one.
+   */
+  it('presents the one-time code to the Provisioner and opens the agent it made', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json(
+        { status: 'PROVISIONED', transaction_id: 'txn-1', agent_id: 'agent-abcdefghijklmnopqrstuvwxyz' },
+        { status: 201 },
+      ),
+    });
+
+    const response = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time', { redirect: 'manual' });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/agents/agent-abcdefghijklmnopqrstuvwxyz');
+    const call = harness.upstream.at(-1)!;
+    expect(call.url).toBe('https://provisioner.test/provisioning/txn-1/resume');
+    expect(call.init.method).toBe('POST');
+    expect(JSON.parse(String(call.init.body))).toEqual({ one_time_code: 'one-time' });
+  });
+
+  it('comes back to the dashboard when the resume names neither an agent nor a consent', async () => {
     const harness = await startAutomationApp({
       upstreamHandler: () => Response.json({ status: 'RESUMABLE', transaction_id: 'txn-1' }, { status: 200 }),
     });
@@ -421,10 +444,6 @@ describe('returning from a consent screen', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/');
-    const call = harness.upstream.at(-1)!;
-    expect(call.url).toBe('https://provisioner.test/provisioning/txn-1/resume');
-    expect(call.init.method).toBe('POST');
-    expect(JSON.parse(String(call.init.body))).toEqual({ one_time_code: 'one-time' });
   });
 
   it('follows a second consent url rather than building one', async () => {

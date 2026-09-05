@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
+import { toRfc3339Seconds } from '../src/agent/expiry.js';
 import { reprovisionBodySchema } from '../src/routes/reprovision.js';
 import { createProvisionerHarness, seedDecision, type ProvisionerHarness } from './helpers.js';
 
@@ -84,12 +85,27 @@ describe('POST /internal/provisioning/reprovision', () => {
 
   it('inherits the expiry instead of granting a fresh lifetime', async () => {
     const target = await createProvisionerHarness();
-    const expiresAt = new Date(Date.now() + 1_800_000).toISOString();
+    // As Lifecycle sends it: the previous agent's own `expires_at`, which the
+    // Provisioner wrote to the second, so the copy is the same string it came in as.
+    const expiresAt = toRfc3339Seconds(Date.now() + 1_800_000);
     const response = await post(target, await body(target, { inherited_expires_at: expiresAt }));
     const answer = await response.json() as { agent_id: string; expires_at: string };
     expect(answer.expires_at).toBe(expiresAt);
     const registration = await target.documents.get<{ expires_at: string }>('agents', `${answer.agent_id}__meta`);
     expect(registration!.expires_at).toBe(expiresAt);
+  });
+
+  /**
+   * A finer-grained expiry is floored, never rounded up. The replacement may end
+   * earlier than the agent it takes over from; it may never end later, which is the
+   * whole reason the expiry is inherited rather than recomputed.
+   */
+  it('never lands the replacement past the expiry it inherited', async () => {
+    const target = await createProvisionerHarness();
+    const expiresAt = new Date(Date.now() + 1_800_000 + 566).toISOString();
+    const response = await post(target, await body(target, { inherited_expires_at: expiresAt }));
+    const answer = await response.json() as { expires_at: string };
+    expect(Date.parse(answer.expires_at)).toBeLessThanOrEqual(Date.parse(expiresAt));
   });
 
   it('refuses an expiry that has already passed', async () => {

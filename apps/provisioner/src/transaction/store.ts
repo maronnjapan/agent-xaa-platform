@@ -15,6 +15,19 @@ export interface ProvisioningTransaction {
   status: TransactionStatus;
   pending_step: string | null;
   dedicated_short_id: string | null;
+  /**
+   * The three inputs a resume cannot recover from anywhere else.
+   *
+   * A provisioning that pauses for consent comes back in a different request, with
+   * none of the first one's memory: the work it runs for, the constraints the Tool
+   * Manifest carries and the expiry that was fixed before the person was sent away.
+   * Recomputing the expiry on the way back would quietly extend the agent's life by
+   * however long the consent screen took, so it is written down here instead — this is
+   * the agent's own expiry, not the half hour this transaction is allowed to wait.
+   */
+  task_id: string;
+  constraints: Record<string, Record<string, unknown>>;
+  agent_expires_at: string;
   /** The last Activity Event number handed out for this transaction (T-PROV-32). */
   sequence: number;
   created_at: string;
@@ -25,7 +38,7 @@ export const provisioningTransactionSchema = {
   $id: 'provisioning-transaction',
   type: 'object',
   additionalProperties: false,
-  required: ['transaction_id', 'human_subject', 'agent_id', 'required_capabilities', 'required_connectors', 'isolation_level', 'status', 'pending_step', 'dedicated_short_id', 'sequence', 'created_at', 'expires_at'],
+  required: ['transaction_id', 'human_subject', 'agent_id', 'required_capabilities', 'required_connectors', 'isolation_level', 'status', 'pending_step', 'dedicated_short_id', 'task_id', 'constraints', 'agent_expires_at', 'sequence', 'created_at', 'expires_at'],
   properties: {
     transaction_id: { type: 'string', pattern: '^txn_[A-Za-z0-9_-]{22}$' },
     human_subject: { type: 'string', minLength: 1 },
@@ -36,6 +49,9 @@ export const provisioningTransactionSchema = {
     status: { enum: TRANSACTION_STATUSES },
     pending_step: { type: ['string', 'null'] },
     dedicated_short_id: { type: ['string', 'null'] },
+    task_id: { type: 'string', minLength: 1 },
+    constraints: { type: 'object' },
+    agent_expires_at: { type: 'string', format: 'date-time' },
     sequence: { type: 'integer', minimum: 0 },
     created_at: { type: 'string', format: 'date-time' },
     expires_at: { type: 'string', format: 'date-time' },
