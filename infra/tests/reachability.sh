@@ -28,7 +28,7 @@ accounts=$(gcloud iam service-accounts list --project="$project_id" --format='va
 # `roles/run.invoker` is read (infra/spike/RESULT.md (a)), and a runner outside the
 # project only ever gets that 404. Measuring such a target would say nothing about IAM.
 deployed=$(gcloud run services list --project="$project_id" --region="$region" \
-  --format='csv[no-heading](metadata.name,metadata.annotations."run.googleapis.com/ingress")') || { echo 'reachability: the deployed services cannot be listed' >&2; exit 2; }
+  --format='csv[no-heading](metadata.name,metadata.annotations."run.googleapis.com/ingress",status.url)') || { echo 'reachability: the deployed services cannot be listed' >&2; exit 2; }
 
 status=0
 while IFS= read -r row; do
@@ -36,17 +36,26 @@ while IFS= read -r row; do
   target=$(jq -r '.target' <<<"$row")
   path=$(jq -r '.path' <<<"$row")
   expected=$(jq -r '.expect' <<<"$row")
-  ingress=$(awk -F, -v name="$target" '$1 == name { print ($2 == "" ? "all" : $2); found = 1 } END { if (!found) print "absent" }' <<<"$deployed")
-  case "$ingress" in
-    absent)
-      printf 'reachability / %s / %s / skipped: the service is not deployed\n' "${caller:-anonymous}" "$target"
-      continue ;;
-    internal*)
-      printf 'reachability / %s / %s / skipped: ingress=%s answers 404 to every caller outside the project\n' "${caller:-anonymous}" "$target" "$ingress"
-      continue ;;
-  esac
+  row=$(awk -F, -v name="$target" '$1 == name { print; exit }' <<<"$deployed")
+  if [[ -z "$row" ]]; then
+    printf 'reachability / %s / %s / skipped: the service is not deployed\n' "${caller:-anonymous}" "$target"
+    continue
+  fi
+  IFS=, read -r _ ingress observed <<<"$row"
+  if [[ "$ingress" == internal* ]]; then
+    printf 'reachability / %s / %s / skipped: ingress=%s answers 404 to every caller outside the project\n' "${caller:-anonymous}" "$target" "$ingress"
+    continue
+  fi
+  # Terraform's URL first, and not only because it is at hand: DEC-IAC-05 computes it from
+  # the project number rather than reading it back, so calling the computed URL is what
+  # measures the formula. A service Terraform knows nothing about — a Dedicated OP the
+  # Provisioner made — is called at the URL Cloud Run reports for it instead.
   url=$(jq -r --arg target "$target" '.[$target] // empty' <<<"$urls")
-  [[ -n "$url" ]] || url="https://${target}-${project_id}.${region}.run.app"
+  [[ -n "$url" ]] || url=$observed
+  if [[ -z "$url" ]]; then
+    printf 'reachability / %s / %s / skipped: the service reports no URL\n' "${caller:-anonymous}" "$target"
+    continue
+  fi
   headers=()
   if [[ -n "$caller" ]]; then
     email="${caller}@${project_id}.iam.gserviceaccount.com"
