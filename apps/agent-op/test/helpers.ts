@@ -4,6 +4,7 @@ import {
   jwkThumbprint, signCompactJws, type Es256KeyPair, type Es256Signer,
 } from '@xaa/crypto';
 import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
+import { extractClientCredentials } from '@maronn-openid-connect/core';
 import { CLIENT_ASSERTION_TYPE, JWT_TYP, ACTOR_TOKEN_TYP } from '@xaa/contracts';
 import createApp, { type AgentOpAppDeps } from '../src/app.js';
 import type { AgentOpConfig } from '../src/config.js';
@@ -41,7 +42,9 @@ export function baseConfig(overrides: Partial<AgentOpConfig> = {}): AgentOpConfi
     humanIdpTokenUrl: `${ISSUER}/token`,
     humanIdpRevokeUrl: `${ISSUER}/revoke`,
     agentOpCallbackUrl: 'https://agent-op-callback.test',
-    clientSecretAgentPlatform: 'test-agent-platform-secret',
+    // Shaped like the deployed secret (`openssl rand -base64 48`): the `+` is what a
+    // header built without form-url-encoding hands to the IdP as a space.
+    clientSecretAgentPlatform: 'test+agent/platform+secret=',
     idJagLifetimeSeconds: 300,
     agentId: null,
     signerMode: 'local',
@@ -254,4 +257,15 @@ export function decodePayload(token: string): Record<string, unknown> {
 
 export function decodeHeader(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split('.')[0]!, 'base64url').toString('utf8')) as Record<string, unknown>;
+}
+
+/**
+ * What Human IdP recovers from an Authorization header, run through the same decoder
+ * it uses. Rebuilding the encoding inside the expectation would let a test drift with
+ * the bug instead of catching it: the raw `client_id:client_secret` header passed a
+ * hand-written assertion for months while Human IdP answered it 401 invalid_client.
+ */
+export function decodeClientAuth(authorization: string | undefined): { clientId: string; clientSecret: string | undefined } {
+  const presented = extractClientCredentials({ params: {}, authorizationHeader: authorization });
+  return { clientId: presented.clientId, clientSecret: presented.clientSecret };
 }

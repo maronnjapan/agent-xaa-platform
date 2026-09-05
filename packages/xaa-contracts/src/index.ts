@@ -11,6 +11,7 @@ export * from './reason-codes.js';
 export * from './catalog-types.js';
 export * from './runtime-env.js';
 export * from './client-assertion-type.js';
+export * from './client-auth.js';
 export * from './collections.js';
 export * from './completion-code.js';
 export * from './dedicated-iam.js';

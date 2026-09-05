@@ -1,4 +1,4 @@
-import { PLATFORM_CLIENT_ID } from '@xaa/contracts';
+import { basicClientAuthHeader, PLATFORM_CLIENT_ID } from '@xaa/contracts';
 import type { AgentOpConfig } from '../config.js';
 
 /**
@@ -7,7 +7,10 @@ import type { AgentOpConfig } from '../config.js';
  * revocation — carries HTTP Basic client authentication. Sending `client_id` alone
  * is answered with 401 invalid_client, which looked like a revoked token and let
  * cleanup report success while the person's refresh token was still live.
+ *
+ * The encoding of the two values is `basicClientAuthHeader`'s to get right; building
+ * the header here by hand is what sent the raw secret and drew the same 401.
  */
 export function humanIdpClientAuthHeader(config: AgentOpConfig): string {
-  return `Basic ${Buffer.from(`${PLATFORM_CLIENT_ID}:${config.clientSecretAgentPlatform}`).toString('base64')}`;
+  return basicClientAuthHeader(PLATFORM_CLIENT_ID, config.clientSecretAgentPlatform);
 }

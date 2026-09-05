@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createDpopProof } from '@xaa/crypto';
 import { CLIENT_ASSERTION_TYPE } from '@xaa/contracts';
 import {
-  AGENT_OP_BASE, clientAssertion, createFixture, fakeEnvelope, LIFECYCLE_SA, PROVISIONER_SA, type Fixture,
+  AGENT_OP_BASE, baseConfig, clientAssertion, createFixture, decodeClientAuth, fakeEnvelope,
+  LIFECYCLE_SA, PROVISIONER_SA, type Fixture,
 } from './helpers.js';
 
 const PATH = '/xaa/subject-token';
@@ -202,9 +203,9 @@ describe('POST /internal/revoke-connection', () => {
     fixture.humanIdpResponses.push(new Response(null, { status: 200 }));
     expect((await revoke(fixture, LIFECYCLE_SA)).status).toBe(200);
 
-    const expected = `Basic ${Buffer.from('agent-platform:test-agent-platform-secret').toString('base64')}`;
     expect(fixture.humanIdpRequests).toHaveLength(1);
-    expect(fixture.humanIdpRequests[0]!.headers.authorization).toBe(expected);
+    expect(decodeClientAuth(fixture.humanIdpRequests[0]!.headers.authorization))
+      .toEqual({ clientId: 'agent-platform', clientSecret: baseConfig().clientSecretAgentPlatform });
     expect(fixture.humanIdpRequests[0]!.body).toContain('token_type_hint=refresh_token');
   });
 

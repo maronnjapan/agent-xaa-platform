@@ -13,7 +13,9 @@ export const config: AutomationAppConfig = {
   port: 8080,
   issuer: ISSUER,
   clientId: 'automation-app',
-  clientSecret: 'test-automation-secret',
+  // Shaped like the deployed secret (`openssl rand -base64 48`): a header that does
+  // not form-url-encode hands the IdP the `+` as a space and is answered 401.
+  clientSecret: 'test+automation/secret=',
   publicBaseUrl: 'https://automation-app.test',
   authorizationPlatformUrl: 'https://authorization.test',
   agentProvisionerUrl: 'https://provisioner.test',

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { webcrypto } from 'node:crypto';
-import { audienceIncludes } from '@xaa/contracts';
+import { audienceIncludes, basicClientAuthHeader } from '@xaa/contracts';
 import {
   createDpopProof, decodeJwsUnverified, generateEs256KeyPair, importPrivateJwk,
   importPublicJwk, type Es256KeyPair, type PublicJwkEs256,
@@ -82,7 +82,7 @@ export function createLoginRoutes(input: {
     const tokenUrl = `${input.config.issuer}/token`;
     const headers: Record<string, string> = {
       'content-type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${Buffer.from(`${input.config.clientId}:${input.config.clientSecret}`).toString('base64')}`,
+      Authorization: basicClientAuthHeader(input.config.clientId, input.config.clientSecret),
       DPoP: await createDpopProof({ method: 'POST', url: tokenUrl, keyPair: pair }),
     };
     const response = await send(tokenUrl, {

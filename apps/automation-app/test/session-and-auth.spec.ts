@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
+import { basicClientAuthHeader } from '@xaa/contracts';
 import { LOGIN_SCOPE, buildAuthorizationRequest, humanIdpJwksUrl } from '../src/auth/oidc-login.js';
 import {
   SESSION_COOKIE, SESSION_FIELDS, SESSION_TOKEN_AUDIENCES, createSessionStore, readSessionCookie,
@@ -105,6 +106,36 @@ describe('logging in', () => {
       headers: { cookie: '' },
     });
     expect(callback.status).toBe(302);
+  });
+
+  /**
+   * RFC 6749 §2.3.1: the two values are form-url-encoded before they are base64'd,
+   * and Human IdP decodes them on the way back out. Sending them raw survived every
+   * secret without a reserved character in it and was answered 401 invalid_client by
+   * the first one that had a `+`, which the decoder reads back as a space.
+   */
+  it('authenticates the exchange with the shared encoder, not a raw concatenation', async () => {
+    let nonce = '';
+    let sent: string | null = null;
+    const harness = await startAutomationApp({
+      upstreamHandler: async (_url, init) => {
+        sent = new Headers(init.headers).get('Authorization');
+        return new Response(JSON.stringify({
+          id_token: await mintAccessToken({ typ: 'JWT', extra: { nonce } }),
+          access_token: await mintAccessToken(),
+          token_type: 'DPoP',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+
+    const login = await harness.fetch('/login', { headers: { cookie: '' } });
+    const state = new URL(login.headers.get('Location')!).searchParams.get('state')!;
+    nonce = (await harness.documents.get<{ nonce: string }>('login_transactions', state))!.nonce;
+
+    await harness.fetch(`/callback?state=${encodeURIComponent(state)}&code=initial-code`, { headers: { cookie: '' } });
+    expect(sent).toBe(basicClientAuthHeader('automation-app', config.clientSecret));
+    // The header the route used to build, and the one Human IdP answered 401 to.
+    expect(sent).not.toBe(`Basic ${Buffer.from(`automation-app:${config.clientSecret}`).toString('base64')}`);
   });
 });
 

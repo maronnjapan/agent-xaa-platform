@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   completionCodeId, PROVISIONING_CODES_COLLECTION, type CompletionCodeRecord,
 } from '@xaa/contracts';
-import { createFixture, fakeEnvelope, type Fixture } from './helpers.js';
+import { baseConfig, createFixture, decodeClientAuth, fakeEnvelope, type Fixture } from './helpers.js';
 
 const TOKEN_BEARING = /(access_token|refresh_token|id_token|[?&#]token=)/;
 
@@ -60,8 +60,8 @@ describe('GET /xaa/callback', () => {
     await seedState(fixture);
     fixture.humanIdpResponses.push(Response.json({ refresh_token: 'rt-1' }));
     expect((await callback(fixture)).status).toBe(302);
-    expect(fixture.humanIdpRequests[0]!.headers.authorization)
-      .toBe(`Basic ${Buffer.from('agent-platform:test-agent-platform-secret').toString('base64')}`);
+    expect(decodeClientAuth(fixture.humanIdpRequests[0]!.headers.authorization))
+      .toEqual({ clientId: 'agent-platform', clientSecret: baseConfig().clientSecretAgentPlatform });
   });
 
   it('rejects a reused state', async () => {
