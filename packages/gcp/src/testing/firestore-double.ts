@@ -1,4 +1,5 @@
 import { Timestamp, type Firestore } from '@google-cloud/firestore';
+import { documentIdByteLength, MAX_DOCUMENT_ID_BYTES } from '../document-id.js';
 
 /**
  * In-process stand-in for the Firestore surface `DocumentStore` and the two store
@@ -38,27 +39,38 @@ export function createFirestoreDouble(): Firestore {
     return limit === undefined ? matched : matched.slice(0, limit);
   };
 
-  const docRef = (name: string, id: string) => ({
-    id,
-    __collection: name,
-    async get() {
-      const data = documentsOf(name).get(id);
-      return { exists: data !== undefined, id, __collection: name, data: () => data };
-    },
-    async set(value: Record<string, unknown>) { documentsOf(name).set(id, value); bump(name, id); },
-    async create(value: Record<string, unknown>) {
-      if (documentsOf(name).has(id)) throw Object.assign(new Error('ALREADY_EXISTS'), { code: 6 });
-      documentsOf(name).set(id, value);
-      bump(name, id);
-    },
-    async update(patch: Record<string, unknown>) {
-      const current = documentsOf(name).get(id);
-      if (!current) throw Object.assign(new Error('NOT_FOUND'), { code: 5 });
-      documentsOf(name).set(id, { ...current, ...patch });
-      bump(name, id);
-    },
-    async delete() { documentsOf(name).delete(id); bump(name, id); },
-  });
+  const docRef = (name: string, id: string) => {
+    // Firestore refuses an over-long document id; until the double did too, a key
+    // that could never be written in production wrote happily in every test.
+    const bytes = documentIdByteLength(id);
+    if (bytes > MAX_DOCUMENT_ID_BYTES) {
+      throw Object.assign(
+        new Error(`INVALID_ARGUMENT: a document id is limited to ${MAX_DOCUMENT_ID_BYTES} bytes, this one is ${bytes}`),
+        { code: 3 },
+      );
+    }
+    return {
+      id,
+      __collection: name,
+      async get() {
+        const data = documentsOf(name).get(id);
+        return { exists: data !== undefined, id, __collection: name, data: () => data };
+      },
+      async set(value: Record<string, unknown>) { documentsOf(name).set(id, value); bump(name, id); },
+      async create(value: Record<string, unknown>) {
+        if (documentsOf(name).has(id)) throw Object.assign(new Error('ALREADY_EXISTS'), { code: 6 });
+        documentsOf(name).set(id, value);
+        bump(name, id);
+      },
+      async update(patch: Record<string, unknown>) {
+        const current = documentsOf(name).get(id);
+        if (!current) throw Object.assign(new Error('NOT_FOUND'), { code: 5 });
+        documentsOf(name).set(id, { ...current, ...patch });
+        bump(name, id);
+      },
+      async delete() { documentsOf(name).delete(id); bump(name, id); },
+    };
+  };
 
   const query = (name: string, filters: Filter[] = [], limit?: number): unknown => ({
     doc: (id: string) => docRef(name, id),

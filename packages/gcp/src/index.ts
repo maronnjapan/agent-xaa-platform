@@ -1,3 +1,4 @@
+export * from './document-id.js';
 export * from './firestore-client.js';
 export * from './firestore-json-store.js';
 export * from './firestore-jti-store.js';

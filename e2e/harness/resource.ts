@@ -11,6 +11,8 @@ import createFinanceAs from '@xaa/resource-finance-as/app';
 import createDocsApi from '@xaa/resource-docs-api/app';
 import createFinanceApi from '@xaa/resource-finance-api/app';
 import { generateLocalSigningJwk, localSigningKey } from '@xaa/resource-docs-as/src/keys/self-bootstrap';
+import { createResourceAsStores } from '@xaa/resource-docs-as/src/store/backend';
+import { createResourceAsStores as createFinanceAsStores } from '@xaa/resource-finance-as/src/store/backend';
 import type { ResourceAsEnv } from '@xaa/resource-docs-as/src/config/env';
 import type { Fetcher } from './oauth-flow.js';
 import { DOCS_AS_ISSUER, DOCS_API_RESOURCE, FINANCE_AS_ISSUER, FINANCE_API_RESOURCE } from './agent-op.js';
@@ -90,9 +92,18 @@ export async function startResource(options: StartResourceOptions): Promise<Reso
     }],
   })) as unknown as typeof fetch;
 
+  // The Firestore-backed stores production wires in runtime.ts, not the generated
+  // provider's process-local defaults. They are where an issued Access Token is
+  // written, and that write is the last thing a redemption does — a harness that
+  // leaves them out cannot see a redemption that succeeds and then fails to record
+  // what it issued (DEC-IAC-09 / T-RES-02).
+  const { stores, storeAccessToken } = options.kind === 'docs'
+    ? createResourceAsStores(firestore as never)
+    : createFinanceAsStores(firestore as never);
+
   const asApp = options.kind === 'docs'
-    ? createDocsAs({ env, signingKey, jtiStore, fetchImpl, logger, recordStep: (step) => redeemSteps.push(step), isActorRevoked: (urn) => ledger.isActorRevoked(urn) })
-    : createFinanceAs({ env, signingKey, jtiStore, fetchImpl, logger, recordStep: (step) => redeemSteps.push(step), isActorRevoked: (urn) => ledger.isActorRevoked(urn), requireIsolationLevel: 'full_isolation' });
+    ? createDocsAs({ env, signingKey, jtiStore, fetchImpl, logger, stores, storeAccessToken, recordStep: (step) => redeemSteps.push(step), isActorRevoked: (urn) => ledger.isActorRevoked(urn) })
+    : createFinanceAs({ env, signingKey, jtiStore, fetchImpl, logger, stores, storeAccessToken, recordStep: (step) => redeemSteps.push(step), isActorRevoked: (urn) => ledger.isActorRevoked(urn), requireIsolationLevel: 'full_isolation' });
 
   // The Resource API verifies Access Tokens against the AS's own published key.
   const apiJwks = (async () => Response.json({ keys: [signingKey.publicJwk] })) as unknown as typeof fetch;
