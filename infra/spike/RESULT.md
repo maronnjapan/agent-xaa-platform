@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | (a) VPCなしの INTERNAL_ONLY への3経路 | 下記 | Cloud Run → Cloud Run のみ 404。Scheduler OIDC と Pub/Sub push は到達 | **一部不可** | DEC-IAC-14, DEC-IAC-15 |
 | (b) Cloud Run URL の決定性 | observed_uri と expected_uri の完全一致 | 未実測（`run.googleapis.com/urls` には `https://<service>-<project_number>.<region>.run.app` が含まれていた） | 未実測 | DEC-IAC-05 |
-| (c) allUsers invoker | caller_url /healthz | 未実測 | 未実測 | DEC-IAC-14 |
+| (c) allUsers invoker | caller_url /healthz | `/healthz` は Google Frontend が横取りし、コンテナへ届かない | **測れない経路がある** | DEC-IAC-14, DEC-IAC-15 |
 | (d) standalone project の Deny Policy | gcloud iam policies get | 未実測 | 未実測 | DEC-IAC-11 |
 
 ## (a) の測り方と読み
@@ -32,6 +32,33 @@ VPC を持たない Cloud Run Service の外向き通信はインターネット
 同一プロジェクトの Cloud Run Service からの呼び出しでも INTERNAL_ONLY には内部として届かない。
 404 は「呼ぶ権利がない」ではなく「そのホストにサービスが無い」という応答なので、
 呼び出し側からは設定ミスと区別が付かない。
+
+## (c) `/healthz` はコンテナまで届かない
+
+(a) を測るついでに気付いた。`*.run.app` への `GET /healthz` は、公開されている
+automation-app でも Google Frontend が 404 を返し、コンテナのルーティングまで届かない。
+
+| 要求 | 応答 | どこが返したか |
+|---|---|---|
+| `GET {automation-app}/` | 302 → `/login` | アプリ（`server: Google Frontend` 付き） |
+| `GET {automation-app}/nonexistent` | 404 `404 Not Found`（text/plain） | アプリ（Hono の既定） |
+| `GET {automation-app}/healthz` | 404 Google の HTML エラーページ（`referrer-policy: no-referrer`、`server` ヘッダ無し） | Google Frontend |
+| `GET {automation-app}/healthz/`、`/HEALTHZ` | 404 `404 Not Found`（text/plain） | アプリ |
+| `GET {automation-app}/%68ealthz`、`//healthz` | Google の HTML エラーページ | Google Frontend（正規化後に一致する） |
+
+`Authorization` を付けても `X-Serverless-Authorization` を付けても同じで、
+authorization のように ingress=ALL にしたサービスでも `/` は 403 を返すのに
+`/healthz` だけ 404 になる。したがって全アプリが持つ `app.get('/healthz')` は
+`*.run.app` 経由では到達不能である。
+
+影響: `infra/tests/reachability.sh` は全エッジを `/healthz` で叩き 200 か 403 を期待する。
+どのケースも 404 になるため `make verify` は通らず、`make demo-apply` がそれを連鎖して
+呼ぶので deploy workflow も止まる。直し方は2つあり、どちらを採るかは未決である。
+
+- 各アプリの health ルートを `/healthz` 以外（例 `/livez`）へ移し、probe もそこへ向ける。
+  12 サービス分の変更になるが、意味は変わらない。
+- probe だけをコンテナへ届く別のパスへ向ける。到達を「アプリが返した 404」で判定する
+  ことになるため、成功の期待値が読みにくくなる。
 
 ## 起票
 
