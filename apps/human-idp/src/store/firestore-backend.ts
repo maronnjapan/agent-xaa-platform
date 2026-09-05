@@ -50,6 +50,18 @@ function grantIdOf(value: unknown): string | null {
   return typeof grantId === 'string' ? grantId : null;
 }
 
+/**
+ * JsonStoreBackend values have JSON semantics, while the Firestore SDK rejects
+ * `undefined` even when it is nested inside an otherwise valid object. Token
+ * records contain optional claims, nonce and auth-context fields, so normalize
+ * them exactly as JSON serialization would before handing them to Firestore.
+ */
+function normalizeJsonValue<T>(value: T): T {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) throw new Error('JSON store value is not serializable');
+  return JSON.parse(serialized) as T;
+}
+
 export interface HumanIdpStoreBackend extends JsonStoreBackend {
   /** OAuth 2.1 §4.1.2: revoke the whole token family behind one authorization grant. */
   revokeByGrantId(grantId: string): Promise<number>;
@@ -69,10 +81,11 @@ export function createHumanIdpStoreBackend(store: DocumentStore, now: () => numb
     },
 
     async put<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+      const normalizedValue = normalizeJsonValue(value);
       await store.set(collectionFor(key), documentId(key), {
         key,
-        value,
-        grant_id: grantIdOf(value),
+        value: normalizedValue,
+        grant_id: grantIdOf(normalizedValue),
         revoked: false,
         expire_at: ttlSeconds === undefined ? null : store.expiryFromNow(ttlSeconds, now()),
       });

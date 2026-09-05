@@ -13,7 +13,7 @@ import { logAgentOperation } from './audit/logger.js';
 import { createWorkDefinitionStore } from './work-definition/store.js';
 import { confirm } from './work-definition/model.js';
 import { LifetimeOutOfRange, validateLifetimeHours } from './work-definition/lifetime.js';
-import { submitBusinessWorkRequest, WorkDefinitionNotConfirmed } from './work-definition/submit.js';
+import { submitBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed } from './work-definition/submit.js';
 import {
   assertStillApproved, AlreadyApproved, ApprovalRequired, CapabilitiesChanged, createAgentDefinitionStore,
 } from './agent-definition/approval.js';
@@ -305,7 +305,8 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
         security_profile?: { isolation_level?: unknown };
       };
       if (!response.ok || typeof decision.decision_id !== 'string') {
-        return context.json(decision, response.status as 200);
+        const refusal = upstreamRefusal(response.status, decision as { error?: unknown });
+        return context.json(refusal.body, refusal.status);
       }
       // What the person is about to be shown, recorded before they see it. Approval and
       // provisioning both read this record, so without it the decision came back and the

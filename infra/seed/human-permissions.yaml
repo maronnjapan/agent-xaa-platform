@@ -4,6 +4,18 @@
 # One row per (subject, capability). A permission is taken away by removing its row —
 # `pnpm perm:set <subject> <capability> revoke` — rather than by flipping a flag, so an
 # entitlement that is gone leaves no record a reader could forget to check.
+# The two people who can actually sign in are `testuser` and `otheruser`
+# (apps/human-idp/src/oidc/store.ts); every other subject here belongs to a test or to a
+# docs example. Without a row of their own, the one account the guide tells a person to
+# log in with intersects every decision with an empty permission set and is granted
+# nothing — which reads on screen as the platform refusing rather than as data that was
+# never seeded. `testuser` holds the four capabilities the default profile can actually
+# serve: the Docs and Finance Resource APIs exist with `enable_google_bridge=false`,
+# calendar and mail do not.
+- { human_subject: testuser, capability_id: document.read }
+- { human_subject: testuser, capability_id: document.write }
+- { human_subject: testuser, capability_id: finance.payment.read }
+- { human_subject: testuser, capability_id: finance.payment.approve }
 - { human_subject: user-123, capability_id: calendar.event.read }
 - { human_subject: user-123, capability_id: calendar.event.write }
 - { human_subject: user-123, capability_id: mail.message.read }

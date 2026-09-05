@@ -83,10 +83,12 @@ export async function verifyCompactJws(token: string, options: {
 /**
  * RS256 verification, kept separate from the ES256 path on purpose.
  *
- * The Resource AS signs its Access Tokens with RSA-2048 because core's discovery
- * builder requires an RS256 key (00b). Nothing else in the platform accepts RS256,
- * so the two algorithms never share a verification function and an RS256 token can
- * never be presented where an ES256 one is expected.
+ * The Resource AS and the Human IdP both sign with RSA-2048, because core's discovery
+ * builder requires an RS256 key (00b). The two algorithms never share a verification
+ * function: the caller picks this one only when the header says RS256, and the key it
+ * hands over came from the JWKS by `kid`, so an ES256 key can never be made to accept
+ * an RS256 signature — `subtle.verify` rejects the mismatch rather than reinterpreting
+ * the algorithm.
  */
 export async function verifyCompactJwsRs256(token: string, options: {
   publicKey: CryptoKey;

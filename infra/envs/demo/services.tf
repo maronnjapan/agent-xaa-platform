@@ -256,7 +256,7 @@ locals {
     for name in local.service_names : name => {
       image           = "${data.terraform_remote_state.shared.outputs.repository_path}/${local.image_app[name]}:${var.image_tag}"
       service_account = module.service_accounts[local.service_sa_key[name]].email
-      ingress         = contains(local.public_services, name) ? "INGRESS_TRAFFIC_ALL" : "INGRESS_TRAFFIC_INTERNAL_ONLY"
+      ingress         = contains(local.ingress_all_services, name) ? "INGRESS_TRAFFIC_ALL" : "INGRESS_TRAFFIC_INTERNAL_ONLY"
       env = merge(local.common_env, local.service_specific_env[name], {
         APP_NAME = local.image_app[name]
       })

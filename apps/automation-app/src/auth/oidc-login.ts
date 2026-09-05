@@ -12,6 +12,22 @@ import { sha256Base64Url } from '@xaa/crypto';
  */
 export const LOGIN_SCOPE = 'openid profile';
 
+/**
+ * Where this app reads the keys that verify the Human IdP's tokens.
+ *
+ * OpenID Discovery's registered location, not `${issuer}/jwks.json`: the IdP serves
+ * the set at `/.well-known/jwks.json` and answers 404 anywhere else, and a 404 here
+ * fails every ID Token and Access Token the same way a bad signature would.
+ *
+ * The IdP's own endpoint rather than the `jwks_uri` its metadata advertises, which
+ * points at the bucket the whole platform publishes into. Only tokens this issuer
+ * minted are verified with this set, and the issuer's own endpoint is the copy that
+ * cannot lag a key rotation.
+ */
+export function humanIdpJwksUrl(issuer: string): string {
+  return `${issuer}/.well-known/jwks.json`;
+}
+
 export interface AuthorizationRequest {
   url: string;
   state: string;

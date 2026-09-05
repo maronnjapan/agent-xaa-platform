@@ -24,8 +24,14 @@ const STYLE_TYPE = 'text/css; charset=utf-8';
  * styled page.
  */
 export const STATIC_ASSETS: Readonly<Record<string, StaticAsset>> = {
+  '/agent-detail.js': { contentType: SCRIPT_TYPE, files: ['public/agent-detail.js'] },
+  '/home.js': { contentType: SCRIPT_TYPE, files: ['public/home.js'] },
   '/timeline.js': { contentType: SCRIPT_TYPE, files: ['public/timeline.js'] },
   '/work-definition.js': { contentType: SCRIPT_TYPE, files: ['public/work-definition.js'] },
+  '/styles/app.css': {
+    contentType: STYLE_TYPE,
+    files: ['public/styles/app.css', 'src/ui/styles/app.css'],
+  },
   '/styles/emphasis.css': {
     contentType: STYLE_TYPE,
     files: ['public/styles/emphasis.css', 'src/ui/styles/emphasis.css'],

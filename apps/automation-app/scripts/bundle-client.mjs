@@ -15,7 +15,12 @@ import { build } from 'esbuild';
 const from = (path) => new URL(`../${path}`, import.meta.url).pathname;
 
 await build({
-  entryPoints: [from('client/src/timeline.ts'), from('client/src/work-definition.ts')],
+  entryPoints: [
+    from('client/src/agent-detail.ts'),
+    from('client/src/home.ts'),
+    from('client/src/timeline.ts'),
+    from('client/src/work-definition.ts'),
+  ],
   outdir: from('public'),
   bundle: true,
   format: 'esm',
@@ -24,7 +29,7 @@ await build({
 });
 
 await mkdir(from('public/styles'), { recursive: true });
-for (const sheet of ['emphasis.css', 'replay.css']) {
+for (const sheet of ['app.css', 'emphasis.css', 'replay.css']) {
   await copyFile(from(`src/ui/styles/${sheet}`), from(`public/styles/${sheet}`));
 }
 

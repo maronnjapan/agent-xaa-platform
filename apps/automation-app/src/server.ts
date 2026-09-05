@@ -4,10 +4,11 @@ import { readModes, verifyHumanAccessToken } from '@xaa/contracts';
 import { createJwksCache, verifyHumanIdToken } from '@xaa/crypto';
 import createApp from './app.js';
 import { loadConfig } from './config.js';
+import { humanIdpJwksUrl } from './auth/oidc-login.js';
 
 const config = loadConfig();
 const documents = createFirestoreDocumentStore(getFirestore(readModes(process.env)), 'automation-app');
-const jwks = createJwksCache({ url: `${config.issuer}/jwks.json` });
+const jwks = createJwksCache({ url: humanIdpJwksUrl(config.issuer) });
 const identityTokenProvider = createIdentityTokenProvider();
 
 serve({

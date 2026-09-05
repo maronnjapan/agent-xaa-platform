@@ -144,7 +144,13 @@ function createGcpAdmin(env: NodeJS.ProcessEnv): GcpAdmin {
         serviceId: input.name,
         service: {
           labels: input.labels,
-          ingress: 'INGRESS_TRAFFIC_INTERNAL_ONLY',
+          // Its one caller is the agent's own Cloud Run Job, and a Cloud Run call leaves
+          // through the internet in a project with no VPC: internal-only ingress answers
+          // it 404 at the front end before `roles/run.invoker` is ever read
+          // (infra/spike/RESULT.md, DEC-IAC-14). Who may call is unchanged — only
+          // `sa-agent-<short>` holds the invoker role on this service — and an
+          // unauthenticated request is refused at the door with 403.
+          ingress: 'INGRESS_TRAFFIC_ALL',
           template: {
             serviceAccount: input.serviceAccount.replace(/^serviceAccount:/, ''),
               containers: [{ image: env.AGENT_OP_IMAGE ?? '', env: serviceEnvironment(input.env) }],

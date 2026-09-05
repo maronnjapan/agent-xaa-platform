@@ -52,12 +52,6 @@ export function createLoginRoutes(input: {
   const send = input.fetchImpl ?? globalThis.fetch;
   const redirectUri = `${input.config.publicBaseUrl}/callback`;
 
-  app.get('/', async (context) => {
-    const sessionId = readSessionCookie(context.req.header('cookie'));
-    if (!sessionId || !await input.sessions.find(sessionId)) return context.redirect('/login');
-    return context.html('<!doctype html><meta charset="utf-8"><title>Agent XAA</title><h1>Agent XAA Platform</h1><p>ログイン済みです。</p>');
-  });
-
   app.get('/login', async (context) => {
     const keyPair = await generateEs256KeyPair();
     const privateJwk = await webcrypto.subtle.exportKey('jwk', keyPair.privateKey);
@@ -89,8 +83,8 @@ export function createLoginRoutes(input: {
     const headers: Record<string, string> = {
       'content-type': 'application/x-www-form-urlencoded',
       Authorization: `Basic ${Buffer.from(`${input.config.clientId}:${input.config.clientSecret}`).toString('base64')}`,
+      DPoP: await createDpopProof({ method: 'POST', url: tokenUrl, keyPair: pair }),
     };
-    if (transaction.stage >= 0) headers.DPoP = await createDpopProof({ method: 'POST', url: tokenUrl, keyPair: pair });
     const response = await send(tokenUrl, {
       method: 'POST', headers,
       body: new URLSearchParams({

@@ -1,10 +1,42 @@
 # GCP 前提実測
 
-> この表は terraform apply 後に実測値で更新する。現時点では未実測であり、P1 へ進むためのゲートは閉じている。
+> (a) は 2026-09-05 に、spike ではなく稼働中の demo 環境（`agent-xaa-platform` / `asia-northeast1`）で実測した。
+> automation-app から authorization への `POST /api/work-requests` が 404 になる事象の切り分けとして測ったため、
+> 判定の根拠は spike の `caller /probe` ではなく本番同型の経路そのものである。
+> (b)(c)(d) は未実測のまま。
 
 | 判定項目 | 実測コマンド | 出力の要点 | 判定 | 影響する DEC |
 |---|---|---|---|---|
-| (a) VPCなしの INTERNAL_ONLY への3経路 | caller /probe、Scheduler run、Pub/Sub publish | 未実測 | 未実測 | DEC-IAC-14, DEC-IAC-15 |
-| (b) Cloud Run URL の決定性 | observed_uri と expected_uri の完全一致 | 未実測（observed と expected を引用予定） | 未実測 | DEC-IAC-05 |
+| (a) VPCなしの INTERNAL_ONLY への3経路 | 下記 | Cloud Run → Cloud Run のみ 404。Scheduler OIDC と Pub/Sub push は到達 | **一部不可** | DEC-IAC-14, DEC-IAC-15 |
+| (b) Cloud Run URL の決定性 | observed_uri と expected_uri の完全一致 | 未実測（`run.googleapis.com/urls` には `https://<service>-<project_number>.<region>.run.app` が含まれていた） | 未実測 | DEC-IAC-05 |
 | (c) allUsers invoker | caller_url /healthz | 未実測 | 未実測 | DEC-IAC-14 |
 | (d) standalone project の Deny Policy | gcloud iam policies get | 未実測 | 未実測 | DEC-IAC-11 |
+
+## (a) の測り方と読み
+
+VPC を1つも作っていない状態（`google_compute_network` / `google_vpc_access_connector` は0件）で、
+`ingress = INGRESS_TRAFFIC_INTERNAL_ONLY` の Cloud Run Service へ3経路を通した。
+
+| 経路 | 観測 | 到達 |
+|---|---|---|
+| Cloud Run Service → Cloud Run Service（ID Token 付き、`run.invoker` 付与済み） | automation-app が `POST {authorization}/api/work-requests` を呼ぶと 404。Google Frontend の HTML が返り、**authorization 側には request log が1件も残らない** | 不可 |
+| Cloud Scheduler → Cloud Run Service（OIDC） | `POST {lifecycle}/internal/tick` が 200 を返し続けている | 可 |
+| Pub/Sub push → Cloud Run Service（OIDC） | `POST {authorization}/internal/events/human-permission-changed` が 204 | 可 |
+
+同じ呼び出しを、authorization の ingress だけ `all` にして繰り返すと 200 と decision 本文が返った。
+`roles/run.invoker` の付与も ID Token も呼び出し側は変えていないので、
+落としているのは IAM ではなく ingress である。
+
+読み: **ingress の判定は IAM より手前にある。**
+VPC を持たない Cloud Run Service の外向き通信はインターネットへ出るため、
+同一プロジェクトの Cloud Run Service からの呼び出しでも INTERNAL_ONLY には内部として届かない。
+404 は「呼ぶ権利がない」ではなく「そのホストにサービスが無い」という応答なので、
+呼び出し側からは設定ミスと区別が付かない。
+
+## 起票
+
+`tasks/done/01-infra.md` の T-IAC-01 が定めたとおり、(a) 不可を DEC-IAC-14 の見直しとして起票した。
+VPC 導入や INTERNAL_LOAD_BALANCER へは寄らず（制約5 の低コストと `public-surface.sh` の検査4）、
+**公開集合（`allUsers` に invoker を与える集合）と ingress を開ける集合を分ける**方向で解いた。
+反映先は `infra/envs/demo/locals-services.tf` の `run_called_services` / `ingress_all_services`、
+`apps/provisioner/src/runtime.ts` の Dedicated OP、および `tasks/00-decisions.md` の DEC-IAC-14。

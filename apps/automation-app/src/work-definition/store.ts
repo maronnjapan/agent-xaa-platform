@@ -5,6 +5,8 @@ import { assertWorkDefinition, type WorkDefinition } from './model.js';
 export interface WorkDefinitionStore {
   create(input: Omit<WorkDefinition, 'work_definition_id' | 'created_at' | 'updated_at' | 'status'>, now?: number): Promise<WorkDefinition>;
   find(id: string): Promise<WorkDefinition | undefined>;
+  /** Everything one person has written, newest first. */
+  listByHuman(humanSubject: string): Promise<WorkDefinition[]>;
   save(definition: WorkDefinition): Promise<void>;
 }
 
@@ -25,6 +27,18 @@ export function createWorkDefinitionStore(documents: DocumentStore): WorkDefinit
     },
     async find(id) {
       return documents.get<WorkDefinition>('work_definitions', id);
+    },
+    /**
+     * The subject is the caller's own, and the rows are filtered by it again on the way
+     * out. The query already scopes the read; the second check costs nothing and means a
+     * later change to the query cannot widen what a screen shows (RULE-56).
+     */
+    async listByHuman(humanSubject) {
+      const rows = await documents.queryEqual<WorkDefinition>('work_definitions', [['human_subject', humanSubject]]);
+      return rows
+        .map((row) => row.data)
+        .filter((definition) => definition.human_subject === humanSubject)
+        .sort((left, right) => right.created_at.localeCompare(left.created_at));
     },
     /**
      * A whole-document write. `arrayUnion` would reorder `operations` into a set, and

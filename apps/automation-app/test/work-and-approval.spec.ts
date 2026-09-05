@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LifetimeOutOfRange, validateLifetimeHours } from '../src/work-definition/lifetime.js';
 import { WORK_DEFINITION_FIELDS, confirm } from '../src/work-definition/model.js';
-import { buildBusinessWorkRequest, WorkDefinitionNotConfirmed } from '../src/work-definition/submit.js';
+import { buildBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed } from '../src/work-definition/submit.js';
 import { BUSINESS_WORK_REQUEST_KEYS } from '../src/schemas/index.js';
 import { capabilitiesHash, assertStillApproved, CapabilitiesChanged, ApprovalRequired } from '../src/agent-definition/approval.js';
 import { SUGGESTION_FIELDS, suggestAutomations } from '../src/automation/suggestions.js';
@@ -10,6 +10,7 @@ import {
   PRESENTED_CAPABILITIES, PRESENTED_CAPABILITIES_REORDERED, PRESENTED_CAPABILITIES_WIDENED,
 } from './fixtures/presented-capabilities.fixture.js';
 import { startAutomationApp } from './helpers.js';
+import { failureMessage } from '../../automation-app/client/src/messages.js';
 
 const definition = {
   work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED' as const,
@@ -235,6 +236,48 @@ describe('the business work request', () => {
     expect(stored!.isolation_level).toBe('standard');
     // Recorded, not approved: the approval is a separate act by a person.
     expect(stored!.approved_at).toBeNull();
+  });
+
+  /**
+   * The failure this app was seen to have, and the reason it was read as the wrong one.
+   *
+   * With no VPC, a Cloud Run service that takes internal-only ingress answers a call from
+   * another Cloud Run service with a 404 written by the Google front end — an HTML page,
+   * before the container is reached. Forwarded unchanged, that arrived at the browser as
+   * this app's own 404, which everywhere else means the person's work definition is gone,
+   * and the screen said so with a bare status because the page had no code to name.
+   */
+  it('does not report an unreachable Authorization Platform as a missing record', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => new Response('<html>Error 404 (Not Found)!!1</html>', {
+        status: 404, headers: { 'Content-Type': 'text/html' },
+      }),
+    });
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: '日報を作る' }),
+    })).json() as { work_definition_id: string };
+    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+
+    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+    const body = await response.json() as { error: string };
+
+    expect(response.status).toBe(502);
+    expect(body).toEqual({ error: 'authorization_platform_unreachable' });
+    // And the screen says which of the two it was, rather than repeating the status.
+    expect(failureMessage(response.status, body)).toContain('権限を判定する仕組みに届きませんでした');
+    // Nothing was presented, so there is nothing for the person to approve.
+    expect(await harness.documents.get('agent_definitions', 'ad_1')).toBeUndefined();
+  });
+
+  /**
+   * A refusal the platform decided on still travels as itself: it is about what the
+   * person wrote, and the code is what the screen turns into a sentence they can act on.
+   */
+  it('passes through a refusal the Authorization Platform named', () => {
+    expect(upstreamRefusal(400, { error: 'invalid_request' })).toEqual({ status: 400, body: { error: 'invalid_request' } });
+    for (const [status, body] of [[400, {}], [401, { error: 'invalid_token' }], [500, { error: 'internal_error' }], [200, {}]] as const) {
+      expect(upstreamRefusal(status, body).status).toBe(502);
+    }
   });
 
   /**

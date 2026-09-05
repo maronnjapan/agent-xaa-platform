@@ -1,8 +1,8 @@
 import { Storage } from '@google-cloud/storage';
 import { createHash } from 'node:crypto';
 import {
-  COLLECTIONS, compile, paymentSchema, paymentSeedSchema, platformEndpointsSchema,
-  type PlatformEndpoints, type StoredPayment,
+  COLLECTIONS, compile, documentSchema, documentSeedSchema, paymentSchema, paymentSeedSchema,
+  platformEndpointsSchema, type PlatformEndpoints, type StoredDocument, type StoredPayment,
 } from '@xaa/contracts';
 import { getFirestore } from '@xaa/gcp';
 import { parse } from 'yaml';
@@ -92,6 +92,7 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
   for (const entry of (records.get('policies/organization.yaml') as Array<{ policy_id: string }> ?? [])) writes.push([COLLECTIONS.ORGANIZATION_POLICIES, entry.policy_id, entry]);
   for (const entry of (records.get('policies/risk.yaml') as Array<{ policy_id: string }> ?? [])) writes.push([COLLECTIONS.RISK_POLICIES, entry.policy_id, entry]);
   for (const payment of demoPayments(records.get('payments-demo.yaml'))) writes.push([COLLECTIONS.PAYMENTS, payment.payment_id, payment]);
+  for (const document of demoDocuments(records.get('documents-demo.yaml'))) writes.push([COLLECTIONS.DOCUMENTS, document.document_id, document]);
   for (let offset = 0; offset < writes.length; offset += 400) {
     const batch = firestore.batch();
     for (const [collection, id, value] of writes.slice(offset, offset + 400)) batch.set(firestore.collection(collection).doc(id), value as Record<string, unknown>);
@@ -128,8 +129,50 @@ export function demoPayments(rows: unknown, createdAt = new Date().toISOString()
   });
 }
 
-/** A UUID-shaped id derived from the row, so `pay_` + 36 chars stays satisfied. */
-function demoPaymentId(row: Record<string, unknown>): string {
+const assertDocumentSeed: (value: unknown) => void = compile(documentSeedSchema);
+const assertDocument: (value: unknown) => asserts value is StoredDocument = compile<StoredDocument>(documentSchema);
+
+/**
+ * The documents a demo starts with (T-APP-04). Nothing else can put one here: a
+ * document is created either by an agent holding a delegated token or by the Automation
+ * App writing a report it generated, and neither has happened on a project that has just
+ * been applied. Without these rows "自動化できそうな作業を探す" reads an empty shelf, and
+ * the flow the guide describes has no first step.
+ *
+ * `documents` is not in the purge list above, so the id has to be stable: it is derived
+ * from the row's own content, which makes a re-seed rewrite the same documents instead of
+ * adding a second copy of each.
+ *
+ * `occurred_days_ago` is resolved against the moment the Job runs rather than baked into
+ * the file, so a re-seed moves the samples back inside the seven days the suggestion form
+ * looks at by default. The row keeps its id across that move because the id is derived
+ * from the unresolved row.
+ */
+export function demoDocuments(rows: unknown, createdAt = new Date().toISOString()): StoredDocument[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    assertDocumentSeed(row);
+    const { occurred_days_ago: daysAgo, ...rest } = row as Record<string, unknown>;
+    const document = {
+      document_id: stableId('doc', row as Record<string, unknown>),
+      ...rest,
+      occurred_at: new Date(Date.parse(createdAt) - Number(daysAgo) * 86_400_000).toISOString(),
+      metadata: {},
+      created_at: createdAt,
+      updated_at: createdAt,
+      version: 1,
+    };
+    assertDocument(document);
+    return document;
+  });
+}
+
+/** A UUID-shaped id derived from the row, so `<prefix>_` + 36 chars stays satisfied. */
+function stableId(prefix: string, row: Record<string, unknown>): string {
   const digest = createHash('sha256').update(JSON.stringify(row)).digest('hex');
-  return `pay_${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
+  return `${prefix}_${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
+}
+
+function demoPaymentId(row: Record<string, unknown>): string {
+  return stableId('pay', row);
 }

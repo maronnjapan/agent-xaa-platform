@@ -146,7 +146,7 @@ Automation App と Human IdP は `allUsers` へ公開され、ログイン情報
 
 `.github/workflows/deploy.yml` は、Pull Request が main にマージされたときの push で起動する。
 state バケットの用意、既存 KMS リソースの import、`shared` の apply、Secret version の補充、イメージの build と push、`demo` の apply と IAM 検証、seed、保存済み検知 View の作成をこの順で実行する。
-`workflow_dispatch` からも同じ手順を起動でき、`image_tag` を渡した場合はビルド済みイメージへの差し替えだけになる。
+起動する経路はこの push だけで、手動実行の口は持たない。
 
 Pull Request では ci、infra-static、infra-validate が動くため、main に届いたコミットはすでにそれらを通っている。
 deploy はその検査を繰り返さず、apply だけを行う。

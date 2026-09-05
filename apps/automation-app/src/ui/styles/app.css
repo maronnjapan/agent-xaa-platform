@@ -1,0 +1,119 @@
+/*
+ * The plain shell every screen is drawn in: readable text, a card per step, and
+ * buttons that look like buttons. It carries no colour that means anything — an
+ * outcome's colour belongs to emphasis.css, which is where someone looking for the
+ * meaning of a colour will look.
+ */
+:root {
+  --ink: #1b1b1f;
+  --muted: #5b5b66;
+  --edge: #d5d5dd;
+  --ground: #f6f6f8;
+  --accent: #1a4f9c;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--ground);
+  font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  line-height: 1.7;
+}
+
+.app-nav {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #fff;
+  border-bottom: 1px solid var(--edge);
+}
+
+.app-nav a { color: var(--accent); }
+
+main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1.05rem; }
+h4 { font-size: 0.95rem; }
+
+.lead { color: var(--muted); }
+
+.card {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+form label {
+  display: block;
+  margin: 0.75rem 0;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="number"],
+textarea {
+  display: block;
+  width: 100%;
+  max-width: 34rem;
+  margin-top: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+button {
+  padding: 0.45rem 1rem;
+  font: inherit;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button[disabled] { opacity: 0.5; cursor: progress; }
+
+.work-definition {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+}
+
+.work-definition [data-field="status"] {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The permissions a person is about to agree to, set apart from the work they describe. */
+.agent-definition {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--ground);
+  border-left: 4px solid var(--accent);
+}
+
+.agent-definition [data-field="presented-capabilities"] {
+  margin: 0.25rem 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+[data-field="action-status"][data-status="error"],
+[data-field="form-status"][data-status="error"],
+[data-field="suggest-status"][data-status="error"] {
+  color: #8a1f1f;
+}
+
+[data-field="suggestions"] { padding-left: 1.25rem; }

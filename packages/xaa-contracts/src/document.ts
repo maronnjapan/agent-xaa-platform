@@ -54,6 +54,32 @@ export const documentCreateSchema = {
 } as const;
 
 /**
+ * The seed input. There is no path that creates a document without an owner's token or
+ * the Automation App's own identity, so a demo needs its documents put there by the
+ * seed Job — the same position `paymentSeedSchema` holds for payments.
+ *
+ * `occurred_days_ago` rather than `occurred_at`: the suggestion form looks back seven
+ * days by default, and a fixed date would put the sample outside that window a week
+ * after it was written. The Job resolves it against the moment it runs, so re-seeding
+ * moves the samples back into view instead of leaving a demo with nothing to read.
+ * `document_id`, `created_at`, `updated_at` and `version` are absent for the same
+ * reason they are absent from `documentCreateSchema`: the store owns them.
+ */
+export const documentSeedSchema = {
+  $id: 'document-seed',
+  type: 'object',
+  additionalProperties: false,
+  required: ['owner_subject', 'type', 'title', 'body', 'occurred_days_ago'],
+  properties: {
+    owner_subject: { type: 'string', minLength: 1 },
+    type: { enum: DOCUMENT_TYPES },
+    title: { type: 'string', minLength: 1, maxLength: 200 },
+    body: { type: 'string', maxLength: 20_000 },
+    occurred_days_ago: { type: 'integer', minimum: 0, maximum: 3650 },
+  },
+} as const;
+
+/**
  * T-APP-05. The body the Automation App's internal daily-report writer sends. The
  * caller here is a Cloud Run service identity, not a delegated agent, so there is
  * no Access Token `sub` to take the owner from — `human_subject` names it instead.

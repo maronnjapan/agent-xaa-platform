@@ -40,6 +40,8 @@ export interface AgentDefinitionStore {
     isolationLevel: string;
   }, now?: number): Promise<AgentDefinition>;
   find(id: string): Promise<AgentDefinition | undefined>;
+  /** What one person has been shown, newest first. */
+  listByHuman(humanSubject: string): Promise<AgentDefinition[]>;
   approve(id: string, humanSubject: string, now?: number): Promise<AgentDefinition>;
 }
 
@@ -63,6 +65,14 @@ export function createAgentDefinitionStore(documents: DocumentStore): AgentDefin
     },
     async find(id) {
       return documents.get<AgentDefinition>('agent_definitions', id);
+    },
+    /** Scoped by the caller's own subject, and filtered by it again on the way out. */
+    async listByHuman(humanSubject) {
+      const rows = await documents.queryEqual<AgentDefinition>('agent_definitions', [['human_subject', humanSubject]]);
+      return rows
+        .map((row) => row.data)
+        .filter((definition) => definition.human_subject === humanSubject)
+        .sort((left, right) => right.created_at.localeCompare(left.created_at));
     },
     /**
      * Approving twice is refused: the second click would restate consent nobody gave.

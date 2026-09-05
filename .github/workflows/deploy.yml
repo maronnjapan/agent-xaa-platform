@@ -9,16 +9,6 @@ name: deploy
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      demo_tfvars:
-        description: Terraform variable file the demo state applies
-        required: false
-        default: infra/tfvars/deploy.tfvars
-      image_tag:
-        description: Image tag to deploy. Leave empty to build this commit.
-        required: false
-        default: ''
 # One project, one Terraform state lock: a second apply would sit on the lock until it
 # timed out. Queueing instead of cancelling keeps a half-finished apply from being killed
 # between the images and the services that reference them.
@@ -34,9 +24,9 @@ jobs:
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       REGION: ${{ vars.GCP_REGION || 'asia-northeast1' }}
-      DEMO_TFVARS: ${{ inputs.demo_tfvars || vars.DEMO_TFVARS || 'infra/tfvars/deploy.tfvars' }}
+      DEMO_TFVARS: ${{ vars.DEMO_TFVARS || 'infra/tfvars/deploy.tfvars' }}
       # Cloud Run resolves an immutable tag, so the commit is what identifies the image.
-      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+      IMAGE_TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: Check the deployment target before touching GCP

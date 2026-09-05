@@ -1,6 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { decodeBase64Url, decodeBase64UrlToString } from './base64url.js';
-import { decodeJwsUnverified, verifyCompactJws } from './jws.js';
+import { decodeJwsUnverified, verifyCompactJws, verifyCompactJwsRs256 } from './jws.js';
 import type { JwksCache } from './jwks-cache.js';
 import { XaaCryptoError } from './errors.js';
 
@@ -16,7 +16,10 @@ async function verifyJwtInternal(token: string, options: { issuer: string; audie
   try {
     const unverified = decodeJwsUnverified(token);
     if (typeof unverified.header.kid !== 'string') throw new Error();
-    const verified = await verifyCompactJws(token, { publicKey: await options.jwks.getKey(unverified.header.kid), allowedTyp: [options.typ] });
+    const publicKey = await options.jwks.getKey(unverified.header.kid);
+    const verified = unverified.header.alg === 'RS256'
+      ? await verifyCompactJwsRs256(token, { publicKey, allowedTyp: [options.typ] })
+      : await verifyCompactJws(token, { publicKey, allowedTyp: [options.typ] });
     if (verified.payload.iss !== options.issuer || !includesAudience(verified.payload.aud, options.audience) || !claimsValid(verified.payload)) throw new Error();
     if (options.resource !== undefined && verified.payload.resource !== options.resource) throw new Error();
     return verified.payload;

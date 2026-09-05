@@ -56,3 +56,28 @@ export async function submitBusinessWorkRequest(input: {
     requiredScope: 'workdef:submit',
   });
 }
+
+/** The two ways this app answers when the decision it asked for did not come back. */
+export interface UpstreamRefusal {
+  status: 400 | 502;
+  body: { error: string };
+}
+
+/**
+ * A refusal the Authorization Platform made, told apart from one nobody made.
+ *
+ * The platform states a refusal it decided on as `{ error: <code> }` with a 400: the
+ * request was read and turned down on its merits, so the person is the one who can act
+ * on it and the code travels to the screen unchanged.
+ *
+ * Everything else means no decision was reached — the far end was down, the body was not
+ * JSON, or the Google front end answered 404 because the service takes no ingress from
+ * here. Forwarding that status made this app say 404, which is what it says from every
+ * other route when the person's own record is missing; the reader then goes looking for
+ * a work definition that was never the problem. One name for "the call did not land" is
+ * what keeps the screen from blaming the wrong thing.
+ */
+export function upstreamRefusal(status: number, body: { error?: unknown }): UpstreamRefusal {
+  if (status === 400 && typeof body.error === 'string') return { status: 400, body: { error: body.error } };
+  return { status: 502, body: { error: 'authorization_platform_unreachable' } };
+}

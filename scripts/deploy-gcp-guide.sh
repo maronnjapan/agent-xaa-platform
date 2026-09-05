@@ -1105,8 +1105,12 @@ print_next_steps() {
     '       パスワード: password' \
     '     ログインできるのは testuser と otheruser の2人だけで、どちらもパスワードは password です。' \
     '     この2人は apps/human-idp/src/oidc/store.ts が持つ固定ユーザーです。' \
-    '  3. 画面の対話で自動化したい内容を書き、提示された Agent Definition を承認する。' \
-    '  4. 実行の様子は同じ画面の Activity タイムラインで追えます。' \
+    '  3. 「自動化したい作業を書く」に内容を書いて保存し、「この内容で確定する」を押す。' \
+    '  4. 「必要な権限を調べる」で提示された Agent Definition を承認し、「この内容で Agent を作る」を押す。' \
+    '  5. 実行の様子は同じ画面の「タイムライン」で追えます。' \
+    '' \
+    "  画面ごとの操作:  $automation_app_url/guide" \
+    '                  docs/user-guide.md に同じ内容と、うまくいかないときの対処があります。' \
     '' \
     "${bridge_lines[@]}" \
     "  Cloud Run:  https://console.cloud.google.com/run?project=$PROJECT_ID" \

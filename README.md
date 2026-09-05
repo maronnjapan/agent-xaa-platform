@@ -41,6 +41,11 @@ macOS と Linux はターミナルで、Windows は [WSL2](https://learn.microso
 終わると、ブラウザで開く URL とログイン情報（`testuser` / `password`）が表示される。
 その画面で自動化したい内容を書き、提示された Agent Definition を承認すると、エージェントが実行を始める。
 
+## 画面を操作する
+
+作業を書くところから Agent を止めるところまでの手順は [docs/user-guide.md](./docs/user-guide.md) にある。
+同じ案内は、ログイン後の画面の「使い方」（`/guide`）にも置いてある。
+
 ## 実行内容だけを確認する
 
 GCP を変更せずに、実行するコマンドの一覧だけを見る。

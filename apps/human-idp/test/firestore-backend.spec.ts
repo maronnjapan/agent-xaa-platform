@@ -61,4 +61,20 @@ describe('human-idp Firestore backend', () => {
     await store.delete('user:testuser');
     expect(await store.get('user:testuser')).toBeNull();
   });
+
+  it('normalizes optional undefined fields before writing to Firestore', async () => {
+    const store = backend();
+    await store.put('access-token:optional', {
+      sub: 'testuser',
+      claims: undefined,
+      auth: { acr: undefined },
+      values: ['present', undefined],
+    });
+
+    expect(await store.get('access-token:optional')).toEqual({
+      sub: 'testuser',
+      auth: {},
+      values: ['present', null],
+    });
+  });
 });

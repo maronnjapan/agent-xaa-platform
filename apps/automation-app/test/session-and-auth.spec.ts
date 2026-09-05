@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
-import { LOGIN_SCOPE, buildAuthorizationRequest } from '../src/auth/oidc-login.js';
+import { LOGIN_SCOPE, buildAuthorizationRequest, humanIdpJwksUrl } from '../src/auth/oidc-login.js';
 import {
   SESSION_COOKIE, SESSION_FIELDS, SESSION_TOKEN_AUDIENCES, createSessionStore, readSessionCookie,
 } from '../src/auth/session-store.js';
@@ -76,6 +76,35 @@ describe('logging in', () => {
     expect(new URL(request.url).searchParams.get('scope')).toBe('openid profile');
     expect(request.url).not.toContain('offline_access');
     expect(new URL(request.url).searchParams.get('code_challenge_method')).toBe('S256');
+  });
+
+  it('uses the Human IdP JWKS endpoint that the provider exposes', () => {
+    expect(humanIdpJwksUrl(ISSUER)).toBe(`${ISSUER}/.well-known/jwks.json`);
+  });
+
+  it('sends a DPoP proof on the initial authorization-code exchange', async () => {
+    let nonce = '';
+    const harness = await startAutomationApp({
+      upstreamHandler: async (_url, init) => {
+        const headers = new Headers(init.headers);
+        expect(headers.get('DPoP')?.split('.')).toHaveLength(3);
+        return new Response(JSON.stringify({
+          id_token: await mintAccessToken({ typ: 'JWT', extra: { nonce } }),
+          access_token: await mintAccessToken(),
+          token_type: 'DPoP',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+
+    const login = await harness.fetch('/login', { headers: { cookie: '' } });
+    const state = new URL(login.headers.get('Location')!).searchParams.get('state')!;
+    const transaction = await harness.documents.get<{ nonce: string }>('login_transactions', state);
+    nonce = transaction!.nonce;
+
+    const callback = await harness.fetch(`/callback?state=${encodeURIComponent(state)}&code=initial-code`, {
+      headers: { cookie: '' },
+    });
+    expect(callback.status).toBe(302);
   });
 });
 

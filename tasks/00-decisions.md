@@ -59,7 +59,10 @@ docs のルールから外れる判断には、外れたルール番号を「逸
 - DEC-IAC-11 単一プロジェクト内の監査ログ分離は3層。(1) BigQuery dataset security_audit を専用 SA と `google_bigquery_dataset_iam_binding`(authoritative)で固定、(2) Log Sink の writer identity にだけ書き込み権限、(3) 変数 enable_deny_policy(既定 false、spike で使用可と分かれば true)で IAM Deny Policy。**同一プロジェクトの Owner は両方へ届くため2プロジェクト構成より保護が弱いことを infra/README に明記する**。
 - DEC-IAC-12 KMS は Key Ring を用途で分ける。sso-signing / idjag-signing / resource-as-signing / connector-encryption / idp-connection-encryption。署名鍵は EC_SIGN_P256_SHA256、暗号鍵は ENCRYPT_DECRYPT。IAM は CryptoKey 単位で付与する。
 - DEC-IAC-13 共有 JWKS は GCS バケット。各アプリは自分専用のオブジェクト `keys/<prefix>-<kid>.json` だけを書き(IAM 条件で prefix 限定)、`jwks.json` は jwks-publish Job が keys/ をマージして書き出す。バケットは uniform BLA、allUsers に objectViewer。
-- DEC-IAC-14 公開(ingress=ALL + allUsers invoker)するのは automation-app / human-idp / agent-op-callback の3つ。enable_google_bridge=true のとき google-bridge-callback と stub-saas-op が加わる。それ以外は INTERNAL_ONLY + run.invoker。
+- DEC-IAC-14 公開(allUsers invoker)するのは automation-app / human-idp / agent-op-callback の3つ。enable_google_bridge=true のとき google-bridge-callback と stub-saas-op が加わる。それ以外への到達可否は run.invoker だけで決める。
+  - 改訂(2026-09-05、DEC-SCOPE-02 の spike (a) を実測した結果)。当初は「公開する3つ以外は ingress=INTERNAL_ONLY」としていたが、VPC を持たない Cloud Run Service 間の呼び出しはインターネットを経由するため INTERNAL_ONLY には内部として届かず、IAM を読む手前で 404 になる（infra/spike/RESULT.md）。Cloud Scheduler と Pub/Sub push は届く。
+  - よって **ingress を開ける集合と allUsers の集合を分ける**。ingress=ALL は「公開集合 + 他の Cloud Run Service / Job から呼ばれる集合」とし、後者は locals.invoker_edge_pairs から導出する(locals.run_called_services)。allUsers は公開集合のまま動かさない。VPC / Serverless VPC Access / INTERNAL_LOAD_BALANCER へは寄らない(DEC-SCOPE-01 の制約5)。
+  - 失うのは多層防御の外側1枚だけである。未認証の要求は「存在しないホスト」として落ちる代わりに玄関で 403 になる。誰が呼べるかは run.invoker が決め続け、Provisioner が実行時に作る Dedicated OP も同じ扱いにする。
 - DEC-IAC-15 run.invoker の付与を locals.invoker_edges マップ1か所に集約し for_each で生成する。apply 後に reachability テストで全エッジの疎通を確認する。
 - DEC-IAC-16 Agent の生存時間は変数 agent_max_lifetime_seconds(既定 86400、検証プロファイル 3600)1つから、Job の task_timeout / Registration の expires_at 上限 / IdP Connection と Agent Binding の expires_at / ID-JAG の exp cap / Lifecycle tick の判定窓 をすべて導出する。
 - DEC-IAC-17 Service Account はアプリごとに専用を作り、デフォルト SA を使わない。モジュールの variable validation で SA 未指定と compute default SA を apply エラーにする。
