@@ -1,8 +1,15 @@
 locals {
+  # Exactly the Service Accounts of the apps that `packages/gcp/src/access-matrix.json`
+  # declares a Firestore collection for; infra/tests/firestore-user-parity.sh holds the
+  # two together. The two Resource AS were missing, so every Firestore call they made
+  # was denied — and the first one on a redemption is the DPoP `jti` write inside the
+  # confirmation binding, which surfaced as `dpop_key_binding_mismatch` on a proof that
+  # was perfectly valid. `security` was missing for the same reason.
   datastore_users = toset([
     "human_idp", "automation_app", "authorization", "provisioner", "lifecycle",
-    "shared_agent_op", "resource_docs_api", "resource_finance_api", "agent_runtime",
-    "google_bridge", "seed", "stub_saas_op", "stub_saas_api",
+    "shared_agent_op", "resource_docs_as", "resource_docs_api", "resource_finance_as",
+    "resource_finance_api", "agent_runtime", "google_bridge", "security", "seed",
+    "stub_saas_op",
   ])
   vertex_users     = toset(["automation_app", "authorization", "agent_runtime", "security"])
   artifact_readers = toset(keys(local.service_accounts))
