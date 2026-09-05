@@ -85,9 +85,13 @@ jobs:
               --region="$REGION" --limit=1 --format='value(metadata.name)' 2>/dev/null) || continue
             [ -n "$execution" ] || continue
             echo "## $execution"
+            # The client libraries write a MaxListenersExceededWarning per request, dozens
+            # of identical lines that would push the reason for the failure out of any
+            # window worth printing. What the job itself wrote is at the end.
             gcloud logging read \
               "resource.type=\"cloud_run_job\" AND labels.\"run.googleapis.com/execution_name\"=\"$execution\"" \
-              --project="$PROJECT_ID" --limit=50 --order=asc --format='value(textPayload)' || true
+              --project="$PROJECT_ID" --limit=300 --order=asc --format='value(textPayload)' \
+              | grep -v 'MaxListenersExceededWarning\|trace-warnings' | tail -n 60
           done
       # The five saved detections read the table Cloud Logging creates from the first Cloud
       # Run stdout line, so the shared apply above leaves them out on a project that has

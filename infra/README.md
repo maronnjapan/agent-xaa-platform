@@ -191,6 +191,8 @@ import する件数と1件ごとの進行は標準出力に出る。
 `make verify` は `scripts/verify-impersonation.sh` を通り、不足している分だけを実測の間に付与して削除する。
 実行者を判別できない環境では `VERIFY_PRINCIPAL` に IAM member 形式で指定する。
 拒否ケースのうち FULL_ISOLATION の Agent 自身の Service Account と Dedicated OP を名指すものは、Provisioner が実行時に作る対象であり、まだ存在しないプロジェクトでは skipped と表示して測定しない。
+ingress が internal のサービスも同じく skipped になる。VPC を持たないこの構成では Google Frontend が IAM を読む前に 404 を返すため、プロジェクトの外にいる実行者からは測りようがない（`infra/spike/RESULT.md` (a)）。
+現在それに当たるのは `sa-pubsub-push` → `security-detection` の1本で、この経路が到達することは spike の (a) が Pub/Sub push で実測している。
 `make seed PROJECT_ID=<id>` は JWKS 集約 Job の完了後に seed Job を実行する。
 `make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
 View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。
