@@ -39,7 +39,16 @@ export function createDocumentRepository(store: DocumentStore, now: () => number
       return document && document.owner_subject === ownerSubject ? document : undefined;
     },
 
-    async create(input: { ownerSubject: string; type: string; title: string; body: string; occurredAt: string; metadata?: Record<string, unknown> }): Promise<string> {
+    /**
+     * `occurredAt` is optional and falls back to the moment of writing.
+     *
+     * A caller restating something that already happened — the seed Job, an importer —
+     * knows the instant and passes it. An agent creating a document as it works does
+     * not: it has no clock, so anything it put in the field would be invented. The
+     * creation timestamp is the true answer for that caller, and it is taken from the
+     * same `now` the row's `created_at` uses so the two cannot disagree.
+     */
+    async create(input: { ownerSubject: string; type: string; title: string; body: string; occurredAt?: string; metadata?: Record<string, unknown> }): Promise<string> {
       const timestamp = new Date(now()).toISOString();
       const document = {
         document_id: `doc_${randomUUID()}`,
@@ -49,7 +58,7 @@ export function createDocumentRepository(store: DocumentStore, now: () => number
         type: input.type,
         title: input.title,
         body: input.body,
-        occurred_at: input.occurredAt,
+        occurred_at: input.occurredAt ?? timestamp,
         metadata: input.metadata ?? {},
         created_at: timestamp,
         updated_at: timestamp,

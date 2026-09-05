@@ -5,7 +5,7 @@ import { VersionConflict, type createDocumentRepository } from '../store/documen
 
 type Env = { Variables: { xaa: XaaResourceContext } };
 
-type CreateInput = { type: string; title: string; body: string; occurred_at: string; metadata?: Record<string, unknown> };
+type CreateInput = { type: string; title: string; body: string; occurred_at?: string; metadata?: Record<string, unknown> };
 type PatchInput = { version: number; title?: string; body?: string };
 const assertCreate: (value: unknown) => asserts value is CreateInput = compile<CreateInput>(documentCreateSchema);
 const assertPatch: (value: unknown) => asserts value is PatchInput = compile<PatchInput>(documentPatchSchema);
@@ -52,9 +52,13 @@ export function createDocumentRoutes(repository: ReturnType<typeof createDocumen
       throw error;
     }
     const input = body as CreateInput;
+    // `occurred_at` is passed on only when the caller sent one; the store stamps the
+    // creation instant otherwise. Defaulting it here would put the route's own clock
+    // beside the store's, and the row would carry two answers to the same question.
     const documentId = await repository.create({
       ownerSubject: context.get('xaa').humanSubject,
-      type: input.type, title: input.title, body: input.body, occurredAt: input.occurred_at,
+      type: input.type, title: input.title, body: input.body,
+      ...(input.occurred_at ? { occurredAt: input.occurred_at } : {}),
       ...(input.metadata ? { metadata: input.metadata } : {}),
     });
     return context.json({ document_id: documentId }, 201);

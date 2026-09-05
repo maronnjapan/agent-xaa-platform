@@ -70,6 +70,27 @@ describe('Document API', () => {
     expect(created.status).toBe(400);
   });
 
+  /**
+   * The shape an agent can actually send. `internal.document.create` declares `type`,
+   * `title` and `body` and nothing else, because the Runtime drops every argument the
+   * Tool Catalog did not declare and an agent has no clock to date the document with.
+   * The write has to succeed on those three alone, or the tool is unusable.
+   */
+  it('creates a document from the three fields an agent can supply', async () => {
+    const { docs, accessToken, keyPair } = await writer();
+    const created = await callResource(docs, {
+      method: 'POST', path: '/documents', accessToken, keyPair, toolId: 'internal.document.create',
+      body: { type: 'note', title: '調べたこと', body: '本文' },
+    });
+    expect(created.status).toBe(201);
+    const documentId = (await created.json() as { document_id: string }).document_id;
+    const fetched = await callResource(docs, { method: 'GET', path: `/documents/${documentId}`, accessToken, keyPair });
+    const document = await fetched.json() as { occurred_at: string; created_at: string };
+    // Dated by the write itself, so the row still sorts and filters like any other.
+    expect(document.occurred_at).toBe(document.created_at);
+    expect(Number.isFinite(Date.parse(document.occurred_at))).toBe(true);
+  });
+
   it('answers 409 on a stale version and leaves the record alone', async () => {
     const { docs, accessToken, keyPair } = await writer();
     const documentId = await seedDocument(docs, 'testuser', { title: 'original' });

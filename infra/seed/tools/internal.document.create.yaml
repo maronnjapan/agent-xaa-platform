@@ -1,11 +1,14 @@
 tool_id: internal.document.create
 connector_id: internal-docs-api
-description: Create a document
+description: Create a document. type is one of daily_report, work_log, mail, calendar, chat, note, task
 required_capability: document.write
 authorization: { type: native_xaa, audience: "${issuer:docs}", resource: "${resource:docs}", scope: docs.write }
 token_provider: null
 api: { base_url: "${resource:docs}", method: POST, path: /documents }
-parameters: { title: { type: string }, body: { type: string } }
+parameters:
+  type: { type: string, required: true, enum: [daily_report, work_log, mail, calendar, chat, note, task] }
+  title: { type: string, required: true }
+  body: { type: string, required: true }
 constraints: {}
 response_schema: { type: object, allowlist: [document_id, type, title] }
 risk_level: medium

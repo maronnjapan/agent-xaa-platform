@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { assertValidCapabilityId, CAPABILITIES, RESOURCE_SCOPES, TOOL_BINDINGS, TOOL_IDS } from '../src/identifiers.js';
+import { DOCUMENT_TYPES, documentCreateSchema } from '../src/document.js';
 
 const seedRoot = new URL('../../../infra/seed/', import.meta.url).pathname;
 const tools = readdirSync(`${seedRoot}tools`).map((file) => parse(readFileSync(`${seedRoot}tools/${file}`, 'utf8')) as Record<string, unknown>);
@@ -63,6 +64,22 @@ describe('seeded Tool Catalog', () => {
     expect(allow('internal.document.get')).toEqual(['document_id', 'type', 'title', 'occurred_at', 'body']);
     expect(allow('internal.document.create')).toEqual(['document_id', 'type', 'title']);
     expect(allow('internal.document.update')).toEqual(['document_id', 'version', 'updated_at']);
+  });
+
+  /**
+   * The catalogue is where a Tool's request schema is written down (docs 04 §1), and
+   * `buildApiRequest` drops every argument the catalogue did not declare. So a tool
+   * that declares fewer parameters than its resource requires cannot be called at
+   * all: `internal.document.create` declared only `title` and `body`, the `type` the
+   * model sent was dropped on the way out, and the Document API answered 400 to every
+   * create an agent ever attempted.
+   */
+  it('declares on the create tool exactly the fields the Document API requires', () => {
+    const create = tools.find((tool) => tool.tool_id === 'internal.document.create')!;
+    const parameters = create.parameters as Record<string, { required?: boolean }>;
+    expect(Object.keys(parameters).sort()).toEqual([...documentCreateSchema.required].sort());
+    for (const name of documentCreateSchema.required) expect(parameters[name]?.required).toBe(true);
+    expect((parameters.type as { enum?: string[] }).enum).toEqual([...DOCUMENT_TYPES]);
   });
 
   it('gives the approve tool a max_amount constraint slot', () => {

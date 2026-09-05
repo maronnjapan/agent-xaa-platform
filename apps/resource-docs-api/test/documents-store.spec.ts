@@ -26,6 +26,16 @@ describe('document schema', () => {
       .toThrow(SchemaValidationError);
   });
 
+  /**
+   * An agent has no clock, so a create it composes carries no `occurred_at`. Requiring
+   * one made `internal.document.create` answer 400 to every call an agent could
+   * possibly make, whatever else was right about it.
+   */
+  it('accepts a create with no occurred_at', () => {
+    expect(() => assertCreate({ type: 'note', title: 't', body: 'b' })).not.toThrow();
+    expect(documentCreateSchema.required).toEqual(['type', 'title', 'body']);
+  });
+
   it('fixes the stored shape at ten fields', () => {
     expect(documentSchema.required).toHaveLength(10);
   });
@@ -67,6 +77,18 @@ describe('document repository', () => {
     for (const summary of all) expect(Object.keys(summary)).not.toContain('body');
     expect(await store.list({ ownerSubject: 'user-1', type: 'note', limit: 20 })).toHaveLength(1);
     expect(await store.list({ ownerSubject: 'user-1', from: '2026-01-15T00:00:00Z', limit: 20 })).toHaveLength(1);
+  });
+
+  it('stamps occurred_at with the write when the caller states none', async () => {
+    const store = createDocumentRepository(
+      createFirestoreDocumentStore(createFirestoreDouble(), 'resource-docs-api'),
+      () => Date.parse('2026-03-04T05:06:07.000Z'),
+    );
+    const id = await store.create({ ownerSubject: 'user-1', type: 'note', title: 't', body: 'b' });
+    const document = await store.get(id, 'user-1');
+    assertDocument(document);
+    expect(document.occurred_at).toBe('2026-03-04T05:06:07.000Z');
+    expect(document.occurred_at).toBe(document.created_at);
   });
 
   it('honours the limit', async () => {
