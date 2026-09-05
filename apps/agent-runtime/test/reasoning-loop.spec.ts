@@ -5,6 +5,7 @@ import { ID_JAG_TOKEN_TYPE, drainActivityQueueForTesting, resetActivityPublisher
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { createVertexClient, vertexResponseSchemaProblems } from '@xaa/vertex';
 import { MAX_REASONING_STEPS, REASONING_SCHEMA, runReasoningLoop } from '../src/reasoning/loop.js';
+import { decideTaskOutcome } from '../src/telemetry/task-outcome.js';
 import { readPendingInstructions } from '../src/instructions/read-pending.js';
 import { createRuntimeStore } from '../src/store/runtime-store.js';
 import { createExecutionContext } from '../src/context/execution-context.js';
@@ -19,11 +20,15 @@ function happy(url: string): Response {
   return json({ documents: [{ document_id: 'd1', title: 'T' }] });
 }
 
-async function harness(input: { steps: Array<Record<string, unknown>>; agentId?: string } ) {
+async function harness(input: {
+  steps: Array<Record<string, unknown>>;
+  agentId?: string;
+  transport?: (url: string) => Response;
+}) {
   const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
   const store = createRuntimeStore({ documents, agentId: input.agentId ?? AGENT_ID });
   const context = await createExecutionContext({ env: await runtimeEnv(), store, processEnv: {} });
-  const { http, calls } = testHttp(context, happy);
+  const { http, calls } = testHttp(context, input.transport ?? happy);
   let index = 0;
   const vertex = { generateJson: async <T>() => (input.steps[index++] ?? { done: true }) as T };
   return { context, http, calls, vertex, documents, store };
@@ -270,5 +275,78 @@ describe('the drained activity queue', () => {
   it('starts empty for each spec', () => {
     resetActivityPublisherForTesting();
     expect(drainActivityQueueForTesting()).toEqual([]);
+  });
+});
+
+/**
+ * A tool call that fails is one step of the run, not the end of it.
+ *
+ * The Runtime used to let `fetchSubjectToken` throw all the way to `main`, so a single
+ * unusable tool ended the Job Execution with `execution_failed` and the model was
+ * never told. The loop is what decides whether to keep going, and it can only decide
+ * about a failure it is handed.
+ */
+describe('a tool that does not work', () => {
+  beforeEach(() => resetActivityPublisherForTesting());
+
+  it('is reported to the model and the loop keeps running', async () => {
+    // The Agent OP cannot mint the subject token, so no tool call can reach a resource.
+    const { context, http, vertex } = await harness({
+      steps: [
+        { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+        { done: false, tool_call: { tool_id: 'internal.document.get', parameters: { id: 'd1' } } },
+        { done: true },
+      ],
+      transport: (url) => (url.startsWith(`${AGENT_OP}/xaa/subject-token`) ? json({ error: 'invalid_grant' }, 400) : happy(url)),
+    });
+
+    const result = await runReasoningLoop({
+      context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {},
+    });
+
+    // Both calls were attempted and both came back as results; the run ended because
+    // the model said so, not because the first failure took the process down.
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results).toHaveLength(2);
+    for (const entry of result.results) {
+      expect(entry).toMatchObject({ outcome: 'failed', error_code: 'unexpected_subject_response' });
+    }
+    // The run ends with a verdict on the task. Before, the first failure left `main`
+    // logging `execution_failed` with no results, no checkpoint of the second step,
+    // and nothing said about which tool could not be used.
+    expect(decideTaskOutcome(result.results)).toBe('TASK_FAILED');
+  });
+
+  it('puts the failure in front of the model, so the next step can differ', async () => {
+    const { context, http, vertex, documents } = await harness({
+      steps: [
+        { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+        { done: true },
+      ],
+      transport: (url) => (url.startsWith(`${AGENT_OP}/xaa/subject-token`) ? json({ error: 'invalid_grant' }, 400) : happy(url)),
+    });
+
+    await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+
+    // The checkpoint is the model's view of the run: the failed call is in it, named.
+    const state = await documents.get<{ conversation_context: unknown[] }>('agents', `${AGENT_ID}__state`);
+    expect(JSON.stringify(state!.conversation_context)).toContain('unexpected_subject_response');
+  });
+
+  it('survives a transport that throws on every hop', async () => {
+    const { context, http, vertex } = await harness({
+      steps: [
+        { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+        { done: true },
+      ],
+      transport: () => { throw new Error('ECONNREFUSED'); },
+    });
+
+    const result = await runReasoningLoop({
+      context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {},
+    });
+
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results[0]).toMatchObject({ outcome: 'failed', error_code: 'tool_execution_error' });
   });
 });

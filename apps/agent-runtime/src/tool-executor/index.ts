@@ -3,9 +3,9 @@ import type { ExecutionContext } from '../context/execution-context.js';
 import type { RuntimeHttpClient } from '../http/http-client.js';
 import { buildExternalAuthorization, buildResourceAuthorization } from '../http/resource-authorization.js';
 import type { ToolCall } from '../reasoning/parse-tool-call.js';
-import { createStageLogger, newSpanId, type StageLogger } from '../telemetry/stage-log.js';
-import { fetchSubjectToken } from '../tokens/subject-token.js';
-import type { ToolResult } from './errors.js';
+import { createStageLogger, newSpanId, type Stage, type StageLogger } from '../telemetry/stage-log.js';
+import { fetchSubjectToken, UnexpectedSubjectResponse } from '../tokens/subject-token.js';
+import { toolFailed, type ToolResult, type ToolStage } from './errors.js';
 import { buildToolIndex, isBlocked, resolveAllowedTool } from './steps/allowed-tools.js';
 import { assertNotExpired } from './steps/expiration.js';
 import { buildApiRequest } from './steps/build-api-request.js';
@@ -24,14 +24,19 @@ export interface ToolExecutorDeps {
 }
 
 /**
- * The seven steps, in order, with every gate that can stop a call placed before the
- * step that would make it observable elsewhere.
+ * One tool call, one result — including when something throws.
  *
- * Reading downwards: is this tool allowed at all; is the agent still within its
- * lifetime; do the constraints hold; only then does anything leave the process. The
- * ordering is the security property — REQ-02-026's "zero calls to the Agent OP" for an
- * out-of-permission request is true because step2 sits above the first `http.send`,
- * not because a later check happens to reject the response.
+ * A tool that cannot be run is a fact about that tool, not about the agent. The
+ * Runtime used to let a throw out of here: `fetchSubjectToken` raised
+ * `UnexpectedSubjectResponse`, nothing between it and `main` caught it, and one bad
+ * step ended the Job Execution with `execution_failed` before the model was told
+ * anything. The agent had seven other tools it could have tried and never got the
+ * chance.
+ *
+ * So this wrapper is the boundary: below it a step may throw, above it the reasoning
+ * loop always gets a `ToolResult` and decides what to do next. Every step that can
+ * name its own failure still does — the catch is for what none of them predicted, and
+ * reports it at the stage the call had actually reached.
  */
 export async function executeTool(deps: ToolExecutorDeps, call: ToolCall): Promise<ToolResult> {
   const now = deps.now ?? (() => Date.now());
@@ -46,6 +51,57 @@ export async function executeTool(deps: ToolExecutorDeps, call: ToolCall): Promi
     ...(deps.stageWrite ? { write: deps.stageWrite } : {}),
   });
 
+  try {
+    return await runSteps(deps, call, stage, now);
+  } catch (error) {
+    const reached = resultStage(stage.lastStage());
+    // The message is for the operator, not for the model: it is the one place the
+    // detail survives, and the only place a thrown string is allowed to land.
+    deps.logger.error('tool_execution_error', deps.logContext, {
+      tool_id: call.tool_id, stage: reached, message: (error as Error).message,
+    });
+    stage.emit(stage.lastStage(), { tool_id: call.tool_id, outcome: 'tool_execution_error' });
+    return toolFailed({ toolId: call.tool_id, stage: reached, errorCode: 'tool_execution_error' });
+  }
+}
+
+/**
+ * The stage log names two transitions the result vocabulary does not, and both sit
+ * before any credential is asked for. `assertNotExpired` already reports a failure at
+ * `required_capability` as `tool_selection`; this keeps that reading.
+ */
+const RESULT_STAGE: Readonly<Record<Stage, ToolStage>> = {
+  agent_intent: 'tool_selection',
+  tool_selection: 'tool_selection',
+  required_capability: 'tool_selection',
+  auth_mapping: 'auth_mapping',
+  agent_op: 'agent_op',
+  id_jag: 'id_jag',
+  token_endpoint: 'token_endpoint',
+  access_token: 'access_token',
+  resource_api: 'resource_api',
+};
+
+function resultStage(stage: Stage): ToolStage {
+  return RESULT_STAGE[stage];
+}
+
+/**
+ * The seven steps, in order, with every gate that can stop a call placed before the
+ * step that would make it observable elsewhere.
+ *
+ * Reading downwards: is this tool allowed at all; is the agent still within its
+ * lifetime; do the constraints hold; only then does anything leave the process. The
+ * ordering is the security property — REQ-02-026's "zero calls to the Agent OP" for an
+ * out-of-permission request is true because step2 sits above the first `http.send`,
+ * not because a later check happens to reject the response.
+ */
+async function runSteps(
+  deps: ToolExecutorDeps,
+  call: ToolCall,
+  stage: StageLogger,
+  now: () => number,
+): Promise<ToolResult> {
   stage.emit('agent_intent', { tool_id: call.tool_id, outcome: 'requested' });
 
   // step2
@@ -77,8 +133,23 @@ export async function executeTool(deps: ToolExecutorDeps, call: ToolCall): Promi
     tool_id: tool.tool_id, audience: authorization.audience, resource: authorization.resource, scope: authorization.scope, outcome: 'mapped',
   });
 
-  // step4
-  const subjectToken = await fetchSubjectToken(deps.context, deps.http, now());
+  // step4. The subject token is fetched, not handed in, so the Agent OP being unable
+  // to produce one is a failure of this call — the same kind as the exchange below it
+  // failing, and reported the same way rather than as an exception (T-RUN-10).
+  let subjectToken: string;
+  try {
+    subjectToken = await fetchSubjectToken(deps.context, deps.http, now());
+  } catch (error) {
+    // Only the OP answering badly is named here. A connection that never got an
+    // answer is a different failure, and calling it `unexpected_subject_response`
+    // would send whoever reads the timeline looking at the wrong service.
+    if (!(error instanceof UnexpectedSubjectResponse)) throw error;
+    deps.logger.error('subject_token_failed', deps.logContext, {
+      tool_id: tool.tool_id, message: error.message,
+    });
+    stage.emit('agent_op', { tool_id: tool.tool_id, outcome: 'unexpected_subject_response' });
+    return toolFailed({ toolId: tool.tool_id, stage: 'agent_op', errorCode: 'unexpected_subject_response' });
+  }
   const exchanged = await requestIdJag({ context: deps.context, http: deps.http, tool, subjectToken, now: now() });
   if ('outcome' in exchanged) {
     stage.emit('agent_op', { tool_id: tool.tool_id, outcome: exchanged.reason });

@@ -31,6 +31,15 @@ const JWT_SHAPE = /^eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 export interface StageLogger {
   spanId: string;
   emit(stage: Stage, fields: StageFields): void;
+  /**
+   * The stage the last line was written for.
+   *
+   * A throw has no stage of its own, and guessing one would break the rule above: the
+   * failure has to be reported where the call actually got to, not back-filled onto a
+   * stage it never entered. The writer already knows, so it is asked rather than
+   * tracked a second time alongside it.
+   */
+  lastStage(): Stage;
 }
 
 export function newSpanId(): string {
@@ -61,9 +70,12 @@ export function createStageLogger(input: {
   const write = input.write ?? ((line: string) => process.stdout.write(line));
   const now = input.now ?? (() => Date.now());
   const spanId = input.spanId ?? newSpanId();
+  let lastStage: Stage = STAGES[0];
   return {
     spanId,
+    lastStage: () => lastStage,
     emit(stage, fields) {
+      lastStage = stage;
       const line: Record<string, unknown> = {
         execution_id: input.executionId,
         agent_id: input.agentId,

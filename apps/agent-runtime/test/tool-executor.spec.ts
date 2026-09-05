@@ -52,8 +52,8 @@ describe('step2, allowed tools', () => {
     expect(resolveAllowedTool(index, 'internal.document.list')).toMatchObject({ tool_id: 'internal.document.list' });
   });
 
-  it('names eleven error codes and no more', () => {
-    expect(TOOL_ERROR_CODES).toHaveLength(11);
+  it('names thirteen error codes and no more', () => {
+    expect(TOOL_ERROR_CODES).toHaveLength(13);
   });
 
   it('never mutates the allowed tool set', async () => {
@@ -370,9 +370,13 @@ describe('step6, building the request', () => {
       }
       return happyPath()(url);
     });
-    const promise = executeTool({ context, http, logger: console as never, logContext: {} as never, stageWrite: () => {} },
-      { tool_id: 'internal.document.list', parameters: {} });
-    await expect(promise).rejects.toThrow(/abort/i);
+    const result = await executeTool(
+      { context, http, logger: { error: () => {} } as never, logContext: {} as never, stageWrite: () => {} },
+      { tool_id: 'internal.document.list', parameters: {} },
+    );
+    // The abort ends this tool call, not the execution: the loop is told the tool did
+    // not work and picks what to do next.
+    expect(result).toMatchObject({ outcome: 'failed', error_code: 'tool_execution_error' });
     expect(attempts).toBe(1);
   }, 20_000);
 });
@@ -583,5 +587,99 @@ describe('the whole call', () => {
       { tool_id: 'internal.document.list', parameters: {} });
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+/**
+ * A tool that cannot be run is a fact about that tool. `executeTool` returns it as a
+ * result at the stage the call reached, and the reasoning loop decides what to do —
+ * where a throw would have ended the Job Execution with `execution_failed` and left
+ * the agent's other tools untried.
+ */
+describe('a step that throws', () => {
+  const silent = { error: () => {}, warning: () => {}, info: () => {}, critical: () => {} } as never;
+
+  it('comes back as tool_execution_error instead of leaving executeTool', async () => {
+    const context = await testContext();
+    const { http } = testHttp(context, () => { throw new Error('ECONNRESET https://docs-api.example.test'); });
+
+    const result = await executeTool(
+      { context, http, logger: silent, logContext: {} as never, stageWrite: () => {} },
+      { tool_id: 'internal.document.list', parameters: {} },
+    );
+
+    expect(result).toMatchObject({
+      outcome: 'failed', reason: 'tool_execution_error', error_code: 'tool_execution_error',
+      tool_id: 'internal.document.list',
+    });
+  });
+
+  it('reports the stage the call reached, not one it never entered', async () => {
+    const context = await testContext();
+    const lines: string[] = [];
+    // Everything up to the Resource API answers; the API itself throws.
+    const { http } = testHttp(context, (url) => {
+      if (url.startsWith(DOCS_API)) throw new Error('socket hang up');
+      return happyPath()(url);
+    });
+
+    const result = await executeTool(
+      { context, http, logger: silent, logContext: {} as never, stageWrite: (line) => lines.push(line) },
+      { tool_id: 'internal.document.list', parameters: {} },
+    );
+
+    // `access_token` is the last stage the call completed. There is no `resource_api`
+    // line because the request never came back, and the stage log's rule is that the
+    // missing stage is the signal — so the result says the same thing rather than
+    // claiming a stage the call never finished.
+    expect(result).toMatchObject({ outcome: 'failed', error_code: 'tool_execution_error', stage: 'access_token' });
+    const stages = lines.map((line) => JSON.parse(line) as { stage: string; outcome: string | null });
+    expect(stages.at(-1)).toMatchObject({ stage: 'access_token', outcome: 'tool_execution_error' });
+    expect(stages.filter((entry) => entry.stage === 'resource_api' && entry.outcome === 'success')).toHaveLength(0);
+  });
+
+  it('keeps the thrown message out of the result the model reads', async () => {
+    const context = await testContext();
+    const secret = 'Bearer sk-not-for-the-model';
+    const { http } = testHttp(context, () => { throw new Error(`refused: ${secret}`); });
+
+    const result = await executeTool(
+      { context, http, logger: silent, logContext: {} as never, stageWrite: () => {} },
+      { tool_id: 'internal.document.list', parameters: {} },
+    );
+
+    // The detail belongs in the log. What travels on into the conversation and the
+    // checkpoint is the code, which is all any consumer classifies on.
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(JSON.stringify(result)).not.toContain('refused');
+  });
+});
+
+/**
+ * step4's own failure. The Agent OP being unable to produce the human's ID Token is
+ * this call's failure, named as such — the exact case that took a whole execution down
+ * when `/xaa/subject-token` and the Runtime disagreed on a field name.
+ */
+describe('step4, the subject token', () => {
+  const silent = { error: () => {}, warning: () => {}, info: () => {}, critical: () => {} } as never;
+
+  it('fails the call with unexpected_subject_response and goes no further', async () => {
+    const context = await testContext();
+    const { http, calls } = testHttp(context, (url) => {
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ error: 'invalid_grant' }, 400);
+      return happyPath()(url);
+    });
+
+    const result = await executeTool(
+      { context, http, logger: silent, logContext: {} as never, stageWrite: () => {} },
+      { tool_id: 'internal.document.list', parameters: {} },
+    );
+
+    expect(result).toMatchObject({
+      outcome: 'failed', reason: 'unexpected_subject_response', error_code: 'unexpected_subject_response',
+      tool_id: 'internal.document.list', stage: 'agent_op',
+    });
+    // No ID-JAG was asked for on a token that never arrived.
+    expect(calls.map((entry) => entry.url)).toEqual([`${AGENT_OP}/xaa/subject-token`]);
   });
 });
