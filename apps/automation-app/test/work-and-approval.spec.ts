@@ -470,6 +470,40 @@ describe('returning from a consent screen', () => {
     expect(failed.status).toBe(502);
     expect(await failed.text()).toContain('やり直して');
   });
+
+  /**
+   * The page says nothing, so the log has to. Without it a consent that came back and
+   * failed was indistinguishable from every other one that came back and failed, and
+   * the person was told to try again with no way of knowing whether it could work.
+   */
+  it('records why the resume failed, and never the one-time code', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json({ error: 'connection_not_ready' }, { status: 409 }),
+    });
+
+    await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time');
+
+    const line = JSON.parse(harness.logLines.at(-1)!) as Record<string, unknown>;
+    expect(line.logType).toBe('xaa.consent_resume_failed');
+    expect(line.status).toBe(409);
+    expect(line.reason).toBe('connection_not_ready');
+    expect(line.transaction_id).toBe('txn-1');
+    expect(harness.logLines.join('\n')).not.toContain('one-time');
+  });
+
+  /** A call that never arrived has no status and no error code, and still says so. */
+  it('records a Provisioner it could not reach', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => { throw new Error('connect ECONNREFUSED'); },
+    });
+
+    const failed = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time');
+
+    expect(failed.status).toBe(502);
+    const line = JSON.parse(harness.logLines.at(-1)!) as Record<string, unknown>;
+    expect(line.status).toBeNull();
+    expect(line.reason).toContain('ECONNREFUSED');
+  });
 });
 
 describe('automation suggestions', () => {

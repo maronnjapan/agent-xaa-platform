@@ -73,6 +73,8 @@ export interface Harness {
   authorizationSeed: DocumentStore;
   session: Session;
   auditLines: string[];
+  /** The structured lines the app writes, so a refusal's reason can be asserted. */
+  logLines: string[];
   upstream: Array<{ url: string; init: RequestInit }>;
   cookie: string;
 }
@@ -125,6 +127,7 @@ export async function startAutomationApp(options: {
   });
 
   const auditLines: string[] = [];
+  const logLines: string[] = [];
   const upstream: Array<{ url: string; init: RequestInit }> = [];
   const app = createApp({
     config: { ...config, ...options.config },
@@ -133,6 +136,7 @@ export async function startAutomationApp(options: {
     verifyAccessToken: options.verifyAccessToken ?? (async (token) => decodePayload(token)),
     verifyIdToken: async (token) => decodePayload(token),
     auditWrite: (line) => auditLines.push(line),
+    logWrite: (line) => logLines.push(line),
     ...(options.now ? { now: options.now } : {}),
     ...(options.verifyPush ? { verifyPush: options.verifyPush } : {}),
     ...(options.generate ? { generate: options.generate } : {}),
@@ -147,7 +151,7 @@ export async function startAutomationApp(options: {
 
   const cookie = `xaa_session=${session.session_id}`;
   return {
-    documents, seed, runtimeSeed, authorizationSeed, session, auditLines, upstream, cookie,
+    documents, seed, runtimeSeed, authorizationSeed, session, auditLines, logLines, upstream, cookie,
     fetch: (path, init = {}) => app.fetch(new Request(new URL(path, 'https://automation-app.test'), {
       ...init,
       headers: { cookie, ...(init.headers as Record<string, string> | undefined) },

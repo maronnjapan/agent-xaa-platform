@@ -93,7 +93,7 @@ locals {
       PROVISIONER_AUDIENCE            = "agent-provisioner"
       PUBLIC_BASE_URL                 = local.run_url["provisioner"]
       SHARED_AGENT_OP_URL             = local.run_url["shared-agent-op"]
-      STANDARD_JOB_NAME               = module.agent_runtime_standard.name
+      STANDARD_JOB_NAME               = module.agent_runtime_standard.full_name
       MAX_FULL_ISOLATION_AGENTS       = tostring(var.max_full_isolation_agents)
       AGENT_MAX_LIFETIME_SECONDS      = tostring(var.agent_max_lifetime_seconds)
       ACTIVITY_TOPIC                  = "agent-activity-stream"

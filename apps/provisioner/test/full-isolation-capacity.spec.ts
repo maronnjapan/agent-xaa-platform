@@ -96,7 +96,8 @@ describe('the FULL_ISOLATION cap', () => {
     const env = {
       ISSUER: 'https://idp.test', JWKS_URL: 'https://idp.test/jwks', PROVISIONER_AUDIENCE: 'agent-provisioner',
       PUBLIC_BASE_URL: 'https://provisioner.test', SHARED_AGENT_OP_URL: 'https://op.test',
-      STANDARD_JOB_NAME: 'job', AGENT_MAX_LIFETIME_SECONDS: '86400', ACTIVITY_TOPIC: 'agent-activity-stream',
+      STANDARD_JOB_NAME: 'job', PROJECT_ID: 'xaa-test', REGION: 'asia-northeast1',
+      AGENT_MAX_LIFETIME_SECONDS: '86400', ACTIVITY_TOPIC: 'agent-activity-stream',
     };
     expect(() => loadConfig(env)).toThrow(/MAX_FULL_ISOLATION_AGENTS/);
     expect(() => loadConfig({ ...env, MAX_FULL_ISOLATION_AGENTS: '2' })).not.toThrow();

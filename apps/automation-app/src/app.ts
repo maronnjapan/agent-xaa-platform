@@ -5,6 +5,7 @@ import type { AutomationAppConfig } from './config.js';
 import { createSessionStore, type SessionStore } from './auth/session-store.js';
 import { requireUser, type UserVariables } from './auth/require-user.js';
 import { createControlPlaneClient } from './http/control-plane-client.js';
+import { logConsentResumeFailure } from './http/resume-log.js';
 import { requireAgentOwner, type AgentOwnerVariables } from './agents/require-owner.js';
 import { readAgentStatus } from './agents/status.js';
 import { stopAgent } from './agents/stop.js';
@@ -42,6 +43,8 @@ export interface AutomationAppDeps {
   fetchImpl?: typeof fetch;
   now?: () => number;
   auditWrite?: (line: string) => void;
+  /** Where a structured line goes; production writes to stdout, a test collects it. */
+  logWrite?: (line: string) => void;
   promptTemplate?: string;
   signals?: WorkSignalSource;
   generate?: Parameters<typeof suggestAutomations>[0]['generate'];
@@ -150,6 +153,13 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       const code = context.req.query('code');
       if (!transactionId || !code) return consentFailurePage(400);
 
+      const failed = (status: number | null, reason: string): Response => {
+        logConsentResumeFailure({
+          transaction_id: transactionId, human_subject: context.get('humanSubject'), status, reason,
+        }, deps.logWrite);
+        return consentFailurePage(502);
+      };
+
       let response: Response;
       try {
         response = await createControlPlaneClient({
@@ -165,14 +175,21 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
           body: { one_time_code: code },
           requiredScope: 'agent:provision',
         });
-      } catch {
-        return consentFailurePage(502);
+      } catch (error) {
+        return failed(null, error instanceof Error ? error.message : 'unknown');
       }
-      if (!response.ok) return consentFailurePage(502);
+
+      // Read before the status is judged, because the Provisioner's refusals carry the
+      // one thing this app can say about them afterwards: the code it refused with.
+      const body = await response.json().catch(() => ({})) as {
+        consent_url?: unknown; agent_id?: unknown; error?: unknown;
+      };
+      if (!response.ok) {
+        return failed(response.status, typeof body.error === 'string' ? body.error : 'no_error_code');
+      }
 
       // A second consent is answered the same way the first was: by following the URL
       // the Provisioner names. This app never builds one (RULE-37).
-      const body = await response.json().catch(() => ({})) as { consent_url?: unknown; agent_id?: unknown };
       if (typeof body.consent_url === 'string') return context.redirect(body.consent_url, 302);
       if (typeof body.agent_id === 'string' && body.agent_id !== '') {
         return context.redirect(agentPagePath(body.agent_id), 302);

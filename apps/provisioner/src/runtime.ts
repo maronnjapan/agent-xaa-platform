@@ -9,6 +9,7 @@ import { createFirestoreDocumentStore, createIdentityTokenProvider, FirestoreJti
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
 import { createAgentOpClient } from './agent/idp-connection.js';
+import { qualifiedJobName } from './job/job-name.js';
 import { createTransactionStore } from './transaction/store.js';
 import { createDedicatedResources, type GcpAdmin } from './dedicated.js';
 import type { ProvisionerConfig } from './deps.js';
@@ -27,7 +28,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ProvisionerCon
     audience: required(env, 'PROVISIONER_AUDIENCE'),
     publicBaseUrl: required(env, 'PUBLIC_BASE_URL'),
     sharedAgentOpUrl: required(env, 'SHARED_AGENT_OP_URL'),
-    standardJobName: required(env, 'STANDARD_JOB_NAME'),
+    // Cloud Run wants the job named in full; Terraform's `name` is the short one.
+    // See `qualifiedJobName`: unqualified, it fails at `start_job_execution`, which on
+    // the consent path runs only after the person has already given their consent.
+    standardJobName: qualifiedJobName({
+      jobName: required(env, 'STANDARD_JOB_NAME'), projectId: env.PROJECT_ID, region: env.REGION,
+    }),
     agentMaxLifetimeSeconds: Number(required(env, 'AGENT_MAX_LIFETIME_SECONDS')),
     // No application default: the cap protects a hard GCP quota, so a missing value
     // must stop the process rather than pick a number.

@@ -37,6 +37,14 @@ required=(
 
 for key in "${required[@]}"; do require_key "$key"; done
 
+# Cloud Run's runJob takes the job's full resource name. `module.*.name` is the short
+# one, and the Provisioner only reaches that call after a person has answered a consent
+# screen, so a short name here is a failure nobody sees until the demo is being given.
+grep -qE '^[[:space:]]+STANDARD_JOB_NAME[[:space:]]*=[[:space:]]*module\.[a-z_]+\.full_name' "$services" || {
+  echo 'service-env-contract: STANDARD_JOB_NAME must be the full job resource name' >&2
+  exit 1
+}
+
 grep -q 'shared_agent_op_idjag.*cryptoKeyVersions/1' "$shared" || {
   echo 'service-env-contract: Agent OP needs a KMS CryptoKeyVersion, not a CryptoKey' >&2
   exit 1
