@@ -30,12 +30,19 @@ project_policy=$(gcloud projects get-iam-policy "$project_id" --format=json) || 
 check_policy "projects/$project_id" "$project_policy"
 # bq answers with more than the policy: a runner that has never used it writes a first-run
 # notice to stdout ahead of the JSON, and a project without the dataset writes nothing at
-# all. Take the answer from its first brace and use it only if it parses, so an unusable
-# reply leaves the dataset unchecked instead of feeding jq a sentence.
+# all. Take the answer from its first brace and use it only if it parses.
+#
+# When it does not parse the dataset goes unchecked, and that is said out loud. DEV-14
+# rests on this file being what separates the audit data from the runtime, and a control
+# that silently did not run reads exactly like one that ran and found nothing.
 dataset_answer=$(bq --headless=true --project_id="$project_id" --format=prettyjson show "$project_id:security_audit" 2>/dev/null)
 dataset_policy=$(sed -n '/^[{[]/,$p' <<<"$dataset_answer")
 if [[ -z "${dataset_policy//[[:space:]]/}" ]] || ! jq -e 'type == "object"' <<<"$dataset_policy" >/dev/null 2>&1; then
-  [[ -z "${dataset_answer//[[:space:]]/}" ]] || echo 'forbidden-roles: the security_audit dataset answered something other than a policy; leaving it unchecked' >&2
+  if [[ -z "${dataset_answer//[[:space:]]/}" ]]; then
+    echo 'forbidden-roles: the security_audit dataset answered nothing, so its access list went unchecked' >&2
+  else
+    echo 'forbidden-roles: the security_audit dataset answered something other than a policy, so its access list went unchecked' >&2
+  fi
   dataset_policy='{"access":[]}'
 fi
 while IFS=$'\t' read -r role member; do
