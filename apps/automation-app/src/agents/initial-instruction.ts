@@ -1,5 +1,5 @@
 import type { DocumentStore } from '@xaa/gcp';
-import { addInstruction, AgentNotActive } from './instructions.js';
+import { addInstruction, AgentNotActive, type StoredInstruction } from './instructions.js';
 import type { WorkDefinition } from '../work-definition/model.js';
 
 /**
@@ -45,22 +45,26 @@ export function buildInitialInstruction(definition: WorkDefinition): string {
  * request that created it would say the opposite. The caller is handed the error to
  * record instead.
  */
+export type InitialInstructionOutcome =
+  | { outcome: 'written'; instruction: StoredInstruction }
+  | { outcome: 'agent_not_active' | 'failed' };
+
 export async function seedInitialInstruction(input: {
   documents: DocumentStore;
   agentId: string;
   definition: WorkDefinition;
   now?: number;
-}): Promise<'written' | 'agent_not_active' | 'failed'> {
+}): Promise<InitialInstructionOutcome> {
   try {
-    await addInstruction({
+    const instruction = await addInstruction({
       documents: input.documents,
       agentId: input.agentId,
       text: buildInitialInstruction(input.definition),
       createdBy: input.definition.human_subject,
       ...(input.now === undefined ? {} : { now: input.now }),
     });
-    return 'written';
+    return { outcome: 'written', instruction };
   } catch (error) {
-    return error instanceof AgentNotActive ? 'agent_not_active' : 'failed';
+    return { outcome: error instanceof AgentNotActive ? 'agent_not_active' : 'failed' };
   }
 }

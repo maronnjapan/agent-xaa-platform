@@ -155,7 +155,7 @@ describe('the written log beside a replay', () => {
   it('is rendered by the server, so it reads with no animation at all', async () => {
     const html = await render(TimelinePage({
       tasks: [{
-        task_id: 'task-1', agent_id: AGENT_ID, purpose: '日報をまとめる', status: 'completed',
+        run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '日報をまとめる', status: 'completed',
         terminal_outcome: 'success', completed_at: '2026-01-01T00:00:10.000Z',
         events: [{ ...event(), record }],
       }],
@@ -167,7 +167,7 @@ describe('the written log beside a replay', () => {
 
   it('adds no replay and no log for a task that has not finished', async () => {
     const html = await render(TimelinePage({
-      tasks: [{ task_id: 'task-1', agent_id: AGENT_ID, purpose: '実行中の作業', status: 'running' }],
+      tasks: [{ run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '実行中の作業', status: 'running' }],
     }));
     expect(html).not.toContain('class="replay"');
     expect(html).not.toContain('data-event-log');

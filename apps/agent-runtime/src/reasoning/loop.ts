@@ -119,9 +119,11 @@ export async function runReasoningLoop(input: {
   let finalNote: string | undefined;
 
   for (let step = 0; step < maxSteps; step += 1) {
-    for (const instruction of await readPendingInstructions(input.context.store, new Date(now()).toISOString())) {
-      conversation.push(instruction);
-    }
+    const read = await readPendingInstructions(input.context.store, new Date(now()).toISOString());
+    for (const instruction of read) conversation.push(instruction);
+    // Carried into this step's record so the account says what the agent was told
+    // before it says what the agent did.
+    const instructions = read.map((instruction) => instruction.text);
 
     const decision = await generate<ReasoningStep>({
       prompt: buildPrompt(input.context, conversation),
@@ -135,6 +137,7 @@ export async function runReasoningLoop(input: {
         step: step + 1,
         headline: 'エージェントから応答がありませんでした',
         message: 'モデルが答えを返さなかったため、この手で打ち切りました。作業は完了していません。',
+        instructions,
       }));
       break;
     }
@@ -146,6 +149,7 @@ export async function runReasoningLoop(input: {
         headline: 'エージェントが作業の終わりを判断しました',
         message: 'これ以上ツールで進めることは無いと判断しました。以下はエージェント自身の言葉です。',
         ...(decision.note ? { note: decision.note } : {}),
+        instructions,
       }));
       break;
     }
@@ -158,6 +162,7 @@ export async function runReasoningLoop(input: {
         headline: 'ツールの指定を読み取れませんでした',
         message: 'エージェントの答えに、実行できる形のツール指定がありませんでした。何も実行していません。',
         ...(decision.note ? { note: decision.note } : {}),
+        instructions,
       }));
       await checkpoint();
       continue;
@@ -166,7 +171,7 @@ export async function runReasoningLoop(input: {
     const recorder = createExecutionRecorder({
       step: step + 1,
       toolId: call.tool_id,
-      intent: { ...(decision.note ? { note: decision.note } : {}), parameters: call.parameters },
+      intent: { ...(decision.note ? { note: decision.note } : {}), parameters: call.parameters, instructions },
     });
     const result = await executeTool({
       context: input.context, http: input.http, logger: input.logger, logContext: input.logContext,
@@ -250,6 +255,12 @@ function lastInstructionId(conversation: readonly unknown[]): string | undefined
  * declared parameters as the source is what turns the free-form field back into the
  * `parameters` map RULE-18 lets the model choose.
  *
+ * `note` is asked for on every step. The schema had the field and nothing asked the
+ * model to fill it, so the "agent's own words" the record and the screen promise were
+ * almost always missing: a person saw which tool ran and never why. The note decides
+ * nothing — the tool and its arguments are still the only two things the model
+ * chooses — and it is carried to the record as prose for the person who asked.
+ *
  * The work itself arrives as an instruction, never from here: this file has no channel
  * to a work definition, and the one thing that tells an agent what it was created for is
  * the text the person wrote, which the Automation App writes to `agent_instructions`.
@@ -266,5 +277,8 @@ function buildPrompt(context: ExecutionContext, conversation: readonly unknown[]
     'tool_call.parameters_json は、そのツールの parameters に宣言されたキーだけを持つ'
       + ' JSON オブジェクトを文字列にしたものです。引数が無いときは "{}" と書きます。',
     '作業が完了している、またはこれ以上ツールで進められない場合は done を true にしてください。',
+    'note には毎回、日本語で次を書いてください：直前のツールの結果から何が分かったか、'
+      + 'なぜ次にそのツールを選ぶのか（done のときは、何を終えたか、何ができなかったか）。'
+      + ' これは指示した人がそのまま読む文章です。',
   ].join('\n');
 }

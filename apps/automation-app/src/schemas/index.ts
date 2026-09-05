@@ -154,6 +154,11 @@ export const agentStatusResponseSchema = {
   },
 } as const;
 
+/**
+ * `run_id` is the agent a task belongs to, or the id of the work that is on its way to
+ * becoming one (`activity/query.ts`). It is what makes two agents' `task-1` rows two
+ * different things to the browser.
+ */
 export const timelineResponseSchema = {
   $id: 'timeline-response',
   type: 'object',
@@ -167,8 +172,9 @@ export const timelineResponseSchema = {
           {
             type: 'object',
             additionalProperties: false,
-            required: ['task_id', 'agent_id', 'purpose', 'status'],
+            required: ['run_id', 'task_id', 'agent_id', 'purpose', 'status'],
             properties: {
+              run_id: { type: 'string', minLength: 1 },
               task_id: { type: 'string' }, agent_id: { type: ['string', 'null'] },
               purpose: { type: 'string' }, status: { const: 'running' },
             },
@@ -176,8 +182,9 @@ export const timelineResponseSchema = {
           {
             type: 'object',
             additionalProperties: false,
-            required: ['task_id', 'agent_id', 'purpose', 'status', 'terminal_outcome', 'completed_at', 'events'],
+            required: ['run_id', 'task_id', 'agent_id', 'purpose', 'status', 'terminal_outcome', 'completed_at', 'events'],
             properties: {
+              run_id: { type: 'string', minLength: 1 },
               task_id: { type: 'string' }, agent_id: { type: ['string', 'null'] },
               purpose: { type: 'string' }, status: { const: 'completed' },
               terminal_outcome: { type: 'string' }, completed_at: { type: 'string' },

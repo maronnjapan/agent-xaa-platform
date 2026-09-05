@@ -81,7 +81,7 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
   const taxonomyVersion = taxonomy.find((entry) => typeof entry.version === 'string')?.version ?? deps.taxonomyVersion;
 
   step('work_definition');
-  const { workDefinition, dropped } = await buildWorkDefinition({
+  const { workDefinition, dropped, note: structuringNote } = await buildWorkDefinition({
     purpose: input.purpose, description: input.description,
     constraints: input.constraints, humanSubject: input.humanSubject,
   }, { vertex: deps.vertex, allowedResources: new Set(taxonomy.map((entry) => entry.resource)), now: () => deps.clock.now() });
@@ -89,11 +89,14 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
 
   step('infer');
   step('sanitize');
+  // Every warning is forwarded as before, and also kept: the record tells the person
+  // which of the model's fields were refused, by name.
+  const warnings: Warning[] = [];
   const proposal = await inferCapabilities({
     description: input.description,
     operations: workDefinition.operations,
     taxonomy: taxonomy.map((entry) => ({ capability_id: entry.capability_id, description: entry.description })),
-  }, { vertex: deps.vertex, ...(deps.onWarning ? { onWarning: deps.onWarning } : {}) });
+  }, { vertex: deps.vertex, onWarning: (warning) => { warnings.push(warning); deps.onWarning?.(warning); } });
 
   if (deps.logger) {
     logAiInference(deps.logger, context, {
@@ -132,6 +135,42 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
   // to decide. The decision is still recorded: "we asked and the answer was nothing"
   // is an auditable outcome, and the proposal is stored without characteristics rather
   // than with seven defaults nobody derived.
+  const activityInput = (record: DecisionRecord, extra: {
+    decisions: CapabilityDecision[]; humanPermissions: string[]; characteristics?: Characteristics;
+  }) => ({
+    decisionId,
+    status: record.status,
+    humanSubject: input.humanSubject,
+    purpose: input.purpose,
+    description: input.description,
+    workDefinition: {
+      operations: workDefinition.operations,
+      targetResources: workDefinition.target_resources,
+      droppedOperations: dropped.dropped_operation,
+      droppedTargetResources: dropped.dropped_target_resource,
+      note: structuringNote,
+    },
+    proposal: {
+      capabilities: proposal.capabilities,
+      characteristics: proposal.characteristics,
+      confidence: proposal.confidence,
+      note: proposal.note,
+      droppedOutOfTaxonomy: filtered.dropped,
+    },
+    warnings,
+    humanPermissions: extra.humanPermissions,
+    characteristics: extra.characteristics,
+    decisions: extra.decisions,
+    effective: record.effective_capabilities,
+    constraints: record.constraints,
+    securityProfile: record.security_profile,
+    occurredAt: createdAt,
+  });
+  const activityDeps = {
+    ...(deps.publishActivity ? { publish: deps.publishActivity } : {}),
+    ...(deps.logger ? { logger: deps.logger } : {}),
+  };
+
   if (filtered.kept.length === 0) {
     step('save_proposal');
     await saveProposal([]);
@@ -143,6 +182,9 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
     };
     step('save_decision');
     await deps.store.saveDecision(decisionId, { ...record });
+    // Nothing was granted, and that is exactly the decision a person asks about most.
+    step('activity_event');
+    await publishDecisionActivity(activityInput(record, { decisions: [], humanPermissions: [] }), activityDeps);
     step('respond');
     deps.onDecided?.(record);
     return record;
@@ -197,17 +239,9 @@ export async function decide(input: DecideInput, deps: DecideDeps): Promise<Deci
   }
 
   step('activity_event');
-  await publishDecisionActivity({
-    decisionId,
-    humanSubject: input.humanSubject,
-    effective: output.effective,
-    decisions: output.decisions,
-    securityProfile: output.securityProfile,
-    occurredAt: createdAt,
-  }, {
-    ...(deps.publishActivity ? { publish: deps.publishActivity } : {}),
-    ...(deps.logger ? { logger: deps.logger } : {}),
-  });
+  await publishDecisionActivity(activityInput(record, {
+    decisions: output.decisions, humanPermissions: policyInput.humanPermissions, characteristics: merged.characteristics,
+  }), activityDeps);
 
   step('respond');
   deps.onDecided?.(record);

@@ -40,22 +40,27 @@ describe('the timeline list', () => {
     ]);
 
     const body = await (await harness.fetch('/api/activity/tasks')).json() as {
-      tasks: Array<{ task_id: string; agent_id: string | null; status: string; terminal_outcome?: string }>;
+      tasks: Array<{ run_id: string; task_id: string; agent_id: string | null; status: string; terminal_outcome?: string }>;
     };
-    expect(body.tasks.map((task) => task.task_id)).toEqual(['provisioning', 'task-1', 'task-2', 'task-9', 'lifecycle']);
+    // The agent a person most recently started is on top; within an agent the order is
+    // the order the work happened in (docs 11 §5.1).
+    expect(body.tasks.map((task) => [task.run_id, task.task_id])).toEqual([
+      [agentTwo, 'task-9'],
+      [agentOne, 'provisioning'], [agentOne, 'task-1'], [agentOne, 'task-2'], [agentOne, 'lifecycle'],
+    ]);
 
     const html = await render(TimelinePage({
       tasks: await readTimeline({ documents: harness.documents, humanSubject: 'testuser' }),
     }));
-    const groups = [...html.matchAll(/data-agent-id="([^"]*)"/g)].map((match) => match[1]);
-    expect(groups).toEqual([agentOne, agentTwo]);
+    const groups = [...html.matchAll(/<section class="agent-group" data-run-id="[^"]*" data-agent-id="([^"]*)"/g)].map((match) => match[1]);
+    expect(groups).toEqual([agentTwo, agentOne]);
     // Within each agent's group: provisioning, then the numbered tasks in the order
     // they finished, then lifecycle.
     const sections = html.split('<section class="agent-group"').slice(1);
     expect(sections).toHaveLength(2);
-    expect([...sections[0]!.matchAll(/data-task-id="([^"]+)"/g)].map((match) => match[1]))
+    expect([...sections[1]!.matchAll(/data-task-key="[^"]+:([^"]+)"/g)].map((match) => match[1]))
       .toEqual(['provisioning', 'task-1', 'task-2', 'lifecycle']);
-    expect([...sections[1]!.matchAll(/data-task-id="([^"]+)"/g)].map((match) => match[1]).slice(0, 1))
+    expect([...sections[0]!.matchAll(/data-task-key="[^"]+:([^"]+)"/g)].map((match) => match[1]).slice(0, 1))
       .toEqual(['task-9']);
   });
 

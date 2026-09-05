@@ -119,3 +119,47 @@ describe('the Activity Events a provisioning produces', () => {
     expect(JSON.stringify(published)).toContain('[REDACTED]');
   });
 });
+
+/**
+ * What the replay draws and the log lists for a provisioning: the two boxes the
+ * Provisioner talks to, and the decision the agent came from — which is how the
+ * timeline joins the agent to the proposal and the decision that preceded it.
+ */
+describe('what each provisioning event says about itself', () => {
+  it('names the decision on the first event when it was given one', async () => {
+    const target = await createProvisionerHarness();
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+    await provisionAgent({
+      ...target.deps,
+      logger: createLogger('provisioner', 'provisioner', (line) => { target.logs.push(line); }),
+      catalogue: createCatalogRepository(target.documents),
+    }, {
+      humanSubject: 'testuser', taskId: 'task-1', decisionId, effectiveCapabilities: ['document.read'],
+      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
+    });
+    const started = target.activity[0]!;
+    expect(started.detail).toMatchObject({ event_type: 'provisioning.started', decision_id: decisionId });
+    expect(started.agent_id).not.toBeNull();
+  });
+
+  it('draws the Agent OP and the Agent Runtime exchanges, and lights the box for the rest', async () => {
+    const target = await createProvisionerHarness();
+    await provision(target);
+    const byType = new Map(target.activity.map((event) => [detail(event).event_type, event]));
+    expect(byType.get('provisioning.idp_connection_created')!.record!.hops!.map((hop) => [hop.from, hop.to])).toEqual([
+      ['agent-provisioner', 'agent-op'], ['agent-op', 'agent-provisioner'],
+    ]);
+    expect(byType.get('provisioning.job_started')!.record!.hops!.map((hop) => [hop.from, hop.to])).toEqual([
+      ['agent-provisioner', 'agent-runtime'],
+    ]);
+    expect(byType.get('provisioning.started')!.record!.hops).toBeUndefined();
+    expect(byType.get('agent.active')!.record!.hops).toBeUndefined();
+    // Every step says what it did and shows the values a person would ask about.
+    for (const event of target.activity) {
+      expect(event.record!.sections[0]!.message.trim()).not.toBe('');
+      expect(() => validateActivityEvent(event)).not.toThrow();
+    }
+    expect(byType.get('provisioning.started')!.record!.sections[0]!.fields).toContainEqual({ label: '許可された権限', value: 'document.read' });
+    expect(byType.get('agent.active')!.record!.sections[0]!.fields?.map((field) => field.label)).toContain('有効期限');
+  });
+});

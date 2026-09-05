@@ -2,17 +2,26 @@ import { classifyTaskId, isTerminalEvent, type ActivityEvent } from '@xaa/contra
 import type { DocumentStore } from '@xaa/gcp';
 import { ACTIVITY_COLLECTION } from './subscriber.js';
 
-export interface RunningTask {
+/**
+ * The fields every row of the list carries.
+ *
+ * `run_id` is the agent the task belongs to once one exists, and a stand-in for the
+ * agent it is on its way to becoming before then — see `runKeyOf`. Two agents each
+ * have a `task-1`, so the pair (`run_id`, `task_id`) is what names a task uniquely, and
+ * the page keys its canvases and logs by that pair rather than by `task_id` alone.
+ */
+interface TaskBase {
+  run_id: string;
   task_id: string;
   agent_id: string | null;
   purpose: string;
+}
+
+export interface RunningTask extends TaskBase {
   status: 'running';
 }
 
-export interface CompletedTask {
-  task_id: string;
-  agent_id: string | null;
-  purpose: string;
+export interface CompletedTask extends TaskBase {
   status: 'completed';
   terminal_outcome: string;
   completed_at: string;
@@ -20,6 +29,11 @@ export interface CompletedTask {
 }
 
 export type TimelineTask = RunningTask | CompletedTask;
+
+/** The one string the page and the browser both build to find a task's canvas. */
+export function taskKeyOf(task: Pick<TimelineTask, 'run_id' | 'task_id'>): string {
+  return `${task.run_id}:${task.task_id}`;
+}
 
 /**
  * The name the terminal table is written in, which two producers spell in two places.
@@ -40,6 +54,11 @@ function eventType(event: ActivityEvent): string {
   return String(detail?.event_type ?? '');
 }
 
+function detailString(event: ActivityEvent, key: string): string | null {
+  const value = (event.detail as Record<string, unknown> | undefined)?.[key];
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
 function orderEvents(events: ActivityEvent[]): ActivityEvent[] {
   return [...events].sort((left, right) => {
     const byTime = left.occurred_at.localeCompare(right.occurred_at);
@@ -50,8 +69,97 @@ function orderEvents(events: ActivityEvent[]): ActivityEvent[] {
 }
 
 /**
- * Groups a person's events into tasks, and hands back the contents of the finished
- * ones only.
+ * Which agent's story an event belongs to — including the events that happened
+ * before the agent existed.
+ *
+ * Every task id is one of four shapes (docs 11 §3.3), and every agent has a
+ * `provisioning`, a `task-1` and a `lifecycle`. Grouping by `task_id` alone therefore
+ * put a person's second login inside their first agent's provisioning, played the
+ * second agent's `task-1` as a continuation of the first's, and ended the shared
+ * `provisioning` task at whichever `AGENT_PROVISIONED` came first — after which every
+ * later login, proposal and decision was shown as having happened after that agent
+ * was already running. That was the "時系列がバグっている" a person saw.
+ *
+ * The events that precede an agent carry the ids that lead to it: a proposal names its
+ * `work_definition_id`, the decision the Automation App received names both that and
+ * the `decision_id`, and the Provisioner's first event names the `decision_id` beside
+ * the `agent_id` it minted. Following that chain is what joins a login-to-agent story
+ * into one run. Until the chain reaches an agent the run is keyed by the furthest id it
+ * has, so work that is still being decided or provisioned shows as a run of its own
+ * rather than nowhere.
+ *
+ * A login carries no id at all; `attachLogins` gives it to the run that began next.
+ */
+function buildLinks(events: readonly ActivityEvent[]): {
+  decisionToAgent: Map<string, string>;
+  workToDecision: Map<string, string>;
+} {
+  const decisionToAgent = new Map<string, string>();
+  const workToDecision = new Map<string, string>();
+  for (const event of events) {
+    const decision = detailString(event, 'decision_id');
+    const work = detailString(event, 'work_definition_id');
+    if (decision && event.agent_id !== null) decisionToAgent.set(decision, event.agent_id);
+    if (decision && work) workToDecision.set(work, decision);
+  }
+  return { decisionToAgent, workToDecision };
+}
+
+function runKeyOf(event: ActivityEvent, links: ReturnType<typeof buildLinks>): string | null {
+  if (event.agent_id !== null) return event.agent_id;
+  if (classifyTaskId(event.task_id) === 'demo') return `demo:${event.task_id}`;
+  const work = detailString(event, 'work_definition_id');
+  const decision = detailString(event, 'decision_id') ?? (work ? links.workToDecision.get(work) : undefined);
+  if (decision) return links.decisionToAgent.get(decision) ?? `decision:${decision}`;
+  if (work) return `work:${work}`;
+  if (eventType(event) === 'LOGGED_IN') return null;
+  return 'unlinked';
+}
+
+interface Run {
+  key: string;
+  agentId: string | null;
+  events: ActivityEvent[];
+}
+
+/**
+ * A login belongs to the run that started next.
+ *
+ * The person logged in and then wrote the work, so the login is the first line of that
+ * agent's story. A login followed by no work at all belongs to nobody's story and is
+ * left out rather than shown as a run that never went anywhere.
+ */
+function attachLogins(runs: Map<string, Run>, logins: readonly ActivityEvent[]): void {
+  const ordered = [...runs.values()]
+    .map((run) => ({ run, firstAt: orderEvents(run.events)[0]?.occurred_at ?? '' }))
+    .sort((left, right) => left.firstAt.localeCompare(right.firstAt));
+  const pending = orderEvents([...logins]);
+  for (const { run, firstAt } of ordered) {
+    while (pending.length > 0 && pending[0]!.occurred_at.localeCompare(firstAt) <= 0) {
+      run.events.push(pending.shift()!);
+    }
+  }
+}
+
+function groupIntoRuns(events: readonly ActivityEvent[]): Run[] {
+  const links = buildLinks(events);
+  const runs = new Map<string, Run>();
+  const logins: ActivityEvent[] = [];
+  for (const event of events) {
+    const key = runKeyOf(event, links);
+    if (key === null) { logins.push(event); continue; }
+    const run = runs.get(key) ?? { key, agentId: null, events: [] };
+    if (event.agent_id !== null) run.agentId = event.agent_id;
+    run.events.push(event);
+    runs.set(key, run);
+  }
+  attachLogins(runs, logins);
+  return [...runs.values()];
+}
+
+/**
+ * Groups a person's events into agents, then into tasks, and hands back the contents
+ * of the finished tasks only.
  *
  * RULE-59: a task is replayable when its terminal event has arrived. Until then the
  * row exists — the person can see something is running — but carries no `events` key
@@ -70,31 +178,37 @@ export async function readTimeline(input: {
   const rows = await input.documents.queryEqual<ActivityEvent>(ACTIVITY_COLLECTION, [['human_subject', input.humanSubject]]);
   // Filtered again on the way out. The query already scopes by subject; re-checking
   // costs nothing and means a future change to the query cannot widen the result.
-  const all = rows.map((row) => asEvent(row.data)).filter((event) => event.human_subject === input.humanSubject);
+  const all = rows
+    .map((row) => asEvent(row.data))
+    .filter((event) => event.human_subject === input.humanSubject)
+    .filter((event) => classifyTaskId(event.task_id) !== null);
 
-  const byTask = new Map<string, ActivityEvent[]>();
-  for (const event of all) {
-    if (input.taskId !== undefined && event.task_id !== input.taskId) continue;
-    if (classifyTaskId(event.task_id) === null) continue;
-    byTask.set(event.task_id, [...(byTask.get(event.task_id) ?? []), event]);
-  }
-
+  const runs = groupIntoRuns(all);
+  const purposes = new Map(runs.map((run) => [run.key, purposeOf(run.events)]));
   const tasks: TimelineTask[] = [];
-  for (const [taskId, events] of byTask) {
-    const ordered = orderEvents(events);
-    const terminal = ordered.find((event) => isTerminalEvent(taskId, eventType(event)));
-    const agentId = ordered.find((event) => event.agent_id !== null)?.agent_id ?? null;
-    const purpose = purposeOf(ordered);
-    if (!terminal) {
-      tasks.push({ task_id: taskId, agent_id: agentId, purpose, status: 'running' });
-      continue;
+  for (const run of sortRuns(runs)) {
+    const purpose = purposes.get(run.key) || inheritedPurpose(run, runs, purposes) || (orderEvents(run.events)[0]?.title ?? '');
+    const byTask = new Map<string, ActivityEvent[]>();
+    for (const event of run.events) byTask.set(event.task_id, [...(byTask.get(event.task_id) ?? []), event]);
+
+    const own: TimelineTask[] = [];
+    for (const [taskId, events] of byTask) {
+      if (input.taskId !== undefined && taskId !== input.taskId) continue;
+      const ordered = orderEvents(events);
+      const terminal = ordered.find((event) => isTerminalEvent(taskId, eventType(event)));
+      const base = { run_id: run.key, task_id: taskId, agent_id: run.agentId, purpose };
+      if (!terminal) {
+        own.push({ ...base, status: 'running' });
+        continue;
+      }
+      own.push({
+        ...base, status: 'completed',
+        terminal_outcome: terminal.outcome, completed_at: terminal.occurred_at, events: ordered,
+      });
     }
-    tasks.push({
-      task_id: taskId, agent_id: agentId, purpose, status: 'completed',
-      terminal_outcome: terminal.outcome, completed_at: terminal.occurred_at, events: ordered,
-    });
+    tasks.push(...sortWithinRun(own));
   }
-  return sortForDisplay(tasks);
+  return tasks;
 }
 
 /**
@@ -127,12 +241,37 @@ function asEvent(row: ActivityEvent): ActivityEvent {
   };
 }
 
+/** The work an agent was made for, from the first event of its story that names it. */
 function purposeOf(events: readonly ActivityEvent[]): string {
-  for (const event of events) {
-    const purpose = (event.detail as { purpose?: unknown } | undefined)?.purpose;
-    if (typeof purpose === 'string' && purpose !== '') return purpose;
+  for (const event of orderEvents([...events])) {
+    const purpose = detailString(event, 'purpose');
+    if (purpose) return purpose;
   }
-  return events[0]?.title ?? '';
+  return '';
+}
+
+/**
+ * A replacement agent (RULE-29) starts with a Provisioner event and no proposal of its
+ * own; its purpose is the one of the agent it took over from.
+ */
+function inheritedPurpose(run: Run, runs: readonly Run[], purposes: Map<string, string>): string {
+  for (const event of run.events) {
+    const previous = detailString(event, 'replaces_agent_id');
+    if (!previous) continue;
+    const inherited = purposes.get(previous) || runs.find((candidate) => candidate.key === previous)?.events[0]?.title;
+    if (inherited) return inherited;
+  }
+  return '';
+}
+
+/**
+ * Newest agent first. Within an agent the order is chronological (`sortWithinRun`);
+ * between agents the one a person most recently started is the one they came to look
+ * at, so it is at the top.
+ */
+function sortRuns(runs: readonly Run[]): Run[] {
+  const firstAt = (run: Run): string => orderEvents(run.events)[0]?.occurred_at ?? '';
+  return [...runs].sort((left, right) => firstAt(right).localeCompare(firstAt(left)) || left.key.localeCompare(right.key));
 }
 
 /**
@@ -140,7 +279,7 @@ function purposeOf(events: readonly ActivityEvent[]): string {
  * when they finished — not by their number. An agent's second task can finish before
  * its first, and the timeline shows what happened, not what was planned.
  */
-export function sortForDisplay(tasks: readonly TimelineTask[]): TimelineTask[] {
+export function sortWithinRun(tasks: readonly TimelineTask[]): TimelineTask[] {
   const rank = (task: TimelineTask): number => {
     const kind = classifyTaskId(task.task_id);
     if (kind === 'provisioning') return 0;

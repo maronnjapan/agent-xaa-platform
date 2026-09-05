@@ -30,6 +30,8 @@ export function buildPrompt(input: PromptInput): string {
     'あなたは業務内容から必要な権限を推定する担当です。',
     '与えられた Capability の一覧から、この業務に必要なものだけを選んでください。',
     '一覧にない権限を作らないでください。',
+    'note には、なぜその Capability が要ると考えたか、なぜ他を選ばなかったかを、日本語で簡潔に書いてください。',
+    'note に URL や接続先の情報を書かないでください。',
     '',
     `業務内容: ${input.description}`,
     `想定される操作: ${input.operations.join(', ')}`,

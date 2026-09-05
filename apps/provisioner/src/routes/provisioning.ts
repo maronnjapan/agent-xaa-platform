@@ -52,6 +52,7 @@ export function createProvisioningRoute(deps: ProvisionerDeps & { catalogue: Cat
     const outcome = await provisionAgent(deps, {
       humanSubject,
       taskId: definition.task_id,
+      decisionId: definition.decision_id,
       effectiveCapabilities: decision.effective_capabilities,
       isolationLevel: decision.security_profile.isolation_level,
       constraints: decision.constraints ?? {},

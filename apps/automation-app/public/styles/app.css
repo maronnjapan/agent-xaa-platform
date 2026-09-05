@@ -332,3 +332,80 @@ button[disabled] { opacity: 0.5; cursor: progress; }
 }
 
 .task-replay-meta time { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/*
+ * One agent's story: the heading is the work, the line under it the agent, and the
+ * rows and replays that follow are its tasks in the order they happened.
+ */
+.run { margin-top: 2.5rem; padding-top: 1rem; border-top: 2px solid var(--edge); }
+.run:first-of-type { border-top: 0; }
+
+.agent-group > h2 { margin-bottom: 0.1rem; }
+
+.agent-group-meta {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.agent-group-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.task-button:not(.is-running) { cursor: pointer; }
+.task-button:not(.is-running):hover { border-color: var(--accent); }
+
+.task-replay > h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0;
+}
+
+.task-replay-count { font-variant-numeric: tabular-nums; }
+
+.timeline-empty { color: var(--muted); }
+
+/*
+ * Someone's own words, in the open.
+ *
+ * The agent's reasoning, the Authorization AI's stated grounds, the instruction a
+ * person wrote: prose the publisher marked as prose is shown as a quotation rather
+ * than folded away with the request bodies, because it is the first thing a reader
+ * asks for.
+ */
+.record-prose {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--accent);
+  background: #f7f9fc;
+  border-radius: 0 6px 6px 0;
+}
+
+.record-prose-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.record-quote {
+  margin: 0.35rem 0;
+  padding: 0;
+  white-space: pre-wrap;
+  color: var(--ink);
+}
+
+.record-prose .record-fields { margin-top: 0.35rem; }
+
+/* The route a step took, listed under its record, folded. */
+.record-hops { margin: 0.3rem 0; border-top: 1px solid var(--edge); padding-top: 0.3rem; }
+.record-hops > summary { cursor: pointer; font-size: 0.9rem; }
+.record-hops ol { margin: 0.3rem 0 0; padding-left: 1.2rem; font-size: 0.9rem; }
+.record-hops li { margin: 0.2rem 0; }
+.hop-route { font-weight: 700; }
+.hop-arrow { margin: 0 0.3rem; color: var(--muted); }
+.hop-label { margin-left: 0.5rem; color: #35506a; }
+.hop-message { display: block; color: var(--muted); }
+.record-hops li[data-hop-outcome="blocked"] .hop-label { color: #6b4a06; font-weight: 700; }
+
+.event-entry[data-entry-state="current"] .record-prose { background: #eef5ff; }

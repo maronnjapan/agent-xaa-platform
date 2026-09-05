@@ -1,4 +1,4 @@
-import { publishActivityEvent, type ActivityEvent } from '@xaa/contracts';
+import { publishActivityEvent, type ActivityEvent, type ActivityRecord, type ActivityRecordHop } from '@xaa/contracts';
 import type { Logger } from '@xaa/logging';
 import type { TransactionStore } from '../transaction/store.js';
 
@@ -74,6 +74,82 @@ const TITLES: Readonly<Record<ProvisioningEventType, string>> = {
   'agent.destroyed': 'Agent を破棄しました',
 };
 
+/**
+ * The exchanges each step really makes, drawn by the replay and listed under the
+ * written record (docs 11 §3.4, §5.2). The Provisioner talks to two boxes on the
+ * diagram — the Agent OP, for the delegated login, and the Agent Runtime, when it
+ * starts the Job — and every other step happens inside its own box, which the replay
+ * shows by lighting the box rather than inventing an arrow.
+ *
+ * The words are written here, by the component that made the call (RULE-55).
+ */
+const HOPS: Readonly<Record<ProvisioningEventType, readonly ActivityRecordHop[]>> = {
+  'provisioning.started': [],
+  'provisioning.idp_consent_required': [
+    { from: 'agent-provisioner', to: 'agent-op', label: 'ログイン連携を依頼', outcome: 'info', message: 'Agent が利用者の代理でログインできるよう、Agent OP に連携の作成を依頼しました。' },
+    { from: 'agent-op', to: 'agent-provisioner', label: '同意が必要と回答', outcome: 'info', message: 'Agent OP は、利用者の同意が無いと連携を作れないと答えました。同意画面へ進みます。' },
+  ],
+  'provisioning.idp_connection_created': [
+    { from: 'agent-provisioner', to: 'agent-op', label: 'ログイン連携を依頼', outcome: 'info', message: 'Agent が利用者の代理でログインできるよう、Agent OP に連携の作成を依頼しました。' },
+    { from: 'agent-op', to: 'agent-provisioner', label: '連携を作成', outcome: 'success', message: 'Agent OP が連携を作り、利用者の代理としてのログインが使えるようになりました。' },
+  ],
+  'provisioning.external_consent_required': [],
+  'provisioning.binding_created': [],
+  'provisioning.agent_registered': [],
+  'provisioning.job_started': [
+    { from: 'agent-provisioner', to: 'agent-runtime', label: 'Job Execution を起動', outcome: 'info', message: 'Agent Runtime の Job Execution を起動しました。ここから先の Tool 呼び出しは Agent Runtime が記録します。' },
+  ],
+  'agent.active': [],
+  'agent.expired': [],
+  'agent.revoked': [],
+  'agent.destroyed': [],
+};
+
+/** The sentence each step's record opens with: what this step did, in its own words. */
+const RECORD_MESSAGES: Readonly<Record<ProvisioningEventType, string>> = {
+  'provisioning.started': '決定された権限を読み直し、Agent の作成に取りかかりました。ここで書かれた権限がこの Agent の全部で、あとから増えることはありません。',
+  'provisioning.idp_consent_required': '利用者の同意画面へ進みます。同意が返ってくるまで、この作成は止まったままです。',
+  'provisioning.idp_connection_created': 'Agent が利用者の代理でログインできる連携ができました。',
+  'provisioning.external_consent_required': '外部サービスへの接続に、利用者の同意が必要です。同意が返ってくるまで、この作成は止まったままです。',
+  'provisioning.binding_created': '外部サービスとの接続ができました。',
+  'provisioning.agent_registered': 'Agent の登録と、使えるツールの一覧（Tool Manifest）の書き込みを終えました。',
+  'provisioning.job_started': 'Agent Runtime の Job Execution を起動しました。',
+  'agent.active': 'Agent が使える状態になりました。以降の作業は Agent Runtime が記録します。',
+  'agent.expired': '有効期限に達しました。',
+  'agent.revoked': 'Agent の資格情報を失効させました。',
+  'agent.destroyed': 'Agent を破棄しました。',
+};
+
+/**
+ * The record for one step: its own sentence, the values worth reading beside it, and
+ * the hops the replay draws. Values are taken by name from `detail`, so a token that
+ * reached a detail field could never be quoted here — and `redactTokens` runs over the
+ * whole event afterwards in any case.
+ */
+function stepRecord(eventType: ProvisioningEventType, detail: Record<string, unknown> | undefined): ActivityRecord {
+  const list = (value: unknown): string => (Array.isArray(value) && value.length > 0 ? value.map(String).join('、') : '—');
+  const text = (value: unknown): string => (typeof value === 'string' && value !== '' ? value : '—');
+  const fields = [
+    ...(detail?.capabilities !== undefined ? [{ label: '許可された権限', value: list(detail.capabilities) }] : []),
+    ...(detail?.isolation_level !== undefined ? [{ label: '分離レベル', value: text(detail.isolation_level) }] : []),
+    ...(detail?.replaces_agent_id !== undefined ? [{ label: '作り直す前の Agent', value: text(detail.replaces_agent_id) }] : []),
+    ...(detail?.allowed_tools !== undefined ? [{ label: '使えるツール', value: list(detail.allowed_tools) }] : []),
+    ...(detail?.expires_at !== undefined ? [{ label: '有効期限', value: text(detail.expires_at) }] : []),
+    ...(detail?.task_id !== undefined ? [{ label: '最初の Task', value: text(detail.task_id) }] : []),
+  ];
+  const hops = HOPS[eventType];
+  return {
+    headline: TITLES[eventType],
+    sections: [{
+      id: 'step',
+      label: 'この段階でしたこと',
+      message: RECORD_MESSAGES[eventType],
+      ...(fields.length > 0 ? { fields } : {}),
+    }],
+    ...(hops.length > 0 ? { hops: [...hops] } : {}),
+  };
+}
+
 const JWT_SHAPE = /^eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 
 /**
@@ -146,6 +222,7 @@ export function createActivityEmitter(deps: ActivityEmitterDeps): ActivityEmitte
           transaction_id: input.transactionId,
           ...input.detail,
         },
+        record: stepRecord(input.eventType, input.detail),
         related_finding_id: null,
         is_simulated: false,
       }) as ActivityEvent;

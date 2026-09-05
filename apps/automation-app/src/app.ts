@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
-import { compile, INITIAL_TASK_ID } from '@xaa/contracts';
+import { compile, INITIAL_TASK_ID, TASK_ID_PATTERN } from '@xaa/contracts';
 import type { AutomationAppConfig } from './config.js';
 import { createSessionStore, type SessionStore } from './auth/session-store.js';
 import { requireUser, type UserVariables } from './auth/require-user.js';
@@ -16,7 +16,9 @@ import { logAgentOperation } from './audit/logger.js';
 import { createWorkDefinitionStore } from './work-definition/store.js';
 import { confirm } from './work-definition/model.js';
 import { LifetimeOutOfRange, validateLifetimeMinutes } from './work-definition/lifetime.js';
-import { submitBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed } from './work-definition/submit.js';
+import {
+  buildBusinessWorkRequest, submitBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed,
+} from './work-definition/submit.js';
 import {
   assertStillApproved, AlreadyApproved, ApprovalRequired, CapabilitiesChanged, createAgentDefinitionStore,
 } from './agent-definition/approval.js';
@@ -26,7 +28,11 @@ import { readTimeline } from './activity/query.js';
 import { createDemoReplayRoute } from './demo/replay-routes.js';
 import { suggestAutomations } from './automation/suggestions.js';
 import { buildDailyReport } from './reports/daily-report.js';
-import { emitAgentStopped, emitConfirmed, emitProposed } from './activity/emit.js';
+import {
+  emitAgentStopped, emitApproved, emitConfirmed, emitDecisionReceived, emitDecisionRefused, emitDecisionRequested,
+  emitDraftRevised, emitInstructionAdded, emitProposed, emitProvisionRefused, emitProvisionRequested,
+  type DraftContent,
+} from './activity/emit.js';
 import { instructionRequestSchema, timelineResponseSchema } from './schemas/index.js';
 import { createLoginRoutes } from './auth/login-flow.js';
 import { createPageRoutes } from './ui/routes.js';
@@ -34,6 +40,19 @@ import { createSignalSource } from './signals/registry.js';
 import type { WorkSignalSource } from './signals/work-signal-source.js';
 import { loadSuggestionPrompt } from './prompts/load.js';
 import { reviseDraft } from './work-definition/dialogue.js';
+import type { WorkDefinition } from './work-definition/model.js';
+
+/** The person's own words, copied out by name for the timeline (RULE-38). */
+function draftOf(definition: WorkDefinition): DraftContent {
+  return {
+    purpose: definition.purpose,
+    description: definition.description,
+    operations: definition.operations,
+    userConfirmations: definition.user_confirmations,
+    safetyNotes: definition.safety_notes,
+    requestedLifetimeMinutes: definition.requested_lifetime_minutes,
+  };
+}
 
 export interface AutomationAppDeps {
   config: AutomationAppConfig;
@@ -202,7 +221,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
         // The same first instruction the dashboard's own button writes. An agent that
         // reached here went through a consent screen rather than straight through, and
         // it needs to be told its work just as much.
-        await seedFirstInstruction(body.agent_id, body.task_id);
+        await seedFirstInstruction(context.get('humanSubject'), body.agent_id, transactionId, body.task_id);
         return context.redirect(agentPagePath(body.agent_id), 302);
       }
       return context.redirect('/', 302);
@@ -282,7 +301,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       requested_lifetime_minutes: minutes,
     }, now());
     await emitProposed({ humanSubject: definition.human_subject, occurredAt: new Date(now()).toISOString() },
-      { purpose: definition.purpose, workDefinitionId: definition.work_definition_id });
+      { purpose: definition.purpose, workDefinitionId: definition.work_definition_id, draft: draftOf(definition) });
     return context.json(definition, 201);
   });
 
@@ -295,7 +314,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     const confirmed = confirm(definition, new Date(now()).toISOString());
     await workDefinitions.save(confirmed);
     await emitConfirmed({ humanSubject: confirmed.human_subject, occurredAt: new Date(now()).toISOString() },
-      { purpose: confirmed.purpose, workDefinitionId: confirmed.work_definition_id });
+      { purpose: confirmed.purpose, workDefinitionId: confirmed.work_definition_id, draft: draftOf(confirmed) });
     return context.json(confirmed, 200);
   });
 
@@ -316,7 +335,14 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     const revised = draft
       ? { ...definition, ...draft, updated_at: new Date(now()).toISOString() }
       : definition;
-    if (draft) await workDefinitions.save(revised);
+    if (draft) {
+      await workDefinitions.save(revised);
+      // The Automation Design AI's one visible act: the person asked, the model
+      // rewrote, and both the request and the answer go on the timeline.
+      await emitDraftRevised({ humanSubject: revised.human_subject, occurredAt: new Date(now()).toISOString() }, {
+        workDefinitionId: revised.work_definition_id, purpose: revised.purpose, request: body.text, revised: draftOf(revised),
+      });
+    }
     return context.json(revised, 200);
   });
 
@@ -325,7 +351,17 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     if (!definition || definition.human_subject !== context.get('humanSubject')) {
       return context.json({ error: 'not_found' }, 404);
     }
+    const activity = { humanSubject: definition.human_subject };
     try {
+      const request = buildBusinessWorkRequest(definition);
+      // Published before the call, with the moment the call was made: the Authorization
+      // Platform's own events are stamped when it starts deciding, and the ask has to
+      // read as having come first.
+      await emitDecisionRequested({ ...activity, occurredAt: new Date(now()).toISOString() }, {
+        workDefinitionId: definition.work_definition_id, purpose: definition.purpose,
+        description: request.description, constraints: request.constraints,
+        requestedLifetimeMinutes: request.requested_lifetime_minutes,
+      });
       const response = await submitBusinessWorkRequest({
         definition,
         client: createControlPlaneClient({
@@ -337,11 +373,17 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       });
       const decision = await response.json().catch(() => ({})) as {
         decision_id?: unknown;
+        status?: unknown;
         effective_capabilities?: unknown;
+        denied?: unknown;
         security_profile?: { isolation_level?: unknown };
       };
       if (!response.ok || typeof decision.decision_id !== 'string') {
         const refusal = upstreamRefusal(response.status, decision as { error?: unknown });
+        await emitDecisionRefused({ ...activity, occurredAt: new Date(now()).toISOString() }, {
+          workDefinitionId: definition.work_definition_id, purpose: definition.purpose,
+          error: refusal.body.error, refusedByPlatform: refusal.status === 400,
+        });
         return context.json(refusal.body, refusal.status);
       }
       // What the person is about to be shown, recorded before they see it. Approval and
@@ -358,6 +400,16 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
           ? decision.security_profile.isolation_level
           : 'standard',
       }, now());
+      // What came back, as opaque strings, and the `decision_id` that joins the
+      // Authorization Platform's own account of it to this work on the timeline.
+      await emitDecisionReceived({ ...activity, occurredAt: new Date(now()).toISOString() }, {
+        workDefinitionId: definition.work_definition_id, agentDefinitionId: agentDefinition.agent_definition_id,
+        purpose: definition.purpose, decisionId: decision.decision_id,
+        status: typeof decision.status === 'string' ? decision.status : 'decided',
+        effectiveCapabilities: agentDefinition.presented_capabilities,
+        deniedCount: Array.isArray(decision.denied) ? decision.denied.length : 0,
+        isolationLevel: agentDefinition.isolation_level,
+      });
       return context.json({ ...decision, agent_definition_id: agentDefinition.agent_definition_id }, 200);
     } catch (error) {
       if (error instanceof WorkDefinitionNotConfirmed) return context.json({ error: error.code }, 409);
@@ -370,6 +422,13 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       // Ownership is settled before the record is touched, and a stranger's id answers
       // 404 like a missing one: anything else would confirm the record exists (RULE-56).
       const approved = await agentDefinitions.approve(context.req.param('id'), context.get('humanSubject'), now());
+      const work = await workDefinitions.find(approved.work_definition_id);
+      await emitApproved({ humanSubject: approved.human_subject, occurredAt: new Date(now()).toISOString() }, {
+        workDefinitionId: approved.work_definition_id, decisionId: approved.decision_id,
+        agentDefinitionId: approved.agent_definition_id, purpose: work?.purpose ?? '',
+        capabilities: approved.presented_capabilities, isolationLevel: approved.isolation_level,
+        approvedAt: approved.approved_at ?? '',
+      });
       return context.json(approved, 200);
     } catch (error) {
       if (error instanceof AlreadyApproved) return context.json({ error: error.code }, 409);
@@ -399,6 +458,14 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     // this agent was approved for rather than from a fourth key it would refuse.
     const work = await workDefinitions.find(definition.work_definition_id);
     if (!work) return context.json({ error: 'not_found' }, 404);
+    const activity = { humanSubject: definition.human_subject };
+    const ids = {
+      workDefinitionId: work.work_definition_id, decisionId: definition.decision_id,
+      agentDefinitionId: definition.agent_definition_id, purpose: work.purpose,
+    };
+    await emitProvisionRequested({ ...activity, occurredAt: new Date(now()).toISOString() }, {
+      ...ids, requestedLifetimeMinutes: work.requested_lifetime_minutes,
+    });
     const response = await createControlPlaneClient({
       session: context.get('session'),
       ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
@@ -417,16 +484,29 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       },
       requiredScope: 'agent:provision',
     });
-    const provisioned = await response.json().catch(() => ({})) as { agent_id?: unknown };
+    const provisioned = await response.json().catch(() => ({})) as {
+      agent_id?: unknown; consent_url?: unknown; transaction_id?: unknown; error?: unknown;
+    };
+    if (!response.ok) {
+      await emitProvisionRefused({ ...activity, occurredAt: new Date(now()).toISOString() }, {
+        ...ids, error: typeof provisioned.error === 'string' ? provisioned.error : `http_${response.status}`,
+      });
+      return context.json(provisioned, response.status as 200);
+    }
+    // A consent screen is about to take this request away. What comes back is the
+    // transaction id and nothing else, so the definition remembers which transaction it
+    // is waiting on — that is how the agent the consent produces is told its work.
+    if (typeof provisioned.consent_url === 'string' && typeof provisioned.transaction_id === 'string') {
+      await agentDefinitions.rememberTransaction(definition.agent_definition_id, provisioned.transaction_id);
+    }
     // The agent is running but has not been told what for: the Runtime is handed a tool
     // manifest and an id, never the work (see seedInitialInstruction). This is the only
     // step that closes that gap, and it is deliberately not part of the answer — the
     // provisioning succeeded either way, and the person can add the instruction by hand.
-    if (response.ok && typeof provisioned.agent_id === 'string') {
-      const outcome = await seedInitialInstruction({
-        documents: deps.documents, agentId: provisioned.agent_id, definition: work, now: now(),
+    if (typeof provisioned.agent_id === 'string') {
+      await seedAndRecordInstruction(provisioned.agent_id, work, {
+        workDefinitionId: work.work_definition_id, decisionId: definition.decision_id,
       });
-      if (outcome !== 'written') logInitialInstructionFailure(provisioned.agent_id, outcome);
     }
     return context.json(provisioned, response.status as 200);
   });
@@ -475,6 +555,12 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
         documents: deps.documents, agentId, text: body.text, createdBy: context.get('humanSubject'), now: now(),
       });
       audit('add_instruction', agentId, context.get('humanSubject'), body.text);
+      // Filed under the task the agent is on, read off its own checkpoint: the
+      // instruction is the next thing that task's story will show the agent doing.
+      await emitInstructionAdded({ humanSubject: context.get('humanSubject'), occurredAt: instruction.created_at }, {
+        agentId, taskId: await currentTaskOf(agentId), instructionId: instruction.instruction_id,
+        text: instruction.text, initial: false,
+      });
       return context.json(instruction, 201);
     } catch (error) {
       if (error instanceof AgentNotActive) {
@@ -518,17 +604,54 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
   return app;
 
   /**
-   * The work definition a just-provisioned agent was made for, looked up by the id the
-   * Provisioner echoes back, and written to it as its first instruction.
+   * The work definition a just-provisioned agent was made for, and its first instruction.
+   *
+   * The consent return trip names the transaction, so the definition that remembered
+   * that transaction is the one to read the work from. The Provisioner's echoed
+   * `task_id` used to be looked up as a work definition id here; since it became
+   * `task-1` (docs 11 §3.3) that lookup found nothing, and every agent created through
+   * a consent screen started without being told its work.
    *
    * A definition that cannot be found is logged rather than raised: it means the agent
    * exists and the row behind it does not, which nothing this route does can repair.
    */
-  async function seedFirstInstruction(agentId: string, taskId: unknown): Promise<void> {
-    const work = typeof taskId === 'string' ? await workDefinitions.find(taskId) : undefined;
+  async function seedFirstInstruction(humanSubject: string, agentId: string, transactionId: string, echoedTaskId: unknown): Promise<void> {
+    const agentDefinition = await agentDefinitions.findByTransaction(humanSubject, transactionId);
+    const work = agentDefinition
+      ? await workDefinitions.find(agentDefinition.work_definition_id)
+      : (typeof echoedTaskId === 'string' ? await workDefinitions.find(echoedTaskId) : undefined);
     if (!work) { logInitialInstructionFailure(agentId, 'work_definition_not_found'); return; }
-    const outcome = await seedInitialInstruction({ documents: deps.documents, agentId, definition: work, now: now() });
-    if (outcome !== 'written') logInitialInstructionFailure(agentId, outcome);
+    await seedAndRecordInstruction(agentId, work, {
+      workDefinitionId: work.work_definition_id,
+      ...(agentDefinition ? { decisionId: agentDefinition.decision_id } : {}),
+    });
+  }
+
+  /**
+   * Writes the first instruction and puts it on the timeline under the agent's first
+   * task — with the ids that join the agent to the decision and the work it came from.
+   */
+  async function seedAndRecordInstruction(
+    agentId: string, work: WorkDefinition, links: { workDefinitionId: string; decisionId?: string },
+  ): Promise<void> {
+    const seeded = await seedInitialInstruction({ documents: deps.documents, agentId, definition: work, now: now() });
+    if (seeded.outcome !== 'written') { logInitialInstructionFailure(agentId, seeded.outcome); return; }
+    await emitInstructionAdded({ humanSubject: work.human_subject, occurredAt: seeded.instruction.created_at }, {
+      agentId, taskId: INITIAL_TASK_ID, instructionId: seeded.instruction.instruction_id,
+      text: seeded.instruction.text, initial: true, ...links,
+    });
+  }
+
+  /**
+   * The task the agent's Runtime says it is on; the first one until it has said.
+   *
+   * Read through the same status reader the screen uses, which is the one place this
+   * app reads an agent's checkpoint (T-APP-27).
+   */
+  async function currentTaskOf(agentId: string): Promise<string> {
+    const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
+    const taskId = status.current_task;
+    return typeof taskId === 'string' && TASK_ID_PATTERN.test(taskId) ? taskId : INITIAL_TASK_ID;
   }
 
   /**

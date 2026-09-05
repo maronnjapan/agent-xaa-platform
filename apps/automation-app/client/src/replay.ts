@@ -1,6 +1,6 @@
 import { buildReplayPlan, isFinished, type ReplayEvent, type ReplayStep } from './replay-plan.js';
 import { MIN_STOP_RATIO, REPLAY_STEP_MS, STOP_CLEARANCE, STOP_RATIO_STEP } from './replay-config.js';
-import { NODE_HALF_HEIGHT, NODE_HALF_WIDTH } from '../../src/ui/replay/nodes.js';
+import { NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_NODES } from '../../src/ui/replay/nodes.js';
 import { emphasisClass } from '../../src/ui/replay/emphasis.js';
 
 const SOURCE_TO_NODE: Readonly<Record<string, string>> = {
@@ -12,6 +12,9 @@ const SOURCE_TO_NODE: Readonly<Record<string, string>> = {
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** How far above or below its arrow a label sits, in the diagram's own units. */
+const LABEL_OFFSET = 9;
 
 interface Point { x: number; y: number }
 
@@ -51,6 +54,12 @@ interface PlayOptions {
  * geometry constants and the emphasis rule come from the modules the server renders
  * with, so a step's colour and the badge on its row are decided by the same function.
  *
+ * Every step puts words on the screen as well as motion: the exchange's name is drawn
+ * on its arrow, the two boxes involved are lit, and the caption under the picture
+ * shows the route, the name and the publisher's own sentence for the step. None of
+ * those words is composed here — they are the hop's `label` and `message`, the event's
+ * `title` and `message`, and the boxes' fixed captions, placed rather than written.
+ *
  * Messages accumulate rather than replace: a person who looks away for one step should
  * still be able to read what they missed. When the last step lands, the root is marked
  * `finished` and the timer is cleared — nothing loops, because a replay that restarted
@@ -74,10 +83,13 @@ export function playReplay(root: HTMLElement, events: readonly ReplayEvent[], op
   };
 
   const draw = (current: ReplayStep): void => {
-    if (current.from === null && current.to === null) {
+    lightBoxes(root, current);
+    if (current.kind === 'banner') {
       // An event with no node of its own: it says something happened to the agent
       // rather than between two services, so it gets the banner and no arrow.
       if (banner) banner.textContent = current.message;
+    } else if (current.kind === 'self') {
+      drawPulse(root, current);
     } else {
       drawArrow(root, current);
     }
@@ -88,6 +100,7 @@ export function playReplay(root: HTMLElement, events: readonly ReplayEvent[], op
       messages.appendChild(line);
     }
     if (progress) progress.textContent = `${current.index + 1} / ${plan.length}`;
+    writeCaption(root, current, plan.length);
     markLog(options.log, current.eventId);
   };
 
@@ -134,10 +147,12 @@ export function playReplay(root: HTMLElement, events: readonly ReplayEvent[], op
     restart() {
       clearTimer();
       emptyOut(root.querySelector('[data-arrows]'));
+      emptyOut(root.querySelector('[data-labels]'));
       emptyOut(root.querySelector('[data-dots]'));
       emptyOut(messages);
       if (banner) banner.textContent = '';
       resetNodes(root);
+      clearCaption(root);
       resetLog(options.log);
       index = 0;
       root.setAttribute('data-replay-state', 'playing');
@@ -195,7 +210,98 @@ function emptyOut(element: Element | null): void {
  * no verdict at all (RULE-54).
  */
 function resetNodes(root: HTMLElement): void {
-  root.querySelectorAll('[data-node]').forEach((node) => { node.setAttribute('data-reached', ''); });
+  root.querySelectorAll('[data-node]').forEach((node) => {
+    node.setAttribute('data-reached', '');
+    node.setAttribute('data-active', '');
+  });
+}
+
+/**
+ * The boxes a step involves, lit while it is the current one.
+ *
+ * `from` and `to` are told apart so the eye can follow the direction without waiting
+ * for the dot; a self step lights its one box as `self`. Everything else goes dark,
+ * so the two lit boxes are always this step's and never a previous one's.
+ */
+function lightBoxes(root: HTMLElement, step: ReplayStep): void {
+  root.querySelectorAll('[data-node]').forEach((node) => {
+    const id = node.getAttribute('data-node');
+    const role = id !== null && id === step.from
+      ? (step.kind === 'self' ? 'self' : 'from')
+      : (id !== null && id === step.to ? 'to' : '');
+    node.setAttribute('data-active', role);
+  });
+}
+
+/**
+ * The words under the picture for the current step.
+ *
+ * Route, name, sentence — three separate elements, each holding one string the
+ * publisher (or the diagram's own fixed captions) wrote. The browser joins nothing
+ * into a sentence of its own.
+ */
+function writeCaption(root: HTMLElement, step: ReplayStep, total: number): void {
+  const caption = root.querySelector('[data-caption]');
+  if (!caption) return;
+  caption.setAttribute('data-caption-state', step.blocked ? 'blocked' : 'playing');
+  caption.setAttribute('data-caption-emphasis', emphasisClass(step.outcome, step.phase));
+  const set = (field: string, text: string): void => {
+    const target = caption.querySelector(`[data-field="${field}"]`);
+    if (target) target.textContent = text;
+  };
+  set('caption-step', `${step.index + 1} / ${total}`);
+  set('caption-route', routeOf(step));
+  set('caption-label', step.label);
+  set('caption-message', step.message);
+}
+
+function clearCaption(root: HTMLElement): void {
+  const caption = root.querySelector('[data-caption]');
+  if (!caption) return;
+  caption.setAttribute('data-caption-state', 'idle');
+  caption.setAttribute('data-caption-emphasis', '');
+  for (const field of ['caption-step', 'caption-route', 'caption-label', 'caption-message']) {
+    const target = caption.querySelector(`[data-field="${field}"]`);
+    if (target) target.textContent = '';
+  }
+}
+
+/** The boxes' own captions, joined by the diagram's arrow glyph: a route, not a sentence. */
+function routeOf(step: ReplayStep): string {
+  const from = step.from === null ? '' : boxLabel(step.from);
+  const to = step.to === null ? '' : boxLabel(step.to);
+  if (step.kind === 'move') return `${from} → ${to}`;
+  return from || to;
+}
+
+function boxLabel(id: string): string {
+  return REPLAY_NODES.find((node) => node.id === id)?.label ?? id;
+}
+
+/**
+ * A step that moved nothing: a ring that swells around the box it happened in.
+ *
+ * Drawn in the dots layer beside the travelling circles, and marked with the step so a
+ * restart can take it away with everything else.
+ */
+function drawPulse(root: HTMLElement, step: ReplayStep): void {
+  const at = step.from === null ? (step.to === null ? null : centreOf(root, step.to)) : centreOf(root, step.from);
+  const dots = root.querySelector('[data-dots]') ?? root.querySelector('[data-arrows]');
+  if (!at || !dots) return;
+  const ring = root.ownerDocument.createElementNS(SVG_NS, 'rect');
+  ring.setAttribute('class', 'replay-pulse');
+  ring.setAttribute('data-pulse', 'true');
+  ring.setAttribute('data-step-index', String(step.index));
+  ring.setAttribute('data-pulse-emphasis', emphasisClass(step.outcome, step.phase));
+  ring.setAttribute('x', String(at.x - NODE_HALF_WIDTH - 4));
+  ring.setAttribute('y', String(at.y - NODE_HALF_HEIGHT - 4));
+  ring.setAttribute('width', String(NODE_HALF_WIDTH * 2 + 8));
+  ring.setAttribute('height', String(NODE_HALF_HEIGHT * 2 + 8));
+  ring.setAttribute('rx', '9');
+  ring.style.setProperty('--step-ms', `${REPLAY_STEP_MS}ms`);
+  dots.appendChild(ring);
+  const box = step.from === null ? null : root.querySelector(`[data-node="${step.from}"]`);
+  if (box) box.setAttribute('data-reached', 'true');
 }
 
 function drawArrow(root: HTMLElement, step: ReplayStep): void {
@@ -208,6 +314,7 @@ function drawArrow(root: HTMLElement, step: ReplayStep): void {
   // The lines live behind the boxes and the dots in front. A canvas with only the one
   // layer — the shape every test double builds — puts both where it can.
   const dots = root.querySelector('[data-dots]') ?? arrows;
+  const labels = root.querySelector('[data-labels]') ?? dots;
   const stop = edgeOf(finish, start);
   const stopRatio = step.blocked ? clearStopRatio(root, step, start, stop) : step.stopRatio;
   const document_ = root.ownerDocument;
@@ -235,10 +342,34 @@ function drawArrow(root: HTMLElement, step: ReplayStep): void {
   dots.appendChild(dot);
 
   if (step.blocked) dots.appendChild(stopMark(document_, pointAt(start, stop, stopRatio), emphasis));
+  if (step.label !== '') labels.appendChild(arrowLabel(document_, step, start, pointAt(start, stop, stopRatio), emphasis));
 
   const target = step.to === null ? null : root.querySelector(`[data-node="${step.to}"]`);
   // A blocked step never arrives, so the destination stays explicitly unreached.
   if (target) target.setAttribute('data-reached', step.blocked ? 'false' : 'true');
+}
+
+/**
+ * The exchange's name, on the arrow it names.
+ *
+ * Set beside the midpoint of the travelled part, above the line for a movement that
+ * runs left or down and below it for the way back, so a call and its answer between
+ * the same two boxes do not print on top of each other.
+ */
+function arrowLabel(document_: Document, step: ReplayStep, start: Point, stop: Point, emphasis: string): SVGElement {
+  const middle = pointAt(start, stop, 0.5);
+  const forward = stop.x > start.x || (stop.x === start.x && stop.y > start.y);
+  const vertical = Math.abs(stop.x - start.x) < Math.abs(stop.y - start.y);
+  const label = document_.createElementNS(SVG_NS, 'text');
+  label.setAttribute('class', 'replay-arrow-label');
+  label.setAttribute('data-arrow-label', 'true');
+  label.setAttribute('data-step-index', String(step.index));
+  label.setAttribute('data-label-emphasis', emphasis);
+  label.setAttribute('text-anchor', vertical ? (forward ? 'start' : 'end') : 'middle');
+  label.setAttribute('x', String(vertical ? middle.x + (forward ? LABEL_OFFSET : -LABEL_OFFSET) : middle.x));
+  label.setAttribute('y', String(vertical ? middle.y : middle.y + (forward ? -LABEL_OFFSET : LABEL_OFFSET + 6)));
+  label.textContent = step.label;
+  return label;
 }
 
 /**
@@ -317,4 +448,30 @@ function pointAt(from: Point, to: Point, ratio: number): Point {
 
 function lineBetween(from: Point, to: Point): string {
   return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+}
+
+/**
+ * The recorded instants, shown in the reader's own clock.
+ *
+ * Every `<time>` on the page is served with the instant as it was recorded, in UTC,
+ * which is what the record is. A person in Tokyo reading `09:00Z` beside something
+ * they did at six in the evening concludes the order is wrong. The text is re-set to
+ * the same instant in the browser's zone; the `datetime` attribute keeps the recorded
+ * value, and the original is left as a tooltip. Nothing about the order changes.
+ */
+export function showLocalTimes(root: { querySelectorAll(selector: string): ArrayLike<Element> }): void {
+  for (const element of Array.from(root.querySelectorAll('[datetime]'))) {
+    const recorded = element.getAttribute('datetime') ?? '';
+    const millis = Date.parse(recorded);
+    if (!Number.isFinite(millis)) continue;
+    try {
+      element.setAttribute('title', recorded);
+      element.textContent = new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      }).format(new Date(millis));
+    } catch {
+      // A browser without Intl keeps the recorded text, which is still correct.
+    }
+  }
 }

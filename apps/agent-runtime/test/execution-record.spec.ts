@@ -259,3 +259,49 @@ describe("the summary on a task's last row", () => {
     ]).size).toBe(4);
   });
 });
+
+/**
+ * "What was it told, and what did it think" — the two things a person reading a step
+ * asks before they ask what it sent. The instructions read at the head of the step
+ * open the record; the model's note follows as the agent's own words.
+ */
+describe('what the agent was told and what it said', () => {
+  it('opens a step with the instructions it read, in the person\'s words', async () => {
+    const context = await testContext();
+    const { http } = testHttp(context, happyPath());
+    const recorder = createExecutionRecorder({
+      step: 1, toolId: 'internal.document.list',
+      intent: { note: 'まず一覧を確かめます。', parameters: {}, instructions: ['目的: 日報をまとめる\n内容: 毎朝の議事録を読む'] },
+    });
+    const result = await executeTool(
+      { context, http, logger: silentLogger, logContext, stageWrite: () => {}, recorder },
+      { tool_id: 'internal.document.list', parameters: {} },
+    );
+    const record = recorder.build(result);
+    expect(sectionIds(record).slice(0, 2)).toEqual(['received', 'intent']);
+    const received = sectionOf(record, 'received')!;
+    expect(received.text).toContain('日報をまとめる');
+    expect(received.format).toBe('text');
+    expect(received.message).toContain('1 件');
+    expect(sectionOf(record, 'intent')?.text).toBe('まず一覧を確かめます。');
+  });
+
+  it('leaves the instructions out of a step that read none', () => {
+    const record = createExecutionRecorder({ step: 2, toolId: 'internal.document.list', intent: { parameters: {} } })
+      .build({ outcome: 'success', tool_id: 'internal.document.list', stage: 'resource_api', data: [] });
+    expect(sectionIds(record)).not.toContain('received');
+  });
+
+  it('asks the model for its note on every step', async () => {
+    const context = await testContext();
+    const { http } = testHttp(context, happyPath());
+    const prompts: string[] = [];
+    await runReasoningLoop({
+      context, http, logger: silentLogger, logContext, stageWrite: () => {},
+      vertex: { generateJson: async <T>(params: { prompt: string }) => { prompts.push(params.prompt); return { done: true, note: '終えました。' } as T; } },
+    });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain('note には毎回');
+    expect(prompts[0]).toContain('指示した人がそのまま読む');
+  });
+});

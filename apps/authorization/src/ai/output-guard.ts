@@ -4,10 +4,16 @@ export interface AuthorizationAiResult {
   capabilities: string[];
   characteristics: Partial<Characteristics>;
   confidence: number;
+  /** The model's own words about the proposal, when it wrote any and they were clean. */
+  note?: string;
 }
 
 /** Where or how to call something: the model has no business naming these. */
 export const TECHNICAL_FIELDS = ['api_url', 'http_method', 'token_endpoint', 'oauth_scope', 'bridge_url', 'base_url', 'endpoint'] as const;
+/** The same markers `prompt.ts` refuses on the way in, applied to the prose on the way out. */
+export const NOTE_TECHNICAL_MARKERS = ['https://', 'http://', 'endpoint', 'base_url', 'oauth', 'bearer', 'token_url'] as const;
+/** Long enough to explain a proposal; short enough that the note stays a note. */
+export const NOTE_MAX_LENGTH = 1200;
 /** The verdict itself: the model proposes, the Policy Engine decides. */
 export const DECISION_FIELDS = ['decision', 'allow', 'deny', 'isolation_level', 'security_profile', 'risk_score'] as const;
 
@@ -55,5 +61,12 @@ export function sanitizeAiOutput(raw: unknown): { result: AuthorizationAiResult;
     ? source.capabilities.filter((value): value is string => typeof value === 'string')
     : [];
 
-  return { result: { capabilities, characteristics, confidence }, warnings };
+  // The note is prose for a person and nothing else. One that names where or how to
+  // call something is dropped whole rather than trimmed: a model that put a URL in its
+  // explanation has done the thing RULE-09 forbids, and the warning says so.
+  const note = typeof source.note === 'string' ? source.note.trim().slice(0, NOTE_MAX_LENGTH) : '';
+  const marker = NOTE_TECHNICAL_MARKERS.find((candidate) => note.toLowerCase().includes(candidate));
+  if (marker) warnings.push({ code: 'ai_output_contains_technical_field', field: 'note' });
+
+  return { result: { capabilities, characteristics, confidence, ...(note !== '' && !marker ? { note } : {}) }, warnings };
 }

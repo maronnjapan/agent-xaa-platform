@@ -1,4 +1,4 @@
-import { playReplay, type ReplayController } from './replay.js';
+import { playReplay, showLocalTimes, type ReplayController } from './replay.js';
 import type { ReplayEvent } from './replay-plan.js';
 import { wireDetailToggles } from './detail-toggle.js';
 
@@ -14,6 +14,9 @@ import { wireDetailToggles } from './detail-toggle.js';
  * words are already on the page — the server rendered every event and every record
  * from what their publishers wrote — so nothing here builds a sentence; it starts,
  * pauses and steps the picture, and marks which written entry the picture is on.
+ *
+ * Tasks are found by `run_id` and `task_id` together: two agents each have a `task-1`,
+ * and wiring by the id alone attached both replays to whichever came first.
  */
 export function start(root: Document = document): void {
   const controllers = new Map<string, ReplayController>();
@@ -22,17 +25,18 @@ export function start(root: Document = document): void {
   const load = async (): Promise<void> => {
     const response = await fetch('/api/activity/tasks', { credentials: 'same-origin' });
     if (!response.ok) return;
-    const body = await response.json() as { tasks: Array<{ task_id: string; events?: unknown[] }> };
+    const body = await response.json() as { tasks: Array<{ run_id: string; task_id: string; events?: unknown[] }> };
     for (const task of body.tasks) {
-      if (!Array.isArray(task.events) || wired.has(task.task_id)) continue;
-      const canvas = root.querySelector<HTMLElement>(`.replay[data-task-id="${task.task_id}"]`);
+      const key = `${task.run_id}:${task.task_id}`;
+      if (!Array.isArray(task.events) || wired.has(key)) continue;
+      const canvas = root.querySelector<HTMLElement>(`[data-replay-key="${key}"]`);
       if (!canvas) continue;
-      wired.add(task.task_id);
-      const log = root.querySelector(`[data-event-log="${task.task_id}"]`);
+      wired.add(key);
+      const log = root.querySelector(`[data-log-key="${key}"]`);
       const events = task.events as ReplayEvent[];
       const begin = (autoplay: boolean): ReplayController => {
         const controller = playReplay(canvas, events, { log, autoplay });
-        controllers.set(task.task_id, controller);
+        controllers.set(key, controller);
         return controller;
       };
       // A click anywhere on the canvas still starts it, which is how the page worked
@@ -41,9 +45,11 @@ export function start(root: Document = document): void {
         if (isControl(event.target)) return;
         begin(true);
       });
-      wireControls(canvas, task.task_id, controllers, begin);
+      wireControls(canvas, key, controllers, begin);
+      wireRow(root, key, canvas, controllers, begin);
     }
     wireDetailToggles(root);
+    showLocalTimes(root);
   };
 
   void load();
@@ -65,13 +71,13 @@ function isControl(target: EventTarget | null): boolean {
  */
 function wireControls(
   canvas: HTMLElement,
-  taskId: string,
+  key: string,
   controllers: Map<string, ReplayController>,
   begin: (autoplay: boolean) => ReplayController,
 ): void {
   const on = (action: string, run: (controller: ReplayController | undefined) => void): void => {
     canvas.querySelector(`[data-action="${action}"]`)?.addEventListener('click', () => {
-      run(controllers.get(taskId));
+      run(controllers.get(key));
     });
   };
   // `begin` already starts moving, so the first press starts it and later presses
@@ -80,6 +86,29 @@ function wireControls(
   on('replay-pause', (controller) => { controller?.pause(); });
   on('replay-step', (controller) => { if (controller) controller.next(); else begin(false).next(); });
   on('replay-restart', (controller) => { if (controller) controller.restart(); else begin(true); });
+}
+
+/**
+ * The row in the list is the way docs 11 §5.1 says a replay is chosen: pressing it
+ * brings its picture into view and starts it, or restarts one that already finished.
+ */
+function wireRow(
+  root: Document,
+  key: string,
+  canvas: HTMLElement,
+  controllers: Map<string, ReplayController>,
+  begin: (autoplay: boolean) => ReplayController,
+): void {
+  root.querySelectorAll<HTMLElement>(`[data-task-key="${key}"]`).forEach((row) => {
+    if (row.hasAttribute('disabled')) return;
+    row.addEventListener('click', () => {
+      canvas.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      const controller = controllers.get(key);
+      if (!controller) { begin(true); return; }
+      if (canvas.getAttribute('data-replay-state') === 'finished') controller.restart();
+      else controller.play();
+    });
+  });
 }
 
 if (typeof document !== 'undefined') start();

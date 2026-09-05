@@ -19,6 +19,15 @@ export const authorizationAiResultSchema = {
       },
     },
     confidence: { type: 'number', minimum: 0, maximum: 1 },
+    /**
+     * The model's stated grounds, in Japanese, for a person to read on the timeline.
+     *
+     * Free text and optional. It is never parsed and decides nothing (RULE-10); it is
+     * carried as prose so the person who asked can see why the model thought the work
+     * needed what it proposed — and refused, redacted, when it names anything technical
+     * (`output-guard.ts`).
+     */
+    note: { type: 'string' },
   },
 } as const;
 

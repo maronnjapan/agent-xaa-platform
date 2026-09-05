@@ -28,6 +28,8 @@ export interface ToolCallIntent {
   note?: string;
   /** The arguments the model asked for, before the manifest was consulted. */
   parameters: Record<string, unknown>;
+  /** The instructions the agent read at the head of this step, in the person's words. */
+  instructions?: readonly string[];
 }
 
 export interface ExecutionRecorder {
@@ -128,6 +130,8 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
     checks.push({ id, label, result, message });
   };
 
+  const received = receivedSection(input.intent.instructions);
+  if (received) sections.push(received);
   sections.push({
     id: 'intent',
     label: 'エージェントが決めたこと',
@@ -333,22 +337,47 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
 }
 
 /**
+ * What the agent was told at the head of this step, in the words it was told.
+ *
+ * The first step's is the confirmed work itself; a later one is something the person
+ * added while the agent ran. A reader who sees the agent refuse a tool two lines down
+ * needs to see the instruction that asked for it, and a reader who sees it do the right
+ * thing needs to see what "right" was.
+ */
+function receivedSection(instructions: readonly string[] | undefined): ActivityRecordSection | null {
+  if (!instructions || instructions.length === 0) return null;
+  return {
+    id: 'received',
+    label: 'この手で読んだ指示',
+    message: `Agent Runtime が ${instructions.length} 件の指示を読み取り、会話に加えました。指示は言葉だけで、使えるツールを増やすことはありません。`,
+    text: redactRecordText(instructions.join('\n\n')),
+    format: 'text',
+  };
+}
+
+/**
  * The record for a step in which no tool ran at all.
  *
  * A model that answered with something unreadable, or that said it was finished, still
  * did something a person is entitled to see. Leaving these steps out made a run of
  * eight reasoning steps look like a run of two tool calls.
  */
-export function reasoningRecord(input: { step: number; headline: string; message: string; note?: string }): ActivityRecord {
+export function reasoningRecord(input: {
+  step: number; headline: string; message: string; note?: string; instructions?: readonly string[];
+}): ActivityRecord {
+  const received = receivedSection(input.instructions);
   return {
     headline: input.headline,
     step: input.step,
-    sections: [{
-      id: 'intent',
-      label: 'エージェントが決めたこと',
-      message: input.message,
-      ...(input.note ? { text: redactRecordText(input.note), format: 'text' as const } : {}),
-    }],
+    sections: [
+      ...(received ? [received] : []),
+      {
+        id: 'intent',
+        label: 'エージェントが決めたこと',
+        message: input.message,
+        ...(input.note ? { text: redactRecordText(input.note), format: 'text' as const } : {}),
+      },
+    ],
   };
 }
 

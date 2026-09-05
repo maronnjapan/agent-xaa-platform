@@ -11,17 +11,21 @@ export const REPLAY_LEGEND_CAPTION = 'この図の見方';
 /**
  * How to read the picture, written next to the picture.
  *
- * A person who has not read docs 05 sees eight boxes and a moving dot. These four
- * lines are what turn that into a claim they can check — and the third one is the
- * whole demonstration: a refusal is an arrow that stops, and nothing else on the
- * canvas looks like that.
+ * A person who has not read docs 05 sees eight boxes and a moving dot. These lines are
+ * what turn that into a claim they can check — and the third one is the whole
+ * demonstration: a refusal is an arrow that stops, and nothing else on the canvas
+ * looks like that.
  */
 export const REPLAY_LEGEND: readonly string[] = [
   '上の段は人と、権限を決める側です。下の段は Agent と、Agent が触るリソースです。',
-  '丸は1回のやり取りです。出どころから相手へ動き、届いたところでその説明が出ます。',
+  '丸は1回のやり取りです。出どころから相手へ動き、矢印の上にそのやり取りの名前が出ます。',
   '止められたやり取りは、相手に届く手前で止まります。届かなかった箱は点線のままです。',
+  '箱の中だけで起きたこと（判断や登録）は、矢印を出さずにその箱を光らせます。',
+  '図の下の枠に、いま動いているやり取りの相手と、発行元が書いた説明が出ます。',
   'この処理に出てこなかった箱は表示しません。出ている箱が、関わったものの全部です。',
 ];
+
+export const REPLAY_CAPTION_IDLE = '再生を押すと、ここに1手ずつ説明が出ます。';
 
 /**
  * The fixed diagram, with the boxes this task did not involve marked hidden rather
@@ -32,18 +36,25 @@ export const REPLAY_LEGEND: readonly string[] = [
  * what lets a person compare two replays, and what makes `data-reached="false"` on a
  * particular box meaningful.
  *
+ * The caption under the picture is where the words go while it moves. A dot that
+ * travels between two boxes says only that something went somewhere; the caption names
+ * the two boxes, the exchange, and the publisher's own sentence about it, so a person
+ * watching learns what is happening rather than only that something is. Every word in
+ * it is written by the browser from the event, never composed (RULE-54).
+ *
  * The controls exist because a replay that only ran once, start to finish, at a fixed
  * pace, is a thing you watch rather than a thing you read. A step that says something
  * surprising is the step you want to stop on.
  */
 export function ReplayCanvas(props: {
   taskId: string;
+  taskKey?: string;
   events: readonly CanvasEvent[];
   simulated?: boolean;
 }): Element {
   const visible = visibleNodeIds(props.events);
   return (
-    <div class="replay" data-task-id={props.taskId} data-replay-state="idle">
+    <div class="replay" data-task-id={props.taskId} data-replay-key={props.taskKey ?? props.taskId} data-replay-state="idle">
       {props.simulated ? <SimulatedBadge position="canvas" /> : null}
       <div class="replay-controls" data-replay-controls="true">
         <button type="button" data-action="replay-play">再生</button>
@@ -65,6 +76,7 @@ export function ReplayCanvas(props: {
             class="replay-node"
             data-node={node.id}
             data-reached="false"
+            data-active=""
             data-x={String(node.x)}
             data-y={String(node.y)}
             transform={`translate(${node.x},${node.y})`}
@@ -82,13 +94,23 @@ export function ReplayCanvas(props: {
           </g>
         ))}
         {/*
-          * The travelling dots go in front, for the opposite reason: adjacent boxes are
-          * close enough that most of a centre-to-edge path lies under the box it starts
-          * from, and a dot behind the boxes would be out of sight for most of its trip.
+          * The travelling dots and the arrow labels go in front, for the opposite
+          * reason: adjacent boxes are close enough that most of a centre-to-edge path
+          * lies under the box it starts from, and a dot behind the boxes would be out
+          * of sight for most of its trip.
           */}
+        <g class="replay-labels" data-labels="true" />
         <g class="replay-dots" data-dots="true" />
         <text class="replay-banner" data-banner="true" x="360" y="150" text-anchor="middle" />
       </svg>
+      <div class="replay-caption" data-caption="true" data-caption-state="idle">
+        <p class="caption-head">
+          <span class="caption-step" data-field="caption-step" />
+          <span class="caption-route" data-field="caption-route" />
+          <span class="caption-label" data-field="caption-label" />
+        </p>
+        <p class="caption-message" data-field="caption-message">{REPLAY_CAPTION_IDLE}</p>
+      </div>
       <ol class="replay-messages" data-messages="true" />
       <details class="replay-legend" data-legend="true">
         <summary>{REPLAY_LEGEND_CAPTION}</summary>

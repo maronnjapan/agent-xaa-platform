@@ -85,7 +85,7 @@ describe('the four Automation App emitters', () => {
   it('writes Japanese titles and messages, never blank', async () => {
     await emitProposed({ humanSubject: SUBJECT }, { purpose: '経費精算', workDefinitionId: 'wd_1' });
     const [entry] = drainActivityQueueForTesting();
-    expect(entry!.message).toBe('Automation Design AI が「経費精算」を提案しました');
+    expect(entry!.message).toBe('「経費精算」を自動化の候補として保存しました。');
     for (const text of [entry!.title, entry!.message]) {
       expect(text.trim()).not.toBe('');
       // eslint-disable-next-line no-control-regex

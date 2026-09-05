@@ -219,7 +219,7 @@ describe('the task list', () => {
   it('labels a simulated task everywhere and a real one nowhere', async () => {
     const simulated = await render(TimelinePage({
       tasks: [{
-        task_id: 'demo-dpop-replay', agent_id: null, purpose: 'デモ', status: 'completed',
+        run_id: 'demo:demo-dpop-replay', task_id: 'demo-dpop-replay', agent_id: null, purpose: 'デモ', status: 'completed',
         terminal_outcome: 'blocked', completed_at: '2026-01-01T00:00:00.000Z',
         events: [{
           event_id: 'e', trace_id: 't', human_subject: 'testuser', agent_id: null, task_id: 'demo-dpop-replay',
@@ -241,7 +241,7 @@ describe('the task list', () => {
     expect(outsideDisclosures.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(2);
 
     const real = await render(TimelinePage({
-      tasks: [{ task_id: 'task-1', agent_id: null, purpose: '実作業', status: 'running' }],
+      tasks: [{ run_id: 'work:wd_1', task_id: 'task-1', agent_id: null, purpose: '実作業', status: 'running' }],
     }));
     expect(real).not.toContain(SIMULATED_LABEL);
   });

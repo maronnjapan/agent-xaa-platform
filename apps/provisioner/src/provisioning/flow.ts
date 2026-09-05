@@ -30,6 +30,12 @@ export interface FlowDeps extends ProvisionerDeps {
 export interface ProvisionRequest {
   humanSubject: string;
   taskId: string;
+  /**
+   * The decision this agent is made from, named on the first event so the timeline
+   * can join the agent to the decision and to the work that led to it. A
+   * re-provisioning has none of its own; it names the agent it replaces instead.
+   */
+  decisionId?: string;
   effectiveCapabilities: string[];
   isolationLevel: IsolationLevel;
   constraints: Record<string, Record<string, unknown>>;
@@ -212,6 +218,7 @@ export async function provisionAgent(
           detail: {
             isolation_level: request.isolationLevel,
             capabilities: request.effectiveCapabilities,
+            ...(request.decisionId ? { decision_id: request.decisionId } : {}),
             // Present only for a replacement, so a timeline can join the new agent to
             // the one it took over from (RULE-29).
             ...(request.previousAgentId ? { replaces_agent_id: request.previousAgentId } : {}),

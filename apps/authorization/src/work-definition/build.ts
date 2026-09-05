@@ -26,8 +26,14 @@ const workDefinitionSchema = {
   properties: {
     operations: { type: 'array', items: { type: 'string' } },
     target_resources: { type: 'array', items: { type: 'string' } },
+    /** How the model read the work, in Japanese, for the timeline. Decides nothing. */
+    note: { type: 'string' },
   },
 } as const;
+
+/** Anything in the model's prose that would tell someone where or how to call something. */
+const NOTE_TECHNICAL_MARKERS = ['https://', 'http://', 'endpoint', 'base_url', 'oauth', 'bearer', 'token_url'];
+const NOTE_MAX_LENGTH = 1200;
 
 /**
  * REQ-03-002. Turns the human's request into a work definition.
@@ -43,11 +49,12 @@ const workDefinitionSchema = {
 export async function buildWorkDefinition(
   request: { purpose: string; description: string; constraints?: Record<string, unknown>; humanSubject: string },
   deps: { vertex: VertexClient; allowedResources: Set<string>; now: () => number },
-): Promise<{ workDefinition: WorkDefinition; dropped: DroppedValues }> {
-  const raw = await deps.vertex.generateJson<{ operations?: unknown; target_resources?: unknown }>({
+): Promise<{ workDefinition: WorkDefinition; dropped: DroppedValues; note?: string }> {
+  const raw = await deps.vertex.generateJson<{ operations?: unknown; target_resources?: unknown; note?: unknown }>({
     prompt: [
       'あなたは業務内容を構造化する担当です。',
       '次の業務内容から、想定される操作と対象リソースを抽出してください。',
+      'note には、どう読み取ったかを日本語で一文か二文で書いてください。URL や接続先は書かないでください。',
       `目的: ${request.purpose}`,
       `内容: ${request.description}`,
     ].join('\n'),
@@ -76,7 +83,12 @@ export async function buildWorkDefinition(
     else dropped.dropped_target_resource.push(value);
   }
 
+  // The model's own account of its reading, kept only when it says nothing technical.
+  const note = typeof raw?.note === 'string' ? raw.note.trim().slice(0, NOTE_MAX_LENGTH) : '';
+  const clean = note !== '' && !NOTE_TECHNICAL_MARKERS.some((marker) => note.toLowerCase().includes(marker));
+
   return {
+    ...(clean ? { note } : {}),
     workDefinition: {
       work_definition_id: `wd_${randomUUID()}`,
       purpose: request.purpose,

@@ -202,3 +202,96 @@
 .replay[data-replay-state="idle"] ~ .event-log .event-entry[data-entry-state="waiting"] {
   opacity: 1;
 }
+
+/*
+ * The words on the picture.
+ *
+ * A dot on its own says "something went from here to there". The label on the arrow
+ * says which exchange it was, the lit boxes say who was involved, and the caption
+ * under the picture carries the publisher's own sentence for the step. All of it is
+ * placed here and written nowhere here: every string comes from a hop, an event, or
+ * the boxes' fixed captions.
+ */
+.replay-arrow-label {
+  font-size: 10.5px;
+  fill: #35506a;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.replay-arrow-label[data-label-emphasis="ev-blocked-tool"] { fill: #6b4a06; }
+.replay-arrow-label[data-label-emphasis="ev-blocked-security"] { fill: #6d1111; font-weight: 700; }
+
+.replay-node[data-active="from"] rect,
+.replay-node[data-active="to"] rect,
+.replay-node[data-active="self"] rect {
+  fill: #eef5ff;
+  stroke: #2f6fb5;
+  stroke-width: 2.5;
+}
+
+.replay-node[data-active="to"] rect { fill: #e3efff; }
+
+/* A step that stayed inside one box: a ring that swells around it and fades. */
+.replay-pulse {
+  fill: none;
+  stroke: #2f6fb5;
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: replay-pulse;
+  animation-duration: var(--step-ms, 1s);
+  animation-timing-function: ease-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+.replay-pulse[data-pulse-emphasis="ev-success"] { stroke: #1d5c33; }
+.replay-pulse[data-pulse-emphasis="ev-blocked-tool"] { stroke: #d8a94f; }
+.replay-pulse[data-pulse-emphasis="ev-blocked-security"] { stroke: #a32020; stroke-width: 3; }
+
+@keyframes replay-pulse {
+  from { opacity: 1; transform: scale(0.96); }
+  70% { opacity: 0.6; transform: scale(1.06); }
+  to { opacity: 0.25; transform: scale(1.06); }
+}
+
+.replay-caption {
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid #d5d5dd;
+  border-left: 4px solid #97a6b2;
+  border-radius: 6px;
+  background: #ffffff;
+  max-width: 38rem;
+  box-sizing: border-box;
+}
+
+.replay-caption[data-caption-state="idle"] { color: #5b5b66; }
+.replay-caption[data-caption-state="playing"] { border-left-color: #2f6fb5; }
+.replay-caption[data-caption-emphasis="ev-success"] { border-left-color: #1d5c33; }
+.replay-caption[data-caption-emphasis="ev-blocked-tool"] { border-left-color: #d8a94f; background: #fdf8ee; }
+.replay-caption[data-caption-emphasis="ev-blocked-security"] { border-left-color: #a32020; background: #fdf6f5; }
+
+.caption-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #5b5b66;
+}
+
+.caption-step { font-variant-numeric: tabular-nums; }
+.caption-route { font-weight: 700; color: #24313b; }
+.caption-label { color: #35506a; }
+
+.caption-message {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+}
+
+.replay[data-replay-state="idle"] .caption-head { display: none; }

@@ -69,12 +69,18 @@ activity_event:
 | phase | event_type | 発生元 | 出典 | 表示例 |
 |---|---|---|---|---|
 | login | LOGGED_IN | Automation App | [05. §1](./05-identity.md#1-human-identity-provider) | ログインしました |
-| work_definition | PROPOSED | Automation App | [02. §1](./02-automation-design.md#1-基本方針) | Automation Design AIが「{purpose}」を提案しました |
+| work_definition | PROPOSED | Automation App | [02. §1](./02-automation-design.md#1-基本方針) | 「{purpose}」を自動化の候補として保存しました |
+| work_definition | DRAFT_REVISED | Automation App | [02. §2](./02-automation-design.md#2-automation-design-aiが決めること決めないこと) | Automation Design AIが「{purpose}」の内容を書き直しました |
 | work_definition | CONFIRMED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | 作業内容を確定しました |
+| authorization | DECISION_REQUESTED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | 「{purpose}」の作業内容をAuthorization Platformへ送り、必要な権限の決定を求めました |
 | authorization | CAPABILITY_DECIDED | Authorization Platform | [03. §6](./03-authorization.md#6-policy-engine) | 許可：{allowed}／却下：{denied}（理由：{reason}） |
 | authorization | ISOLATION_DECIDED | Authorization Platform | [03. §7](./03-authorization.md#7-security-profile) | isolation_level={level}に決定（risk_score {n}） |
+| authorization | DECISION_RECEIVED／DECISION_REFUSED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | Authorization Platformから決定{decision_id}が返りました／決定が返りませんでした |
+| authorization | AGENT_DEFINITION_APPROVED | Automation App | [02. §4](./02-automation-design.md#4-agent-definition) | 提示された権限を承認しました |
+| provisioning | PROVISION_REQUESTED／PROVISION_REFUSED | Automation App | [07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow) | Agentの作成を依頼しました／Agentを作れませんでした |
 | provisioning | CONSENT_REQUIRED | Agent Provisioner | [07. §3.2](./07-lifecycle.md#32-provisioning-transaction) | {connector}への追加の同意が必要です |
 | provisioning | AGENT_PROVISIONED | Agent Provisioner | [07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow) | Agentを作成しました（有効期限{expires_at}） |
+| work_definition | INSTRUCTION_ADDED | Automation App | [02. §5](./02-automation-design.md#5-実行中agentの操作) | Agentに作業内容を伝えました／Agentに追加の指示を出しました |
 | tool_call | TOOL_SUCCEEDED | Agent Runtime | [04. §6](./04-tool-catalog.md#6-tool-executor) | {tool_id}を実行しました |
 | tool_call | TOOL_BLOCKED | Agent Runtime | [04. §7](./04-tool-catalog.md#7-agentに任意httpを許さない) | {tool_id}は許可されたToolに含まれないため拒否しました |
 | security | PROTOCOL_VIOLATION | 要求を受けたアプリ（Agent OP、Tool Executor等） | [09. §5.1](./09-security-monitoring.md#51-protocol-validation) | {検証名}に違反したため要求を拒否しました |
@@ -84,7 +90,9 @@ activity_event:
 | lifecycle | RE_PROVISIONED | Lifecycle Manager | [07. §7.2](./07-lifecycle.md#72-human-userの権限が変更された場合re-provisioning) | 権限変更によりAgentを作り直しました |
 | authorization | PERMISSION_CHANGE_IGNORED | Authorization Platform | [07. §7.2](./07-lifecycle.md#72-human-userの権限が変更された場合re-provisioning) | 権限が広がりましたが、実行中のAgentには反映しません |
 
-CAPABILITY_DECIDEDは`denied`側も表示する。却下されたCapabilityとその理由（Delegatable Permission外、Organization Policy違反など）は、実際には何も実行されていなくても「何が許されなかったか」を示す情報であり、遮断の理解に欠かせない。
+CAPABILITY_DECIDEDは`denied`側も表示する。却下されたCapabilityとその理由（Delegatable Permission外、Organization Policy違反など）は、実際には何も実行されていなくても「何が許されなかったか」を示す情報であり、遮断の理解に欠かせない。何も許可できなかった決定も同じ理由で発行する。許可が空の決定は、人がいちばん説明を求める決定である。
+
+Automation Appは、人が画面で行った操作と、他のアプリへ何を頼み何が返ったかを、自分が知る範囲で発行する。DECISION_REQUESTEDは送った業務の言葉を、DECISION_RECEIVEDは返った値を届いたまま並べる。なぜ許可され、なぜ却下されたかはAuthorization Platformが自分のイベントに書き、Automation Appはその`decision_id`を名指すだけで理由を言い直さない（RULE-07）。INSTRUCTION_ADDEDは、確定した作業内容を最初の指示としてAgentへ渡した瞬間と、人が追加の指示を書いた瞬間を、そのAgentのTaskの側に置く。
 
 ### 3.3 Task境界
 
@@ -97,6 +105,8 @@ CAPABILITY_DECIDEDは`denied`側も表示する。却下されたCapabilityと�
 | `lifecycle` | Agentの終了 | AGENT_EXPIRED／AGENT_STOPPED／AGENT_QUARANTINED／AGENT_REVOKED_SECURITY |
 
 終端イベントが記録された`task_id`だけが再生の対象になる。終端イベントがまだ無い`task_id`は「実行中」として名前だけ示し、途中経過を先出しで再生しない（[§4](#4-配信経路)）。
+
+`task_id`はAgentごとに振り直される。どのAgentにも`provisioning`と`task-1`と`lifecycle`があるので、読む側は`task_id`だけでまとめてはならない。まとめる単位はAgentである。Agentができる前のイベント（ログイン、提案、決定）には`agent_id`が無いので、イベントが名指すidの連鎖でAgentへつなぐ。提案は`work_definition_id`を、Automation Appが受け取った決定は`work_definition_id`と`decision_id`を、Provisionerの最初のイベントは`decision_id`と、自分が採番した`agent_id`を持つ。この連鎖をたどると、ログインからAgentの終了までが1本の物語になる。連鎖がまだAgentに届いていない作業（決定は返ったがAgentは未作成）は、届いているidを名前にした独立の物語として「実行中」に並べる。ログインはidを持たないので、その次に始まった物語の先頭に置く。どの作業にもつながらなかったログインは、どのAgentの物語でもないので並べない。
 
 TASK_COMPLETED、TASK_BLOCKED、TASK_FAILEDはAgent Runtimeが発行する。1回の指示に対する処理は複数のTool呼び出しを含みうるため、それらがすべて終わった時点でAgent Runtimeが結果を判定する。
 
@@ -165,7 +175,7 @@ Automation Appはこのトピックをpush subscriptionで受け、`human_subjec
 
 タイムライン画面は3段になる。
 
-1. **一覧**：ユーザーの全Agentについて、完了した`task_id`を新しい順に並べる。各行はAgentの目的、区分（`provisioning` / `task-{n}` / `lifecycle`）、終端の`outcome`、完了時刻を示す。実行中の`task_id`は「実行中」の行として名前だけ出し、選べない。
+1. **一覧**：ユーザーの全Agentについて、Agentごとにまとめ、新しく始めたAgentを上に置く。1つのAgentの中は起きた順（`provisioning`、完了順の`task-{n}`、`lifecycle`）に並べる。各行はAgentの目的、区分、終端の`outcome`、完了時刻を示す。実行中の`task_id`は「実行中」の行として名前だけ出し、選べない。Agentがまだ無い物語は、目的の下に「Agentはまだ作られていません」と添える。
 2. **再生**：そのTaskに含まれるActivity Eventをアニメーションで再生する（[§5.2](#52-再生の中身)）。
 3. **起きたことの一覧**：同じイベントを、サーバー側で描画した文章として上から並べる（[§5.4](#54-起きたことの一覧)）。
 
@@ -190,6 +200,8 @@ lifecycle      Agentの終了                                     成功   10:05
 
 **1回のTool呼び出しは1本の矢印ではない。** Agent OPがID-JAGを発行し、Resource ASがそれをAccess Tokenに換え、Resource APIが答える——実際には4往復である。1本の矢印で描くと「Agentが何かに触った」しか言えず、遮断がどこで起きたのかも示せない。そこで発行元が経路を`hops`（[§3.4](#34-activity-record)）として記録し、再生はその1本ずつを順に動かす。経路を知っているのは呼び出した本人であり、画面ではない。
 
+**動きには言葉を添える。** 丸が動くだけでは「何かがどこかへ行った」としか分からない。矢印の上にはその往復の`label`を描き、関わった2つの箱を光らせ、図の下の枠に「どこからどこへ」「何という往復か」「発行元の`message`」を出す。どれも発行元が書いた文字列と箱の固定の見出しを置くだけで、ブラウザが文を作ることはない（RULE-54）。`hops`も宛先も持たないイベント——権限の決定や登録のように、1つの箱の中で起きたこと——は、矢印を描かずにその箱を光らせる。以前はこうしたイベントを、直前の箱へ戻る矢印として描いていたが、それは起きていない呼び出しを描くことだった。
+
 再生は次の順で進む。
 
 1. そのTaskのActivity Eventを`occurred_at`の順に並べ、`hops`を持つイベントはその順に展開する。
@@ -213,7 +225,9 @@ lifecycle      Agentの終了                                     成功   10:05
 
 ### 5.4 起きたことの一覧
 
-再生の下に、同じイベントを文章として上から並べる。1件ごとに、発生元の箱の名前、時刻、`outcome`のバッジ、`title`、`message`、そして[§3.4](#34-activity-record)のRecordを置く。Recordのうち`checks`は最初から開いておく。「何かに止められたのか」への答えであり、開かないと分からない形にすると読まれないからである。技術的な値（要求、応答、Token の有効期限など）は畳んでおく。
+再生の下に、同じイベントを文章として上から並べる。1件ごとに、発生元の箱の名前、時刻、`outcome`のバッジ、`title`、`message`、そして[§3.4](#34-activity-record)のRecordを置く。Recordのうち`checks`は最初から開いておく。「何かに止められたのか」への答えであり、開かないと分からない形にすると読まれないからである。発行元が`format: text`と印を付けた文章——Agentが自分で書いた考え、Authorization AIが述べた根拠、人が書いた指示——も開いたまま引用として出す。読む人が最初に知りたいのは「何を考えていたか」だからである。技術的な値（要求、応答、Token の有効期限など）は畳んでおく。`hops`は「やり取りの経路」として畳んで並べ、図を見ない人にも経路が残るようにする。
+
+時刻は記録どおりの値（UTC）を`<time>`に持たせ、ブラウザが読む人の時計で表示し直す。並び順は変わらない。記録の値そのものは要素に残す。
 
 この一覧はサーバー側で描画する。ブラウザが行うのは、再生がいま説明している行に印を付けることだけで、文章は書かない。ブラウザが一文でも作れば、それは立ち会っていない出来事についてブラウザが述べたことになる（RULE-54）。
 

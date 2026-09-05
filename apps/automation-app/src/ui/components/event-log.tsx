@@ -19,7 +19,7 @@ export interface LogEvent {
 }
 
 export const EVENT_LOG_CAPTION = '起きたことを順番に';
-export const EVENT_LOG_NOTE = '上から順に、この処理で実際に起きたことです。図の再生に合わせて、いま説明している行が強調されます。';
+export const EVENT_LOG_NOTE = '上から順に、この処理で実際に起きたことです。各行の文章は、それを行った側がその場で書いたものです。図の再生に合わせて、いま説明している行が強調されます。';
 
 /**
  * Which box on the diagram published a line, named the way the box is named.
@@ -43,11 +43,13 @@ function sourceLabel(source: string): string {
  *
  * Each row carries its `event_id` so the browser can mark the one the replay has
  * reached. The browser sets an attribute and nothing else — the words are all here,
- * server-rendered, exactly as their publishers wrote them.
+ * server-rendered, exactly as their publishers wrote them. The `<time>` keeps the
+ * instant as recorded; the browser may show it in the reader's own clock, and the
+ * recorded value stays on the element.
  */
-export function EventLog(props: { taskId: string; events: readonly LogEvent[] }): Element {
+export function EventLog(props: { taskId: string; taskKey?: string; events: readonly LogEvent[] }): Element {
   return (
-    <section class="event-log" data-event-log={props.taskId}>
+    <section class="event-log" data-event-log={props.taskId} data-log-key={props.taskKey ?? props.taskId}>
       <h3>{EVENT_LOG_CAPTION}</h3>
       <p class="event-log-note">{EVENT_LOG_NOTE}</p>
       <ol>
@@ -56,6 +58,7 @@ export function EventLog(props: { taskId: string; events: readonly LogEvent[] })
             class="event-entry"
             data-event-id={event.event_id}
             data-entry-index={String(index)}
+            data-source={event.source}
             data-emphasis={emphasisClass(event.outcome, event.phase)}
             data-entry-state="waiting"
           >
