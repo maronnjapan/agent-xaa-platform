@@ -155,7 +155,7 @@ describe('the static assets the pages name', () => {
 
     const replay = await (await harness.fetch('/styles/replay.css')).text();
     expect(replay).toContain('offset-distance');
-    expect(replay).toContain('var(--step-ms');
+    expect(replay).toContain('var(--motion-ms');
     expect(replay).toContain('var(--stop-ratio');
     expect(replay).toContain('animation-fill-mode: forwards');
   });

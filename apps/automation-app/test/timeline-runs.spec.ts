@@ -379,7 +379,6 @@ describe('the replay as it speaks', () => {
       caption.appendChild(element(document_, 'span', { 'data-field': field }));
     }
     root.appendChild(caption);
-    root.appendChild(element(document_, 'ol', { 'data-messages': 'true' }));
     return root;
   }
 

@@ -257,12 +257,21 @@ describe('the replay as a thing a person can stop', () => {
       }));
     }
     svg.appendChild(element(document_, 'g', { 'data-arrows': 'true' }));
+    svg.appendChild(element(document_, 'g', { 'data-labels': 'true' }));
+    svg.appendChild(element(document_, 'g', { 'data-dots': 'true' }));
     svg.appendChild(element(document_, 'text', { 'data-banner': 'true' }));
     root.appendChild(svg);
-    root.appendChild(element(document_, 'ol', { 'data-messages': 'true' }));
+    const caption = element(document_, 'div', { 'data-caption': 'true', 'data-caption-state': 'idle' });
+    for (const field of ['caption-step', 'caption-route', 'caption-label', 'caption-message']) {
+      caption.appendChild(element(document_, 'span', { 'data-field': field }));
+    }
+    root.appendChild(caption);
     root.appendChild(element(document_, 'span', { 'data-field': 'replay-progress' }));
     return root;
   }
+
+  const said = (root: FakeElement, field: string): string =>
+    root.querySelectorAll(`[data-field="${field}"]`)[0]!.textContent;
 
   function log(...eventIds: string[]): FakeElement {
     const list = element(document_, 'ol', { 'data-event-log': 'task-1' });
@@ -319,12 +328,13 @@ describe('the replay as a thing a person can stop', () => {
     vi.useFakeTimers();
     try {
       const controller = playReplay(root as unknown as HTMLElement, events as never, { autoplay: false } as never);
-      expect(root.querySelectorAll('[data-messages]')[0]!.children).toHaveLength(0);
+      expect(root.querySelectorAll('[data-dots]')[0]!.children).toHaveLength(0);
       controller.next();
-      expect(root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent)).toEqual(['一番目']);
+      expect(said(root, 'caption-message')).toBe('一番目');
       // Nothing is scheduled: a paused replay stays where it was put.
       vi.advanceTimersByTime(REPLAY_STEP_MS * 5);
-      expect(root.querySelectorAll('[data-messages]')[0]!.children).toHaveLength(1);
+      expect(said(root, 'caption-message')).toBe('一番目');
+      expect(said(root, 'caption-step')).toBe('1 / 2');
     } finally {
       vi.useRealTimers();
     }

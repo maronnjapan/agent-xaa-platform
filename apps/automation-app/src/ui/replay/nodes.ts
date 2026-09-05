@@ -34,7 +34,17 @@ export const REPLAY_NODES: readonly ReplayNode[] = [
   { id: 'resource-api', label: 'Resource API', role: 'データを持つ', x: 620, y: 220 },
 ];
 
-export const REPLAY_VIEWBOX = '0 0 720 300';
+/**
+ * The frame the boxes sit in.
+ *
+ * Written as numbers rather than as one string because the browser measures against
+ * them too: a label is kept away from the left and right edges, and the lane an arrow
+ * detours through is found from the gap between the rows. One set of numbers, so the
+ * picture and the things placed on it cannot disagree about how big it is.
+ */
+export const REPLAY_WIDTH = 720;
+export const REPLAY_HEIGHT = 300;
+export const REPLAY_VIEWBOX = `0 0 ${REPLAY_WIDTH} ${REPLAY_HEIGHT}`;
 
 /**
  * Half a box, in the diagram's own units.

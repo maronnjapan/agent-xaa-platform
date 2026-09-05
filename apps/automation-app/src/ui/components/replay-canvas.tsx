@@ -18,7 +18,9 @@ export const REPLAY_LEGEND_CAPTION = 'この図の見方';
  */
 export const REPLAY_LEGEND: readonly string[] = [
   '上の段は人と、権限を決める側です。下の段は Agent と、Agent が触るリソースです。',
-  '丸は1回のやり取りです。出どころから相手へ動き、矢印の上にそのやり取りの名前が出ます。',
+  '丸は1回のやり取りです。出どころから相手へ動き、矢印のそばにそのやり取りの名前が出ます。',
+  '図に出るのは、いま動いている1回分だけです。次へ進むと前の矢印と文字は消えます。',
+  '起きたことの全部は、図の下の一覧に順番どおり残ります。再生中の行が強調されます。',
   '止められたやり取りは、相手に届く手前で止まります。届かなかった箱は点線のままです。',
   '箱の中だけで起きたこと（判断や登録）は、矢印を出さずにその箱を光らせます。',
   '図の下の枠に、いま動いているやり取りの相手と、発行元が書いた説明が出ます。',
@@ -41,6 +43,12 @@ export const REPLAY_CAPTION_IDLE = '再生を押すと、ここに1手ずつ説�
  * the two boxes, the exchange, and the publisher's own sentence about it, so a person
  * watching learns what is happening rather than only that something is. Every word in
  * it is written by the browser from the event, never composed (RULE-54).
+ *
+ * It holds the current step and only the current step, and so does the canvas. The
+ * replay used to keep a growing list of every sentence it had shown, which is a
+ * transcript — and the transcript is already here, below, in `EventLog`: server-rendered
+ * from the same events, complete, and in order. Two of them meant the same words twice
+ * on one screen, one of them piling up over the picture it was supposed to explain.
  *
  * The controls exist because a replay that only ran once, start to finish, at a fixed
  * pace, is a thing you watch rather than a thing you read. A step that says something
@@ -65,10 +73,11 @@ export function ReplayCanvas(props: {
       </div>
       <svg viewBox={REPLAY_VIEWBOX} class="replay-canvas" role="img" aria-label="処理の再生">
         {/*
-          * The movement layer sits before the boxes, so the boxes paint over it.
-          * An arrow runs from one centre to the edge of the next, and with the layers
-          * the other way round every line was drawn straight through the label of the
-          * box it started from.
+          * The movement layer sits before the boxes, so the boxes paint over it. An
+          * arrow now runs edge to edge and detours around anything in between, so it
+          * should not reach a box at all — this order is what keeps that true when a
+          * hidden box is shown again, or a coordinate is changed, rather than leaving
+          * the picture to depend on the routing being perfect.
           */}
         <g class="replay-arrows" data-arrows="true" />
         {REPLAY_NODES.map((node) => (
@@ -111,7 +120,6 @@ export function ReplayCanvas(props: {
         </p>
         <p class="caption-message" data-field="caption-message">{REPLAY_CAPTION_IDLE}</p>
       </div>
-      <ol class="replay-messages" data-messages="true" />
       <details class="replay-legend" data-legend="true">
         <summary>{REPLAY_LEGEND_CAPTION}</summary>
         <ul>

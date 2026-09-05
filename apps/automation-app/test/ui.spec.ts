@@ -3,13 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import {
-  NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds,
+  NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_HEIGHT, REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds,
 } from '../src/ui/replay/nodes.js';
 import { EMPHASIS_CLASSES, EMPHASIS_LABELS, emphasisClass } from '../src/ui/replay/emphasis.js';
 import { buildReplayPlan, isFinished } from '../../automation-app/client/src/replay-plan.js';
 import { playReplay } from '../../automation-app/client/src/replay.js';
 import { start as startTimelinePage } from '../../automation-app/client/src/timeline.js';
-import { REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../../automation-app/client/src/replay-config.js';
+import { REPLAY_MOTION_MS, REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../../automation-app/client/src/replay-config.js';
 import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
 import { ReplayCanvas } from '../src/ui/components/replay-canvas.js';
@@ -94,7 +94,19 @@ describe('the replay plan', () => {
   it('paces every step identically whatever the real gap', () => {
     const plan = buildReplayPlan(events, (source) => SOURCE_TO_NODE[source] ?? null);
     expect(plan.map((step) => step.delayMs)).toEqual([REPLAY_STEP_MS, REPLAY_STEP_MS, REPLAY_STEP_MS]);
-    expect(REPLAY_STEP_MS).toBe(800);
+  });
+
+  /**
+   * A step a person can read. Under a second, the dot arrived before the caption naming
+   * it had been read; over two, a tool call's eight exchanges become a wait. The motion
+   * is the shorter of the two so every step ends with the picture standing still.
+   */
+  it('gives a step between one and two seconds, and leaves it standing at the end', () => {
+    for (const length of [REPLAY_MOTION_MS, REPLAY_STEP_MS]) {
+      expect(length).toBeGreaterThanOrEqual(1_000);
+      expect(length).toBeLessThanOrEqual(2_000);
+    }
+    expect(REPLAY_MOTION_MS).toBeLessThan(REPLAY_STEP_MS);
   });
 
   /**
@@ -136,16 +148,20 @@ describe('the replay plan', () => {
     expect(plan[0]).toMatchObject({ from: null, to: null });
   });
 
-  it('names the step length in one place', async () => {
-    const hits = execFileSync('bash', ['-c',
-      "grep -rn 'REPLAY_STEP_MS' apps/automation-app/src apps/automation-app/client/src"],
-      { cwd: repoRoot, encoding: 'utf8' }).trim().split('\n');
-    expect(hits.filter((line) => line.includes('export const'))).toHaveLength(1);
-    expect(hits.length).toBeGreaterThan(1);
-    const literals = execFileSync('bash', ['-c', "grep -rn '800' apps/automation-app/src apps/automation-app/client/src || true"], {
-      cwd: repoRoot, encoding: 'utf8',
-    }).trim();
-    expect(literals.split('\n').filter((line) => line !== '' && !line.includes('REPLAY_STEP_MS = 800'))).toEqual([]);
+  it('names each length in one place', async () => {
+    for (const [name, value] of [['REPLAY_STEP_MS', REPLAY_STEP_MS], ['REPLAY_MOTION_MS', REPLAY_MOTION_MS]] as const) {
+      const hits = execFileSync('bash', ['-c',
+        `grep -rn '${name}' apps/automation-app/src apps/automation-app/client/src`],
+        { cwd: repoRoot, encoding: 'utf8' }).trim().split('\n');
+      expect(hits.filter((line) => line.includes('export const'))).toHaveLength(1);
+      expect(hits.length).toBeGreaterThan(1);
+      // The number itself occurs only on the line that names it. A duration written out
+      // again in the stylesheet or in a timer is a second answer waiting to disagree.
+      const literals = execFileSync('bash', ['-c',
+        `grep -rn '${value}' apps/automation-app/src apps/automation-app/client/src || true`],
+        { cwd: repoRoot, encoding: 'utf8' }).trim();
+      expect(literals.split('\n').filter((line) => line !== '' && !line.includes(`${name} = ${value}`))).toEqual([]);
+    }
   });
 });
 
@@ -376,11 +392,20 @@ describe('the replay as it is drawn', () => {
       }));
     }
     svg.appendChild(element(document_, 'g', { 'data-arrows': 'true' }));
+    svg.appendChild(element(document_, 'g', { 'data-labels': 'true' }));
+    svg.appendChild(element(document_, 'g', { 'data-dots': 'true' }));
     svg.appendChild(element(document_, 'text', { 'data-banner': 'true' }));
     root.appendChild(svg);
-    root.appendChild(element(document_, 'ol', { 'data-messages': 'true' }));
+    const caption = element(document_, 'div', { 'data-caption': 'true', 'data-caption-state': 'idle' });
+    for (const field of ['caption-step', 'caption-route', 'caption-label', 'caption-message']) {
+      caption.appendChild(element(document_, 'span', { 'data-field': field }));
+    }
+    root.appendChild(caption);
     return root;
   }
+
+  const said = (root: FakeElement, field: string): string =>
+    root.querySelectorAll(`[data-field="${field}"]`)[0]!.textContent;
 
   function play(root: FakeElement, events: unknown[]): void {
     vi.useFakeTimers();
@@ -392,21 +417,82 @@ describe('the replay as it is drawn', () => {
     }
   }
 
+  /** The corners of a drawn path, in order, as the browser would follow them. */
+  const corners = (d: string): Array<{ x: number; y: number }> =>
+    d.split(/[ML]/).filter((part) => part.trim() !== '').map((part) => {
+      const [x, y] = part.trim().split(/\s+/).map(Number) as [number, number];
+      return { x, y };
+    });
+
+  /** Points along a polyline, close enough together to catch a clipped corner. */
+  const samples = (route: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> =>
+    route.slice(1).flatMap((to, index) => {
+      const from = route[index]!;
+      return Array.from({ length: 41 }, (_unused, tick) => ({
+        x: from.x + (to.x - from.x) * (tick / 40),
+        y: from.y + (to.y - from.y) * (tick / 40),
+      }));
+    });
+
+  /** One line of the label font, so a name near the frame's edge is not cut off. */
+  const TEXT_HEIGHT = 11;
+
   const step = (overrides: Record<string, unknown> = {}) => ({
     event_id: 'a', occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime',
     phase: 'tool_call', outcome: 'success', message: '読みました',
     detail: { target: 'resource-api' }, ...overrides,
   });
 
-  it('gives each step a path and an animation paced by the step length', () => {
+  it('gives each step a path and an animation paced by the motion length', () => {
     const root = canvas();
     play(root, [step()]);
     const dot = root.querySelectorAll('[data-emphasis]')[0]!;
     expect(dot.getAttribute('class')).toBe('replay-dot');
-    expect(dot.style.getPropertyValue('offset-path')).toMatch(/^path\('M 260 220 L /);
-    expect(dot.style.getPropertyValue('--step-ms')).toBe(`${REPLAY_STEP_MS}ms`);
+    // Agent Runtime is at (260, 220) and the path leaves the edge of its box, not its
+    // centre: an arrow drawn from the centre is drawn underneath the box it left.
+    expect(dot.style.getPropertyValue('offset-path')).toMatch(/^path\('M 260 190 /);
+    expect(dot.style.getPropertyValue('--motion-ms')).toBe(`${REPLAY_MOTION_MS}ms`);
     expect(root.querySelectorAll('[data-arrows]')[0]!.children.some((child) => child.tagName === 'path')).toBe(true);
     expect(root.getAttribute('data-replay-state')).toBe('finished');
+  });
+
+  /**
+   * The picture's one geometric promise: a line and a name are about the two boxes at
+   * the ends of the arrow, and about no other box. A straight centre-to-centre line
+   * broke it twice over — it ran under the box it left, and a hop with a third box
+   * between its ends was drawn straight through that third box, which reads as a call
+   * that service was part of.
+   *
+   * Every ordered pair is checked rather than the handful the demo happens to produce:
+   * which boxes a real task connects is not this file's to predict.
+   */
+  it('draws no line and no name over a box the step is not about', () => {
+    for (const from of REPLAY_NODES) {
+      for (const to of REPLAY_NODES) {
+        if (from.id === to.id) continue;
+        const root = canvas();
+        play(root, [step({ source: from.id, title: 'やり取りの名前', detail: { target: to.id } })]);
+        const others = REPLAY_NODES.filter((node) => node.id !== from.id && node.id !== to.id);
+
+        const drawn = corners(root.querySelectorAll('[data-arrows]')[0]!.children[0]!.getAttribute('d')!);
+        for (const at of samples(drawn)) {
+          for (const node of others) {
+            const clear = Math.abs(at.x - node.x) >= NODE_HALF_WIDTH || Math.abs(at.y - node.y) >= NODE_HALF_HEIGHT;
+            expect(clear, `${from.id} → ${to.id} is drawn over ${node.id}`).toBe(true);
+          }
+        }
+
+        // The name is placed by height alone, so it clears every box however wide the
+        // text turns out to be — which the browser knows and this suite cannot.
+        const label = root.querySelectorAll('[data-arrow-label]')[0]!;
+        const y = Number(label.getAttribute('y'));
+        for (const node of REPLAY_NODES) {
+          expect(Math.abs(y - node.y) >= NODE_HALF_HEIGHT, `the name of ${from.id} → ${to.id} sits on ${node.id}`).toBe(true);
+        }
+        expect(y).toBeGreaterThan(TEXT_HEIGHT);
+        expect(y).toBeLessThan(REPLAY_HEIGHT);
+      }
+    }
   });
 
   it('stops a blocked step short of the box and marks that one box unreached', () => {
@@ -438,8 +524,7 @@ describe('the replay as it is drawn', () => {
     }
 
     // The reason shown is the publisher's own sentence, put on screen unchanged.
-    expect(root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent))
-      .toEqual(['許可された Tool に含まれない']);
+    expect(said(root, 'caption-message')).toBe('許可された Tool に含まれない');
   });
 
   it('draws a blocked security event more strongly than a blocked tool call', () => {
@@ -453,19 +538,29 @@ describe('the replay as it is drawn', () => {
       .toBe(emphasisClass('blocked', 'tool_call'));
   });
 
-  it('keeps every message and adds one per step', () => {
+  /**
+   * One step on the canvas, and it is the current one. The words used to pile up: four
+   * steps left four sentences and four arrows on screen at once, which answered "what
+   * is happening now" with everything that had ever happened. What did happen, in
+   * order, is the written log beside the picture — server-rendered and never wiped.
+   */
+  it('shows the step it is on and nothing the steps before drew', () => {
     const root = canvas();
     // Handed over out of order, on purpose: the replay decides the order, from
     // `occurred_at`, not from however the events arrived.
     play(root, [
-      step({ event_id: 'c', occurred_at: '2026-01-01T00:09:00.000Z', message: '三番目', detail: { target: 'resource-as' } }),
-      step({ event_id: 'a', occurred_at: '2026-01-01T00:03:00.000Z', message: '一番目' }),
-      step({ event_id: 'd', occurred_at: '2026-01-01T00:12:00.000Z', message: '四番目', detail: { target: 'resource-api' } }),
-      step({ event_id: 'b', occurred_at: '2026-01-01T00:06:00.000Z', message: '二番目', detail: { target: 'resource-as' } }),
+      step({ event_id: 'c', occurred_at: '2026-01-01T00:09:00.000Z', title: '三', message: '三番目', detail: { target: 'resource-as' } }),
+      step({ event_id: 'a', occurred_at: '2026-01-01T00:03:00.000Z', title: '一', message: '一番目' }),
+      step({ event_id: 'd', occurred_at: '2026-01-01T00:12:00.000Z', title: '四', message: '四番目', detail: { target: 'resource-api' } }),
+      step({ event_id: 'b', occurred_at: '2026-01-01T00:06:00.000Z', title: '二', message: '二番目', detail: { target: 'resource-as' } }),
     ]);
-    const messages = root.querySelectorAll('[data-messages]')[0]!;
-    expect(messages.children.map((line) => line.textContent)).toEqual(['一番目', '二番目', '三番目', '四番目']);
-    expect(messages.children.map((line) => line.getAttribute('data-step-index'))).toEqual(['0', '1', '2', '3']);
+    expect(said(root, 'caption-message')).toBe('四番目');
+    expect(said(root, 'caption-step')).toBe('4 / 4');
+    for (const layer of ['data-arrows', 'data-labels', 'data-dots']) {
+      expect(root.querySelectorAll(`[${layer}]`)[0]!.children).toHaveLength(1);
+    }
+    expect(root.querySelectorAll('[data-step-index]').map((drawn) => drawn.getAttribute('data-step-index')))
+      .toEqual(['3', '3', '3']);
   });
 
   /**
@@ -478,21 +573,22 @@ describe('the replay as it is drawn', () => {
     try {
       playReplay(root as unknown as HTMLElement, [step({ event_id: 'a', message: '一番目' })] as never);
       vi.advanceTimersByTime(REPLAY_STEP_MS * 2);
-      const settled = root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent);
+      const settled = said(root, 'caption-message');
       expect(root.getAttribute('data-replay-state')).toBe('finished');
 
       vi.advanceTimersByTime(5_000);
       expect(root.getAttribute('data-replay-state')).toBe('finished');
-      expect(root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent)).toEqual(settled);
+      expect(said(root, 'caption-message')).toBe(settled);
+      expect(root.querySelectorAll('[data-dots]')[0]!.children).toHaveLength(1);
     } finally {
       vi.useRealTimers();
     }
   });
 
   /**
-   * REQ-11-026. The disclosure belongs to the row, and the replay only appends to the
-   * message list — so the same `<details>` opens before a replay, during one, and after
-   * it has finished.
+   * REQ-11-026. The disclosure belongs to the row and the replay only ever clears the
+   * layers inside the canvas — so the same `<details>` opens before a replay, during
+   * one, and after it has finished.
    */
   it('leaves the detail disclosure openable before and after playing', () => {
     const root = canvas();

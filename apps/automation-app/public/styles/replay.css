@@ -2,10 +2,14 @@
  * The moving part of a replay.
  *
  * A step is a circle travelling along the path between two boxes. The duration is a
- * custom property the script sets from REPLAY_STEP_MS, so the picture is paced by the
+ * custom property the script sets from REPLAY_MOTION_MS, so the picture is paced by the
  * same constant the sequencing uses and the two cannot drift apart; nothing here knows
  * how long the step really took, because a replay shows the order of what happened,
  * not its duration (REQ-11-025).
+ *
+ * The motion is shorter than the step, so every step ends with the picture standing
+ * still for a moment. That pause is where a person reads the caption; without it the
+ * next step wiped the frame at the instant the dot landed on it.
  *
  * `animation-fill-mode: forwards` with a single iteration is what leaves the result
  * standing at the end. A replay that looped would make a viewer doubt whether what they
@@ -55,10 +59,19 @@
   stroke-dasharray: 4 3;
 }
 
+/*
+ * The line itself: edge to edge, and around anything in between.
+ *
+ * `stroke-linejoin: round` is for the one shape a straight line cannot make — a hop
+ * whose two boxes have a third between them leaves its row, runs along the empty band
+ * and comes back, and a square corner on that detour reads as two separate arrows.
+ */
 .replay-arrow {
   fill: none;
   stroke: #97a6b2;
   stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
 .replay-dot {
@@ -66,7 +79,7 @@
   offset-distance: 0%;
   offset-rotate: 0deg;
   animation-name: replay-travel;
-  animation-duration: var(--step-ms, 1s);
+  animation-duration: var(--motion-ms, 1.2s);
   animation-timing-function: ease-in-out;
   animation-iteration-count: 1;
   animation-fill-mode: forwards;
@@ -115,12 +128,6 @@
 .replay-banner {
   font-size: 14px;
   fill: #6d1111;
-}
-
-.replay-messages {
-  margin: 0.5rem 0 0;
-  padding-left: 1.2rem;
-  font-size: 0.9rem;
 }
 
 .simulated-canvas {
@@ -206,11 +213,15 @@
 /*
  * The words on the picture.
  *
- * A dot on its own says "something went from here to there". The label on the arrow
+ * A dot on its own says "something went from here to there". The name beside the arrow
  * says which exchange it was, the lit boxes say who was involved, and the caption
  * under the picture carries the publisher's own sentence for the step. All of it is
  * placed here and written nowhere here: every string comes from a hop, an event, or
  * the boxes' fixed captions.
+ *
+ * The name is drawn in the empty bands above, below and between the rows, never over a
+ * box. The white halo is still worth keeping: a name in the band between the rows can
+ * sit across the line it belongs to, and a word broken by its own arrow is unreadable.
  */
 .replay-arrow-label {
   font-size: 10.5px;
@@ -242,7 +253,7 @@
   transform-box: fill-box;
   transform-origin: center;
   animation-name: replay-pulse;
-  animation-duration: var(--step-ms, 1s);
+  animation-duration: var(--motion-ms, 1.2s);
   animation-timing-function: ease-out;
   animation-iteration-count: 1;
   animation-fill-mode: forwards;

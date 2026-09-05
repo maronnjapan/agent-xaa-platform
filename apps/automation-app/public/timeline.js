@@ -1,5 +1,6 @@
 // client/src/replay-config.ts
-var REPLAY_STEP_MS = 800;
+var REPLAY_MOTION_MS = 1200;
+var REPLAY_STEP_MS = 1800;
 var BLOCKED_STOP_RATIO = 0.6;
 var STOP_CLEARANCE = 8;
 var MIN_STOP_RATIO = 0.15;
@@ -70,6 +71,9 @@ var REPLAY_NODES = [
   { id: "resource-as", label: "Resource AS", role: "Access Token \u3092\u51FA\u3059", x: 440, y: 220 },
   { id: "resource-api", label: "Resource API", role: "\u30C7\u30FC\u30BF\u3092\u6301\u3064", x: 620, y: 220 }
 ];
+var REPLAY_WIDTH = 720;
+var REPLAY_HEIGHT = 300;
+var REPLAY_VIEWBOX = `0 0 ${REPLAY_WIDTH} ${REPLAY_HEIGHT}`;
 var NODE_HALF_WIDTH = 70;
 var NODE_HALF_HEIGHT = 30;
 
@@ -94,10 +98,11 @@ var SOURCE_TO_NODE = {
   "resource-api": "resource-api"
 };
 var SVG_NS = "http://www.w3.org/2000/svg";
-var LABEL_OFFSET = 9;
+var LANE_CLEARANCE = 60;
+var LABEL_CLEARANCE = 12;
+var LABEL_MARGIN = 110;
 function playReplay(root, events, options = {}) {
   const plan = buildReplayPlan(events, (source) => SOURCE_TO_NODE[source] ?? null);
-  const messages = root.querySelector("[data-messages]");
   const banner = root.querySelector("[data-banner]");
   const progress = root.querySelector('[data-field="replay-progress"]');
   let index = 0;
@@ -106,7 +111,14 @@ function playReplay(root, events, options = {}) {
     if (timer !== void 0) clearTimeout(timer);
     timer = void 0;
   };
+  const clearCanvas = () => {
+    emptyOut(root.querySelector("[data-arrows]"));
+    emptyOut(root.querySelector("[data-labels]"));
+    emptyOut(root.querySelector("[data-dots]"));
+    if (banner) banner.textContent = "";
+  };
   const draw = (current) => {
+    clearCanvas();
     lightBoxes(root, current);
     if (current.kind === "banner") {
       if (banner) banner.textContent = current.message;
@@ -114,12 +126,6 @@ function playReplay(root, events, options = {}) {
       drawPulse(root, current);
     } else {
       drawArrow(root, current);
-    }
-    if (messages) {
-      const line = root.ownerDocument.createElement("li");
-      line.setAttribute("data-step-index", String(current.index));
-      line.textContent = current.message;
-      messages.appendChild(line);
     }
     if (progress) progress.textContent = `${current.index + 1} / ${plan.length}`;
     writeCaption(root, current, plan.length);
@@ -164,11 +170,7 @@ function playReplay(root, events, options = {}) {
     },
     restart() {
       clearTimer();
-      emptyOut(root.querySelector("[data-arrows]"));
-      emptyOut(root.querySelector("[data-labels]"));
-      emptyOut(root.querySelector("[data-dots]"));
-      emptyOut(messages);
-      if (banner) banner.textContent = "";
+      clearCanvas();
       resetNodes(root);
       clearCaption(root);
       resetLog(options.log);
@@ -261,25 +263,26 @@ function drawPulse(root, step2) {
   ring.setAttribute("width", String(NODE_HALF_WIDTH * 2 + 8));
   ring.setAttribute("height", String(NODE_HALF_HEIGHT * 2 + 8));
   ring.setAttribute("rx", "9");
-  ring.style.setProperty("--step-ms", `${REPLAY_STEP_MS}ms`);
+  ring.style.setProperty("--motion-ms", `${REPLAY_MOTION_MS}ms`);
   dots.appendChild(ring);
   const box = step2.from === null ? null : root.querySelector(`[data-node="${step2.from}"]`);
   if (box) box.setAttribute("data-reached", "true");
 }
 function drawArrow(root, step2) {
   const arrows = root.querySelector("[data-arrows]");
-  const start2 = step2.from === null ? null : centreOf(root, step2.from);
-  const finish = step2.to === null ? null : centreOf(root, step2.to);
-  if (!arrows || !start2 || !finish) return;
+  const from = step2.from === null ? null : centreOf(root, step2.from);
+  const to = step2.to === null ? null : centreOf(root, step2.to);
+  if (!arrows || !from || !to) return;
   const dots = root.querySelector("[data-dots]") ?? arrows;
   const labels = root.querySelector("[data-labels]") ?? dots;
-  const stop = edgeOf(finish, start2);
-  const stopRatio = step2.blocked ? clearStopRatio(root, step2, start2, stop) : step2.stopRatio;
+  const route = routeAround(root, step2, from, to);
+  const stopRatio = step2.blocked ? clearStopRatio(root, step2, route) : step2.stopRatio;
   const document_ = root.ownerDocument;
+  const drawn = pathOf(route);
   const path = document_.createElementNS(SVG_NS, "path");
   path.setAttribute("class", "replay-arrow");
   path.setAttribute("data-step-index", String(step2.index));
-  path.setAttribute("d", lineBetween(start2, stop));
+  path.setAttribute("d", drawn);
   arrows.appendChild(path);
   const emphasis = emphasisClass(step2.outcome, step2.phase);
   const dot = document_.createElementNS(SVG_NS, "circle");
@@ -290,40 +293,87 @@ function drawArrow(root, step2) {
   dot.setAttribute("data-emphasis", emphasis);
   if (step2.blocked) dot.setAttribute("data-blocked", "true");
   dot.setAttribute("r", "6");
-  dot.style.setProperty("offset-path", `path('${lineBetween(start2, stop)}')`);
-  dot.style.setProperty("--step-ms", `${REPLAY_STEP_MS}ms`);
+  dot.style.setProperty("offset-path", `path('${drawn}')`);
+  dot.style.setProperty("--motion-ms", `${REPLAY_MOTION_MS}ms`);
   dot.style.setProperty("--stop-ratio", String(stopRatio));
   dots.appendChild(dot);
-  if (step2.blocked) dots.appendChild(stopMark(document_, pointAt(start2, stop, stopRatio), emphasis));
-  if (step2.label !== "") labels.appendChild(arrowLabel(document_, step2, start2, pointAt(start2, stop, stopRatio), emphasis));
+  if (step2.blocked) dots.appendChild(stopMark(document_, alongRoute(route, stopRatio), emphasis));
+  if (step2.label !== "") labels.appendChild(arrowLabel(document_, step2, route, from, to, stopRatio));
   const target = step2.to === null ? null : root.querySelector(`[data-node="${step2.to}"]`);
   if (target) target.setAttribute("data-reached", step2.blocked ? "false" : "true");
 }
-function arrowLabel(document_, step2, start2, stop, emphasis) {
-  const middle = pointAt(start2, stop, 0.5);
-  const forward = stop.x > start2.x || stop.x === start2.x && stop.y > start2.y;
-  const vertical = Math.abs(stop.x - start2.x) < Math.abs(stop.y - start2.y);
+function routeAround(root, step2, from, to) {
+  const direct = [edgeOf(from, to), edgeOf(to, from)];
+  const obstacles = otherBoxes(root, [step2.from, step2.to]);
+  if (!crossesAny(direct, obstacles)) return direct;
+  const lane = laneFor(from);
+  return [
+    { x: from.x, y: from.y + inwardFrom(from.y) * NODE_HALF_HEIGHT },
+    { x: from.x, y: lane },
+    { x: to.x, y: lane },
+    { x: to.x, y: to.y + inwardFrom(to.y) * NODE_HALF_HEIGHT }
+  ];
+}
+function inwardFrom(y) {
+  return REPLAY_NODES.some((node) => node.y > y) ? 1 : -1;
+}
+function laneFor(from) {
+  return from.y + inwardFrom(from.y) * (NODE_HALF_HEIGHT + LANE_CLEARANCE);
+}
+function otherBoxes(root, involved) {
+  const boxes = [];
+  root.querySelectorAll("[data-node]").forEach((node) => {
+    const id = node.getAttribute("data-node");
+    if (involved.includes(id) || node.getAttribute("hidden") !== null) return;
+    const x = Number(node.getAttribute("data-x"));
+    const y = Number(node.getAttribute("data-y"));
+    if (Number.isFinite(x) && Number.isFinite(y)) boxes.push({ x, y });
+  });
+  return boxes;
+}
+var CROSSING_SAMPLES = 60;
+function crossesAny(route, boxes) {
+  if (boxes.length === 0) return false;
+  for (let sample = 0; sample <= CROSSING_SAMPLES; sample += 1) {
+    const at = alongRoute(route, sample / CROSSING_SAMPLES);
+    if (boxes.some((box) => Math.abs(at.x - box.x) < NODE_HALF_WIDTH && Math.abs(at.y - box.y) < NODE_HALF_HEIGHT)) {
+      return true;
+    }
+  }
+  return false;
+}
+function arrowLabel(document_, step2, route, from, to, stopRatio) {
+  const at = labelPoint(route, from, to, stopRatio);
   const label = document_.createElementNS(SVG_NS, "text");
   label.setAttribute("class", "replay-arrow-label");
   label.setAttribute("data-arrow-label", "true");
   label.setAttribute("data-step-index", String(step2.index));
-  label.setAttribute("data-label-emphasis", emphasis);
-  label.setAttribute("text-anchor", vertical ? forward ? "start" : "end" : "middle");
-  label.setAttribute("x", String(vertical ? middle.x + (forward ? LABEL_OFFSET : -LABEL_OFFSET) : middle.x));
-  label.setAttribute("y", String(vertical ? middle.y : middle.y + (forward ? -LABEL_OFFSET : LABEL_OFFSET + 6)));
+  label.setAttribute("data-label-emphasis", emphasisClass(step2.outcome, step2.phase));
+  label.setAttribute("text-anchor", "middle");
+  label.setAttribute("x", String(at.x));
+  label.setAttribute("y", String(at.y));
   label.textContent = step2.label;
   return label;
 }
-function clearStopRatio(root, step2, start2, stop) {
-  const others = [];
-  root.querySelectorAll("[data-node]").forEach((node) => {
-    if (node.getAttribute("data-node") === step2.from || node.getAttribute("hidden") !== null) return;
-    const x = Number(node.getAttribute("data-x"));
-    const y = Number(node.getAttribute("data-y"));
-    if (Number.isFinite(x) && Number.isFinite(y)) others.push({ x, y });
-  });
+function labelPoint(route, from, to, stopRatio) {
+  const x = clamp(alongRoute(route, stopRatio / 2).x, LABEL_MARGIN, REPLAY_WIDTH - LABEL_MARGIN);
+  if (route.length > 2) {
+    const lane = route[1].y;
+    return { x, y: lane + (lane > from.y ? LABEL_CLEARANCE : -LABEL_CLEARANCE) };
+  }
+  if (Math.abs(to.y - from.y) < 1) {
+    const outward = -inwardFrom(from.y);
+    return { x, y: from.y + outward * (NODE_HALF_HEIGHT + LABEL_CLEARANCE) + (outward < 0 ? 0 : 6) };
+  }
+  return { x, y: (from.y + to.y) / 2 - LABEL_CLEARANCE / 2 };
+}
+function clamp(value, low, high) {
+  return Math.min(high, Math.max(low, value));
+}
+function clearStopRatio(root, step2, route) {
+  const others = otherBoxes(root, [step2.from]);
   const clear = (ratio) => {
-    const at = pointAt(start2, stop, ratio);
+    const at = alongRoute(route, ratio);
     return others.every((node) => Math.abs(at.x - node.x) > NODE_HALF_WIDTH + STOP_CLEARANCE || Math.abs(at.y - node.y) > NODE_HALF_HEIGHT + STOP_CLEARANCE);
   };
   for (let ratio = step2.stopRatio; ratio > MIN_STOP_RATIO; ratio -= STOP_RATIO_STEP) {
@@ -360,11 +410,31 @@ function edgeOf(target, from) {
   const scale = Math.min(1, horizontal, vertical);
   return { x: target.x + dx * scale, y: target.y + dy * scale };
 }
-function pointAt(from, to, ratio) {
+function alongRoute(route, ratio) {
+  const lengths = route.slice(1).map((point, index) => distance(route[index], point));
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  if (total === 0) return route[0] ?? { x: 0, y: 0 };
+  let travelled = clamp(ratio, 0, 1) * total;
+  for (const [index, length] of lengths.entries()) {
+    if (travelled <= length || index === lengths.length - 1) {
+      return between(route[index], route[index + 1], length === 0 ? 0 : travelled / length);
+    }
+    travelled -= length;
+  }
+  return route[route.length - 1];
+}
+function distance(from, to) {
+  return Math.hypot(to.x - from.x, to.y - from.y);
+}
+function between(from, to, ratio) {
   return { x: from.x + (to.x - from.x) * ratio, y: from.y + (to.y - from.y) * ratio };
 }
-function lineBetween(from, to) {
-  return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+function pathOf(route) {
+  const [first, ...rest] = route;
+  return [`M ${round(first.x)} ${round(first.y)}`, ...rest.map((point) => `L ${round(point.x)} ${round(point.y)}`)].join(" ");
+}
+function round(value) {
+  return Math.round(value * 100) / 100;
 }
 function showLocalTimes(root) {
   for (const element of Array.from(root.querySelectorAll("[datetime]"))) {

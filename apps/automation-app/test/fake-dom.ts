@@ -3,9 +3,9 @@
  *
  * The browser code was previously only reachable through its plan, which is why an
  * arrow that carried no animation went unnoticed. This double supports the handful of
- * calls `replay.ts` makes — attributes, appended children, custom properties and the
- * `[attr]` / `[attr="value"]` selectors — so the DOM the script produces can be
- * asserted without a headless browser in the unit suite.
+ * calls `replay.ts` makes — attributes, appended and removed children, custom
+ * properties and the `[attr]` / `[attr="value"]` selectors — so the DOM the script
+ * produces can be asserted without a headless browser in the unit suite.
  */
 
 type AttributeSelector = { name: string; value?: string };
@@ -31,6 +31,19 @@ export class FakeElement {
   setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
   getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
   appendChild(child: FakeElement): FakeElement { this.children.push(child); return child; }
+
+  /**
+   * Removal, because the replay takes the previous step off the canvas before drawing
+   * the next one. Without these two the double silently kept every step ever drawn,
+   * and a test counting arrows would have passed whatever the browser really did.
+   */
+  get firstChild(): FakeElement | null { return this.children[0] ?? null; }
+
+  removeChild(child: FakeElement): FakeElement {
+    const at = this.children.indexOf(child);
+    if (at >= 0) this.children.splice(at, 1);
+    return child;
+  }
 
   querySelector(selector: string): FakeElement | null { return this.querySelectorAll(selector)[0] ?? null; }
 
