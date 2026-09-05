@@ -79,3 +79,45 @@
     transparent 12px
   );
 }
+
+/*
+ * The same four kinds, on the written entries under a replay.
+ *
+ * The badge inside each entry already names the kind; this puts the weight on the
+ * entry's own edge, so a person scrolling a long task can find the blocked step
+ * without reading. The classes come from `emphasisClass`, exactly as the badges do —
+ * there is no second decision here about what counts as serious.
+ */
+.event-entry[data-emphasis="ev-info"] { border-left-color: #b6c2cf; }
+.event-entry[data-emphasis="ev-success"] { border-left-color: #8fc7a1; }
+.event-entry[data-emphasis="ev-blocked-tool"] { border-left-color: #d8a94f; }
+
+.event-entry[data-emphasis="ev-blocked-security"] {
+  border-left-color: #a32020;
+  border-left-width: 6px;
+  background: #fdf6f5;
+}
+
+/* A check that stopped something reads differently from one that merely ran. */
+.check-mark[data-check-mark="blocked"] {
+  border-color: #a32020;
+  background: #f8dcda;
+  color: #6d1111;
+  font-weight: 700;
+}
+
+.check-mark[data-check-mark="failed"] {
+  border-color: #d8a94f;
+  background: #fdf3e1;
+  color: #6b4a06;
+}
+
+.check-mark[data-check-mark="passed"] {
+  border-color: #8fc7a1;
+  background: #e8f5ec;
+  color: #1d5c33;
+}
+
+.check-mark[data-check-mark="skipped"] {
+  color: #5b5b66;
+}

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { publishActivityEvent, type ActivityEvent, type ToolManifest } from '@xaa/contracts';
+import { publishActivityEvent, type ActivityEvent, type ActivityRecord, type ToolManifest } from '@xaa/contracts';
 import type { LogContext, Logger } from '@xaa/logging';
 
 export interface ActivityContext {
@@ -52,6 +52,7 @@ export async function publishToolSucceeded(input: {
   logger: Logger;
   ctx: LogContext;
   occurredAt?: string;
+  record?: ActivityRecord;
 }): Promise<void> {
   const occurredAt = input.occurredAt ?? new Date().toISOString();
   await publish({
@@ -60,7 +61,39 @@ export async function publishToolSucceeded(input: {
     outcome: 'success',
     title: 'ツールを実行しました',
     message: `${input.toolId} を実行し、結果を受け取りました。`,
-    detail: { event_type: 'TOOL_SUCCEEDED', tool_id: input.toolId },
+    // `target` is what the canvas draws the arrow towards. A successful call ends at
+    // the resource, and the hops inside the record say how it got there.
+    detail: { event_type: 'TOOL_SUCCEEDED', tool_id: input.toolId, target: 'resource-api' },
+    ...(input.record ? { record: input.record } : {}),
+  }, input.logger, input.ctx);
+}
+
+/**
+ * A tool call that neither worked nor was refused.
+ *
+ * Nothing published this before, so a run where every call failed on a 503 produced
+ * one terminal event and no explanation — the timeline showed a task that ended and
+ * nothing that happened inside it. `outcome` is `info` rather than `blocked` for the
+ * same reason TASK_FAILED is: nobody decided this agent may not act (docs 11 §3.1).
+ */
+export async function publishToolFailed(input: {
+  context: ActivityContext;
+  toolId: string;
+  errorCode: string;
+  logger: Logger;
+  ctx: LogContext;
+  occurredAt?: string;
+  record?: ActivityRecord;
+}): Promise<void> {
+  const occurredAt = input.occurredAt ?? new Date().toISOString();
+  await publish({
+    ...base(input.context, occurredAt),
+    phase: 'tool_call',
+    outcome: 'info',
+    title: 'ツールを実行できませんでした',
+    message: `${input.toolId} は ${input.errorCode} のため完了しませんでした。`,
+    detail: { event_type: 'TOOL_FAILED', tool_id: input.toolId, error_code: input.errorCode },
+    ...(input.record ? { record: input.record } : {}),
   }, input.logger, input.ctx);
 }
 
@@ -71,6 +104,7 @@ export async function publishToolBlocked(input: {
   logger: Logger;
   ctx: LogContext;
   occurredAt?: string;
+  record?: ActivityRecord;
 }): Promise<void> {
   const occurredAt = input.occurredAt ?? new Date().toISOString();
   await publish({
@@ -87,7 +121,11 @@ export async function publishToolBlocked(input: {
       tool_id: input.toolId,
       effective_capabilities: effectiveCapabilities(input.context.manifest),
       reason: input.reason,
+      // The refusal is drawn as an arrow towards the resource that stops short of it,
+      // which needs a destination even though nothing was sent (docs 11 §5.2).
+      target: 'resource-api',
     },
+    ...(input.record ? { record: input.record } : {}),
   }, input.logger, input.ctx);
 }
 
@@ -97,6 +135,7 @@ export async function publishTaskOutcome(input: {
   logger: Logger;
   ctx: LogContext;
   occurredAt?: string;
+  record?: ActivityRecord;
 }): Promise<void> {
   const occurredAt = input.occurredAt ?? new Date().toISOString();
   const wording = {
@@ -113,5 +152,6 @@ export async function publishTaskOutcome(input: {
     title: wording.title,
     message: wording.message,
     detail: { event_type: input.eventType },
+    ...(input.record ? { record: input.record } : {}),
   }, input.logger, input.ctx);
 }

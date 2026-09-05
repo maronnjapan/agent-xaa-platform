@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
-import { compile } from '@xaa/contracts';
+import { compile, INITIAL_TASK_ID } from '@xaa/contracts';
 import type { AutomationAppConfig } from './config.js';
 import { createSessionStore, type SessionStore } from './auth/session-store.js';
 import { requireUser, type UserVariables } from './auth/require-user.js';
@@ -408,7 +408,11 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       method: 'POST',
       body: {
         decision_id: definition.decision_id,
-        task_id: definition.work_definition_id,
+        // The id the agent's events will be grouped under, which has to be one of the
+        // shapes the timeline can file (docs 11 §3.3). The work definition id was sent
+        // here, and `wd_<uuid>` is not one of them — so every event the agent published
+        // was dropped on the way to the screen without anyone being told.
+        task_id: INITIAL_TASK_ID,
         requested_lifetime_hours: work.requested_lifetime_hours,
       },
       requiredScope: 'agent:provision',

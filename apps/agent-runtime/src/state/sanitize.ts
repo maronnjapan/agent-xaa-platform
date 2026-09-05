@@ -12,7 +12,17 @@ const DENY_KEYS = new Set([
   'client_secret', 'private_key', 'privatekey', 'd', 'jwk', 'dpop',
 ]);
 
-const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+/**
+ * A compact JWS, not merely a dotted string — the same shape `@xaa/logging` and the
+ * stage log match on.
+ *
+ * The header segment of a real token always begins `eyJ`, because it is base64url of a
+ * JSON object. Testing for dots alone also matched `internal.document.list`, so every
+ * tool id of exactly three segments was dropped from the checkpoint as if it were a
+ * credential — and the agent screen, which reads `pending_tool_calls` for the tool it
+ * ran, had nothing to show but an empty name beside the outcome.
+ */
+const JWT_SHAPE = /^eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 
 /**
  * Two different failures, kept apart on purpose (REQ-07-019, REQ-05-092).

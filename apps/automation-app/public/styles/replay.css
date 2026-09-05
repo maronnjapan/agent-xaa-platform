@@ -17,8 +17,16 @@
   margin: 1rem 0;
 }
 
+/*
+ * Capped rather than stretched. The boxes sit at fixed coordinates so two replays of
+ * the same system line up (DEC-APP-06), which means a task that only involves the
+ * lower row leaves the upper half of the frame empty. Letting the picture fill the
+ * column turned that gap into the largest thing on the page.
+ */
 .replay-canvas {
+  display: block;
   width: 100%;
+  max-width: 38rem;
   height: auto;
 }
 
@@ -119,4 +127,78 @@
   position: absolute;
   top: 0.25rem;
   right: 0.25rem;
+}
+
+/*
+ * The controls, the captions inside each box, and the legend.
+ *
+ * A replay that could only be watched once, at one speed, was a film. The step a person
+ * wants is the one that says something surprising, and they want to stop on it and read
+ * the record underneath.
+ */
+.replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.replay-controls button {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.replay-progress {
+  color: #5b5b66;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-node .node-label {
+  font-size: 13px;
+  fill: #24313b;
+}
+
+/* What the box is for. Smaller and lighter: it is a caption, not the name. */
+.replay-node .node-role {
+  font-size: 10.5px;
+  fill: #5f7080;
+}
+
+.replay-legend {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.replay-legend > summary {
+  cursor: pointer;
+  color: #5b5b66;
+}
+
+.replay-legend ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+  color: #5b5b66;
+}
+
+/*
+ * Which written entry the picture is on.
+ *
+ * Three states, because a person who paused halfway needs to see the boundary between
+ * what has been shown and what has not. The current one is moved and brightened rather
+ * than merely tinted, so it is findable on a long list without scanning colours.
+ */
+.event-entry[data-entry-state="current"] {
+  background: #f2f7fd;
+  box-shadow: 0 0 0 2px #2f6fb5;
+}
+
+.event-entry[data-entry-state="waiting"] {
+  opacity: 0.55;
+}
+
+/* Nothing has played yet, so nothing is dimmed: the log reads on its own. */
+.replay[data-replay-state="idle"] ~ .event-log .event-entry[data-entry-state="waiting"] {
+  opacity: 1;
 }

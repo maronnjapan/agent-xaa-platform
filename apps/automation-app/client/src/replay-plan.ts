@@ -1,5 +1,13 @@
 import { REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from './replay-config.js';
 
+export interface ReplayHop {
+  from: string;
+  to: string;
+  label: string;
+  outcome: string;
+  message: string;
+}
+
 export interface ReplayEvent {
   event_id: string;
   occurred_at: string;
@@ -8,6 +16,7 @@ export interface ReplayEvent {
   outcome: string;
   message: string;
   detail?: Record<string, unknown>;
+  record?: { hops?: readonly ReplayHop[] };
 }
 
 export interface ReplayStep {
@@ -35,6 +44,12 @@ export interface ReplayStep {
  *
  * A blocked step stops short of its destination and stays there — the picture of a
  * refusal is the arrow that never arrives (RULE-54).
+ *
+ * An event that carries hops becomes one step per hop. One tool call is four
+ * exchanges — the Agent OP issues an identity, the Resource AS turns it into a token,
+ * the resource answers — and drawing it as a single arrow said only that the agent
+ * touched something. The hops are the publisher's own account of the path, so the
+ * picture and the written log describe the same journey.
  */
 export function buildReplayPlan(
   events: readonly ReplayEvent[],
@@ -43,8 +58,32 @@ export function buildReplayPlan(
   const ordered = [...events].sort((left, right) =>
     left.occurred_at.localeCompare(right.occurred_at) || left.event_id.localeCompare(right.event_id));
 
+  const steps: ReplayStep[] = [];
   let previous: string | null = null;
-  return ordered.map((event, index) => {
+
+  for (const event of ordered) {
+    const hops = event.record?.hops ?? [];
+    if (hops.length > 0) {
+      for (const hop of hops) {
+        const from = nodeIdFor(hop.from);
+        const to = nodeIdFor(hop.to);
+        const blocked = hop.outcome === 'blocked' && to !== null;
+        if (from) previous = from;
+        if (to && !blocked) previous = to;
+        steps.push(step({
+          index: steps.length,
+          eventId: event.event_id,
+          from,
+          to,
+          message: hop.message,
+          outcome: hop.outcome,
+          phase: event.phase ?? '',
+          blocked,
+        }));
+      }
+      continue;
+    }
+
     const from = nodeIdFor(event.source);
     const target = event.detail?.target;
     // With no declared target the movement returns to where the story was: an event
@@ -57,8 +96,8 @@ export function buildReplayPlan(
     // is already shown by the step that actually tried.
     const blocked = event.outcome === 'blocked' && declared;
     if (from) previous = from;
-    return {
-      index,
+    steps.push(step({
+      index: steps.length,
       eventId: event.event_id,
       from,
       to,
@@ -66,10 +105,14 @@ export function buildReplayPlan(
       outcome: event.outcome,
       phase: event.phase ?? '',
       blocked,
-      stopRatio: blocked ? BLOCKED_STOP_RATIO : 1,
-      delayMs: REPLAY_STEP_MS,
-    };
-  });
+    }));
+  }
+
+  return steps;
+}
+
+function step(input: Omit<ReplayStep, 'stopRatio' | 'delayMs'>): ReplayStep {
+  return { ...input, stopRatio: input.blocked ? BLOCKED_STOP_RATIO : 1, delayMs: REPLAY_STEP_MS };
 }
 
 export function isFinished(plan: readonly ReplayStep[], playedIndex: number): boolean {

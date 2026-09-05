@@ -1,3 +1,5 @@
+import { activityRecordSchema } from '@xaa/contracts';
+
 /** JSON Schemas the Automation App validates against, kept together (DEC-APP-05). */
 
 export const suggestionSchema = {
@@ -113,7 +115,9 @@ export const AGENT_STATUS_VALUES = [
   'CREATED', 'PROVISIONING', 'ACTIVE', 'EXPIRING', 'EXPIRED', 'SUSPICIOUS', 'QUARANTINED', 'REVOKED', 'DESTROYED',
 ] as const;
 
-export const AGENT_STATUS_RESPONSE_KEYS = ['agent_status', 'remaining_seconds', 'current_task', 'tool_invocations'] as const;
+export const AGENT_STATUS_RESPONSE_KEYS = [
+  'agent_status', 'remaining_seconds', 'current_task', 'tool_invocations', 'execution_log',
+] as const;
 
 export const agentStatusResponseSchema = {
   $id: 'agent-status-response',
@@ -137,6 +141,16 @@ export const agentStatusResponseSchema = {
         },
       },
     },
+    /**
+     * What the agent has done so far, in the words of the Runtime that did it.
+     *
+     * The same records the timeline replays, read from the checkpoint rather than from
+     * the event stream — the timeline waits for a task to finish (RULE-59) and this
+     * screen must not, so a person watching a long run has something to read while it
+     * is still going. Validating them here means a Runtime that wrote a record of some
+     * other shape is a failure on this endpoint, not a broken screen.
+     */
+    execution_log: { type: 'array', items: activityRecordSchema },
   },
 } as const;
 

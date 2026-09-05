@@ -1,4 +1,5 @@
 import type { FromSchema } from 'json-schema-to-ts';
+import { activityRecordSchema } from './activity-record.js';
 import { compile } from './schema/validator.js';
 
 /**
@@ -38,6 +39,14 @@ export const activityEventSchema = {
     title: { type: 'string', minLength: 1 },
     message: { type: 'string', minLength: 1 },
     detail: { type: 'object' },
+    /**
+     * The breakdown of this one event, written by its publisher (docs 11 §3.4).
+     *
+     * Optional, and required of nobody: an event that is one fact — a login, a
+     * confirmation — has nothing to break down, and an empty record on it would tell a
+     * reader there is something to open when there is not.
+     */
+    record: activityRecordSchema,
     related_finding_id: { type: ['string', 'null'] },
     is_simulated: { type: 'boolean', default: false },
   },

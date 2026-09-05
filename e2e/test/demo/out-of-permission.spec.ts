@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import {
-  drainActivityQueueForTesting, resetActivityPublisherForTesting, validateActivityEvent, type ActivityEvent,
+  drainActivityQueueForTesting, resetActivityPublisherForTesting, type ActivityEvent,
 } from '@xaa/contracts';
 import { createFirestoreDouble } from '@xaa/gcp';
 import { runReasoningLoop } from '@xaa/agent-runtime/src/reasoning/loop';
@@ -10,7 +10,7 @@ import { createExecutionContext } from '@xaa/agent-runtime/src/context/execution
 import { manifestSha256 } from '@xaa/agent-runtime/src/manifest/load';
 import { buildAllowedHosts } from '@xaa/agent-runtime/src/http/allowed-hosts';
 import { createRuntimeHttpClient } from '@xaa/agent-runtime/src/http/http-client';
-import { publishToolBlocked, publishTaskOutcome } from '@xaa/agent-runtime/src/telemetry/activity';
+import { publishTaskOutcome } from '@xaa/agent-runtime/src/telemetry/activity';
 import { decideTaskOutcome } from '@xaa/agent-runtime/src/telemetry/task-outcome';
 import { storeActivityEvent } from '@xaa/automation-app/src/activity/subscriber';
 import { readTimeline } from '@xaa/automation-app/src/activity/query';
@@ -40,6 +40,11 @@ const silent = createLogger('agent-runtime', 'agent_runtime', () => {});
  * it, the model is taken in by it, and the Tool Executor refuses. What the person then
  * sees is one TOOL_BLOCKED, one TASK_BLOCKED, and a replay whose arrow stops before the
  * Finance API.
+ *
+ * The TOOL_BLOCKED row is published by the loop itself. It used to be posted by hand
+ * here, with the destination box added by a helper afterwards, which meant the test
+ * proved the screen could draw a refusal rather than that the platform reports one —
+ * and in production no per-tool row was published at all.
  */
 describe('demo D-1: an out-of-permission instruction', () => {
   beforeEach(() => resetActivityPublisherForTesting());
@@ -108,11 +113,15 @@ describe('demo D-1: an out-of-permission instruction', () => {
       { done: true },
     ];
     let index = 0;
+    const activityContext = {
+      humanSubject, agentId: agentOp.agentId, taskId: 'task-1', traceId: 'demo', manifest: context.manifest,
+    };
     const loop = await runReasoningLoop({
       context, http, logger: silent,
       logContext: { request_id: 'demo', trace_id: 'demo', agent_id: agentOp.agentId, human_subject: humanSubject },
       vertex: { generateJson: async <T>() => (steps[index++] ?? { done: true }) as T },
       stageWrite: () => {},
+      activity: activityContext,
     });
 
     expect(loop.results[0]).toMatchObject({
@@ -125,15 +134,9 @@ describe('demo D-1: an out-of-permission instruction', () => {
     );
     expect(state!.execution_state.rejected_instruction).toHaveLength(1);
 
-    // The Runtime publishes exactly one TOOL_BLOCKED and one TASK_BLOCKED.
-    const activityContext = {
-      humanSubject, agentId: agentOp.agentId, taskId: 'task-1', traceId: 'demo', manifest: context.manifest,
-    };
+    // The loop published the refusal on its own; only the task's ending is left, and
+    // `main.ts` is what emits that in production.
     const ctx = { request_id: 'demo', trace_id: 'demo', agent_id: agentOp.agentId, human_subject: humanSubject };
-    await publishToolBlocked({
-      context: activityContext, toolId: 'internal.finance.payment.approve',
-      reason: 'not_in_allowed_tools', logger: silent, ctx, occurredAt: '2026-01-01T00:00:01.000Z',
-    });
     await publishTaskOutcome({
       context: activityContext, eventType: decideTaskOutcome(loop.results), logger: silent, ctx,
       occurredAt: '2026-01-01T00:00:02.000Z',
@@ -144,12 +147,17 @@ describe('demo D-1: an out-of-permission instruction', () => {
     expect(types.filter((type) => type === 'TOOL_BLOCKED')).toHaveLength(1);
     expect(types.filter((type) => type === 'TASK_BLOCKED')).toHaveLength(1);
 
+    // The refusal names the box it was heading for, so the canvas can stop the arrow
+    // short of it. Nothing adds that here any more.
+    const refusal = published.find((entry) => (entry.detail as { event_type: string }).event_type === 'TOOL_BLOCKED')!;
+    expect((refusal.detail as { target: string }).target).toBe('resource-api');
+    // And it carries the account of what the agent asked for and what it was allowed.
+    expect(refusal.record?.headline).toContain('拒否');
+    expect(refusal.record?.checks?.some((check) => check.result === 'blocked')).toBe(true);
+
     // The events reach the person's timeline the ordinary way.
     for (const entry of published) {
-      await storeActivityEvent({
-        documents: automation.documents,
-        event: withTarget(entry),
-      });
+      await storeActivityEvent({ documents: automation.documents, event: entry });
     }
     const listed = await (await automation.fetch('/api/activity/tasks')).json() as {
       tasks: Array<{ task_id: string; status: string; terminal_outcome?: string; events?: ActivityEvent[] }>;
@@ -164,9 +172,15 @@ describe('demo D-1: an out-of-permission instruction', () => {
     expect(html).toContain('data-node="resource-api"');
     expect(html.match(/data-reached="false"/g)!.length).toBeGreaterThan(0);
 
+    // The written account is on the page beside the picture, server-rendered.
+    expect(html).toContain('data-event-log="task-1"');
+    expect(html).toContain('この Agent が使えるツール');
+
     const events = task.events!.map((entry) => ({
       event_id: entry.event_id, occurred_at: entry.occurred_at, source: entry.source,
-      outcome: entry.outcome, message: entry.message, ...(entry.detail ? { detail: entry.detail as Record<string, unknown> } : {}),
+      outcome: entry.outcome, message: entry.message,
+      ...(entry.detail ? { detail: entry.detail as Record<string, unknown> } : {}),
+      ...(entry.record ? { record: entry.record } : {}),
     }));
     const plan = buildReplayPlan(events, (source) => SOURCE_TO_NODE[source] ?? null);
     const blockedSteps = plan.filter((step) => step.blocked);
@@ -192,13 +206,3 @@ describe('demo D-1: an out-of-permission instruction', () => {
   });
 });
 
-/**
- * The Runtime does not know it is drawing a picture, so the replay needs to be told
- * which box the blocked call was heading for. The tool's destination is the Resource
- * API; adding it here keeps the canvas honest without teaching the Runtime about nodes.
- */
-function withTarget(event: ActivityEvent): ActivityEvent {
-  const detail = event.detail as { event_type?: string } | undefined;
-  if (detail?.event_type !== 'TOOL_BLOCKED') return event;
-  return validateActivityEvent({ ...event, detail: { ...detail, target: 'resource-api' } }) as ActivityEvent;
-}

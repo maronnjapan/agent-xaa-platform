@@ -1,4 +1,5 @@
 import { generateJson, type VertexClient } from '@xaa/vertex';
+import type { ActivityRecord } from '@xaa/contracts';
 import type { LogContext, Logger } from '@xaa/logging';
 import type { ExecutionContext } from '../context/execution-context.js';
 import type { RuntimeHttpClient } from '../http/http-client.js';
@@ -7,6 +8,10 @@ import { executeTool } from '../tool-executor/index.js';
 import type { ToolResult } from '../tool-executor/errors.js';
 import { readPendingInstructions } from '../instructions/read-pending.js';
 import { appendRejection } from '../instructions/record-rejection.js';
+import { createExecutionRecorder, reasoningRecord } from '../telemetry/execution-record.js';
+import {
+  publishToolBlocked, publishToolFailed, publishToolSucceeded, type ActivityContext,
+} from '../telemetry/activity.js';
 import { buildToolDeclarations } from './tool-declarations.js';
 import { isInvalidToolCall, parseToolCall } from './parse-tool-call.js';
 
@@ -50,6 +55,17 @@ interface ReasoningStep { done: boolean; tool_call?: unknown; note?: string }
 export interface LoopResult {
   results: ToolResult[];
   /**
+   * What a person is shown about each step, in the order the steps happened.
+   *
+   * One entry per reasoning step, not per tool call: a step where the model answered
+   * with something unreadable, or said it was finished, is still a step somebody
+   * watching wants accounted for. Without them a run of eight steps that produced two
+   * calls looked, from the timeline, like a run of two.
+   */
+  records: ActivityRecord[];
+  /** The agent's own closing words, when it wrote any before saying it was done. */
+  finalNote?: string;
+  /**
    * `no_decision` is separate from `done` because the two look identical from the
    * outside and mean opposite things. `generateJson` answers `null` for every way a
    * generation can fail — a refused schema, a timeout, an answer that did not validate —
@@ -81,6 +97,14 @@ export async function runReasoningLoop(input: {
   maxSteps?: number;
   now?: () => number;
   stageWrite?: (line: string) => void;
+  /**
+   * Where the per-tool Activity Events go, when this Execution is publishing any.
+   *
+   * Optional so the loop stays testable without a topic. It is also the reason these
+   * events exist at all: they were written and then never called, so until now a task
+   * put exactly one row — its own ending — on the person's timeline.
+   */
+  activity?: ActivityContext;
 }): Promise<LoopResult> {
   const now = input.now ?? (() => Date.now());
   const maxSteps = input.maxSteps ?? MAX_REASONING_STEPS;
@@ -88,9 +112,11 @@ export async function runReasoningLoop(input: {
     ?? (<T>(params: Parameters<typeof generateJson>[0]) => generateJson<T>(params));
 
   const results: ToolResult[] = [];
+  const records: ActivityRecord[] = [];
   const conversation: unknown[] = [];
   let executionState: Record<string, unknown> = {};
   let stoppedBy: LoopResult['stoppedBy'] = 'reasoning_step_limit';
+  let finalNote: string | undefined;
 
   for (let step = 0; step < maxSteps; step += 1) {
     for (const instruction of await readPendingInstructions(input.context.store, new Date(now()).toISOString())) {
@@ -103,21 +129,53 @@ export async function runReasoningLoop(input: {
       maxOutputTokens: 2048,
       temperature: 0,
     });
-    if (!decision) { stoppedBy = 'no_decision'; break; }
-    if (decision.done) { stoppedBy = 'done'; break; }
+    if (!decision) {
+      stoppedBy = 'no_decision';
+      records.push(reasoningRecord({
+        step: step + 1,
+        headline: 'エージェントから応答がありませんでした',
+        message: 'モデルが答えを返さなかったため、この手で打ち切りました。作業は完了していません。',
+      }));
+      break;
+    }
+    if (decision.done) {
+      stoppedBy = 'done';
+      finalNote = decision.note;
+      records.push(reasoningRecord({
+        step: step + 1,
+        headline: 'エージェントが作業の終わりを判断しました',
+        message: 'これ以上ツールで進めることは無いと判断しました。以下はエージェント自身の言葉です。',
+        ...(decision.note ? { note: decision.note } : {}),
+      }));
+      break;
+    }
 
     const call = parseToolCall(decision.tool_call);
     if (isInvalidToolCall(call)) {
       results.push({ ...call, tool_id: 'unknown', stage: 'tool_selection' });
+      records.push(reasoningRecord({
+        step: step + 1,
+        headline: 'ツールの指定を読み取れませんでした',
+        message: 'エージェントの答えに、実行できる形のツール指定がありませんでした。何も実行していません。',
+        ...(decision.note ? { note: decision.note } : {}),
+      }));
       await checkpoint();
       continue;
     }
 
+    const recorder = createExecutionRecorder({
+      step: step + 1,
+      toolId: call.tool_id,
+      intent: { ...(decision.note ? { note: decision.note } : {}), parameters: call.parameters },
+    });
     const result = await executeTool({
       context: input.context, http: input.http, logger: input.logger, logContext: input.logContext,
-      now, ...(input.stageWrite ? { stageWrite: input.stageWrite } : {}),
+      now, recorder, ...(input.stageWrite ? { stageWrite: input.stageWrite } : {}),
     }, call);
     results.push(result);
+    const record = recorder.build(result);
+    records.push(record);
+    await publishToolEvent(result, record);
     conversation.push({ role: 'tool', tool_id: call.tool_id, result: result.outcome === 'success' ? result.data : result });
 
     if (result.outcome === 'blocked' && result.reason === 'not_in_allowed_tools') {
@@ -133,7 +191,7 @@ export async function runReasoningLoop(input: {
     if (result.outcome === 'failed' && result.error_code === 'agent_expired') { stoppedBy = 'agent_expired'; break; }
   }
 
-  return { results, stoppedBy };
+  return { results, records, stoppedBy, ...(finalNote ? { finalNote } : {}) };
 
   async function checkpoint(): Promise<void> {
     const state: Checkpoint = {
@@ -141,10 +199,37 @@ export async function runReasoningLoop(input: {
       conversation_context: conversation,
       execution_state: executionState,
       pending_tool_calls: results,
+      // The same records the timeline will replay, written on every step so the agent
+      // screen can show what is happening while it is still happening. The timeline
+      // waits for the task to finish (RULE-59); the screen does not, and the two must
+      // not end up telling the story from two different sources.
+      execution_log: records,
       agent_status: 'ACTIVE',
       updated_at: new Date(now()).toISOString(),
     };
     await writeCheckpoint(input.context.store, state, input.logger, input.logContext);
+  }
+
+  /**
+   * One Activity Event per tool call, published beside the checkpoint.
+   *
+   * A publish that fails is already swallowed inside `activity.ts`; what is guarded
+   * here is the absence of a context, which is how the loop stays runnable in a test
+   * with no topic behind it.
+   */
+  async function publishToolEvent(result: ToolResult, record: ActivityRecord): Promise<void> {
+    const context = input.activity;
+    if (!context) return;
+    const common = { context, logger: input.logger, ctx: input.logContext, record };
+    if (result.outcome === 'success') {
+      await publishToolSucceeded({ ...common, toolId: result.tool_id });
+      return;
+    }
+    if (result.outcome === 'blocked') {
+      await publishToolBlocked({ ...common, toolId: result.tool_id, reason: result.reason });
+      return;
+    }
+    await publishToolFailed({ ...common, toolId: result.tool_id, errorCode: result.error_code });
   }
 }
 

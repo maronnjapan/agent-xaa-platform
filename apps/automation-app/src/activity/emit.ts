@@ -49,7 +49,10 @@ export async function emitProposed(context: EmitContext, input: { purpose: strin
     phase: 'work_definition', outcome: 'info',
     title: '自動化の候補を提案しました',
     message: `Automation Design AI が「${input.purpose}」を提案しました`,
-    detail: { event_type: 'PROPOSED', work_definition_id: input.workDefinitionId },
+    // `purpose` is what the timeline heads the whole group with. Without it the list
+    // fell back to the first event's title, so every agent's group was headed
+    // 「ログインしました」 rather than the work it was created for.
+    detail: { event_type: 'PROPOSED', work_definition_id: input.workDefinitionId, purpose: input.purpose },
   });
 }
 
@@ -59,7 +62,7 @@ export async function emitConfirmed(context: EmitContext, input: { purpose: stri
     phase: 'work_definition', outcome: 'success',
     title: '作業内容を確定しました',
     message: `「${input.purpose}」を実行する内容で確定しました。`,
-    detail: { event_type: 'CONFIRMED', work_definition_id: input.workDefinitionId },
+    detail: { event_type: 'CONFIRMED', work_definition_id: input.workDefinitionId, purpose: input.purpose },
   });
 }
 

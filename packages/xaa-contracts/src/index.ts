@@ -1,5 +1,6 @@
 export * from './activity-event.js';
 export * from './activity-publisher.js';
+export * from './activity-record.js';
 export * from './actor-token.js';
 export * from './agent-stage.js';
 export * from './agent-namespace.js';

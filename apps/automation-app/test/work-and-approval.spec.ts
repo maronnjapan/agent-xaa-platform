@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { INITIAL_TASK_ID, TASK_ID_PATTERN } from '@xaa/contracts';
 import { LifetimeOutOfRange, validateLifetimeHours } from '../src/work-definition/lifetime.js';
 import { WORK_DEFINITION_FIELDS, confirm } from '../src/work-definition/model.js';
 import { buildBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed } from '../src/work-definition/submit.js';
@@ -400,9 +401,15 @@ describe('approval', () => {
     expect(call.url).toBe('https://provisioner.test/provisioning');
     // The Provisioner's schema is closed: three keys, and `agent_definition_id` is not
     // one of them, so sending it made every provisioning request a 400.
+    //
+    // `task_id` is the id the agent's events are grouped under, so it has to be one of
+    // the four shapes the timeline can file (docs 11 §3.3). The work definition id was
+    // sent here, and `wd_<uuid>` is not one of them — the events reached the store and
+    // `readTimeline` then dropped every one of them without a word.
     expect(JSON.parse(String(call.init.body))).toEqual({
-      decision_id: 'dec_1', task_id: 'wd_1', requested_lifetime_hours: 3,
+      decision_id: 'dec_1', task_id: INITIAL_TASK_ID, requested_lifetime_hours: 3,
     });
+    expect(TASK_ID_PATTERN.test(INITIAL_TASK_ID)).toBe(true);
   });
 
   /**

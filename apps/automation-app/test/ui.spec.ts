@@ -251,6 +251,7 @@ describe('the agent detail page', () => {
   const status = {
     agent_status: 'ACTIVE', remaining_seconds: 100, current_task: 'task-1',
     tool_invocations: [{ tool_id: 'internal.finance.payment.approve', outcome: 'blocked', summary: 'not_in_allowed_tools' }],
+    execution_log: [],
   };
 
   it('separates the status panel from the timeline link', async () => {
@@ -413,7 +414,7 @@ describe('the replay as it is drawn', () => {
     play(root, [step({ outcome: 'blocked', message: '許可された Tool に含まれない' })]);
     const dot = root.querySelectorAll('[data-blocked="true"]')[0]!;
     expect(dot.getAttribute('class')).toBe('replay-dot is-blocked');
-    expect(dot.style.getPropertyValue('--stop-ratio')).toBe(String(BLOCKED_STOP_RATIO));
+    expect(Number(dot.style.getPropertyValue('--stop-ratio'))).toBeLessThanOrEqual(BLOCKED_STOP_RATIO);
     expect(root.querySelectorAll('[data-blocked="true"]')).toHaveLength(1);
     expect(root.querySelectorAll('[data-stop="true"]')).toHaveLength(1);
 
@@ -423,12 +424,18 @@ describe('the replay as it is drawn', () => {
     expect(unreached).toHaveLength(1);
     expect(unreached[0]!.getAttribute('data-node')).toBe('resource-api');
 
-    // The stop mark, and the dot that ends on it, must not overlap the destination box.
+    /*
+     * The stop mark must not sit on any box but the one the movement left. The plan's
+     * ratio alone put it on top of the Resource AS on this very path — a refusal the
+     * Tool Executor made, drawn as if a service in the middle had made it.
+     */
     const stopped = root.querySelectorAll('[data-stop="true"]')[0]!;
     const [x, y] = /translate\(([-\d.]+),([-\d.]+)\)/.exec(stopped.getAttribute('transform') ?? '')!.slice(1).map(Number) as [number, number];
-    const destination = REPLAY_NODES.find((node) => node.id === 'resource-api')!;
-    const clear = Math.abs(x - destination.x) > NODE_HALF_WIDTH || Math.abs(y - destination.y) > NODE_HALF_HEIGHT;
-    expect(clear).toBe(true);
+    for (const node of REPLAY_NODES) {
+      if (node.id === 'agent-runtime') continue;
+      const clear = Math.abs(x - node.x) > NODE_HALF_WIDTH || Math.abs(y - node.y) > NODE_HALF_HEIGHT;
+      expect(clear, `the stop mark overlaps ${node.id}`).toBe(true);
+    }
 
     // The reason shown is the publisher's own sentence, put on screen unchanged.
     expect(root.querySelectorAll('[data-messages]')[0]!.children.map((line) => line.textContent))

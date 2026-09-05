@@ -11,6 +11,7 @@ import { manifestSha256 } from './manifest/load.js';
 import { runReasoningLoop } from './reasoning/loop.js';
 import { createRuntimeStore } from './store/runtime-store.js';
 import { publishTaskOutcome } from './telemetry/activity.js';
+import { taskSummaryRecord } from './telemetry/execution-record.js';
 import { createTerminalEmitter, decideTaskOutcome } from './telemetry/task-outcome.js';
 
 /**
@@ -72,12 +73,19 @@ async function main(): Promise<number> {
     humanSubject: context.humanSubject, agentId: context.agentId, taskId: context.taskId,
     traceId: logContext.trace_id, manifest: context.manifest,
   };
+  // Filled in once the loop has run. The terminal event is emitted from three places
+  // — the normal path, the catch and the `finally` — and only one of them has a loop
+  // result to describe, so the summary is held here rather than passed to each.
+  let summary: ReturnType<typeof taskSummaryRecord> | undefined;
   const terminal = createTerminalEmitter(async (outcome) => {
-    await publishTaskOutcome({ context: activityContext, eventType: outcome, logger, ctx: logContext });
+    await publishTaskOutcome({
+      context: activityContext, eventType: outcome, logger, ctx: logContext,
+      ...(summary ? { record: summary } : {}),
+    });
   });
 
   try {
-    const loop = await runReasoningLoop({ context, http, logger, logContext });
+    const loop = await runReasoningLoop({ context, http, logger, logContext, activity: activityContext });
     // Two ways of stopping that the tool results cannot show. Running out of steps is
     // the loop's own bound; `no_decision` is the model never answering, which without
     // this reads as a task that finished with nothing to do.
@@ -85,6 +93,17 @@ async function main(): Promise<number> {
     const outcome = loop.stoppedBy === 'reasoning_step_limit' || loop.stoppedBy === 'no_decision'
       ? 'TASK_FAILED'
       : decideTaskOutcome(loop.results);
+    summary = taskSummaryRecord({
+      headline: TERMINAL_HEADLINES[outcome],
+      stoppedBy: loop.stoppedBy,
+      steps: loop.records,
+      toolCalls: {
+        succeeded: loop.results.filter((result) => result.outcome === 'success').length,
+        blocked: loop.results.filter((result) => result.outcome === 'blocked').length,
+        failed: loop.results.filter((result) => result.outcome === 'failed').length,
+      },
+      ...(loop.finalNote ? { finalNote: loop.finalNote } : {}),
+    });
     await terminal.emitTerminalOnce(outcome);
 
     // RULE-13 again, from the other end: the manifest that governed this execution is
@@ -109,5 +128,12 @@ async function main(): Promise<number> {
     await terminal.emitTerminalOnce('TASK_FAILED');
   }
 }
+
+/** The one line at the top of the summary, matched to the verdict it describes. */
+const TERMINAL_HEADLINES: Readonly<Record<'TASK_COMPLETED' | 'TASK_BLOCKED' | 'TASK_FAILED', string>> = {
+  TASK_COMPLETED: '指示された作業を最後まで行いました',
+  TASK_BLOCKED: '権限の範囲外の操作があったため、そこで止めました',
+  TASK_FAILED: '途中で問題が起きたため、作業を完了できませんでした',
+};
 
 process.exit(await main());
