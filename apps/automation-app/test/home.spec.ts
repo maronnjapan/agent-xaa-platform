@@ -46,7 +46,60 @@ async function seedAgentDefinition(harness: Harness, overrides: Record<string, u
   return id;
 }
 
+/**
+ * What the Authorization Platform leaves in `work_definitions`: the structured Work
+ * Definition it derives from the request. Same collection, same person, different shape
+ * — `target_resources` and `constraints` instead of `status`, `user_confirmations` and
+ * `safety_notes` (apps/authorization/src/work-definition/build.ts).
+ */
+async function seedAuthorizationWorkDefinition(harness: Harness, id = 'wd_authz'): Promise<string> {
+  await harness.authorizationSeed.set('work_definitions', id, {
+    work_definition_id: id, human_subject: SUBJECT,
+    purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
+    operations: [], target_resources: ['document'], constraints: { external_message_send: false },
+    created_at: '2026-01-02T00:00:00.000Z',
+  });
+  return id;
+}
+
 describe('the home screen', () => {
+  /**
+   * The 500 a person met right after logging in. `work_definitions` is one collection
+   * for the platform and the Authorization Platform writes its own shape into it, so a
+   * query by `human_subject` returned rows this screen cannot render, and the first
+   * `user_confirmations.map` threw before any of the page reached the browser.
+   */
+  it('renders when the Authorization Platform has written its own row for the same person', async () => {
+    const harness = await startAutomationApp();
+    await seedWorkDefinition(harness);
+    await seedAuthorizationWorkDefinition(harness);
+
+    const response = await harness.fetch('/');
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    // The person's own draft is there, and the other writer's row is not listed at all.
+    expect(html).toContain('data-work-definition-id="wd_1"');
+    expect(html).not.toContain('wd_authz');
+  });
+
+  /**
+   * And it is not addressable either: the routes read `find`, so an id belonging to the
+   * other writer has to answer the way a missing one does rather than be confirmed into
+   * a shape this app could never have written.
+   */
+  it('answers 404 for a work definition id that belongs to the other writer', async () => {
+    const harness = await startAutomationApp();
+    const id = await seedAuthorizationWorkDefinition(harness);
+
+    for (const path of [`/api/work-definitions/${id}/confirm`, `/api/work-definitions/${id}/submit`]) {
+      const response = await harness.fetch(path, { method: 'POST' });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'not_found' });
+    }
+    expect(harness.upstream).toHaveLength(0);
+  });
+
   it('is served to a logged-in person with the form, its script and its stylesheet', async () => {
     const harness = await startAutomationApp();
     const response = await harness.fetch('/');
