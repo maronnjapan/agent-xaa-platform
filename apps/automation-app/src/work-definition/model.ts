@@ -12,7 +12,7 @@ export interface WorkDefinition {
   operations: string[];
   user_confirmations: string[];
   safety_notes: string[];
-  requested_lifetime_hours: number;
+  requested_lifetime_minutes: number;
   created_at: string;
   updated_at: string;
 }

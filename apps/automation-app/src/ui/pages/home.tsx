@@ -31,7 +31,7 @@ export const HOME_LEAD = '自動化したい作業を書き、提示された権
  * `data-section` so the browser half can find one without knowing the others.
  */
 export function HomePage(props: {
-  defaultHours: number;
+  defaultMinutes: number;
   items: readonly HomeWorkItem[];
   agents: readonly HomeAgent[];
   defaultFrom: string;
@@ -62,7 +62,7 @@ export function HomePage(props: {
 
       <section class="card" data-section="new-work">
         <h2>1. 自動化したい作業を書く</h2>
-        <WorkDefinitionForm defaultHours={props.defaultHours} />
+        <WorkDefinitionForm defaultMinutes={props.defaultMinutes} />
         <p data-field="form-status" data-status="" />
       </section>
 

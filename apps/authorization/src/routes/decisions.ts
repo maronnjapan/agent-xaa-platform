@@ -11,12 +11,12 @@ type Env = { Variables: ControlPlaneVariables };
 interface DecisionResponse { decision_id: string; status: string; effective_capabilities: string[]; security_profile: unknown; denied: unknown[] }
 const assertResponse: (value: unknown) => asserts value is DecisionResponse = compile<DecisionResponse>(authorizationDecisionResponseSchema);
 
-export function createDecisionRoute(deps: DecideDeps & { maxLifetimeHours: number }): Hono<Env> {
+export function createDecisionRoute(deps: DecideDeps & { maxLifetimeMinutes: number }): Hono<Env> {
   const app = new Hono<Env>();
   app.post('/', async (context) => {
     let request;
     try {
-      request = validateWorkRequest(context.get('validatedBody'), deps.maxLifetimeHours);
+      request = validateWorkRequest(context.get('validatedBody'), deps.maxLifetimeMinutes);
     } catch (error) {
       if (error instanceof WorkRequestRejected) return context.json({ error: error.code }, 400);
       throw error;
@@ -31,7 +31,7 @@ export function createDecisionRoute(deps: DecideDeps & { maxLifetimeHours: numbe
         purpose: request.purpose,
         description: request.description,
         constraints: request.constraints ?? {},
-        requestedLifetimeHours: request.requested_lifetime_hours,
+        requestedLifetimeMinutes: request.requested_lifetime_minutes,
       }, deps);
 
       const response = {

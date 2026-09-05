@@ -71,7 +71,7 @@ describe('reprovisioning', () => {
     expect(Object.keys(body).sort()).toEqual([...REPROVISION_BODY_KEYS].sort());
     expect(body.inherited_expires_at).toBe(expiresAt);
     // Nothing recomputes the lifetime: a permission change must not extend an agent.
-    expect(body).not.toHaveProperty('requested_lifetime_hours');
+    expect(body).not.toHaveProperty('requested_lifetime_minutes');
     expect(body).not.toHaveProperty('expires_at');
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LifetimeOutOfRange, validateLifetimeHours } from '../src/work-definition/lifetime.js';
+import { LifetimeOutOfRange, validateLifetimeMinutes } from '../src/work-definition/lifetime.js';
 import { WORK_DEFINITION_FIELDS, confirm } from '../src/work-definition/model.js';
 import { buildBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed } from '../src/work-definition/submit.js';
 import { BUSINESS_WORK_REQUEST_KEYS } from '../src/schemas/index.js';
@@ -16,29 +16,36 @@ const definition = {
   work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED' as const,
   purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
   operations: ['作業記録を読む', '日報を作る'], user_confirmations: ['内容を確認する'], safety_notes: ['社外に送らない'],
-  requested_lifetime_hours: 2, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+  requested_lifetime_minutes: 120, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
 };
 
 describe('the requested lifetime', () => {
-  it('accepts 24 and rejects 25', () => {
-    expect(validateLifetimeHours(24)).toBe(24);
-    expect(() => validateLifetimeHours(25)).toThrow(LifetimeOutOfRange);
+  it('accepts 1440 minutes and rejects 1441', () => {
+    expect(validateLifetimeMinutes(1440)).toBe(1440);
+    expect(() => validateLifetimeMinutes(1441)).toThrow(LifetimeOutOfRange);
+  });
+
+  // The point of counting minutes: a three-minute errand no longer has to ask for an
+  // hour of standing permission.
+  it('accepts a single minute', () => {
+    expect(validateLifetimeMinutes(1)).toBe(1);
+    expect(validateLifetimeMinutes(3)).toBe(3);
   });
 
   it('rejects 1.5, "3" and 0', () => {
     for (const value of [1.5, '3', 0, -1, null, undefined, Number.NaN]) {
-      expect(() => validateLifetimeHours(value)).toThrow(LifetimeOutOfRange);
+      expect(() => validateLifetimeMinutes(value)).toThrow(LifetimeOutOfRange);
     }
   });
 
   it('answers 400 with lifetime_out_of_range', async () => {
     const harness = await startAutomationApp();
-    // 25 is over the cap; 1.5 is not a whole hour; "3" is the string a form sends when
-    // nobody parsed it; 0 is no life at all. None of them is rounded into range.
-    for (const requested_lifetime_hours of [25, 1.5, '3', 0]) {
+    // 1441 is over the cap; 1.5 is not a whole minute; "3" is the string a form sends
+    // when nobody parsed it; 0 is no life at all. None of them is rounded into range.
+    for (const requested_lifetime_minutes of [1441, 1.5, '3', 0]) {
       const response = await harness.fetch('/api/work-definitions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ purpose: 'x', requested_lifetime_hours }),
+        body: JSON.stringify({ purpose: 'x', requested_lifetime_minutes }),
       });
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: 'lifetime_out_of_range' });
@@ -46,10 +53,10 @@ describe('the requested lifetime', () => {
   });
 
   it('renders the configured default with the fixed bounds', async () => {
-    const html = String(await LifetimeInput({ defaultHours: 2 }));
-    expect(html).toContain('value="2"');
+    const html = String(await LifetimeInput({ defaultMinutes: 120 }));
+    expect(html).toContain('value="120"');
     expect(html).toContain('min="1"');
-    expect(html).toContain('max="24"');
+    expect(html).toContain('max="1440"');
   });
 });
 
@@ -58,7 +65,7 @@ describe('the work definition', () => {
     const harness = await startAutomationApp();
     const created = await (await harness.fetch('/api/work-definitions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: 'x', operations: ['a', 'b'], requested_lifetime_hours: 3 }),
+      body: JSON.stringify({ purpose: 'x', operations: ['a', 'b'], requested_lifetime_minutes: 180 }),
     })).json() as Record<string, unknown>;
     expect(Object.keys(created).sort()).toEqual([...WORK_DEFINITION_FIELDS].sort());
   });
@@ -390,7 +397,7 @@ describe('approval', () => {
     await harness.documents.set('work_definitions', 'wd_1', {
       work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED',
       purpose: '書類を読む', description: '毎朝', operations: [], user_confirmations: [], safety_notes: [],
-      requested_lifetime_hours: 3,
+      requested_lifetime_minutes: 180,
       created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
     });
 
@@ -401,7 +408,7 @@ describe('approval', () => {
     // The Provisioner's schema is closed: three keys, and `agent_definition_id` is not
     // one of them, so sending it made every provisioning request a 400.
     expect(JSON.parse(String(call.init.body))).toEqual({
-      decision_id: 'dec_1', task_id: 'wd_1', requested_lifetime_hours: 3,
+      decision_id: 'dec_1', task_id: 'wd_1', requested_lifetime_minutes: 180,
     });
   });
 
@@ -483,7 +490,7 @@ async function seedApprovedDefinition(harness: Harness): Promise<void> {
     operations: ['申請書の一覧を開く', '金額を確かめる'],
     user_confirmations: ['金額が10万円を超えるものは報告する'],
     safety_notes: ['承認はしない'],
-    requested_lifetime_hours: 3,
+    requested_lifetime_minutes: 180,
     created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
   });
 }

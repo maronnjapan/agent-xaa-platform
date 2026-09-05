@@ -30,7 +30,7 @@ var MESSAGES = {
   approval_required: "\u5148\u306B\u63D0\u793A\u3055\u308C\u305F\u6A29\u9650\u3092\u627F\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
   capabilities_changed: "\u63D0\u793A\u3057\u305F\u6A29\u9650\u304C\u5909\u308F\u308A\u307E\u3057\u305F\u3002\u3082\u3046\u4E00\u5EA6\u300C\u5FC5\u8981\u306A\u6A29\u9650\u3092\u8ABF\u3079\u308B\u300D\u304B\u3089\u3084\u308A\u76F4\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
   already_approved: "\u3059\u3067\u306B\u627F\u8A8D\u6E08\u307F\u3067\u3059\u3002",
-  lifetime_out_of_range: "\u5E0C\u671B\u3059\u308B\u7A3C\u50CD\u6642\u9593\u306F 1\u301C24 \u306E\u6574\u6570\u3067\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+  lifetime_out_of_range: "\u5E0C\u671B\u3059\u308B\u7A3C\u50CD\u6642\u9593\u306F 1\u301C1440 \u306E\u6574\u6570\uFF08\u5206\uFF09\u3067\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
   agent_not_active: "\u3053\u306E Agent \u306F\u52D5\u3044\u3066\u3044\u306A\u3044\u305F\u3081\u3001\u6307\u793A\u3092\u53D7\u3051\u53D6\u308C\u307E\u305B\u3093\u3002",
   not_found: "\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u753B\u9762\u3092\u66F4\u65B0\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
   // The call to the Authorization Platform did not land. Naming it separately is
@@ -52,7 +52,7 @@ function toWorkDefinitionBody(read) {
     operations: lines("operations"),
     user_confirmations: lines("user_confirmations"),
     safety_notes: lines("safety_notes"),
-    requested_lifetime_hours: Number(read("requested_lifetime_hours"))
+    requested_lifetime_minutes: Number(read("requested_lifetime_minutes"))
   };
 }
 function readWorkDefinitionForm(form) {

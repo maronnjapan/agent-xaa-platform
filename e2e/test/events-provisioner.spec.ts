@@ -50,7 +50,7 @@ async function provision(provisioner: ProvisionerHarness, caller: Caller, decisi
         method: 'POST', url: `${PROVISIONER_BASE}/provisioning`, keyPair: caller.keyPair, accessToken: caller.token,
       }),
     },
-    body: JSON.stringify({ decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 }),
+    body: JSON.stringify({ decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60 }),
   });
 }
 

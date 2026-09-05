@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { validateWorkRequest, WorkRequestRejected } from '../src/validation/work-request.js';
 
-const valid = { purpose: '予定整理', description: '当日の予定を整理する', requested_lifetime_hours: 8 };
-const MAX_HOURS = 24;
+const valid = { purpose: '予定整理', description: '当日の予定を整理する', requested_lifetime_minutes: 480 };
+const MAX_MINUTES = 24 * 60;
 
 function codeOf(body: unknown): string {
   try {
-    validateWorkRequest(body, MAX_HOURS);
+    validateWorkRequest(body, MAX_MINUTES);
     return 'accepted';
   } catch (error) {
     return (error as WorkRequestRejected).code;
@@ -34,9 +34,12 @@ describe('Business Work Request validation', () => {
   });
 
   it('bounds the requested lifetime at both ends', () => {
-    expect(codeOf({ ...valid, requested_lifetime_hours: 0 })).toBe('invalid_request');
-    expect(codeOf({ ...valid, requested_lifetime_hours: 999 })).toBe('invalid_request');
-    expect(codeOf({ ...valid, requested_lifetime_hours: MAX_HOURS })).toBe('accepted');
+    expect(codeOf({ ...valid, requested_lifetime_minutes: 0 })).toBe('invalid_request');
+    expect(codeOf({ ...valid, requested_lifetime_minutes: 59940 })).toBe('invalid_request');
+    expect(codeOf({ ...valid, requested_lifetime_minutes: MAX_MINUTES })).toBe('accepted');
+    // A minute is a request the platform now takes: the floor is the unit.
+    expect(codeOf({ ...valid, requested_lifetime_minutes: 1 })).toBe('accepted');
+    expect(codeOf({ ...valid, requested_lifetime_minutes: MAX_MINUTES + 1 })).toBe('invalid_request');
   });
 
   it('accepts only the known constraint key', () => {
@@ -45,8 +48,8 @@ describe('Business Work Request validation', () => {
   });
 
   it('requires purpose, description and lifetime', () => {
-    expect(codeOf({ description: 'x', requested_lifetime_hours: 1 })).toBe('invalid_request');
-    expect(codeOf({ purpose: 'x', requested_lifetime_hours: 1 })).toBe('invalid_request');
+    expect(codeOf({ description: 'x', requested_lifetime_minutes: 60 })).toBe('invalid_request');
+    expect(codeOf({ purpose: 'x', requested_lifetime_minutes: 60 })).toBe('invalid_request');
     expect(codeOf({ purpose: 'x', description: 'y' })).toBe('invalid_request');
   });
 

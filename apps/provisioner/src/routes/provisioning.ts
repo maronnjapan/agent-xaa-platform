@@ -36,7 +36,7 @@ export function createProvisioningRoute(deps: ProvisionerDeps & { catalogue: Cat
     try {
       definition = validateAgentDefinition(
         context.get('validatedBody'),
-        Math.floor(Math.min(deps.config.agentMaxLifetimeSeconds, HARD_CAP_SECONDS) / 3600),
+        Math.floor(Math.min(deps.config.agentMaxLifetimeSeconds, HARD_CAP_SECONDS) / 60),
       );
     } catch (error) {
       if (error instanceof DefinitionRejected) return context.json({ error: error.code }, 400);
@@ -55,7 +55,7 @@ export function createProvisioningRoute(deps: ProvisionerDeps & { catalogue: Cat
       effectiveCapabilities: decision.effective_capabilities,
       isolationLevel: decision.security_profile.isolation_level,
       constraints: decision.constraints ?? {},
-      lifetime: { kind: 'requested', hours: definition.requested_lifetime_hours },
+      lifetime: { kind: 'requested', minutes: definition.requested_lifetime_minutes },
     });
     return context.json(outcome.body, outcome.status, outcome.headers ?? {});
   });

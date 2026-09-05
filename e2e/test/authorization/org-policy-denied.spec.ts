@@ -25,7 +25,7 @@ async function run(): Promise<{ authz: AuthorizationHarness; body: DecisionBody 
     body: {
       purpose: '会議要約の共有',
       description: '社外の取引先へ会議の要約をメールで送る',
-      requested_lifetime_hours: 4,
+      requested_lifetime_minutes: 240,
     },
   });
   expect(response.status).toBe(200);

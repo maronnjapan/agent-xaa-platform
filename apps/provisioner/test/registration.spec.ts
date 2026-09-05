@@ -76,7 +76,7 @@ describe('creating an agent registration', () => {
     const agents: string[] = [];
     for (const task of ['a', 'b']) {
       const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-      const response = await issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_hours: 8 });
+      const response = await issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_minutes: 480 });
       expect(response.status).toBe(201);
       agents.push((await response.json() as { agent_id: string }).agent_id);
     }
@@ -100,7 +100,7 @@ describe('creating an agent registration', () => {
     const shared = createFirestoreDouble();
     const target = await createProvisionerHarness({ shared, idpPublicJwk: issuer.publicJwk });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     const { agent_id: agentId } = await response.json() as { agent_id: string };
 
     const agentOpView = createFirestoreDocumentStore(shared, 'agent-op');

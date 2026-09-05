@@ -33,7 +33,7 @@ export const dailyReportSchema = {
 
 export const WORK_DEFINITION_FIELDS = [
   'work_definition_id', 'human_subject', 'status', 'purpose', 'description', 'operations',
-  'user_confirmations', 'safety_notes', 'requested_lifetime_hours', 'created_at', 'updated_at',
+  'user_confirmations', 'safety_notes', 'requested_lifetime_minutes', 'created_at', 'updated_at',
 ] as const;
 
 export const workDefinitionSchema = {
@@ -50,7 +50,7 @@ export const workDefinitionSchema = {
     operations: { type: 'array', items: { type: 'string' } },
     user_confirmations: { type: 'array', items: { type: 'string' } },
     safety_notes: { type: 'array', items: { type: 'string' } },
-    requested_lifetime_hours: { type: 'integer', minimum: 1, maximum: 24 },
+    requested_lifetime_minutes: { type: 'integer', minimum: 1, maximum: 1440 },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
   },
@@ -78,7 +78,7 @@ export const workDefinitionDraftSchema = {
 } as const;
 
 export const BUSINESS_WORK_REQUEST_KEYS = [
-  'human_subject', 'purpose', 'description', 'constraints', 'requested_lifetime_hours',
+  'human_subject', 'purpose', 'description', 'constraints', 'requested_lifetime_minutes',
 ] as const;
 
 export const businessWorkRequestSchema = {
@@ -91,7 +91,7 @@ export const businessWorkRequestSchema = {
     purpose: { type: 'string', minLength: 1 },
     description: { type: 'string' },
     constraints: { type: 'object', additionalProperties: { type: 'boolean' } },
-    requested_lifetime_hours: { type: 'integer', minimum: 1, maximum: 24 },
+    requested_lifetime_minutes: { type: 'integer', minimum: 1, maximum: 1440 },
   },
 } as const;
 

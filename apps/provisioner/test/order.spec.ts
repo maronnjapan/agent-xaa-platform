@@ -38,7 +38,7 @@ async function provision(target: ProvisionerHarness, capabilities: string[], iso
     effectiveCapabilities: decision!.effective_capabilities,
     isolationLevel,
     constraints: {},
-    lifetime: { kind: 'requested', hours: 8 },
+    lifetime: { kind: 'requested', minutes: 480 },
   });
 }
 
@@ -140,7 +140,7 @@ describe('a provisioning that fails after the first write', () => {
       ))!.effective_capabilities,
       isolationLevel,
       constraints: {},
-      lifetime: { kind: 'requested', hours: 8 },
+      lifetime: { kind: 'requested', minutes: 480 },
     });
     return { target, outcome };
   }

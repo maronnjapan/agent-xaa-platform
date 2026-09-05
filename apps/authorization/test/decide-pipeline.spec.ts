@@ -18,7 +18,7 @@ async function fixture(options: { humanPermissions?: string[]; model?: Parameter
     store: createAuthorizationStore(documents),
     run: () => decide({
       humanSubject: 'testuser', purpose: '予定整理', description: '当日の予定を取得して整理する',
-      constraints: {}, requestedLifetimeHours: 8,
+      constraints: {}, requestedLifetimeMinutes: 480,
     }, {
       store: createAuthorizationStore(documents), vertex,
       clock: { now: () => Date.parse('2026-03-01T00:00:00Z') },

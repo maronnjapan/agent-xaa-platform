@@ -14,7 +14,7 @@ async function provision(target: ProvisionerHarness, capabilities = ['document.r
     catalogue: createCatalogRepository(target.documents),
   }, {
     humanSubject: 'testuser', taskId: 'task-1', effectiveCapabilities: capabilities,
-    isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+    isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
   });
 }
 

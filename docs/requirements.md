@@ -43,7 +43,7 @@
 | REQ-02-004 | 承認レコードと Capability ハッシュ照合を実装する | [02.](./02-automation-design.md) | T-APP-10 | planned |
 | REQ-02-005 | Work Definition のデータモデルと DRAFT / CONFIRMED 遷移を実装する | [02.](./02-automation-design.md) | T-APP-07 | planned |
 | REQ-02-006 | 権限とResourceとIsolationの語彙を持ち込まない検査を作る | [02.](./02-automation-design.md) | T-APP-11 | planned |
-| REQ-02-007 | requested_lifetime_hours の範囲検証と UI 初期値を実装する | [02.](./02-automation-design.md) | T-APP-08 | planned |
+| REQ-02-007 | requested_lifetime_minutes の範囲検証と UI 初期値を実装する | [02.](./02-automation-design.md) | T-APP-08 | planned |
 | REQ-02-008 | Business Work Request の送信を実装する | [02.](./02-automation-design.md) | T-APP-09 | planned |
 | REQ-02-009 | Business Work Request の受信側スキーマ検証を実装する | [02.](./02-automation-design.md) | T-AUTHZ-09 | planned |
 | REQ-02-010 | human_subject 照合ミドルウェアを実装する | [02.](./02-automation-design.md) | T-AUTHZ-07 | planned |

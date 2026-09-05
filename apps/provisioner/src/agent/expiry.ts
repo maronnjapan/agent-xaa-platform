@@ -23,13 +23,17 @@ export function toRfc3339Seconds(epochMillis: number): string {
  * job timeout, the registration, the IdP connection and the grant cap cannot disagree.
  *
  * The human may ask for less than the ceiling; they may not ask for more.
+ *
+ * The request is counted in minutes. An hour was the coarsest an agent could be asked
+ * for and the shortest, which made a three-minute errand cost an hour of standing
+ * permission; a minute is short enough that the lifetime can match the work.
  */
 export function computeExpiresAt(input: {
-  requestedLifetimeHours: number;
+  requestedLifetimeMinutes: number;
   agentMaxLifetimeSeconds: number;
   now: number;
 }): { createdAt: string; expiresAt: string; lifetimeSeconds: number } {
-  const requested = Math.max(1, Math.floor(input.requestedLifetimeHours)) * 3600;
+  const requested = Math.max(1, Math.floor(input.requestedLifetimeMinutes)) * 60;
   const lifetimeSeconds = Math.min(requested, input.agentMaxLifetimeSeconds, HARD_CAP_SECONDS);
   return {
     createdAt: toRfc3339Seconds(input.now),

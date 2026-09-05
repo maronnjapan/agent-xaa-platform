@@ -18,21 +18,38 @@ const NOW = Date.parse('2026-03-01T00:00:00.000Z');
 
 describe('how long an agent lives', () => {
   it('clamps at a day even when the environment allows two', () => {
-    const result = computeExpiresAt({ requestedLifetimeHours: 48, agentMaxLifetimeSeconds: 172_800, now: NOW });
+    const result = computeExpiresAt({ requestedLifetimeMinutes: 48 * 60, agentMaxLifetimeSeconds: 172_800, now: NOW });
     expect(Date.parse(result.expiresAt) - Date.parse(result.createdAt)).toBe(HARD_CAP_SECONDS * 1000);
     expect(result.lifetimeSeconds).toBe(HARD_CAP_SECONDS);
     expect(HARD_CAP_SECONDS).toBe(86_400);
   });
 
   it('honours a shorter ceiling than the request', () => {
-    const result = computeExpiresAt({ requestedLifetimeHours: 1, agentMaxLifetimeSeconds: 3600, now: NOW });
+    const result = computeExpiresAt({ requestedLifetimeMinutes: 60, agentMaxLifetimeSeconds: 3600, now: NOW });
     expect(Date.parse(result.expiresAt) - Date.parse(result.createdAt)).toBe(3600 * 1000);
     expect(result.lifetimeSeconds).toBe(3600);
   });
 
   it('honours a request shorter than the ceiling', () => {
-    const result = computeExpiresAt({ requestedLifetimeHours: 2, agentMaxLifetimeSeconds: 86_400, now: NOW });
+    const result = computeExpiresAt({ requestedLifetimeMinutes: 120, agentMaxLifetimeSeconds: 86_400, now: NOW });
     expect(result.lifetimeSeconds).toBe(7200);
+  });
+
+  /**
+   * The reason the request is counted in minutes: a three-minute errand used to have
+   * to ask for an hour, because an hour was both the unit and the floor.
+   */
+  it('gives an agent asked for in minutes exactly those minutes', () => {
+    const result = computeExpiresAt({ requestedLifetimeMinutes: 3, agentMaxLifetimeSeconds: 86_400, now: NOW });
+    expect(result.lifetimeSeconds).toBe(180);
+    expect(Date.parse(result.expiresAt) - Date.parse(result.createdAt)).toBe(180 * 1000);
+  });
+
+  it('floors a request below a minute at one minute rather than at zero', () => {
+    // A job handed a timeout of zero is refused outright, which is a worse answer than
+    // an agent that expires almost immediately.
+    expect(computeExpiresAt({ requestedLifetimeMinutes: 0, agentMaxLifetimeSeconds: 86_400, now: NOW })
+      .lifetimeSeconds).toBe(60);
   });
 
   it('returns RFC 3339 in UTC, to the second', () => {
@@ -40,7 +57,7 @@ describe('how long an agent lives', () => {
     const result = computeExpiresAt({
       // A `now` that is not on a second boundary: the truncation has to happen, not
       // merely be invisible in a fixture that was already round.
-      requestedLifetimeHours: 8, agentMaxLifetimeSeconds: 86_400, now: NOW + 1234,
+      requestedLifetimeMinutes: 8 * 60, agentMaxLifetimeSeconds: 86_400, now: NOW + 1234,
     });
     expect(result.createdAt).toMatch(rfc3339);
     expect(result.expiresAt).toMatch(rfc3339);

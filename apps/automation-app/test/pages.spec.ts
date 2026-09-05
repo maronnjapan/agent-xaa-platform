@@ -124,11 +124,12 @@ describe('the new work definition page', () => {
     expect(html).toContain('<script type="module" src="/work-definition.js">');
   });
 
-  it('starts the lifetime at the configured default and caps it at 24', async () => {
-    const harness = await startAutomationApp({ config: { defaultAgentLifetimeHours: 2 } });
+  it('starts the lifetime at the configured default and caps it at a day of minutes', async () => {
+    const harness = await startAutomationApp({ config: { defaultAgentLifetimeMinutes: 120 } });
     const html = await (await harness.fetch('/work-definitions/new')).text();
-    expect(html).toMatch(/name="requested_lifetime_hours"[^>]*value="2"/);
-    expect(html).toMatch(/name="requested_lifetime_hours"[^>]*max="24"/);
+    expect(html).toMatch(/name="requested_lifetime_minutes"[^>]*value="120"/);
+    expect(html).toMatch(/name="requested_lifetime_minutes"[^>]*min="1"/);
+    expect(html).toMatch(/name="requested_lifetime_minutes"[^>]*max="1440"/);
   });
 });
 

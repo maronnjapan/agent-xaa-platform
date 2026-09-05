@@ -26,7 +26,7 @@ async function seedWorkDefinition(harness: Harness, overrides: Record<string, un
     work_definition_id: id, human_subject: SUBJECT, status: 'DRAFT',
     purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
     operations: ['作業記録を読む', '日報を作る'], user_confirmations: ['内容を確認する'],
-    safety_notes: ['社外に送らない'], requested_lifetime_hours: 2,
+    safety_notes: ['社外に送らない'], requested_lifetime_minutes: 120,
     created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   });
@@ -235,7 +235,7 @@ describe('the flow from a blank form to an agent', () => {
 
     const created = await (await harness.fetch('/api/work-definitions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '毎朝の日報をまとめる', operations: ['作業記録を読む'], requested_lifetime_hours: 2 }),
+      body: JSON.stringify({ purpose: '毎朝の日報をまとめる', operations: ['作業記録を読む'], requested_lifetime_minutes: 120 }),
     })).json() as { work_definition_id: string };
 
     const draftPage = await (await harness.fetch('/')).text();
@@ -322,12 +322,12 @@ describe("the browser half's decisions", () => {
     const fields: Record<string, string> = {
       purpose: '日報', description: '',
       operations: '作業記録を読む\n\n  日報を作る  \n', user_confirmations: '', safety_notes: '',
-      requested_lifetime_hours: '2',
+      requested_lifetime_minutes: '2',
     };
     expect(toWorkDefinitionBody((name) => fields[name] ?? '')).toEqual({
       purpose: '日報', description: '',
       operations: ['作業記録を読む', '日報を作る'], user_confirmations: [], safety_notes: [],
-      requested_lifetime_hours: 2,
+      requested_lifetime_minutes: 2,
     });
   });
 });

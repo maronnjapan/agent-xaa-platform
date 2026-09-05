@@ -222,7 +222,7 @@ describe('the app shell', () => {
     });
     expect(Object.keys(loaded)).toHaveLength(14);
     expect(loaded.clientId).toBe('automation-app');
-    expect(loaded.defaultAgentLifetimeHours).toBe(1);
+    expect(loaded.defaultAgentLifetimeMinutes).toBe(60);
     expect(() => loadConfig({})).toThrow(/ISSUER is required/);
   });
 });

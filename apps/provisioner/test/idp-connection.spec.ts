@@ -103,7 +103,7 @@ describe('asking the Agent OP for an IdP connection', () => {
       catalogue: createCatalogRepository(target.documents),
     }, {
       humanSubject: 'testuser', taskId: 't', effectiveCapabilities: ['document.read'],
-      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
     });
 
     // 409 rather than a retry: the connection is the delegation, and every later step
@@ -129,7 +129,7 @@ describe('asking the Agent OP for an IdP connection', () => {
       },
     }, {
       humanSubject: 'testuser', taskId: 't', effectiveCapabilities: ['document.read'],
-      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
     });
     expect(outcome.status).toBe(201);
     // The creating call says the request was accepted; only the verify says the refresh

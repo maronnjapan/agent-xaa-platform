@@ -263,7 +263,7 @@ describe('a created permission reaches the Policy Engine', () => {
 async function runWith(harness: AuthzHarness, capabilities: string[]) {
   return decide({
     humanSubject: 'testuser', purpose: '契約レビュー', description: '契約書を確認する',
-    constraints: {}, requestedLifetimeHours: 8,
+    constraints: {}, requestedLifetimeMinutes: 480,
   }, {
     store: createAuthorizationStore(harness.documents),
     vertex: createFakeVertex({ capabilities }),

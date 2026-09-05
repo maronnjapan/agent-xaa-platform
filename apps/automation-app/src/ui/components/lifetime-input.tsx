@@ -1,4 +1,4 @@
-import { MAX_LIFETIME_HOURS, MIN_LIFETIME_HOURS } from '../../work-definition/lifetime.js';
+import { MAX_LIFETIME_MINUTES, MIN_LIFETIME_MINUTES } from '../../work-definition/lifetime.js';
 import type { Element } from '../element.js';
 
 
@@ -10,16 +10,16 @@ import type { Element } from '../element.js';
  * setting — a deployment that raised it here would produce agents the Job then cuts
  * short at 24 hours anyway.
  */
-export function LifetimeInput(props: { defaultHours: number }): Element {
+export function LifetimeInput(props: { defaultMinutes: number }): Element {
   return (
     <label class="lifetime-input">
-      希望する稼働時間（時間）
+      希望する稼働時間（分）
       <input
         type="number"
-        name="requested_lifetime_hours"
-        min={String(MIN_LIFETIME_HOURS)}
-        max={String(MAX_LIFETIME_HOURS)}
-        value={String(props.defaultHours)}
+        name="requested_lifetime_minutes"
+        min={String(MIN_LIFETIME_MINUTES)}
+        max={String(MAX_LIFETIME_MINUTES)}
+        value={String(props.defaultMinutes)}
       />
     </label>
   );

@@ -22,7 +22,7 @@ export const config: AutomationAppConfig = {
   lifecycleManagerUrl: 'https://lifecycle.test',
   docsApiUrl: 'https://resource-docs-api.test',
   activityTopic: 'agent-activity-stream',
-  defaultAgentLifetimeHours: 1,
+  defaultAgentLifetimeMinutes: 60,
   vertexModel: 'test-model',
   vertexMode: 'fake',
   storeMode: 'emulator',

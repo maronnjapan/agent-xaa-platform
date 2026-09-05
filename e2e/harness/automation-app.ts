@@ -112,7 +112,7 @@ export async function startAutomationAppHarness(options: {
     clientSecret: 'test-automation-app-secret', publicBaseUrl: AUTOMATION_APP_BASE,
     authorizationPlatformUrl: AUTHORIZATION_BASE, agentProvisionerUrl: PROVISIONER_BASE,
     lifecycleManagerUrl: LIFECYCLE_BASE, docsApiUrl: 'https://resource-docs-api.test',
-    activityTopic: 'agent-activity-stream', defaultAgentLifetimeHours: 1,
+    activityTopic: 'agent-activity-stream', defaultAgentLifetimeMinutes: 60,
     vertexModel: 'test-model', vertexMode: 'fake', storeMode: 'emulator',
   };
 

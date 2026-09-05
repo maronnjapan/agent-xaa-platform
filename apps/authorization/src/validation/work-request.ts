@@ -5,14 +5,14 @@ export interface BusinessWorkRequest {
   purpose: string;
   description: string;
   constraints?: { external_message_send?: boolean };
-  requested_lifetime_hours: number;
+  requested_lifetime_minutes: number;
 }
 
 export const businessWorkRequestSchema = {
   $id: 'business-work-request',
   type: 'object',
   additionalProperties: false,
-  required: ['purpose', 'description', 'requested_lifetime_hours'],
+  required: ['purpose', 'description', 'requested_lifetime_minutes'],
   properties: {
     human_subject: { type: 'string', minLength: 1 },
     purpose: { type: 'string', minLength: 1, maxLength: 500 },
@@ -22,7 +22,7 @@ export const businessWorkRequestSchema = {
       additionalProperties: false,
       properties: { external_message_send: { type: 'boolean' } },
     },
-    requested_lifetime_hours: { type: 'integer', minimum: 1 },
+    requested_lifetime_minutes: { type: 'integer', minimum: 1 },
   },
 } as const;
 
@@ -43,7 +43,7 @@ export class WorkRequestRejected extends Error {
  * than a schema quibble. Automation App does not decide permissions, and a request
  * that tries to is refused rather than quietly sanitised.
  */
-export function validateWorkRequest(body: unknown, maxLifetimeHours: number): BusinessWorkRequest {
+export function validateWorkRequest(body: unknown, maxLifetimeMinutes: number): BusinessWorkRequest {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new WorkRequestRejected('invalid_request');
   if (findAuthorizationInputFields(body as Record<string, unknown>).length > 0) {
     throw new WorkRequestRejected('authorization_field_not_allowed');
@@ -56,7 +56,7 @@ export function validateWorkRequest(body: unknown, maxLifetimeHours: number): Bu
     if (!(error instanceof SchemaValidationError)) throw error;
     throw new WorkRequestRejected(unknownField ? 'unexpected_field' : 'invalid_request');
   }
-  if ((body as BusinessWorkRequest).requested_lifetime_hours > maxLifetimeHours) {
+  if ((body as BusinessWorkRequest).requested_lifetime_minutes > maxLifetimeMinutes) {
     throw new WorkRequestRejected('invalid_request');
   }
   return body as BusinessWorkRequest;

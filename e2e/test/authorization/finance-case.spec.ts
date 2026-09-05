@@ -11,7 +11,7 @@ const HUMAN_PERMISSIONS = ['finance.payment.read', 'finance.payment.approve', 'd
 const REQUEST = {
   purpose: '支払処理',
   description: '承認済みの支払情報を確認し、条件を満たす支払を承認する',
-  requested_lifetime_hours: 4,
+  requested_lifetime_minutes: 240,
 };
 
 interface DecisionBody {

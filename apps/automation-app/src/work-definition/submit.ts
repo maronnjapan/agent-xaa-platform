@@ -8,7 +8,7 @@ export interface BusinessWorkRequest {
   purpose: string;
   description: string;
   constraints: Record<string, boolean>;
-  requested_lifetime_hours: number;
+  requested_lifetime_minutes: number;
 }
 
 const assertRequest: (value: unknown) => asserts value is BusinessWorkRequest =
@@ -37,7 +37,7 @@ export function buildBusinessWorkRequest(definition: WorkDefinition): BusinessWo
     // Declared by the person, in their own terms. `external_message_send` is always
     // present so its absence never reads as "not considered".
     constraints: { external_message_send: definition.operations.some((operation) => operation.includes('送信')) },
-    requested_lifetime_hours: definition.requested_lifetime_hours,
+    requested_lifetime_minutes: definition.requested_lifetime_minutes,
   };
 }
 
