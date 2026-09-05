@@ -3,7 +3,9 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ManifestIntegrityError, deepFreeze, loadToolManifest, manifestSha256 } from '../src/manifest/load.js';
 import { buildToolDeclarations } from '../src/reasoning/tool-declarations.js';
-import { buildAllowedHosts, assertHostAllowed, HostNotAllowed, PLATFORM_HOSTS } from '../src/http/allowed-hosts.js';
+import {
+  buildAllowedHosts, buildInternalOrigins, assertHostAllowed, HostNotAllowed, PLATFORM_HOSTS,
+} from '../src/http/allowed-hosts.js';
 import { createRuntimeHttpClient } from '../src/http/http-client.js';
 import type { InvokerIdToken } from '../src/http/internal-invoker-token.js';
 import { AGENT_OP, DOCS_API, DOCS_AS, docsManifest } from './helpers.js';
@@ -189,10 +191,66 @@ function topLevelParameterNames(list: string): string[] {
 }
 
 /**
- * Cloud Run refuses a call to an INTERNAL_ONLY service before the app sees it, so the
- * Execution's own invoker token has to ride along to the Agent OP and the Bridge — and
- * nowhere else, because a platform identity arriving at a resource would be an identity
- * that resource could act on.
+ * Which destinations are this platform's own, and therefore behind Cloud Run's IAM
+ * check. `buildAllowedHosts` says where an Execution may go; this says where it will
+ * be let in, and the two are read together because a destination added to one and not
+ * the other is the shape of the failure: the Resource AS answered
+ * `403 Empty Authorization header value` to the redemption while the manifest,
+ * the allow list and `locals-invoker.tf` all named it.
+ */
+describe('the internal origin set', () => {
+  it('is the Agent OP and both hops of every native tool', () => {
+    const origins = buildInternalOrigins({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest());
+    expect([...origins].sort()).toEqual([
+      new URL(AGENT_OP).origin, new URL(DOCS_AS).origin, new URL(DOCS_API).origin,
+    ].sort());
+  });
+
+  /**
+   * `locals-invoker.tf` grants `sa-agent-runtime` `roles/run.invoker` on the Native AS
+   * and the Resource API as well as the Shared OP. A grant the Runtime never presents
+   * a token against is a hop that cannot be made at all.
+   */
+  it('holds every destination a native tool reaches', () => {
+    const origins = buildInternalOrigins({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest());
+    for (const tool of docsManifest().tools) {
+      expect(origins.has(new URL(tool.authorization.audience).origin)).toBe(true);
+      expect(origins.has(new URL(tool.api.base_url).origin)).toBe(true);
+    }
+  });
+
+  /**
+   * The bridged path ends at a SaaS this platform does not run. Its Bridge is ours and
+   * needs the token; the API behind it is Google's and must never be shown one.
+   */
+  it('names the Bridge of a bridged tool and not the SaaS behind it', () => {
+    const [tool] = docsManifest().tools;
+    const bridged = {
+      ...docsManifest(),
+      tools: [{
+        ...tool!,
+        authorization: { ...tool!.authorization, type: 'xaa_bridge' as const, audience: 'https://saas.example.test' },
+        token_provider: 'https://bridge.example.test',
+        api: { ...tool!.api, base_url: 'https://saas.example.test' },
+      }],
+    };
+    const origins = buildInternalOrigins({ AGENT_OP_BASE_URL: AGENT_OP }, bridged);
+    expect(origins.has('https://bridge.example.test')).toBe(true);
+    expect(origins.has('https://saas.example.test')).toBe(false);
+  });
+
+  it('internal origin set is frozen', () => {
+    const origins = buildInternalOrigins({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest());
+    expect(() => (origins as Set<string>).add('https://evil.example.test')).toThrow();
+  });
+});
+
+/**
+ * Cloud Run refuses the call before the app sees it, so the Execution's own invoker
+ * token has to ride along to every service of this platform. It travels in a header of
+ * its own: the redemption at a Resource AS carries no `Authorization`, the call to a
+ * Resource API carries the agent's DPoP-bound one, and neither may be displaced by a
+ * credential that says nothing about who the agent acts for.
  */
 describe('the invoker token on internal calls', () => {
   const AGENT_OP_ORIGIN = new URL(AGENT_OP).origin;
@@ -200,7 +258,7 @@ describe('the invoker token on internal calls', () => {
   function clientFor(sent: Array<{ url: string; headers: Record<string, string> }>) {
     return createRuntimeHttpClient({
       allowedHosts: buildAllowedHosts({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest()),
-      internalOrigins: new Set([AGENT_OP_ORIGIN]),
+      internalOrigins: buildInternalOrigins({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest()),
       invokerToken: async (audience) => `id-token-for-${audience}` as InvokerIdToken,
       fetch: async (url, init) => {
         sent.push({ url, headers: (init.headers ?? {}) as Record<string, string> });
@@ -218,9 +276,39 @@ describe('the invoker token on internal calls', () => {
     expect(sent[0]!.headers.Authorization).toBe('DPoP agent-token');
   });
 
-  it('leaves a resource call untouched', async () => {
+  /**
+   * The redemption the deployment refused. It carries a DPoP proof and no
+   * `Authorization`, so without this header Cloud Run sees an unauthenticated request.
+   */
+  it('carries the token to the Resource AS the ID-JAG is redeemed at', async () => {
     const sent: Array<{ url: string; headers: Record<string, string> }> = [];
-    await clientFor(sent).send(`${DOCS_API}/documents`, { method: 'GET' });
+    await clientFor(sent).send(`${DOCS_AS}/token`, { method: 'POST', headers: { DPoP: 'proof' } });
+    expect(sent[0]!.headers['X-Serverless-Authorization']).toBe(`Bearer id-token-for-${new URL(DOCS_AS).origin}`);
+    expect(sent[0]!.headers.Authorization).toBeUndefined();
+  });
+
+  it('carries the token to the Resource API without displacing the access token', async () => {
+    const sent: Array<{ url: string; headers: Record<string, string> }> = [];
+    await clientFor(sent).send(`${DOCS_API}/documents`, {
+      method: 'GET', headers: { Authorization: 'DPoP access-token' },
+    });
+    expect(sent[0]!.headers['X-Serverless-Authorization']).toBe(`Bearer id-token-for-${new URL(DOCS_API).origin}`);
+    expect(sent[0]!.headers.Authorization).toBe('DPoP access-token');
+  });
+
+  it('leaves a call outside the platform untouched', async () => {
+    const sent: Array<{ url: string; headers: Record<string, string> }> = [];
+    const client = createRuntimeHttpClient({
+      allowedHosts: buildAllowedHosts({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest()),
+      internalOrigins: buildInternalOrigins({ AGENT_OP_BASE_URL: AGENT_OP }, docsManifest()),
+      invokerToken: async (audience) => `id-token-for-${audience}` as InvokerIdToken,
+      fetch: async (url, init) => {
+        sent.push({ url, headers: (init.headers ?? {}) as Record<string, string> });
+        return new Response('{}', { status: 200 });
+      },
+    });
+    // Reachable because it is a platform endpoint, never ours to authenticate to.
+    await client.send('https://aiplatform.googleapis.com/v1/models', { method: 'POST' });
     expect(sent[0]!.headers['X-Serverless-Authorization']).toBeUndefined();
   });
 });

@@ -248,8 +248,8 @@ Blast Radiusの比較は [05. §5](./05-identity.md#5-isolation-model) を参照
 | `sa-lifecycle` | Job Executionの取り消し。OP / Bridge / Native AS / Provisionerの `run.invoker`。KMS Keyの無効化。Dedicated Cloud Run ServiceとService Accountの削除。Firestore（`agents/*` 削除） | Refresh Token。Client Secret。署名 |
 | `sa-shared-agent-op` | Shared OPのID-JAG署名鍵での署名（`cloudkms.signerVerifier`）。Firestore（`agents/*` 読み取り）。Firestore（`idp_connections`）。IdP Connection Encryption Keyでの暗号化と復号。JWKS Bucketへの自鍵の書き込み | Dedicated OP用Key。Human IdPのSSO署名鍵。Google Refresh Token。Authorization DB。Provisionerの権限 |
 | `sa-op-<short>` | そのAgentのID-JAG署名鍵の利用。そのAgentのRegistrationと `idp_connection` 行の読み取り。JWKS Bucketへの自鍵の書き込み | 他AgentのKeyとIdP Connection。Human IdPのSSO署名鍵。Google Refresh Token。Authorization DBの書き込み。Provisionerの権限 |
-| `sa-agent-runtime` | Shared OP / Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Secret Manager。Credential DB。`idp_connection`。KMS鍵の利用。Authorization DBの書き込み。Provisionerの権限 |
-| `sa-agent-<short>` | `dedicated-op-<short>` の `run.invoker`。Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Shared OPの `run.invoker`。上記 `sa-agent-runtime` と同じ |
+| `sa-agent-runtime` | Shared OP / Google Bridge / Native AS / Resource APIの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Secret Manager。Credential DB。`idp_connection`。KMS鍵の利用。Authorization DBの書き込み。Provisionerの権限 |
+| `sa-agent-<short>` | `dedicated-op-<short>` の `run.invoker`。Google Bridge / Native AS / Resource APIの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Shared OPの `run.invoker`。上記 `sa-agent-runtime` と同じ |
 | `sa-google-bridge` | Google OAuth Client Secretの読み取り。Credential DBの読み書き。Connector Encryption Keyでの暗号化と復号 | Agent OP Signing Key。Authorization DBの書き込み。Agent Runtimeの操作 |
 | `sa-native-resource-as` | Resource AS Signing Keyでの署名。Resource側の認可DB | Agent OP Signing Key。Platform側DB |
 | `sa-security` | Pub/Sub Subscribe。BigQuery（`security_audit` dataset）の読み書き。Vertex AI推論。Lifecycle Managerの `run.invoker` | Platform側DBの書き込み。Signing Key。Secret |

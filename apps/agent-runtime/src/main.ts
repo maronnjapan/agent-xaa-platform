@@ -4,7 +4,7 @@ import { createFirestoreDocumentStore, getFirestore } from '@xaa/gcp';
 import { createLogger, type LogContext } from '@xaa/logging';
 import { createExecutionContext } from './context/execution-context.js';
 import { loadEnv, ForbiddenEnvKey, MissingEnvKey } from './env.js';
-import { buildAllowedHosts } from './http/allowed-hosts.js';
+import { buildAllowedHosts, buildInternalOrigins } from './http/allowed-hosts.js';
 import { createRuntimeHttpClient } from './http/http-client.js';
 import { createInvokerTokenProvider } from './http/internal-invoker-token.js';
 import { manifestSha256 } from './manifest/load.js';
@@ -58,20 +58,14 @@ async function main(): Promise<number> {
     return RUNTIME_EXIT_CODES.failed;
   }
 
-  // The Agent OP and the Bridge sit behind Cloud Run's IAM check, so a call to either
-  // needs this Execution's own `run.invoker` token beside the agent's credentials. On
-  // GCP only: there is no metadata server anywhere else, and asking for one would turn
+  // Every platform service this Execution calls sits behind Cloud Run's IAM check, so
+  // each call needs this Execution's own `run.invoker` token beside the agent's
+  // credentials; `buildInternalOrigins` says which destinations those are. On GCP
+  // only: there is no metadata server anywhere else, and asking for one would turn
   // every local run into a timeout.
-  const internalOrigins = new Set([
-    new URL(env.AGENT_OP_BASE_URL).origin,
-    ...context.manifest.tools
-      .map((tool) => tool.token_provider)
-      .filter((value): value is string => typeof value === 'string' && value.length > 0)
-      .map((value) => new URL(value).origin),
-  ]);
   const http = createRuntimeHttpClient({
     allowedHosts: buildAllowedHosts(env, context.manifest),
-    internalOrigins,
+    internalOrigins: buildInternalOrigins(env, context.manifest),
     invokerToken: createInvokerTokenProvider({ enabled: process.env.STORE_MODE === 'gcp' }),
   });
   const activityContext = {

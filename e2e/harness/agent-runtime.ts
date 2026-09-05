@@ -4,8 +4,9 @@ import type { ToolManifest } from '@xaa/contracts';
 import { createExecutionContext, type ExecutionContext } from '@xaa/agent-runtime/src/context/execution-context';
 import { manifestSha256 } from '@xaa/agent-runtime/src/manifest/load';
 import { createRuntimeStore } from '@xaa/agent-runtime/src/store/runtime-store';
-import { buildAllowedHosts } from '@xaa/agent-runtime/src/http/allowed-hosts';
+import { buildAllowedHosts, buildInternalOrigins } from '@xaa/agent-runtime/src/http/allowed-hosts';
 import { createRuntimeHttpClient, type RuntimeHttpClient } from '@xaa/agent-runtime/src/http/http-client';
+import type { InvokerIdToken } from '@xaa/agent-runtime/src/http/internal-invoker-token';
 import type { AgentOpHarness } from './agent-op.js';
 import type { ResourceHarness } from './resource.js';
 
@@ -18,6 +19,8 @@ export interface RuntimeHarness {
   stageLines: string[];
   /** One entry per outbound request, so a spec can assert who was never called. */
   hostCalls: string[];
+  /** One entry per invoker token minted, so a spec can assert which door it opened. */
+  invokerAudiences: string[];
 }
 
 export interface StartRuntimeOptions {
@@ -30,6 +33,27 @@ export interface StartRuntimeOptions {
   taskId?: string;
   expiresAt?: string;
   agentClientPrivateJwk: string;
+}
+
+/**
+ * Cloud Run's front door, in front of every app this harness routes to.
+ *
+ * All of them are IAM-protected in `infra/envs/demo/locals-invoker.tf`, and Cloud Run
+ * answers a request that carries no invoker token with 403 before the container runs —
+ * the agent's own credentials are never read. The harness used to hand each request
+ * straight to the app, so the one part of the Runtime that decides where that token
+ * goes lived in `main.ts` and in no spec at all: five real apps in one process, and
+ * the door they sit behind missing. The deployment found it instead, answering
+ * `Empty Authorization header value` to the ID-JAG redemption at the Resource AS.
+ */
+function cloudRunIamCheck(init: RequestInit): Response | undefined {
+  const headers = (init.headers ?? {}) as Record<string, string>;
+  if (typeof headers['X-Serverless-Authorization'] === 'string') return undefined;
+  return new Response(
+    'The request was not authenticated. Either allow unauthenticated invocations or set '
+    + 'the proper Authorization header. Empty Authorization header value.',
+    { status: 403 },
+  );
 }
 
 /**
@@ -64,25 +88,38 @@ export async function startAgentRuntime(options: StartRuntimeOptions): Promise<R
   });
 
   const hostCalls: string[] = [];
+  const invokerAudiences: string[] = [];
+  const appFor = (target: URL): ((path: string, init?: RequestInit) => Promise<Response>) | undefined => {
+    if (target.origin === new URL(options.agentOpBaseUrl).origin) return options.agentOp.fetch;
+    for (const resource of options.resources) {
+      if (target.origin === new URL(resource.asIssuer).origin) return resource.as;
+      if (target.origin === new URL(resource.resourceUri).origin) return resource.api;
+    }
+    return undefined;
+  };
   const http = createRuntimeHttpClient({
     allowedHosts: buildAllowedHosts({ AGENT_OP_BASE_URL: options.agentOpBaseUrl }, context.manifest),
+    // As `main.ts` wires them, so the harness exercises the set the deployment uses
+    // rather than one written for the test.
+    internalOrigins: buildInternalOrigins({ AGENT_OP_BASE_URL: options.agentOpBaseUrl }, context.manifest),
+    invokerToken: async (audience) => {
+      invokerAudiences.push(audience);
+      return `invoker-for-${audience}` as InvokerIdToken;
+    },
     fetch: async (url, init) => {
-      hostCalls.push(new URL(url).origin);
       const target = new URL(url);
-      if (target.origin === new URL(options.agentOpBaseUrl).origin) {
-        return options.agentOp.fetch(`${target.pathname}${target.search}`, init);
-      }
-      for (const resource of options.resources) {
-        if (target.origin === new URL(resource.asIssuer).origin) return resource.as(`${target.pathname}${target.search}`, init);
-        if (target.origin === new URL(resource.resourceUri).origin) return resource.api(`${target.pathname}${target.search}`, init);
-      }
-      throw new Error(`no app is wired for ${target.origin}`);
+      hostCalls.push(target.origin);
+      const app = appFor(target);
+      if (!app) throw new Error(`no app is wired for ${target.origin}`);
+      const refused = cloudRunIamCheck(init);
+      if (refused) return refused;
+      return app(`${target.pathname}${target.search}`, init);
     },
   });
 
   const stageLines: string[] = [];
   return {
-    context, http, documents, stageLines, hostCalls,
+    context, http, documents, stageLines, hostCalls, invokerAudiences,
     logger: createLogger('agent-runtime', 'agent_runtime', () => {}),
     logContext: {
       request_id: 'e2e', trace_id: 'e2e-trace',

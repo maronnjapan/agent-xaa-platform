@@ -14,14 +14,14 @@ locals {
   }
   service_specific_env = {
     "human-idp" = {
-      ISSUER                      = local.platform_endpoints.issuer
-      PUBLIC_BASE_URL             = local.run_url["human-idp"]
-      ISSUER_PROFILE              = var.issuer_profile
-      JWKS_PUBLIC_BASE_URL        = "https://storage.googleapis.com/${local.jwks_bucket}"
-      JWKS_BUCKET                 = local.jwks_bucket
-      KEY_BUCKET                  = google_storage_bucket.platform_config.name
-      KMS_SSO_KEY_NAME            = data.terraform_remote_state.shared.outputs.kms_keys.human_idp_sso
-      DPOP_REQUIRED               = "true"
+      ISSUER               = local.platform_endpoints.issuer
+      PUBLIC_BASE_URL      = local.run_url["human-idp"]
+      ISSUER_PROFILE       = var.issuer_profile
+      JWKS_PUBLIC_BASE_URL = "https://storage.googleapis.com/${local.jwks_bucket}"
+      JWKS_BUCKET          = local.jwks_bucket
+      KEY_BUCKET           = google_storage_bucket.platform_config.name
+      KMS_SSO_KEY_NAME     = data.terraform_remote_state.shared.outputs.kms_keys.human_idp_sso
+      DPOP_REQUIRED        = "true"
       # Matches SESSION_TTL_SECONDS in apps/automation-app/src/auth/session-store.ts.
       # A session holds the four Access Tokens it was minted with and never refreshes
       # them (DEC-ID-13 leaves this app no refresh token to do it with), so a token
@@ -109,9 +109,18 @@ locals {
       AGENT_PLATFORM_CLIENT_SECRET_ID = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.agent_platform
       # The capability-to-resource mapping console. Empty leaves it reachable by nobody.
       ADMIN_PRINCIPALS = join(",", var.admin_principals)
+      # What a Dedicated Agent's own Service Account must be able to invoke: the same
+      # doors locals-invoker.tf opens for sa-agent-runtime, less the Shared OP it does
+      # not use. The Resource APIs belong here as much as the AS in front of them: an
+      # agent that redeems an Access Token and is then refused at the API door has come
+      # no further than one refused at the token endpoint. The two lists are held
+      # together by infra/tests/runtime-invoker-parity.sh, because invoker-matrix.sh
+      # reads a deployed project and a Dedicated service exists only while its Agent does.
       DEDICATED_RUNTIME_INVOKER_SERVICES = jsonencode(compact([
         "projects/${var.project_id}/locations/${var.region}/services/resource-docs-as",
         "projects/${var.project_id}/locations/${var.region}/services/resource-finance-as",
+        "projects/${var.project_id}/locations/${var.region}/services/resource-docs-api",
+        "projects/${var.project_id}/locations/${var.region}/services/resource-finance-api",
         var.enable_google_bridge ? "projects/${var.project_id}/locations/${var.region}/services/google-bridge" : null,
       ]))
       AGENT_OP_IMAGE        = "${data.terraform_remote_state.shared.outputs.repository_path}/agent-op:${var.image_tag}"
