@@ -7,7 +7,8 @@ import { createExecutionContext } from '../src/context/execution-context.js';
 import { manifestSha256 } from '../src/manifest/load.js';
 import type { RejectedInstruction } from '../src/instructions/record-rejection.js';
 import {
-  AGENT_ID, AGENT_OP, DOCS_AS, docsManifest, fakeIdToken, json, logContext, runtimeEnv, silentLogger, testHttp,
+  AGENT_ID, AGENT_OP, DOCS_AS, docsManifest, json, logContext, runtimeEnv, silentLogger, subjectTokenResponse,
+  testHttp,
 } from './helpers.js';
 
 const INSTRUCTION_ID = 'instr-1';
@@ -29,7 +30,7 @@ async function runOutOfPermissionInstruction() {
   const env = await runtimeEnv();
   const context = await createExecutionContext({ env, store, processEnv: {} });
   const { http, calls } = testHttp(context, (url) => {
-    if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+    if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
     if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE });
     if (url.startsWith(`${DOCS_AS}/token`)) return json({ access_token: 'a.t', token_type: 'DPoP', expires_in: 300 });
     return json({ documents: [] });

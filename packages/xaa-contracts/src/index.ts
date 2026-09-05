@@ -34,6 +34,7 @@ export * from './runtime-names.js';
 export * from './scopes.js';
 export * from './verify/index.js';
 export * from './service-ids.js';
+export * from './subject-token-response.js';
 export * from './task-boundary.js';
 export * from './token-catalog.js';
 export * from './work-definition.js';

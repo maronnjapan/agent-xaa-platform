@@ -17,13 +17,15 @@ import { projectResponse } from '../src/tool-executor/steps/project-response.js'
 import { parseToolCall, isInvalidToolCall } from '../src/reasoning/parse-tool-call.js';
 import { asResourceAccessToken, buildResourceAuthorization } from '../src/http/resource-authorization.js';
 import { invokerAuthorizationHeader, type InvokerIdToken } from '../src/http/internal-invoker-token.js';
-import { AGENT_OP, DOCS_API, DOCS_AS, docsManifest, fakeIdToken, json, testContext, testHttp } from './helpers.js';
+import {
+  AGENT_OP, DOCS_API, DOCS_AS, docsManifest, json, subjectTokenResponse, testContext, testHttp,
+} from './helpers.js';
 
 const JWT_ANYWHERE = /eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/;
 
 function happyPath(body: unknown = { documents: [{ document_id: 'd1', title: 'T', secret: 's' }] }) {
   return (url: string): Response => {
-    if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+    if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
     if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'id.jag.token', issued_token_type: ID_JAG_TOKEN_TYPE, expires_in: 300 });
     if (url.startsWith(`${DOCS_AS}/token`)) return json({ access_token: 'access.token.value', token_type: 'DPoP', expires_in: 300 });
     return json(body);
@@ -149,7 +151,7 @@ describe('step4, token exchange', () => {
   it('does not retry on 5xx', async () => {
     const context = await testContext();
     const { http, calls } = testHttp(context, (url) => {
-      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
       return json({ error: 'server_error' }, 500);
     });
     const result = await executeTool({ context, http, logger: console as never, logContext: {} as never, stageWrite: () => {} },
@@ -172,7 +174,7 @@ describe('step4, token exchange', () => {
   it('rejects an issued_token_type that is not an ID-JAG', async () => {
     const context = await testContext();
     const { http } = testHttp(context, (url) => {
-      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
       if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'x', issued_token_type: 'urn:ietf:params:oauth:token-type:access_token' });
       return json({});
     });
@@ -199,7 +201,7 @@ describe('step5, redemption at the resource AS', () => {
   it('rejects a non-DPoP token_type', async () => {
     const context = await testContext();
     const { http } = testHttp(context, (url) => {
-      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
       if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE });
       if (url === `${DOCS_AS}/token`) return json({ access_token: 'a.b.c', token_type: 'Bearer' });
       return json({});
@@ -222,7 +224,7 @@ describe('step5, redemption at the resource AS', () => {
   it('does not retry with a different scope', async () => {
     const context = await testContext();
     const { http, calls } = testHttp(context, (url) => {
-      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
       if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE });
       return json({ error: 'invalid_scope' }, 400);
     });
@@ -246,7 +248,7 @@ describe('the redeemer is chosen once, from the manifest', () => {
     let bridgeCalls = 0;
     const { http } = testHttp(context, (url) => {
       if (url.includes('bridge')) { bridgeCalls += 1; return json({}); }
-      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
       if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE });
       return json({}, 500);
     });
@@ -464,7 +466,7 @@ describe('the bridged path', () => {
   async function runBridged() {
     const context = await testContext({ manifest: { ...docsManifest(), tools: [bridged] } });
     const { http, calls } = testHttp(context, (url) => {
-      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
       if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE });
       if (url === `${bridge}/token`) return json({ access_token: 'saas-token', expires_in: 300 });
       return json({ documents: [{ document_id: 'd1' }] });
@@ -498,7 +500,7 @@ describe('the bridged path', () => {
   it('reports a bridge failure without switching to the native path', async () => {
     const context = await testContext({ manifest: { ...docsManifest(), tools: [bridged] } });
     const { http, calls } = testHttp(context, (url) => {
-      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
       if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE });
       return json({ error: 'bridge_down' }, 502);
     });

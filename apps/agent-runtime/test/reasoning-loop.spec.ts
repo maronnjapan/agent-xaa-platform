@@ -8,10 +8,12 @@ import { MAX_REASONING_STEPS, REASONING_SCHEMA, runReasoningLoop } from '../src/
 import { readPendingInstructions } from '../src/instructions/read-pending.js';
 import { createRuntimeStore } from '../src/store/runtime-store.js';
 import { createExecutionContext } from '../src/context/execution-context.js';
-import { AGENT_ID, AGENT_OP, DOCS_AS, fakeIdToken, json, logContext, runtimeEnv, silentLogger, testHttp } from './helpers.js';
+import {
+  AGENT_ID, AGENT_OP, DOCS_AS, json, logContext, runtimeEnv, silentLogger, subjectTokenResponse, testHttp,
+} from './helpers.js';
 
 function happy(url: string): Response {
-  if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+  if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
   if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE, expires_in: 300 });
   if (url.startsWith(`${DOCS_AS}/token`)) return json({ access_token: 'a.t', token_type: 'DPoP', expires_in: 300 });
   return json({ documents: [{ document_id: 'd1', title: 'T' }] });

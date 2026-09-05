@@ -1,7 +1,7 @@
 import { webcrypto } from 'node:crypto';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { createLogger, type LogContext } from '@xaa/logging';
-import type { ToolManifest } from '@xaa/contracts';
+import { buildSubjectTokenResponse, type ToolManifest } from '@xaa/contracts';
 import { createExecutionContext, type ExecutionContext } from '../src/context/execution-context.js';
 import { manifestSha256 } from '../src/manifest/load.js';
 import { createRuntimeStore, type RuntimeStore } from '../src/store/runtime-store.js';
@@ -118,4 +118,16 @@ export function testHttp(context: ExecutionContext, handler: (url: string, init:
 export function fakeIdToken(expSeconds = Math.floor(Date.now() / 1000) + 3600): string {
   const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
   return `${part({ alg: 'RS256', typ: 'JWT' })}.${part({ sub: 'testuser', exp: expSeconds })}.signature`;
+}
+
+/**
+ * The `/xaa/subject-token` body, built by the same function the Agent OP answers with.
+ *
+ * Hand-written mocks are how `subject_token` and `id_token` drifted apart unnoticed:
+ * the Runtime's tests described a response the OP never sends, and stayed green while
+ * every real execution failed. A double that no longer resembles the service is worse
+ * than none, so this one is built rather than typed out.
+ */
+export function subjectTokenResponse(expSeconds?: number): Record<string, unknown> {
+  return { ...buildSubjectTokenResponse({ idToken: fakeIdToken(expSeconds) }) };
 }
