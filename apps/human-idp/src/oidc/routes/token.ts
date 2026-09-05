@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 // XAA-PATCH:REQ-05-018 begin
 import { bindDpop, DpopBindingError } from '../../auth/dpop-token-binding.js';
+import { blanketDpopApplies } from '../../config/dpop-required-audiences.js';
+import { DPOP_STATUS } from '@xaa/contracts';
 import type { JtiStore } from '@xaa/crypto';
 import type { AuditHooks } from '../../log/audit-log.js';
 // XAA-PATCH:REQ-05-018 end
@@ -425,10 +427,27 @@ tokenApp.post('/', async (c) => {
           issuer: config.issuer,
           jtiStore,
           audience: effectiveAudience,
-          alwaysRequired: c.get('dpopRequired') === true,
+          // The blanket flag binds the clients that can hold a Control Plane Access
+          // Token; `agent-platform`'s back-channel grants are not one of RULE-06's
+          // three DPoP routes. The audience check inside bindDpop still stands for
+          // every client.
+          alwaysRequired: c.get('dpopRequired') === true && blanketDpopApplies(validatedRequest.clientId),
         });
       } catch (dpopError) {
         if (dpopError instanceof DpopBindingError) {
+          // Rejected here rather than thrown as a TokenError, so this is the one
+          // /token exit that would otherwise leave no audit line at all (RULE-38,
+          // docs 09 §2). A missing proof and a bad one are told apart by
+          // `dpop_result`, which is what makes the two diagnosable from the log.
+          (c.get('auditHooks') as AuditHooks | undefined)?.token(
+            {
+              client_id: validatedRequest.clientId, audience: effectiveAudience,
+              scope: validatedRequest.scope.join(' '), auth_result: 'failure',
+              failure_code: 'invalid_dpop_proof',
+              dpop_result: c.req.raw.headers.get('dpop') ? DPOP_STATUS.invalid : DPOP_STATUS.absent,
+            },
+            c.req.raw, subject,
+          );
           return c.json({ error: 'invalid_dpop_proof' }, 400);
         }
         throw dpopError;

@@ -23,7 +23,11 @@ export const humanIdpEnv: HumanIdpEnv = {
   signerMode: 'local',
   storeMode: 'emulator',
   firestoreDatabase: 'xaa-db',
-  dpopRequired: false,
+  // As deployed, and as `loadEnv` reads an unset DPOP_REQUIRED: on. A harness that
+  // ran with it off could not see the back-channel grants the Agent OP makes being
+  // rejected for want of a proof, which is how the offline_access consent shipped
+  // broken. A test that wants the loose setting asks for it by name.
+  dpopRequired: true,
   clientSecretAutomationApp: 'automation-secret',
   clientSecretAgentPlatform: 'agent-platform-secret',
   automationAppRedirectUri: AUTOMATION_REDIRECT_URI,
@@ -56,6 +60,19 @@ export interface HumanIdpHarness {
   stores: ProviderStores;
   jtiStore: JtiStore;
   env: HumanIdpEnv;
+}
+
+/**
+ * The Human IdP as another app's `fetch`, for a test that wires one to the real thing
+ * instead of a canned token response. `HUMAN_IDP_TOKEN_URL` is an absolute URL in
+ * every deployment, so the origin is dropped and the path handed to `app.fetch`.
+ */
+export function humanIdpAsFetch(idp: HumanIdpHarness): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const url = new URL(href);
+    return idp.fetch(`${url.pathname}${url.search}`, init);
+  }) as unknown as typeof fetch;
 }
 
 /**

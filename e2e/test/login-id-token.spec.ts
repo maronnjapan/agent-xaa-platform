@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createDpopProof, generateEs256KeyPair } from '@xaa/crypto';
 import { buildAuthorizationRequest } from '@xaa/automation-app/src/auth/oidc-login';
 import { authorize, basicAuth, decodeJwtPayload } from '../harness/oauth-flow.js';
 import { AUTOMATION_REDIRECT_URI, HUMAN_IDP_ISSUER, startHumanIdp } from '../harness/human-idp.js';
@@ -26,9 +27,17 @@ describe('login produces an ID Token addressed to automation-app', () => {
     expect(result.error).toBeUndefined();
     expect(result.code).toBeDefined();
 
+    // With the proof the Automation App's own login flow sends: `automation-app` is a
+    // Control Plane client, so DPOP_REQUIRED binds it (apps/automation-app/src/auth/
+    // login-flow.ts). Exchanging without one here would test a login the app never does.
+    const keyPair = await generateEs256KeyPair();
     const response = await idp.fetch('/token', {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', authorization: basicAuth('automation-app', 'automation-secret') },
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        authorization: basicAuth('automation-app', 'automation-secret'),
+        DPoP: await createDpopProof({ method: 'POST', url: `${HUMAN_IDP_ISSUER}/token`, keyPair }),
+      },
       body: new URLSearchParams({
         grant_type: 'authorization_code', code: result.code!, redirect_uri: AUTOMATION_REDIRECT_URI,
         code_verifier: result.pkce.verifier, client_id: 'automation-app',

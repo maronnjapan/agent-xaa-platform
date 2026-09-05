@@ -70,6 +70,11 @@ Stolen Access Token + DPoP Private Keyなし = 利用不可
 | Agent Runtime → Agent OP（Token Exchange） | 必須。ここで提示した鍵がID-JAGの `cnf.jkt` になる（[§6.4](#64-id-jag)） |
 | Agent Runtime → Native Resource Authorization Server | 必須。`cnf` を持つID-JAGはProofなしで提示すると拒否される（[§7](#7-native-xaa-runtime-flow)） |
 | Agent Runtime → Google Bridge / 外部Resource API | 必須にしない。接続先の仕様に従い Bearer / DPoP / mTLS などを許容する（外部SaaSがDPoPに対応している保証がないため） |
+| Agent OP → Human IdPの `/token`（`agent-platform` のCode交換とRefresh Token grant） | 必須にしない。ブラウザの居ないサーバ間の呼び出しであり、Confidential Clientのクライアント認証が鍵の役割を果たす（[§4.1](#41-human-idp-connection)） |
+
+この表に無い経路へDPoPを広げてはならない。
+Human IdPの `DPOP_REQUIRED` は、Control Plane宛のAccess Tokenを持ちうるClient、すなわちOperation Scopeを登録したClientにだけ掛ける。
+`agent-platform` は `openid offline_access` しか持たずDPoP鍵も持たないため、ここへ掛けるとofflineアクセスの同意そのものが完了しなくなる。
 
 ```mermaid
 sequenceDiagram
