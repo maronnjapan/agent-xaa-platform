@@ -60,7 +60,7 @@ describe('coming back from the IdP consent', () => {
           method: 'POST', url: `${PROVISIONER_BASE}/provisioning`, keyPair: caller.keyPair, accessToken: caller.token,
         }),
       },
-      body: JSON.stringify({ decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 }),
+      body: JSON.stringify({ decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60 }),
     });
     const started = await paused.json() as { status: string; transaction_id: string };
     expect(started.status).toBe('IDP_CONSENT_REQUIRED');
@@ -162,7 +162,7 @@ describe('coming back from the IdP consent', () => {
           method: 'POST', url: `${PROVISIONER_BASE}/provisioning`, keyPair: caller.keyPair, accessToken: caller.token,
         }),
       },
-      body: JSON.stringify({ decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 }),
+      body: JSON.stringify({ decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60 }),
     });
     const started = await paused.json() as { transaction_id: string };
 

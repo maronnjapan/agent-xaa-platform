@@ -29,7 +29,7 @@ function keysOf(value: unknown, found: string[] = []): string[] {
 
 async function provisioned(target: ProvisionerHarness): Promise<{ agentId: string; body: Record<string, unknown> }> {
   const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-  const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+  const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
   expect(response.status).toBe(201);
   const body = await response.json() as Record<string, unknown>;
   return { agentId: body.agent_id as string, body };

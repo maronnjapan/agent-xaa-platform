@@ -13,7 +13,7 @@ export interface WorkDefinitionBody {
   operations: string[];
   user_confirmations: string[];
   safety_notes: string[];
-  requested_lifetime_hours: number;
+  requested_lifetime_minutes: number;
 }
 
 /** One item per line: a person describing their own work writes a list, not JSON. */
@@ -26,7 +26,7 @@ export function toWorkDefinitionBody(read: (name: string) => string): WorkDefini
     operations: lines('operations'),
     user_confirmations: lines('user_confirmations'),
     safety_notes: lines('safety_notes'),
-    requested_lifetime_hours: Number(read('requested_lifetime_hours')),
+    requested_lifetime_minutes: Number(read('requested_lifetime_minutes')),
   };
 }
 

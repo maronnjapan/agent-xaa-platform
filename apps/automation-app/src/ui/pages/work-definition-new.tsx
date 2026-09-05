@@ -11,11 +11,11 @@ import type { Element } from '../element.js';
  * it needs, approve them — happens on the home screen, which lists every draft they
  * have.
  */
-export function WorkDefinitionNewPage(props: { defaultHours: number }): Element {
+export function WorkDefinitionNewPage(props: { defaultMinutes: number }): Element {
   return (
     <main class="work-definition-new" data-page="work-definition-new">
       <h1>新しい作業を定義する</h1>
-      <WorkDefinitionForm defaultHours={props.defaultHours} />
+      <WorkDefinitionForm defaultMinutes={props.defaultMinutes} />
       <p data-field="form-status" data-status="" />
     </main>
   );

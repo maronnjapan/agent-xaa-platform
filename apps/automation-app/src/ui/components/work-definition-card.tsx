@@ -43,7 +43,7 @@ export function WorkDefinitionCard(props: WorkDefinitionCardProps): Element {
           <ul data-field="safety_notes">{definition.safety_notes.map((item) => <li>{item}</li>)}</ul>
         </dd>
         <dt>希望する稼働時間</dt>
-        <dd data-field="requested_lifetime_hours">{String(definition.requested_lifetime_hours)} 時間</dd>
+        <dd data-field="requested_lifetime_minutes">{String(definition.requested_lifetime_minutes)} 分</dd>
       </dl>
 
       {definition.status === 'DRAFT'

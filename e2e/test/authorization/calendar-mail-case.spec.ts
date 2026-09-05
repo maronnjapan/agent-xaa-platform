@@ -32,7 +32,7 @@ describe('the Calendar and Mail case', () => {
       body: {
         purpose: '予定整理',
         description: '当日の予定を取得し、重要な予定を抽出して関係者へメールで共有する',
-        requested_lifetime_hours: 8,
+        requested_lifetime_minutes: 480,
       },
     });
     expect(response.status).toBe(200);

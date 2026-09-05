@@ -10,7 +10,7 @@ const MESSAGES: Record<string, string> = {
   approval_required: '先に提示された権限を承認してください。',
   capabilities_changed: '提示した権限が変わりました。もう一度「必要な権限を調べる」からやり直してください。',
   already_approved: 'すでに承認済みです。',
-  lifetime_out_of_range: '希望する稼働時間は 1〜24 の整数で指定してください。',
+  lifetime_out_of_range: '希望する稼働時間は 1〜1440 の整数（分）で指定してください。',
   agent_not_active: 'この Agent は動いていないため、指示を受け取れません。',
   not_found: '見つかりませんでした。画面を更新してください。',
   // The call to the Authorization Platform did not land. Naming it separately is

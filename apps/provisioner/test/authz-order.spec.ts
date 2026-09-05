@@ -49,7 +49,7 @@ describe('nothing is written before the request has been accepted', () => {
           keyPair: await generateEs256KeyPair(), accessToken: token,
         }),
       },
-      body: JSON.stringify({ decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 }),
+      body: JSON.stringify({ decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 }),
     });
     expect(response.status).toBe(401);
     expect(await writes(target.documents)).toBe(0);
@@ -59,7 +59,7 @@ describe('nothing is written before the request has been accepted', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
     const response = await issuer.provision(target, {
-      decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8, human_subject: 'someone-else',
+      decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480, human_subject: 'someone-else',
     });
     expect(response.status).toBe(403);
     expect(await writes(target.documents)).toBe(0);
@@ -68,7 +68,7 @@ describe('nothing is written before the request has been accepted', () => {
   it('writes nothing when the decision does not match', async () => {
     const target = await harness();
     const response = await issuer.provision(target, {
-      decision_id: `dec_${crypto.randomUUID()}`, task_id: 't', requested_lifetime_hours: 8,
+      decision_id: `dec_${crypto.randomUUID()}`, task_id: 't', requested_lifetime_minutes: 480,
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'decision_mismatch' });
@@ -79,7 +79,7 @@ describe('nothing is written before the request has been accepted', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'], grantHumanPermissions: false });
     const response = await issuer.provision(target, {
-      decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8,
+      decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480,
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'capability_not_subset_of_human_permission' });
@@ -128,7 +128,7 @@ describe('nothing is written before the request has been accepted', () => {
       catalogue: createCatalogRepository(watched),
     }, {
       humanSubject: 'testuser', taskId: 't', effectiveCapabilities: ['document.read'],
-      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
     });
     expect(outcome.status).toBe(201);
     expect(decisionId).toMatch(/^dec_/);

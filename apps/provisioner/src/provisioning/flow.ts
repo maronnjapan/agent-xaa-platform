@@ -33,8 +33,8 @@ export interface ProvisionRequest {
   effectiveCapabilities: string[];
   isolationLevel: IsolationLevel;
   constraints: Record<string, Record<string, unknown>>;
-  /** A fresh request names hours; a re-provisioning inherits the expiry it replaces. */
-  lifetime: { kind: 'requested'; hours: number } | { kind: 'inherited'; expiresAt: string };
+  /** A fresh request names minutes; a re-provisioning inherits the expiry it replaces. */
+  lifetime: { kind: 'requested'; minutes: number } | { kind: 'inherited'; expiresAt: string };
   previousAgentId?: string | null;
 }
 
@@ -103,7 +103,7 @@ export async function provisionAgent(
 
   const expiry = request.lifetime.kind === 'requested'
     ? computeExpiresAt({
-        requestedLifetimeHours: request.lifetime.hours,
+        requestedLifetimeMinutes: request.lifetime.minutes,
         agentMaxLifetimeSeconds: deps.config.agentMaxLifetimeSeconds,
         now: deps.clock.now(),
       })

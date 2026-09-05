@@ -21,7 +21,7 @@ beforeAll(async () => { issuer = await createTokenIssuer(); });
 
 async function provision(target: ProvisionerHarness, capabilities: string[], task = 't'): Promise<Response> {
   const decisionId = await seedDecision(target, { capabilities });
-  return issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_hours: 8 });
+  return issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_minutes: 480 });
 }
 
 describe('the STANDARD branch', () => {

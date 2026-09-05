@@ -24,7 +24,7 @@ export interface DecideInput {
   purpose: string;
   description: string;
   constraints: Record<string, unknown>;
-  requestedLifetimeHours: number;
+  requestedLifetimeMinutes: number;
 }
 
 export interface DecideDeps {

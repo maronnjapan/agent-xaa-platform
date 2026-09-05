@@ -52,11 +52,11 @@ function createApp(deps: AuthorizationDeps): Hono {
   const clock = deps.clock ?? { now: () => Date.now() };
   const publish = deps.publishActivity;
 
-  const decideDeps: DecideDeps & { maxLifetimeHours: number } = {
+  const decideDeps: DecideDeps & { maxLifetimeMinutes: number } = {
     store, vertex: deps.vertex, clock, logger,
     modelVersion: deps.config.vertexModel,
     taxonomyVersion: deps.config.taxonomyVersion,
-    maxLifetimeHours: Math.floor(deps.config.agentMaxLifetimeSeconds / 3600),
+    maxLifetimeMinutes: Math.floor(deps.config.agentMaxLifetimeSeconds / 60),
     ...(publish ? { publishActivity: async (event) => { await publish({ ...event }); } } : {}),
     ...(deps.recordStep ? { recordStep: deps.recordStep } : {}),
     onWarning: (warning) => logger.warning('authz_ai.warning', logContext(), { ...warning }),

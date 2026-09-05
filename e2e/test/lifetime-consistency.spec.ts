@@ -72,7 +72,7 @@ describe('one expiry, across the Provisioner and the Agent OP', () => {
       },
     }, {
       humanSubject: 'testuser', taskId: 'task-1', effectiveCapabilities: ['document.read'],
-      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 1 },
+      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 60 },
     });
 
     expect(outcome.status).toBe(201);

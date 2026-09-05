@@ -8,7 +8,7 @@ import { AUTHZ_COLLECTIONS } from '../src/store/collections.js';
 import type { DecisionRecord } from '../src/pipeline/decide.js';
 import { createFakeVertex, seedAuthorizationData, testConfig } from './helpers.js';
 
-const REQUEST = { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_hours: 8 };
+const REQUEST = { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_minutes: 480 };
 
 /**
  * The route with the guard already satisfied: what is under test here is what the
@@ -42,7 +42,7 @@ async function route(options: {
     clock: { now: () => Date.parse('2026-03-01T00:00:00Z') },
     modelVersion: testConfig.vertexModel,
     taxonomyVersion: testConfig.taxonomyVersion,
-    maxLifetimeHours: 24,
+    maxLifetimeMinutes: 24 * 60,
     ...(options.corrupt ? { onDecided: options.corrupt } : {}),
   }));
 

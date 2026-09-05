@@ -15,7 +15,7 @@ import type { Element } from '../element.js';
  * the standalone page the blocked guidance points at. One form means one set of field
  * names for the browser half to read.
  */
-export function WorkDefinitionForm(props: { defaultHours: number }): Element {
+export function WorkDefinitionForm(props: { defaultMinutes: number }): Element {
   return (
     <form data-form="work-definition">
       <label>
@@ -38,7 +38,7 @@ export function WorkDefinitionForm(props: { defaultHours: number }): Element {
         注意点（1行に1つ）
         <textarea name="safety_notes" rows={3} />
       </label>
-      <LifetimeInput defaultHours={props.defaultHours} />
+      <LifetimeInput defaultMinutes={props.defaultMinutes} />
       <button type="submit" data-action="create-work-definition">下書きを保存する</button>
     </form>
   );

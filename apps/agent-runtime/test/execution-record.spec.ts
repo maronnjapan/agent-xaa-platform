@@ -8,7 +8,7 @@ import { createExecutionRecorder, taskSummaryRecord } from '../src/telemetry/exe
 import { runReasoningLoop } from '../src/reasoning/loop.js';
 import { sanitizeCheckpoint } from '../src/state/sanitize.js';
 import {
-  AGENT_ID, AGENT_OP, DOCS_API, DOCS_AS, docsManifest, json, logContext, memoryStore, silentLogger,
+  AGENT_ID, AGENT_OP, DOCS_API, DOCS_AS, json, logContext, memoryStore, silentLogger,
   subjectTokenResponse, testContext, testHttp,
 } from './helpers.js';
 

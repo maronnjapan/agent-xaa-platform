@@ -92,7 +92,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     return context.html(await renderDocument(
       <Layout title="自動化をつくる" styles={STYLES} script="/home.js">
         <HomePage
-          defaultHours={deps.config.defaultAgentLifetimeHours}
+          defaultMinutes={deps.config.defaultAgentLifetimeMinutes}
           items={items}
           agents={agentsOf(tasks)}
           defaultFrom={isoDate(now() - SUGGESTION_WINDOW_DAYS * 86_400_000)}
@@ -145,7 +145,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   app.get('/work-definitions/new', asUser, async (context) =>
     context.html(await renderDocument(
       <Layout title="新しい作業を定義する" styles={STYLES} script="/work-definition.js">
-        <WorkDefinitionNewPage defaultHours={deps.config.defaultAgentLifetimeHours} />
+        <WorkDefinitionNewPage defaultMinutes={deps.config.defaultAgentLifetimeMinutes} />
       </Layout>,
     )));
 

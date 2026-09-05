@@ -7,7 +7,7 @@ function toWorkDefinitionBody(read) {
     operations: lines("operations"),
     user_confirmations: lines("user_confirmations"),
     safety_notes: lines("safety_notes"),
-    requested_lifetime_hours: Number(read("requested_lifetime_hours"))
+    requested_lifetime_minutes: Number(read("requested_lifetime_minutes"))
   };
 }
 function readWorkDefinitionForm(form) {

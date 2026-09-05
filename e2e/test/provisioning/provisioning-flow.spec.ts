@@ -83,7 +83,7 @@ describe('from login to a running agent', () => {
       token: authorizationToken.token, keyPair: authorizationToken.keyPair,
       body: {
         human_subject: 'testuser', purpose: '書類を読む', description: '毎朝の確認',
-        constraints: { external_message_send: false }, requested_lifetime_hours: 1,
+        constraints: { external_message_send: false }, requested_lifetime_minutes: 60,
       },
     });
     expect(decided.status).toBe(200);
@@ -95,7 +95,7 @@ describe('from login to a running agent', () => {
     const provisioned = await send({
       fetch: provisioner.fetch, base: PROVISIONER_BASE, path: '/provisioning',
       token: provisionerToken.token, keyPair: provisionerToken.keyPair,
-      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 },
+      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60 },
     });
     expect(provisioned.status).toBe(201);
 
@@ -112,7 +112,7 @@ describe('from login to a running agent', () => {
     const response = await send({
       fetch: provisioner.fetch, base: PROVISIONER_BASE, path: '/provisioning',
       token: provisionerToken.token, keyPair: provisionerToken.keyPair,
-      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1, isolation_level: 'standard' },
+      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60, isolation_level: 'standard' },
     });
     // The isolation level is the Authorization Platform's to decide (RULE-07); a
     // provisioning request that states one is refused rather than obeyed.
@@ -130,7 +130,7 @@ describe('from login to a running agent', () => {
     const response = await send({
       fetch: provisioner.fetch, base: PROVISIONER_BASE, path: '/provisioning',
       token: provisionerToken.token, keyPair: provisionerToken.keyPair,
-      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 },
+      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60 },
     });
     expect(response.status).not.toBe(201);
     expect(provisioner.jobRuns).toHaveLength(0);
@@ -145,7 +145,7 @@ describe('from login to a running agent', () => {
     const response = await send({
       fetch: provisioner.fetch, base: PROVISIONER_BASE, path: '/provisioning',
       token: provisionerToken.token, keyPair: provisionerToken.keyPair,
-      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 },
+      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60 },
     });
     const body = await response.json() as { status: string; transaction_id: string };
     expect(body.status).toBe('IDP_CONSENT_REQUIRED');
@@ -177,7 +177,7 @@ describe('what the execution is handed', () => {
     const response = await send({
       fetch: provisioner.fetch, base: PROVISIONER_BASE, path: '/provisioning',
       token: provisionerToken.token, keyPair: provisionerToken.keyPair,
-      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 1 },
+      body: { decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 60 },
     });
     expect(response.status).toBe(201);
     const created = await response.json() as { agent_id: string; allowed_tools: string[] };

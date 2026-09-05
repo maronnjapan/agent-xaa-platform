@@ -70,7 +70,7 @@ describe('the reply that pauses a provisioning', () => {
   it('answers 200 with a url on another host, and starts nothing', async () => {
     const target = await createProvisionerHarness({ idpPublicJwk: issuer.publicJwk, idpConnectionStatus: 'CONSENT_REQUIRED' });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
 
     expect(response.status).toBe(200);
     const body = await response.json() as ConsentRequired;
@@ -103,7 +103,7 @@ describe('the reply that pauses a provisioning', () => {
       },
     }, {
       humanSubject: 'testuser', taskId: 't', effectiveCapabilities: ['document.read'],
-      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
     });
 
     expect(outcome.status).toBe(500);

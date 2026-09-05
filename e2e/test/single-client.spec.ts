@@ -55,7 +55,7 @@ async function provisionThree(provisioner: ProvisionerHarness, caller: Caller): 
           method: 'POST', url: `${PROVISIONER_BASE}/provisioning`, keyPair: caller.keyPair, accessToken: caller.token,
         }),
       },
-      body: JSON.stringify({ decision_id: decisionId, task_id: task, requested_lifetime_hours: 1 }),
+      body: JSON.stringify({ decision_id: decisionId, task_id: task, requested_lifetime_minutes: 60 }),
     });
     expect(response.status).toBe(201);
     agentIds.push((await response.json() as { agent_id: string }).agent_id);

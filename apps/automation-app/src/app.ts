@@ -15,7 +15,7 @@ import { agentPagePath } from './agents/page-link.js';
 import { logAgentOperation } from './audit/logger.js';
 import { createWorkDefinitionStore } from './work-definition/store.js';
 import { confirm } from './work-definition/model.js';
-import { LifetimeOutOfRange, validateLifetimeHours } from './work-definition/lifetime.js';
+import { LifetimeOutOfRange, validateLifetimeMinutes } from './work-definition/lifetime.js';
 import { submitBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed } from './work-definition/submit.js';
 import {
   assertStillApproved, AlreadyApproved, ApprovalRequired, CapabilitiesChanged, createAgentDefinitionStore,
@@ -265,9 +265,9 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
 
   app.post('/api/work-definitions', async (context) => {
     const body = await context.req.json().catch(() => ({})) as Record<string, unknown>;
-    let hours: number;
+    let minutes: number;
     try {
-      hours = validateLifetimeHours(body.requested_lifetime_hours ?? deps.config.defaultAgentLifetimeHours);
+      minutes = validateLifetimeMinutes(body.requested_lifetime_minutes ?? deps.config.defaultAgentLifetimeMinutes);
     } catch (error) {
       if (error instanceof LifetimeOutOfRange) return context.json({ error: error.code }, 400);
       throw error;
@@ -279,7 +279,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       operations: Array.isArray(body.operations) ? body.operations.map(String) : [],
       user_confirmations: Array.isArray(body.user_confirmations) ? body.user_confirmations.map(String) : [],
       safety_notes: Array.isArray(body.safety_notes) ? body.safety_notes.map(String) : [],
-      requested_lifetime_hours: hours,
+      requested_lifetime_minutes: minutes,
     }, now());
     await emitProposed({ humanSubject: definition.human_subject, occurredAt: new Date(now()).toISOString() },
       { purpose: definition.purpose, workDefinitionId: definition.work_definition_id });
@@ -413,7 +413,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
         // here, and `wd_<uuid>` is not one of them — so every event the agent published
         // was dropped on the way to the screen without anyone being told.
         task_id: INITIAL_TASK_ID,
-        requested_lifetime_hours: work.requested_lifetime_hours,
+        requested_lifetime_minutes: work.requested_lifetime_minutes,
       },
       requiredScope: 'agent:provision',
     });

@@ -9,7 +9,7 @@ export interface AutomationAppConfig {
   lifecycleManagerUrl: string;
   docsApiUrl: string;
   activityTopic: string;
-  defaultAgentLifetimeHours: number;
+  defaultAgentLifetimeMinutes: number;
   vertexModel: string;
   vertexMode: string;
   storeMode: string;
@@ -46,7 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AutomationAppC
     lifecycleManagerUrl: required(env, 'LIFECYCLE_MANAGER_URL'),
     docsApiUrl: required(env, 'DOCS_API_URL'),
     activityTopic: required(env, 'ACTIVITY_TOPIC'),
-    defaultAgentLifetimeHours: Number(env.DEFAULT_AGENT_LIFETIME_HOURS ?? 1),
+    defaultAgentLifetimeMinutes: Number(env.DEFAULT_AGENT_LIFETIME_MINUTES ?? 60),
     vertexModel: required(env, 'VERTEX_MODEL'),
     vertexMode: env.VERTEX_MODE ?? 'fake',
     storeMode: env.STORE_MODE ?? 'emulator',

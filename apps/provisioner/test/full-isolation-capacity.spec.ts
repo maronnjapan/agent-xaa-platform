@@ -19,7 +19,7 @@ async function provision(target: ProvisionerHarness, taskId: string) {
     effectiveCapabilities: CAPABILITIES,
     isolationLevel: 'full_isolation',
     constraints: {},
-    lifetime: { kind: 'requested', hours: 8 },
+    lifetime: { kind: 'requested', minutes: 480 },
   });
 }
 
@@ -51,7 +51,7 @@ describe('the FULL_ISOLATION cap', () => {
       catalogue: createCatalogRepository(target.documents),
     }, {
       humanSubject: 'testuser', taskId: 'a', effectiveCapabilities: CAPABILITIES,
-      isolationLevel: 'full_isolation', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+      isolationLevel: 'full_isolation', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
     });
     expect(failed.status).toBe(500);
 

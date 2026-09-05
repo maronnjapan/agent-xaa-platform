@@ -32,7 +32,7 @@ Automation Design AI:
 |---|---|
 | 何の作業をするか（Work Definition） | 必要な権限（`document.read` など） |
 | 自動化候補、業務内容、処理順序、ユーザー確認事項、安全上の注意 | どのResourceへアクセスできるか |
-| Agentの希望生存時間（最大24時間） | Isolation Level |
+| Agentの希望生存時間（分単位、1〜1440分＝最大24時間） | Isolation Level |
 
 権限に関する判断はすべてAuthorization Platformが行う（[03. 権限決定](./03-authorization.md)）。
 Automation App側は、アクセス可能なResourceやCapabilityの一覧を保持しない。
@@ -52,7 +52,7 @@ business_work_request:
     日報としてまとめて記録する
   constraints:
     external_message_send: false
-  requested_lifetime_hours: 24
+  requested_lifetime_minutes: 1440
 ```
 
 `human_subject` はAccess Tokenの `sub` と一致する値だけを受け付ける。
@@ -157,7 +157,7 @@ business_work_request:
     重要な予定を抽出して整理する
   constraints:
     external_message_send: false
-  requested_lifetime_hours: 24
+  requested_lifetime_minutes: 1440
 ```
 
 ```yaml

@@ -216,7 +216,7 @@ export async function runDecision(options: {
   const record = await decide({
     humanSubject: 'testuser', purpose: '支払い確認',
     description: options.description ?? '支払いを確認する',
-    constraints: {}, requestedLifetimeHours: 8,
+    constraints: {}, requestedLifetimeMinutes: 480,
   }, {
     store: createAuthorizationStore(documents),
     vertex: createFakeVertex(options.model ?? {}),
