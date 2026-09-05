@@ -35,6 +35,45 @@ describe('vertex client', () => {
     expect(asked).toEqual(['gemini-x']);
   });
 
+  /**
+   * `responseSchema` is an OpenAPI subset. Vertex answered a schema carrying `$id` with
+   * `400 Unknown name "$id"`, `generateContent` threw, the catch above turned it into
+   * `null`, and the Authorization Platform recorded `no_capability_inferred` for a
+   * request the model never saw — every decision, for every work definition. Ajv still
+   * validates against the schema as written, so what is dropped here is provenance and
+   * not a constraint.
+   */
+  it('sends Vertex a schema with no $ keywords, and still validates against the original', async () => {
+    let sent: Record<string, unknown> | undefined;
+    const identified = {
+      $id: 'named-result',
+      type: 'object', additionalProperties: false, required: ['value'],
+      properties: { value: { type: 'string' }, nested: { $id: 'inner', type: 'object', properties: { deep: { type: 'string' } } } },
+    };
+    const client = createVertexClient({
+      mode: 'live', project: 'p', location: 'l', model: 'm',
+      createSdk: () => ({
+        getGenerativeModel: () => ({
+          generateContent: async (request: { generationConfig: { responseSchema: Record<string, unknown> } }) => {
+            sent = request.generationConfig.responseSchema;
+            return { response: { candidates: [{ content: { parts: [{ text: '{"value":"ok"}' }] } }] } };
+          },
+        }),
+      }) as never,
+    });
+
+    await expect(client.generateJson({ prompt: 'p', schema: identified, maxOutputTokens: 10, temperature: 0 }))
+      .resolves.toEqual({ value: 'ok' });
+    expect(JSON.stringify(sent)).not.toContain('$id');
+    // Everything that constrains the answer survives, at every depth.
+    expect(sent).toEqual({
+      type: 'object', additionalProperties: false, required: ['value'],
+      properties: { value: { type: 'string' }, nested: { type: 'object', properties: { deep: { type: 'string' } } } },
+    });
+    // And the caller's own schema is untouched, because it is the platform's contract.
+    expect(identified.$id).toBe('named-result');
+  });
+
   it('takes that model from VERTEX_MODEL and has no default for it', async () => {
     resetDefaultVertexClientForTesting();
     const previous = process.env.VERTEX_MODEL;
