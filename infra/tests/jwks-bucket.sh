@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # T-IAC-20. One shared JWKS bucket, readable by anyone and writable only under the
-# prefix that belongs to the writer. Nobody may delete a `keys/*.json`: a deleted key
-# silently drops a signer out of the aggregate `jwks.json` and every token it signed
-# starts failing verification with no trace of why.
+# prefix that belongs to the writer. No principal holds a predefined storage role that can
+# delete an object: those all cover the whole bucket, and a deleted `keys/*.json` drops a
+# signer out of the aggregate `jwks.json` with every token it signed then failing
+# verification and no trace of why.
 #
-# The aggregate itself is the one object that is replaced rather than only written, which
-# Cloud Storage counts as a delete. That grant exists, and the checks at the end of this
-# file are what keep it from becoming a way to delete anything else.
+# Two custom roles carry that permission on purpose, each for one thing. The Lifecycle
+# Manager removes a retired Agent's key (apps/lifecycle-manager/src/clients/gcp.ts), and
+# the publish job replaces the aggregate, which Cloud Storage counts as a delete of the
+# generation it replaces. The checks at the end of this file are what keep the second one
+# narrow: a single permission, bound under the condition that names `jwks.json`.
 set -euo pipefail
 
 file=infra/envs/demo/storage-jwks.tf
