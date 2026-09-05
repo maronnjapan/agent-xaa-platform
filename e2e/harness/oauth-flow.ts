@@ -65,15 +65,45 @@ export async function authorize(options: AuthorizeOptions): Promise<AuthorizeRes
   if (options.audience) query.set('audience', options.audience);
   if (options.prompt) query.set('prompt', options.prompt);
 
+  const walked = await followAuthorizeUrl({
+    fetch: options.fetch,
+    url: `/authorize?${query.toString()}`,
+    issuer: options.issuer,
+    redirectUri: options.redirectUri,
+    ...(options.cookie ? { cookie: options.cookie } : {}),
+    ...(options.credentials ? { credentials: options.credentials } : {}),
+  });
+  return { ...walked, pkce };
+}
+
+export interface FollowAuthorizeOptions {
+  fetch: Fetcher;
+  /** The authorization request, as the client built it. */
+  url: string;
+  issuer: string;
+  /** Stops the walk early when the OP redirects straight back to the client. */
+  redirectUri?: string;
+  cookie?: string;
+  credentials?: { username: string; password: string };
+}
+
+/**
+ * The same walk for a URL somebody else built. The offline_access consent starts at a
+ * URL the Agent OP composed (`buildAuthorizeUrl`), so a test that rebuilds the query
+ * here would be checking its own arithmetic rather than the Agent OP's.
+ */
+export async function followAuthorizeUrl(options: FollowAuthorizeOptions): Promise<AuthorizeResult> {
   let cookie = options.cookie ?? '';
   const headers = () => (cookie ? { cookie } : undefined);
+  const done = (location: string) => Boolean(options.redirectUri && location.startsWith(options.redirectUri));
 
-  let response = await options.fetch(`/authorize?${query.toString()}`, { headers: headers(), redirect: 'manual' });
+  let response = await options.fetch(pathOf(options.url, options.issuer), { headers: headers(), redirect: 'manual' });
   if (response.status >= 400) {
-    return { ...parseRedirect(response.headers.get('location') ?? ''), cookie, location: response.headers.get('location') ?? '', pkce };
+    const location = response.headers.get('location') ?? '';
+    return { ...parseRedirect(location), cookie, location };
   }
   let location = locationOf(response);
-  if (location.startsWith(options.redirectUri)) return { ...parseRedirect(location), cookie, location, pkce };
+  if (done(location)) return { ...parseRedirect(location), cookie, location };
 
   if (location.includes('/login')) {
     const loginPage = await options.fetch(pathOf(location, options.issuer), { headers: headers() });
@@ -111,7 +141,7 @@ export async function authorize(options: AuthorizeOptions): Promise<AuthorizeRes
     location = locationOf(response);
   }
 
-  return { ...parseRedirect(location), cookie, location, pkce };
+  return { ...parseRedirect(location), cookie, location };
 }
 
 function pathOf(location: string, issuer: string): string {

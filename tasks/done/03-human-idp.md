@@ -544,13 +544,16 @@ RULE-06 と DEC-ID-13 の経路(3)の発行側にあたる。maronn は DPoP 非
 - `cnf.jkt` は RFC 7638 の thumbprint（SHA-256、base64url）を `packages/xaa-crypto` の `jwkThumbprint(jwk)` から得る。
 - `buildAccessTokenPayload(...)` の戻り値をスプレッドして `{ ...payload, cnf: { jkt } }` を作り、`accessTokenIssuer.issue({ payload, ... })` へ渡す。`AccessTokenPayload` は `[key: string]: unknown` を持つためキャストは不要。
 - トークン応答の `token_type` を `DPoP` にする。`Bearer` を返す分岐は `DPOP_REQUIRED=false` かつ `DPoP` ヘッダ不在のときだけ残す。
-- `DPOP_REQUIRED=true` で `DPoP` ヘッダが無い、あるいは検証に失敗した場合は 400 と `{"error":"invalid_dpop_proof"}` を返す。
+- `DPOP_REQUIRED=true` で `DPoP` ヘッダが無い、あるいは検証に失敗した場合は 400 と `{"error":"invalid_dpop_proof"}` を返す。掛かる相手は Control Plane 宛の Access Token を持ちうる Client、すなわち Operation Scope を登録した Client に限る（RULE-06、docs 05 §2）。`agent-platform` の back-channel はブラウザを持たず DPoP 鍵も無いため対象外である。
+- この 400 でも監査ログを1行書く。ヘッダ不在は `dpop_result=absent`、検証失敗は `invalid` として区別する（RULE-38）。
 - introspection 応答に `cnf` をそのまま含める。`idp_tokens` のレコードにも `cnf` を保存する。
 - `/authorize` に DPoP を要求しない。ブラウザリダイレクトの経路であり Proof を作れない。
 
 **完了条件**
 - [x] `apps/human-idp/test/dpop-binding.spec.ts::binds cnf.jkt to the proof key` が、応答の `token_type === "DPoP"` かつ Access Token の `cnf.jkt` が送った Proof の JWK の thumbprint と一致することを検証して緑になる（実体は `e2e/test/dpop-access-token.spec.ts`）
 - [x] `DPOP_REQUIRED=true` で DPoP ヘッダ無しの `/token` が 400 と `invalid_dpop_proof` を返す（実体は `e2e/test/dpop-access-token.spec.ts`）
+- [x] `DPOP_REQUIRED=true` でも `agent-platform` の Code 交換と Refresh Token grant は Proof 無しで通る（実体は `e2e/test/agent-op/offline-access-consent.spec.ts`）
+- [x] `invalid_dpop_proof` の 400 が `failure_code` と `dpop_result` を載せた監査ログを残す（実体は `e2e/test/dpop-access-token.spec.ts`）
 - [x] 同一 `jti` の Proof を2回送ると2回目が `invalid_dpop_proof` になる（実体は `e2e/test/dpop-access-token.spec.ts`）
 - [x] introspection 応答の `cnf.jkt` が Access Token の値と一致する（実体は `e2e/test/dpop-access-token.spec.ts`）
 

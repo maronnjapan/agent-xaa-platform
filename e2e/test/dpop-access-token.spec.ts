@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDpopProof, generateEs256KeyPair, jwkThumbprint } from '@xaa/crypto';
+import { expectLogFields } from '@xaa/logging';
 import { authorize, basicAuth, decodeJwtPayload, tokenRequest } from '../harness/oauth-flow.js';
 import { AUTOMATION_REDIRECT_URI, HUMAN_IDP_ISSUER, startHumanIdp } from '../harness/human-idp.js';
 
@@ -86,8 +87,38 @@ describe('DPoP bound access tokens', () => {
     expect(await response.json()).toEqual({ error: 'invalid_dpop_proof' });
   });
 
-  it('leaves a non Control Plane audience on Bearer when no proof is sent', async () => {
-    const idp = await startHumanIdp();
+  /**
+   * RULE-38 / docs 09 §2: the audit line is written just before every /token response.
+   * This rejection returns rather than throwing a TokenError, so it used to slip past
+   * the one place that writes the line — a /token request turned away for want of a
+   * proof left no record anywhere, on either side of the call.
+   */
+  it('writes the audit line for a rejected proof, telling absent from invalid', async () => {
+    const missing: string[] = [];
+    const idp = await startHumanIdp({}, missing);
+    expect((await tokenRequest({
+      fetch: idp.fetch, clientId: 'automation-app', clientSecret: 'automation-secret',
+      issuer: HUMAN_IDP_ISSUER, form: await grant(idp),
+    })).status).toBe(400);
+    const absent = expectLogFields(missing.at(-1)!, 'idp.authenticate');
+    expect(absent.auth_result).toBe('failure');
+    expect(absent.failure_code).toBe('invalid_dpop_proof');
+    expect(absent.dpop_result).toBe('absent');
+    expect(absent.client_id).toBe('automation-app');
+
+    const bad: string[] = [];
+    const second = await startHumanIdp({}, bad);
+    expect((await tokenRequest({
+      fetch: second.fetch, clientId: 'automation-app', clientSecret: 'automation-secret',
+      issuer: HUMAN_IDP_ISSUER, form: await grant(second), rawProof: 'not-a-proof',
+    })).status).toBe(400);
+    expect(expectLogFields(bad.at(-1)!, 'idp.authenticate').dpop_result).toBe('invalid');
+  });
+
+  it('leaves a non Control Plane audience on Bearer when DPOP_REQUIRED is off', async () => {
+    // The one setting under which a Control Plane client may go without a proof, and
+    // no deployment uses it; the harness now defaults to the deployed `true`.
+    const idp = await startHumanIdp({ dpopRequired: false });
     const response = await tokenRequest({
       fetch: idp.fetch, clientId: 'automation-app', clientSecret: 'automation-secret',
       issuer: HUMAN_IDP_ISSUER, form: await grant(idp, 'openid'),

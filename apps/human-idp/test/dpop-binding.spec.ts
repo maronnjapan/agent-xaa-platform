@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createDpopProof, decodeJwsUnverified, generateEs256KeyPair, InMemoryJtiStore, jwkThumbprint } from '@xaa/crypto';
 import { bindDpop, DpopBindingError } from '../src/auth/dpop-token-binding.js';
+import { blanketDpopApplies } from '../src/config/dpop-required-audiences.js';
+import { AGENT_PLATFORM_CLIENT_ID, AUTOMATION_APP_CLIENT_ID } from '../src/config/clients.js';
 
 const ISSUER = 'https://human-idp.test';
 
@@ -54,6 +56,18 @@ describe('DPoP token binding at /token', () => {
       proofs: [await proofFor(keyPair), await proofFor(keyPair)], issuer: ISSUER,
       jtiStore: new InMemoryJtiStore(), audience: ['agent-provisioner'], alwaysRequired: true,
     })).rejects.toBeInstanceOf(DpopBindingError);
+  });
+
+  /**
+   * RULE-06 covers three routes and all three end at a Control Plane audience. The
+   * blanket flag must not reach past them: `agent-platform` redeems its authorization
+   * code and refreshes it from the Agent OP, server to server, with no DPoP key, and
+   * requiring a proof there broke the offline_access consent outright.
+   */
+  it('binds the blanket flag to Control Plane clients only', () => {
+    expect(blanketDpopApplies(AUTOMATION_APP_CLIENT_ID)).toBe(true);
+    expect(blanketDpopApplies(AGENT_PLATFORM_CLIENT_ID)).toBe(false);
+    expect(blanketDpopApplies('unregistered')).toBe(false);
   });
 
   it('rejects a proof made for a different endpoint', async () => {
