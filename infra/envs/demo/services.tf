@@ -22,7 +22,12 @@ locals {
       KEY_BUCKET                  = google_storage_bucket.platform_config.name
       KMS_SSO_KEY_NAME            = data.terraform_remote_state.shared.outputs.kms_keys.human_idp_sso
       DPOP_REQUIRED               = "true"
-      ACCESS_TOKEN_EXPIRES_IN     = "300"
+      # Matches SESSION_TTL_SECONDS in apps/automation-app/src/auth/session-store.ts.
+      # A session holds the four Access Tokens it was minted with and never refreshes
+      # them (DEC-ID-13 leaves this app no refresh token to do it with), so a token
+      # shorter than the session is a session that stops working while it is still
+      # valid: the stop button, five minutes after logging in, answered `invalid_token`.
+      ACCESS_TOKEN_EXPIRES_IN     = "3600"
       AUTOMATION_APP_REDIRECT_URI = "${local.run_url["automation-app"]}/callback"
       AGENT_OP_CALLBACK_URI       = "${local.run_url["agent-op-callback"]}/xaa/callback"
     }

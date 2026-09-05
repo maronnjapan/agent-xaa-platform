@@ -12,13 +12,35 @@ import { isInvalidToolCall, parseToolCall } from './parse-tool-call.js';
 
 export const MAX_REASONING_STEPS = 8;
 
-const REASONING_SCHEMA = {
+/**
+ * The answer the model is constrained to give, in the subset Vertex can express.
+ *
+ * `responseSchema` is OpenAPI 3.0, not JSON Schema: an `object` there is its
+ * `properties` and nothing else, so `tool_call: { type: 'object' }` described a value
+ * with no fields. The model could only ever fill it with `{}`, `parseToolCall` read no
+ * `tool_id` in that, and every step of every execution came back as
+ * `unknown / failed / invalid_tool_call` — eight of them, then `reasoning_step_limit`.
+ *
+ * The parameters travel as JSON text because their shape is per-tool: the manifest
+ * declares a different set for each, and one fixed `properties` map cannot describe all
+ * of them at once. `parseToolCall` decodes the text, which keeps the two fields RULE-18
+ * allows the model to decide — which tool, with what arguments — and adds no third.
+ */
+export const REASONING_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: ['done'],
   properties: {
     done: { type: 'boolean' },
-    tool_call: { type: 'object' },
+    tool_call: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['tool_id', 'parameters_json'],
+      properties: {
+        tool_id: { type: 'string' },
+        parameters_json: { type: 'string' },
+      },
+    },
     note: { type: 'string' },
   },
 } as const;
@@ -27,7 +49,14 @@ interface ReasoningStep { done: boolean; tool_call?: unknown; note?: string }
 
 export interface LoopResult {
   results: ToolResult[];
-  stoppedBy: 'done' | 'reasoning_step_limit' | 'agent_expired';
+  /**
+   * `no_decision` is separate from `done` because the two look identical from the
+   * outside and mean opposite things. `generateJson` answers `null` for every way a
+   * generation can fail — a refused schema, a timeout, an answer that did not validate —
+   * and treating that as "the agent says it is finished" reported TASK_COMPLETED with
+   * no tool call for a model that was never reached.
+   */
+  stoppedBy: 'done' | 'no_decision' | 'reasoning_step_limit' | 'agent_expired';
 }
 
 /**
@@ -74,7 +103,8 @@ export async function runReasoningLoop(input: {
       maxOutputTokens: 2048,
       temperature: 0,
     });
-    if (!decision || decision.done) { stoppedBy = 'done'; break; }
+    if (!decision) { stoppedBy = 'no_decision'; break; }
+    if (decision.done) { stoppedBy = 'done'; break; }
 
     const call = parseToolCall(decision.tool_call);
     if (isInvalidToolCall(call)) {
@@ -126,12 +156,30 @@ function lastInstructionId(conversation: readonly unknown[]): string | undefined
   return undefined;
 }
 
+/**
+ * What the model is told, and in what form it must answer.
+ *
+ * The response shape is spelled out because the schema alone does not say what belongs
+ * in `parameters_json`: an OpenAPI `string` is satisfied by any text, including prose,
+ * and text that is not a JSON object decodes to nothing here. Naming the tool's own
+ * declared parameters as the source is what turns the free-form field back into the
+ * `parameters` map RULE-18 lets the model choose.
+ *
+ * The work itself arrives as an instruction, never from here: this file has no channel
+ * to a work definition, and the one thing that tells an agent what it was created for is
+ * the text the person wrote, which the Automation App writes to `agent_instructions`.
+ */
 function buildPrompt(context: ExecutionContext, conversation: readonly unknown[]): string {
   return [
     'あなたは委譲された権限の範囲内でのみ動作するエージェントです。',
     `task_id: ${context.taskId}`,
     `使用できるツール: ${JSON.stringify(buildToolDeclarations(context.manifest))}`,
     `これまでの経過: ${JSON.stringify(conversation)}`,
-    '次に実行するツールを1つ選ぶか、作業が完了していれば done を true にしてください。',
+    '指示に書かれた作業を、上のツールだけで進めてください。',
+    'まだ終わっていなければ done を false にし、tool_call に次に実行するツールを1つ書いてください。',
+    'tool_call.tool_id は上の一覧の name をそのまま使います。',
+    'tool_call.parameters_json は、そのツールの parameters に宣言されたキーだけを持つ'
+      + ' JSON オブジェクトを文字列にしたものです。引数が無いときは "{}" と書きます。',
+    '作業が完了している、またはこれ以上ツールで進められない場合は done を true にしてください。',
   ].join('\n');
 }

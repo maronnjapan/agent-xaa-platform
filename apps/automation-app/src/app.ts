@@ -10,6 +10,7 @@ import { requireAgentOwner, type AgentOwnerVariables } from './agents/require-ow
 import { readAgentStatus } from './agents/status.js';
 import { stopAgent } from './agents/stop.js';
 import { addInstruction, AgentNotActive } from './agents/instructions.js';
+import { seedInitialInstruction } from './agents/initial-instruction.js';
 import { agentPagePath } from './agents/page-link.js';
 import { logAgentOperation } from './audit/logger.js';
 import { createWorkDefinitionStore } from './work-definition/store.js';
@@ -182,7 +183,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       // Read before the status is judged, because the Provisioner's refusals carry the
       // one thing this app can say about them afterwards: the code it refused with.
       const body = await response.json().catch(() => ({})) as {
-        consent_url?: unknown; agent_id?: unknown; error?: unknown;
+        consent_url?: unknown; agent_id?: unknown; task_id?: unknown; error?: unknown;
       };
       if (!response.ok) {
         return failed(response.status, typeof body.error === 'string' ? body.error : 'no_error_code');
@@ -192,6 +193,10 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       // the Provisioner names. This app never builds one (RULE-37).
       if (typeof body.consent_url === 'string') return context.redirect(body.consent_url, 302);
       if (typeof body.agent_id === 'string' && body.agent_id !== '') {
+        // The same first instruction the dashboard's own button writes. An agent that
+        // reached here went through a consent screen rather than straight through, and
+        // it needs to be told its work just as much.
+        await seedFirstInstruction(body.agent_id, body.task_id);
         return context.redirect(agentPagePath(body.agent_id), 302);
       }
       return context.redirect('/', 302);
@@ -402,7 +407,18 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       },
       requiredScope: 'agent:provision',
     });
-    return context.json(await response.json().catch(() => ({})), response.status as 200);
+    const provisioned = await response.json().catch(() => ({})) as { agent_id?: unknown };
+    // The agent is running but has not been told what for: the Runtime is handed a tool
+    // manifest and an id, never the work (see seedInitialInstruction). This is the only
+    // step that closes that gap, and it is deliberately not part of the answer — the
+    // provisioning succeeded either way, and the person can add the instruction by hand.
+    if (response.ok && typeof provisioned.agent_id === 'string') {
+      const outcome = await seedInitialInstruction({
+        documents: deps.documents, agentId: provisioned.agent_id, definition: work, now: now(),
+      });
+      if (outcome !== 'written') logInitialInstructionFailure(provisioned.agent_id, outcome);
+    }
+    return context.json(provisioned, response.status as 200);
   });
 
   app.use('/api/agents/:agent_id/*', requireAgentOwner({
@@ -490,6 +506,35 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
   }));
 
   return app;
+
+  /**
+   * The work definition a just-provisioned agent was made for, looked up by the id the
+   * Provisioner echoes back, and written to it as its first instruction.
+   *
+   * A definition that cannot be found is logged rather than raised: it means the agent
+   * exists and the row behind it does not, which nothing this route does can repair.
+   */
+  async function seedFirstInstruction(agentId: string, taskId: unknown): Promise<void> {
+    const work = typeof taskId === 'string' ? await workDefinitions.find(taskId) : undefined;
+    if (!work) { logInitialInstructionFailure(agentId, 'work_definition_not_found'); return; }
+    const outcome = await seedInitialInstruction({ documents: deps.documents, agentId, definition: work, now: now() });
+    if (outcome !== 'written') logInitialInstructionFailure(agentId, outcome);
+  }
+
+  /**
+   * An agent that was created but never told its work. It still runs, so this is a
+   * warning and not an error — but a person watching a silent agent has no other way to
+   * learn that its first instruction is missing.
+   */
+  function logInitialInstructionFailure(agentId: string, reason: string): void {
+    (deps.logWrite ?? ((line: string) => process.stdout.write(line)))(`${JSON.stringify({
+      severity: 'WARNING',
+      logType: 'xaa.initial_instruction_not_written',
+      agent_id: agentId,
+      reason,
+      occurred_at: new Date(now()).toISOString(),
+    })}\n`);
+  }
 
   function audit(operation: 'status_read' | 'stop' | 'add_instruction', agentId: string, subject: string, text?: string): void {
     logAgentOperation({

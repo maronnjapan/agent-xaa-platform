@@ -3,7 +3,7 @@ import {
   createDpopProof, createLocalEs256Signer, generateEs256KeyPair, jwkThumbprint, signCompactJws,
   type Es256KeyPair,
 } from '@xaa/crypto';
-import { ISSUER, LIFECYCLE_BASE, createLifecycleHarness, seedDomain } from '../src/testing/harness.js';
+import { ISSUER, LIFECYCLE_BASE, TEST_ENDPOINTS, createLifecycleHarness, seedDomain } from '../src/testing/harness.js';
 
 /**
  * The eight checks of docs 05 §2.1, as this service applies them.
@@ -100,6 +100,39 @@ describe('the access token guard on the stop route', () => {
       },
     });
     expect(response.status).toBe(202);
+  });
+
+  /**
+   * The stop button, refusing a token that was never wrong.
+   *
+   * This service used to compose `${issuer}/jwks.json` for itself. The Human IdP serves
+   * its set at `/.well-known/jwks.json` and answers 404 anywhere else, so the key was
+   * never found, the guard's catch turned that into `invalid_token`, and every attempt
+   * to stop an agent was refused — with a token that verified perfectly against the set
+   * the Authorization Platform and the Provisioner read.
+   *
+   * The assertion is on the URL rather than on the 202 alone, because a 202 only says
+   * some set was reachable. What must hold is that the location comes from
+   * endpoints.json, which is the copy Terraform keeps in step with the deployment.
+   */
+  it('reads its JWK Set from endpoints.json, and stops the agent', async () => {
+    const idpKey = await generateEs256KeyPair();
+    const dpopKey = await generateEs256KeyPair();
+    const harness = createLifecycleHarness({ idpPublicJwk: idpKey.publicJwk });
+    await seedDomain(harness, { agentId: AGENT_ID });
+    const accessToken = await signAccessToken(idpKey, dpopKey);
+    const response = await harness.fetch(`/agents/${AGENT_ID}/revoke`, {
+      method: 'POST',
+      headers: {
+        Authorization: `DPoP ${accessToken}`,
+        DPoP: await createDpopProof({ method: 'POST', url: `${LIFECYCLE_BASE}/agents/${AGENT_ID}/revoke`, keyPair: dpopKey, accessToken }),
+      },
+    });
+
+    expect(response.status).toBe(202);
+    expect(harness.jwksRequests).not.toHaveLength(0);
+    expect(harness.jwksRequests).toEqual(harness.jwksRequests.map(() => TEST_ENDPOINTS.jwksUrl));
+    expect(TEST_ENDPOINTS.jwksUrl).not.toBe(`${ISSUER}/jwks.json`);
   });
 
   it('answers /livez with 200 and {"status":"ok"} without any token', async () => {

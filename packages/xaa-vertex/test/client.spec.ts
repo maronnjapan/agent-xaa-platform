@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createVertexClient, generateJson, resetDefaultVertexClientForTesting } from '../src/index.js';
+import {
+  createVertexClient, generateJson, resetDefaultVertexClientForTesting, vertexResponseSchemaProblems,
+} from '../src/index.js';
 
 const schema = { type: 'object', additionalProperties: false, required: ['value'], properties: { value: { type: 'string' } } };
 describe('vertex client', () => {
@@ -72,6 +74,39 @@ describe('vertex client', () => {
     });
     // And the caller's own schema is untouched, because it is the platform's contract.
     expect(identified.$id).toBe('named-result');
+  });
+
+  /**
+   * The other half of "OpenAPI subset", and the half that fails silently.
+   *
+   * A schema Vertex refuses at least produces a `null` somebody can notice. An `object`
+   * with no `properties` is *accepted*, and answered as `{}` — which validates against
+   * the caller's own JSON Schema, so `generateJson` returns it as a real answer. The
+   * agent's reasoning loop shipped that way: every step asked the model for a
+   * `tool_call`, got `{}` back, and recorded `invalid_tool_call` against `unknown`.
+   */
+  describe('the response schema shapes Vertex cannot express', () => {
+    it('names an object that declares no properties, at any depth', () => {
+      expect(vertexResponseSchemaProblems({
+        type: 'object', required: ['done'],
+        properties: { done: { type: 'boolean' }, tool_call: { type: 'object' } },
+      })).toEqual(['$.properties.tool_call: an object with no properties can only ever be answered as {}']);
+
+      expect(vertexResponseSchemaProblems({
+        type: 'object',
+        properties: { rows: { type: 'array', items: { type: 'object', properties: {} } } },
+      })).toHaveLength(1);
+    });
+
+    it('passes a schema whose every object names its fields', () => {
+      expect(vertexResponseSchemaProblems({
+        type: 'object', additionalProperties: false, required: ['value'],
+        properties: {
+          value: { type: 'string' },
+          rows: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' } } } },
+        },
+      })).toEqual([]);
+    });
   });
 
   it('takes that model from VERTEX_MODEL and has no default for it', async () => {

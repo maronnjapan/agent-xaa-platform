@@ -7,9 +7,17 @@ export class FirestorePathDenied extends Error {
   }
 }
 
+/**
+ * One row of `agent_instructions`, named the way its writer names it.
+ *
+ * The Automation App owns this collection (00b §3) and writes the words as `text`. This
+ * reader called the field `body`, which is not an error anywhere: the read succeeds, the
+ * row is stamped applied, and the instruction reaches the model with no words in it. So
+ * every 「指示を追加する」 arrived as an empty turn, and the agent had nothing to act on.
+ */
 export interface RuntimeInstruction {
   instruction_id: string;
-  body: string;
+  text: string;
   created_at: string;
   applied_at: string | null;
 }

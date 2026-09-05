@@ -1,6 +1,8 @@
 import { createFakeClient, type FakeResponder } from './fake-client.js';
 import { createLiveClient, type LiveClientOptions } from './live-client.js';
 
+export { vertexResponseSchemaProblems } from './response-schema.js';
+
 export interface GenerateJsonParams {
   prompt: string;
   schema: object;

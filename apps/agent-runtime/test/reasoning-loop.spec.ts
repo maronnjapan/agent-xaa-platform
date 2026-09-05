@@ -3,7 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ID_JAG_TOKEN_TYPE, drainActivityQueueForTesting, resetActivityPublisherForTesting } from '@xaa/contracts';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
-import { MAX_REASONING_STEPS, runReasoningLoop } from '../src/reasoning/loop.js';
+import { createVertexClient, vertexResponseSchemaProblems } from '@xaa/vertex';
+import { MAX_REASONING_STEPS, REASONING_SCHEMA, runReasoningLoop } from '../src/reasoning/loop.js';
 import { readPendingInstructions } from '../src/instructions/read-pending.js';
 import { createRuntimeStore } from '../src/store/runtime-store.js';
 import { createExecutionContext } from '../src/context/execution-context.js';
@@ -64,9 +65,81 @@ describe('the reasoning loop', () => {
   // that proves nothing was widened live in instruction-guard.spec.ts (T-RUN-23).
 
   it('treats an unusable model answer as invalid_tool_call', async () => {
-    const { context, http, vertex } = await harness({ steps: [{ done: false, tool_call: { tool_id: 42 } }, { done: true }] });
+    // `{}` is the second case on purpose: it is exactly what a `tool_call` declared as a
+    // bare `type: 'object'` could produce, and reading it as a failed call is right —
+    // what was wrong was asking a question only answerable that way.
+    for (const toolCall of [{ tool_id: 42 }, {}]) {
+      const { context, http, vertex } = await harness({ steps: [{ done: false, tool_call: toolCall }, { done: true }] });
+      const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+      expect(result.results[0]).toMatchObject({ tool_id: 'unknown', outcome: 'failed', error_code: 'invalid_tool_call' });
+    }
+  });
+
+  /**
+   * The bug that made every execution useless, from both ends.
+   *
+   * `tool_call` was declared as a bare `type: 'object'`. Vertex's `responseSchema` is an
+   * OpenAPI subset in which an object *is* its `properties`, so the model had no field
+   * it was allowed to fill and could only answer `{}` — which passes the schema, so the
+   * loop received a decision, read no `tool_id` in it, and wrote
+   * `unknown / failed / invalid_tool_call` eight times before stopping at the step
+   * limit. Every agent, every task, every time.
+   *
+   * The first case pins the schema itself. The second runs the loop against a client
+   * that validates its answer the way the live one does, so an answer shaped like the
+   * one the deployed model gives has to reach `executeTool`.
+   */
+  /**
+   * A model that never answered, told apart from one that said it was finished.
+   *
+   * `generateJson` answers `null` for every way a generation can fail, and this loop
+   * used to read that as `done`. The execution then reported TASK_COMPLETED having
+   * called nothing — the same thing it reports for work that genuinely needed no tool.
+   */
+  it('does not call a silent model a finished task', async () => {
+    const { context, http } = await harness({ steps: [] });
+    const vertex = { generateJson: async () => null };
     const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
-    expect(result.results[0]).toMatchObject({ error_code: 'invalid_tool_call' });
+    expect(result.stoppedBy).toBe('no_decision');
+    expect(result.results).toEqual([]);
+  });
+
+  it('declares a tool_call the model can actually fill in', () => {
+    expect(vertexResponseSchemaProblems(REASONING_SCHEMA)).toEqual([]);
+  });
+
+  it('executes a tool call that came back through structured output', async () => {
+    const { context, http } = await harness({ steps: [] });
+    let step = 0;
+    // What the live client does with a model's answer: validate it against this exact
+    // schema, and hand back `null` for anything that does not fit.
+    const vertex = createVertexClient({
+      mode: 'fake', project: 'p', location: 'l', model: 'm',
+      fakeResponder: () => (step++ === 0
+        ? { done: false, tool_call: { tool_id: 'internal.document.list', parameters_json: '{}' } }
+        : { done: true }),
+    });
+
+    const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results).toEqual([expect.objectContaining({ outcome: 'success', tool_id: 'internal.document.list' })]);
+  });
+
+  it('carries the model\'s arguments through to the request', async () => {
+    const { context, http, calls } = await harness({ steps: [] });
+    let step = 0;
+    const vertex = createVertexClient({
+      mode: 'fake', project: 'p', location: 'l', model: 'm',
+      fakeResponder: () => (step++ === 0
+        ? { done: false, tool_call: { tool_id: 'internal.document.get', parameters_json: '{"id":"d1"}' } }
+        : { done: true }),
+    });
+
+    const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+
+    expect(result.results[0]).toMatchObject({ outcome: 'success' });
+    expect(calls.some((call) => call.url.endsWith('/documents/d1'))).toBe(true);
   });
 });
 
@@ -74,10 +147,10 @@ describe('pending instructions', () => {
   it('same instruction is not applied twice', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: '請求書を確認して', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: '請求書を確認して', created_at: '2026-01-01T00:00:00Z', applied_at: null });
 
     expect(await readPendingInstructions(store, '2026-01-02T00:00:00Z')).toEqual([
-      { role: 'user', source: 'instruction', instruction_id: 'i1', body: '請求書を確認して' },
+      { role: 'user', source: 'instruction', instruction_id: 'i1', text: '請求書を確認して' },
     ]);
     expect(await readPendingInstructions(store, '2026-01-02T00:00:01Z')).toEqual([]);
   });
@@ -85,15 +158,15 @@ describe('pending instructions', () => {
   it('orders by created_at', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'later', { agent_id: AGENT_ID, body: 'b', created_at: '2026-01-02T00:00:00Z', applied_at: null });
-    await documents.set('agent_instructions', 'earlier', { agent_id: AGENT_ID, body: 'a', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'later', { agent_id: AGENT_ID, text: 'b', created_at: '2026-01-02T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'earlier', { agent_id: AGENT_ID, text: 'a', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     expect((await readPendingInstructions(store, 'now')).map((entry) => entry.instruction_id)).toEqual(['earlier', 'later']);
   });
 
   it('concurrent readers do not double-apply', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     const [first, second] = await Promise.all([
       readPendingInstructions(store, 'now'),
       readPendingInstructions(store, 'now'),
@@ -104,14 +177,14 @@ describe('pending instructions', () => {
   it('reads only its own agent', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'other', { agent_id: 'agent-zzzzzzzzzzzzzzzzzzzzzzzzzz', body: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'other', { agent_id: 'agent-zzzzzzzzzzzzzzzzzzzzzzzzzz', text: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     expect(await readPendingInstructions(store, 'now')).toEqual([]);
   });
 
   it('takes them into the conversation once per execution', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: '追加の指示', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: '追加の指示', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     const context = await createExecutionContext({ env: await runtimeEnv(), store, processEnv: {} });
     const { http } = testHttp(context, happy);
     let index = 0;
@@ -174,7 +247,7 @@ describe('pending instructions', () => {
         return documents.set(collection, id, value);
       },
     } as typeof documents;
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     seeded = true;
 
     const store = createRuntimeStore({ documents: counted, agentId: AGENT_ID });

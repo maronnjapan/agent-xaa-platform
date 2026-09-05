@@ -188,7 +188,7 @@
 | `agents/{agent_id}` | サブドキュメントの親のみ。フィールドを持たせない | なし | なし |
 | `agents/{agent_id}/meta` | Agent Registration の17キー。`agent_id` `human_subject` `client_auth` `idp_connection_id` `allowed_audiences` `resources` `scopes` `created_at` `expires_at` `status` `dedicated_op` `isolation_level` `registration_id` `kms_key_name` `job_execution_name` `bridge_binding_ids` `cleanup_step_results`。`additionalProperties: false`。`issuer` `subject` `api_base_url` `api_method` `api_path` `tool_id` を持たせない | T-PROV-19 の `registration-writer.ts`（`createRegistration` と `deleteRegistration` の2関数）と T-LIFE-02 の `status-writer.ts`（`status` と `cleanup_step_results` のみ） | T-OP-02 / T-OP-19 / T-RUN-04 / T-APP-12 / T-APP-13 / T-LIFE-03 |
 | `agents/{agent_id}/state` | Agent の作業状態 | T-RUN | T-APP-12（read のみ） |
-| `agents/{agent_id}/instructions` | 追加指示 | T-APP-12 | T-RUN |
+| `agents/{agent_id}/instructions` | 追加指示。物理コレクションは `agent_instructions`。`instruction_id` `agent_id` `text` `created_at` `created_by` `applied_at` の6キー。本文のキーは `text` であり `body` ではない（読む側が `body` を読んでいたため、指示は本文の無い1ターンとして Agent へ届いていた）。Agent 作成直後の1件目には、確定した Work Definition の本文を T-APP-12 が書く。Runtime へ作業内容を渡す経路はこれだけである | T-APP-12 | T-RUN |
 | `agents/{agent_id}/manifest` | Tool Manifest の写し | T-PROV-06 | T-RUN-06 |
 | `idp_connections/{idp_connection_id}` | Refresh Token の封筒暗号値と `status` と `expires_at` | T-OP-27 / T-OP-28 | T-OP-26 / T-PROV-17 / T-LIFE-06 |
 | `consents/{consent_id}` | Human の同意記録 | T-IDP | T-IDP |

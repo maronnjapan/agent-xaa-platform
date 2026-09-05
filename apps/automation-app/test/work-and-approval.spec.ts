@@ -9,7 +9,7 @@ import { LifetimeInput } from '../src/ui/components/lifetime-input.js';
 import {
   PRESENTED_CAPABILITIES, PRESENTED_CAPABILITIES_REORDERED, PRESENTED_CAPABILITIES_WIDENED,
 } from './fixtures/presented-capabilities.fixture.js';
-import { startAutomationApp } from './helpers.js';
+import { AGENT_ID, startAutomationApp, type Harness } from './helpers.js';
 import { failureMessage } from '../../automation-app/client/src/messages.js';
 
 const definition = {
@@ -404,7 +404,89 @@ describe('approval', () => {
       decision_id: 'dec_1', task_id: 'wd_1', requested_lifetime_hours: 3,
     });
   });
+
+  /**
+   * An agent that knows what it was created for.
+   *
+   * The Runtime is started with ten environment values and a Tool Manifest, none of
+   * which is the work: `TASK_ID` is an id and the manifest is a permission. So a new
+   * agent's first reasoning step used to see a tool list, an empty history, and no job
+   * — and did nothing anybody had asked for. This is where the words the person
+   * confirmed reach it, over the channel that already exists for telling an agent
+   * things.
+   */
+  it('tells the new agent what work it was created for', async () => {
+    // Provisioning answers with the agent it started; the agent is ACTIVE by then,
+    // which is what `addInstruction` requires.
+    const harness = await startAutomationApp({ upstreamHandler: () => provisioned() });
+    await seedApprovedDefinition(harness);
+    await harness.seed.set('agents', `${AGENT_ID}__meta`, {
+      agent_id: AGENT_ID, human_subject: 'testuser', status: 'ACTIVE',
+      expires_at: '2026-01-02T00:00:00.000Z',
+    });
+
+    expect((await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' })).status).toBe(201);
+
+    const stored = await harness.documents.queryEqual<{ text: string; created_by: string }>(
+      'agent_instructions', [['agent_id', AGENT_ID]],
+    );
+    expect(stored).toHaveLength(1);
+    const { text } = stored[0]!.data;
+    // The confirmed text, in the person's own words — purpose, description and each
+    // list they wrote. Not a capability, a tool id or a scope: an instruction is words,
+    // which is what keeps this from being a way to widen what the agent may do.
+    expect(text).toContain('経費の申請書を読む');
+    expect(text).toContain('毎朝9時に確認する');
+    expect(text).toContain('- 申請書の一覧を開く');
+    expect(text).toContain('- 金額が10万円を超えるものは報告する');
+    expect(text).toContain('- 承認はしない');
+    expect(stored[0]!.data.created_by).toBe('testuser');
+  });
+
+  /**
+   * The agent was created; only the instruction failed. Answering 500 would tell the
+   * person their agent does not exist, and they would make a second one.
+   */
+  it('still reports the agent when its first instruction cannot be written', async () => {
+    const harness = await startAutomationApp({ upstreamHandler: () => provisioned() });
+    await seedApprovedDefinition(harness);
+    // No meta row, so the agent reads as not ACTIVE and the instruction is refused.
+
+    const response = await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ agent_id: AGENT_ID });
+    expect(harness.logLines.join('\n')).toContain('xaa.initial_instruction_not_written');
+  });
 });
+
+/** The Provisioner's answer for an agent it started. */
+function provisioned(): Response {
+  return new Response(
+    JSON.stringify({ status: 'PROVISIONED', agent_id: AGENT_ID, task_id: 'wd_1' }),
+    { status: 201, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+/** An approved definition, its decision and the confirmed work behind it. */
+async function seedApprovedDefinition(harness: Harness): Promise<void> {
+  await harness.documents.set('agent_definitions', 'ad_1', {
+    agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
+    presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+    isolation_level: 'standard', approved_by: 'testuser', approved_at: '2026-01-01T00:00:00.000Z',
+    created_at: '2026-01-01T00:00:00.000Z',
+  });
+  await harness.authorizationSeed.set('authorization_decisions', 'dec_1', { effective_capabilities: ['a'] });
+  await harness.documents.set('work_definitions', 'wd_1', {
+    work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED',
+    purpose: '経費の申請書を読む', description: '毎朝9時に確認する',
+    operations: ['申請書の一覧を開く', '金額を確かめる'],
+    user_confirmations: ['金額が10万円を超えるものは報告する'],
+    safety_notes: ['承認はしない'],
+    requested_lifetime_hours: 3,
+    created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+  });
+}
 
 /**
  * The other half of the consent round trip. The Agent OP redirects the browser here

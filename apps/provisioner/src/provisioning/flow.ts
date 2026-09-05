@@ -488,6 +488,11 @@ export async function provisionAgent(
     body: {
       status: 'PROVISIONED',
       agent_id: agentId,
+      // Echoed so the caller can pair the agent with the work it asked for. On the
+      // resume path the request was made by a browser coming back from a consent
+      // screen, and the transaction is all it carries: without this the Automation App
+      // cannot tell which of a person's work definitions this agent belongs to.
+      task_id: request.taskId,
       transaction_id: context.transactionId,
       expires_at: expiry.expiresAt,
       allowed_tools: resolved.tools.map((tool) => tool.tool_id),

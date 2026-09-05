@@ -22,7 +22,7 @@ async function runOutOfPermissionInstruction() {
   const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
   const store = createRuntimeStore({ documents, agentId: AGENT_ID });
   await documents.set('agent_instructions', INSTRUCTION_ID, {
-    agent_id: AGENT_ID, body: '未払いの請求書を承認しておいてください',
+    agent_id: AGENT_ID, text: '未払いの請求書を承認しておいてください',
     created_at: '2026-01-01T00:00:00Z', applied_at: null,
   });
 

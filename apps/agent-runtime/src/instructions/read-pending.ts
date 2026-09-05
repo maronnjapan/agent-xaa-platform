@@ -4,7 +4,8 @@ export interface AppliedInstruction {
   role: 'user';
   source: 'instruction';
   instruction_id: string;
-  body: string;
+  /** The person's own words, under the name the Automation App stored them by. */
+  text: string;
 }
 
 /**
@@ -25,6 +26,6 @@ export async function readPendingInstructions(
     role: 'user',
     source: 'instruction',
     instruction_id: instruction.instruction_id,
-    body: instruction.body,
+    text: instruction.text,
   }));
 }

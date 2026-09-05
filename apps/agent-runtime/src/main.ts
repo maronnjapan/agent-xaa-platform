@@ -84,7 +84,11 @@ async function main(): Promise<number> {
 
   try {
     const loop = await runReasoningLoop({ context, http, logger, logContext });
-    const outcome = loop.stoppedBy === 'reasoning_step_limit'
+    // Two ways of stopping that the tool results cannot show. Running out of steps is
+    // the loop's own bound; `no_decision` is the model never answering, which without
+    // this reads as a task that finished with nothing to do.
+    if (loop.stoppedBy === 'no_decision') logger.error('reasoning_no_decision', logContext, { steps: loop.results.length });
+    const outcome = loop.stoppedBy === 'reasoning_step_limit' || loop.stoppedBy === 'no_decision'
       ? 'TASK_FAILED'
       : decideTaskOutcome(loop.results);
     await terminal.emitTerminalOnce(outcome);
