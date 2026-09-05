@@ -82,7 +82,9 @@ describe('a Provisioner event reaches the person\'s own timeline', () => {
 
     // The Automation App's push endpoint, authenticated the way a real Pub/Sub delivery
     // is: an OIDC token for a Google service account, verified against a JWKS this test
-    // serves over `fetchImpl` rather than https://www.googleapis.com.
+    // serves over `fetchImpl` rather than https://www.googleapis.com. The token's
+    // audience is the app's `https://` public base URL, because that is what T-IAC-28
+    // configures on the subscription.
     const identity = await mintPushIdentity({ audience: AUTOMATION_APP_BASE });
     const automation = await startAutomationAppHarness({
       humanSubject: HUMAN_SUBJECT,
@@ -91,8 +93,12 @@ describe('a Provisioner event reaches the person\'s own timeline', () => {
         : new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })),
     });
 
+    // Delivered over `http://`, which is what the container actually sees: Cloud Run
+    // terminates TLS at its front end and forwards plain HTTP/1.1. The endpoint must
+    // still check the token against the configured `https://` audience above.
+    const pushUrl = `${AUTOMATION_APP_BASE.replace('https://', 'http://')}/internal/activity/push`;
     for (const event of published) {
-      const response = await automation.fetch('/internal/activity/push', {
+      const response = await automation.fetch(pushUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${identity.token}` },
         body: JSON.stringify({ message: { data: Buffer.from(JSON.stringify(event)).toString('base64') } }),

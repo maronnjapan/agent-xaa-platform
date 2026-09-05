@@ -7,7 +7,7 @@ import {
 import { buildActivityPath, decodePushMessage, storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline } from '../src/activity/query.js';
 import { emitAgentStopped, emitConfirmed, emitLoggedIn, emitProposed } from '../src/activity/emit.js';
-import { AGENT_ID, ISSUER, SUBJECT, mintAccessToken, seedAgent, startAutomationApp } from './helpers.js';
+import { AGENT_ID, ISSUER, SUBJECT, config, mintAccessToken, seedAgent, startAutomationApp } from './helpers.js';
 
 function event(overrides: Partial<ActivityEvent> = {}): ActivityEvent {
   return validateActivityEvent({
@@ -184,6 +184,32 @@ describe('the push subscriber', () => {
       body: JSON.stringify({ message: { data: Buffer.from(JSON.stringify(event())).toString('base64') } }),
     });
     expect(response.status).toBe(401);
+  });
+
+  /**
+   * The audience the delivery's token is checked against is `PUBLIC_BASE_URL`, not the
+   * URL the request arrived at.
+   *
+   * Cloud Run terminates TLS at its front end and forwards plain HTTP/1.1 to the
+   * container, so `context.req.url` is `http://…` while T-IAC-28 mints the subscription's
+   * OIDC token for the `https://…` audience. Deriving the audience from the request
+   * answered every real delivery 401.
+   */
+  it('checks the token against PUBLIC_BASE_URL, not the URL Cloud Run forwarded', async () => {
+    const audiences: string[] = [];
+    const harness = await startAutomationApp({
+      verifyPush: async ({ audience }) => {
+        audiences.push(audience);
+        return { email: 'sa-pubsub-push@x' };
+      },
+    });
+    const response = await harness.fetch('http://automation-app.test/internal/activity/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', authorization: 'Bearer pubsub-oidc', cookie: '' },
+      body: JSON.stringify({ message: { data: Buffer.from(JSON.stringify(event())).toString('base64') } }),
+    });
+    expect(response.status).toBe(200);
+    expect(audiences).toEqual([config.publicBaseUrl]);
   });
 
   /**

@@ -49,7 +49,6 @@ export interface AutomationAppDeps {
   promptTemplate?: string;
   signals?: WorkSignalSource;
   generate?: Parameters<typeof suggestAutomations>[0]['generate'];
-  pushAudience?: string;
   /**
    * Who the push endpoint believes. Production passes nothing and gets
    * `verifyPushCaller`, which checks Google's OIDC token; a test supplies its own so
@@ -107,6 +106,13 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
   /**
    * Pub/Sub, not a person. Verified by the delivery's OIDC token: the body names the
    * subject whose timeline the row lands in, so knowing the sender is the only defence.
+   *
+   * The audience is `PUBLIC_BASE_URL`, never the URL this request arrived at. Cloud Run
+   * terminates TLS at its front end and hands the container plain HTTP, so `req.url`'s
+   * origin is `http://…` while T-IAC-28 mints the subscription's token for the `https://…`
+   * audience — a mismatch that answered every real delivery 401. A request-derived origin
+   * is the caller's word for where it sent the request; the audience a token is checked
+   * against has to be this service's own configured identity.
    */
   app.post('/internal/activity/push', async (context) => {
     try {
@@ -116,7 +122,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       }));
       await verify({
         authorization: context.req.header('authorization'),
-        audience: deps.pushAudience ?? new URL(context.req.url).origin,
+        audience: deps.config.publicBaseUrl,
       });
     } catch {
       return context.json({ error: 'unauthorized' }, 401);
