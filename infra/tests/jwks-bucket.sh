@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # T-IAC-20. One shared JWKS bucket, readable by anyone and writable only under the
-# prefix that belongs to the writer. Nobody may delete an object: a deleted `keys/*.json`
+# prefix that belongs to the writer. Nobody may delete a `keys/*.json`: a deleted key
 # silently drops a signer out of the aggregate `jwks.json` and every token it signed
 # starts failing verification with no trace of why.
+#
+# The aggregate itself is the one object that is replaced rather than only written, which
+# Cloud Storage counts as a delete. That grant exists, and the checks at the end of this
+# file are what keep it from becoming a way to delete anything else.
 set -euo pipefail
 
 file=infra/envs/demo/storage-jwks.tf
@@ -30,3 +34,21 @@ if find infra/envs -name '*.tf' -not -path '*/.terraform/*' -print0 \
   echo 'jwks-bucket: no principal may hold a storage role that can delete an object' >&2
   exit 1
 fi
+
+# The single exception, and the shape that keeps it single: one custom role carrying that
+# one permission, bound under a condition that names the aggregate object. The same
+# permission granted without the condition would reach every keys/*.json in the bucket.
+replacer=$(sed -n '/resource "google_project_iam_custom_role" "jwks_aggregate_replacer"/,/^}/p' infra/envs/demo/iam-jwks.tf)
+grep -qF 'permissions = ["storage.objects.delete"]' <<<"$replacer" || {
+  echo 'jwks-bucket: the aggregate replacer role must carry storage.objects.delete and nothing else' >&2
+  exit 1
+}
+binding=$(sed -n '/resource "google_storage_bucket_iam_member" "jwks_publish_replace"/,/^}/p' infra/envs/demo/iam-jwks.tf)
+grep -qF "objects/jwks.json'" <<<"$binding" || {
+  echo 'jwks-bucket: the delete grant must be conditioned on the aggregate object' >&2
+  exit 1
+}
+[[ $(grep -v '^[[:space:]]*#' infra/envs/demo/iam-jwks.tf | grep -c 'storage\.objects\.delete') -eq 1 ]] || {
+  echo 'jwks-bucket: storage.objects.delete is granted more than once in iam-jwks.tf' >&2
+  exit 1
+}

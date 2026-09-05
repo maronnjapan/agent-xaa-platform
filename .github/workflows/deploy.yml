@@ -74,6 +74,21 @@ jobs:
         run: make demo-apply TF=terraform
       - name: Publish the aggregate JWKS and the definition data
         run: make seed
+      # A failed Cloud Run job answers `gcloud run jobs execute` with nothing but the name
+      # of its execution, so a failure here used to be readable only from inside the
+      # project. These are the lines the container wrote.
+      - name: Show what a failed job execution wrote
+        if: failure()
+        run: |
+          for job in jwks-publish seed; do
+            execution=$(gcloud run jobs executions list --job="$job" --project="$PROJECT_ID" \
+              --region="$REGION" --limit=1 --format='value(metadata.name)' 2>/dev/null) || continue
+            [ -n "$execution" ] || continue
+            echo "## $execution"
+            gcloud logging read \
+              "resource.type=\"cloud_run_job\" AND labels.\"run.googleapis.com/execution_name\"=\"$execution\"" \
+              --project="$PROJECT_ID" --limit=50 --order=asc --format='value(textPayload)' || true
+          done
       # The five saved detections read the table Cloud Logging creates from the first Cloud
       # Run stdout line, so the shared apply above leaves them out on a project that has
       # never run a service. By here it has, and this is the same state applied once more.
