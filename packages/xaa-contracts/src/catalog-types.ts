@@ -1,4 +1,4 @@
-import { CAPABILITIES, RESOURCE_SCOPES, TOOL_IDS, type Capability, type ResourceScope, type ToolId } from './identifiers.js';
+import { CAPABILITY_ID_PATTERN, RESOURCE_SCOPES, TOOL_IDS, type ResourceScope, type ToolId } from './identifiers.js';
 
 export type ConnectorId = 'internal-docs-api' | 'internal-finance-api' | 'stub-saas-calendar';
 export const CONNECTOR_IDS: readonly ConnectorId[] = ['internal-docs-api', 'internal-finance-api', 'stub-saas-calendar'];
@@ -23,7 +23,12 @@ export interface CatalogTool {
   tool_id: ToolId;
   connector_id: ConnectorId;
   description: string;
-  required_capability: Capability;
+  /**
+   * The capability this tool is the execution of. A string rather than one of the
+   * eight shipped ids: which capabilities exist is the taxonomy's answer, and an
+   * administrator can add one and map this tool to it (docs 04 §1).
+   */
+  required_capability: string;
   authorization: { type: 'native_xaa' | 'xaa_bridge'; audience: string; resource: string; scope: ResourceScope };
   /** Absolute Bridge URL for xaa_bridge tools, null for native ones (00b). */
   token_provider: string | null;
@@ -43,7 +48,7 @@ export const catalogToolSchema = {
     tool_id: { type: 'string' },
     connector_id: { enum: CONNECTOR_IDS },
     description: { type: 'string' },
-    required_capability: { type: 'string' },
+    required_capability: { type: 'string', pattern: CAPABILITY_ID_PATTERN },
     authorization: {
       type: 'object', additionalProperties: false, required: ['type', 'audience', 'resource', 'scope'],
       properties: {
@@ -94,7 +99,7 @@ export interface ToolManifest {
   tools: Array<{
     tool_id: ToolId;
     description: string;
-    required_capability: Capability;
+    required_capability: string;
     authorization: { type: 'native_xaa' | 'xaa_bridge'; audience: string; resource: string; scope: ResourceScope };
     token_provider: string | null;
     api: { base_url: string; method: string; path: string };
@@ -121,7 +126,9 @@ export const toolManifestSchema = {
         properties: {
           tool_id: { enum: TOOL_IDS },
           description: { type: 'string' },
-          required_capability: { enum: CAPABILITIES },
+          // Checked by shape, not by membership of the shipped eight: a manifest for an
+          // agent granted an administrator-defined capability is still a valid manifest.
+          required_capability: { type: 'string', pattern: CAPABILITY_ID_PATTERN },
           authorization: {
             type: 'object', additionalProperties: false, required: ['type', 'audience', 'resource', 'scope'],
             properties: {

@@ -1,3 +1,5 @@
+import { parseAdminPrincipals } from '@xaa/control-plane-auth';
+
 export interface AuthorizationConfig {
   port: number;
   issuer: string;
@@ -17,6 +19,12 @@ export interface AuthorizationConfig {
   activityTopic: string;
   taxonomyVersion: string;
   agentMaxLifetimeSeconds: number;
+  /**
+   * Who may operate the permission console. Empty by default: a deployment that names
+   * nobody has a console nobody can reach, which is the safe way round for a screen
+   * that edits what every future agent may be granted.
+   */
+  adminPrincipals: string[];
 }
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -50,5 +58,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AuthorizationC
     activityTopic: required(env, 'ACTIVITY_TOPIC'),
     taxonomyVersion: required(env, 'TAXONOMY_VERSION'),
     agentMaxLifetimeSeconds: Number(required(env, 'AGENT_MAX_LIFETIME_SECONDS')),
+    adminPrincipals: parseAdminPrincipals(env.ADMIN_PRINCIPALS),
   };
 }

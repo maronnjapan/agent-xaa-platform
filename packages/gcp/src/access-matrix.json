@@ -22,7 +22,9 @@
       "ai_proposals/**",
       "work_definitions/**",
       "dpop_jti/**",
-      "permission_change_receipts/**"
+      "permission_change_receipts/**",
+      "capability_taxonomy/**",
+      "delegatable_permissions/**"
     ]
   },
   "provisioner": {
@@ -30,6 +32,7 @@
       "agent_definitions/**",
       "agents/**",
       "authorization_decisions/**",
+      "capability_taxonomy/**",
       "catalog_connectors/**",
       "catalog_tools/**",
       "dedicated_resources/**",
@@ -40,6 +43,7 @@
     "write": [
       "agents/**",
       "agents/*/baseline",
+      "catalog_tools/**",
       "dedicated_resources/**",
       "provisioning_codes/**",
       "provisioning_transactions/**"

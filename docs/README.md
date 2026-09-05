@@ -83,3 +83,4 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 - 2026-08-30：制約（単一 GCP Project、IaC 管理）に合わせて RULE-06 / 32 / 33 / 34 / 42 / 44 / 47 / 49 / 53 / 57 を見直し、うち8件を改訂した。改訂前の文面は `docs/rules.json` の `revised_from` に残る。
 - 2026-08-30：docs 08 と docs 09 を単一 GCP Project 構成へ書き換えた。監査ログの分離は Project ではなく BigQuery dataset と IAM で行い、`enable_deny_policy=false` のとき Owner による削除を防げないことを本文へ明記した。
 - 2026-08-30：docs の検査を CI 必須にした。`pnpm check:docs` は要件索引・逸脱・用語・リンク・旧プロジェクト名の5検査を連結し、図は `pnpm gen:diagrams` の再生成差分で検査する。
+- 2026-09-05：権限（Capability）の管理画面を Authorization Platform に、権限とリソースの対応付け画面を Agent Provisioner に追加した（[03. §2.1](./03-authorization.md#21-権限の管理画面)、[04. §5.1](./04-tool-catalog.md#51-権限とリソースのマッピング画面)）。どちらも Internet へは公開せず、`ADMIN_PRINCIPALS` に挙げた Google アカウントだけが `gcloud run services proxy` 経由で到達する。Capability が8件固定でなくなったため、Tool Manifest の検査と再評価ガードを id の形で行うよう改めた。

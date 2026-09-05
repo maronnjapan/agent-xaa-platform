@@ -14,6 +14,9 @@ export type { FakeModel };
 export const AUTHZ_ISSUER = 'https://human-idp.test';
 export const AUTHZ_BASE = 'https://authorization.test';
 
+/** The one account `ADMIN_PRINCIPALS` names in these specs. */
+export const ADMIN_PRINCIPAL = 'admin@example.test';
+
 export const testConfig: AuthorizationConfig = {
   port: 8080, issuer: AUTHZ_ISSUER, jwksUrl: 'https://storage.test/jwks.json',
   authzAudience: 'authorization-platform', authzPublicBaseUrl: AUTHZ_BASE,
@@ -23,6 +26,7 @@ export const testConfig: AuthorizationConfig = {
   dpopIatSkewSeconds: 60, dpopJtiTtlSeconds: 120,
   lifecycleManagerUrl: 'https://lifecycle.test', activityTopic: 'agent-activity-stream',
   taxonomyVersion: 'v1', agentMaxLifetimeSeconds: 86_400,
+  adminPrincipals: [ADMIN_PRINCIPAL],
 };
 
 export const DEFAULT_CHARACTERISTICS: Characteristics = {
@@ -42,6 +46,8 @@ export interface AuthzHarness {
   vertex: { calls: number };
   deps: AuthorizationDeps;
   fetch(path: string, init?: RequestInit): Promise<Response>;
+  /** The same request, carrying a token for whoever is named (the admin by default). */
+  asAdmin(path: string, init?: RequestInit & { principal?: string }): Promise<Response>;
 }
 
 export async function createAuthzHarness(options: {
@@ -76,12 +82,25 @@ export async function createAuthzHarness(options: {
       reprovisions.push(request);
       if (options.reprovisionFails) throw new Error('lifecycle unavailable');
     },
+    /**
+     * Stands in for Google's OIDC verification: the token is the account it was minted
+     * for, and a token minted for another service's URL resolves to nobody, so the
+     * audience check the real verifier makes is still the thing being exercised.
+     */
+    verifyAdmin: async (token, audience) => (audience === AUTHZ_BASE ? token : null),
   };
   const app = createApp(deps);
   return {
     documents, steps, logs, activity, reprovisions, vertex, deps,
     foreign: (app_) => createFirestoreDocumentStore(firestore, app_),
     fetch: (path, init) => app.fetch(new Request(new URL(path, AUTHZ_BASE), init)),
+    asAdmin: (path, init = {}) => {
+      const { principal = ADMIN_PRINCIPAL, ...request } = init;
+      return app.fetch(new Request(new URL(path, AUTHZ_BASE), {
+        ...request,
+        headers: { ...(request.headers as Record<string, string> | undefined), Authorization: `Bearer ${principal}` },
+      }));
+    },
   };
 }
 

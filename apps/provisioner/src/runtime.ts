@@ -4,6 +4,7 @@ import { PubSub } from '@google-cloud/pubsub';
 import { Storage } from '@google-cloud/storage';
 import { GoogleAuth } from 'google-auth-library';
 import { assertRuntimeName, publishActivityEvent } from '@xaa/contracts';
+import { parseAdminPrincipals } from '@xaa/control-plane-auth';
 import { createFirestoreDocumentStore, createIdentityTokenProvider, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
@@ -36,6 +37,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ProvisionerCon
     // Re-provisioning is asked for by Lifecycle and by nothing else. An unset variable
     // leaves the list empty, which refuses every caller rather than opening the route.
     internalCallers: (env.LIFECYCLE_SA_EMAIL ?? '').split(',').map((email) => email.trim()).filter(Boolean),
+    // Same shape and the same default as the Authorization Platform's console: a
+    // deployment that names nobody has a console nobody can reach.
+    adminPrincipals: parseAdminPrincipals(env.ADMIN_PRINCIPALS),
   };
 }
 

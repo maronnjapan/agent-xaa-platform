@@ -20,6 +20,8 @@ export interface ProvisionerConfig {
   dpopIatSkewSeconds: number;
   /** Service-account emails allowed on `/internal/*`; empty refuses every caller. */
   internalCallers: string[];
+  /** Accounts allowed on the mapping console; empty refuses every caller. */
+  adminPrincipals: string[];
 }
 
 export interface IdpConnectionResult {
@@ -38,6 +40,8 @@ export interface ProvisionerDeps {
   publishActivity?: (event: ActivityEvent) => Promise<void>;
   /** Verifies a Google-issued OIDC ID Token; injected so tests need no Google JWKS. */
   verifyInternalCaller?: (token: string, audience: string) => Promise<string | null>;
+  /** The same seam for the console, whose callers are people rather than services. */
+  verifyAdmin?: (token: string, audience: string) => Promise<string | null>;
   /** Agent OP owns the refresh token; the Provisioner only asks for a connection. */
   agentOp: {
     createIdpConnection(input: {

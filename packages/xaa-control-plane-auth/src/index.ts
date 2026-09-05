@@ -3,6 +3,7 @@ import { accessTokenMiddleware, type AccessTokenOptions } from './access-token.j
 import { dpopMiddleware, type DpopOptions } from './dpop.js';
 import { humanSubjectMiddleware, type HumanSubjectOptions } from './human-subject.js';
 export * from './access-token.js';
+export * from './admin-console.js';
 export * from './dpop.js';
 export * from './human-subject.js';
 export * from './protocol-validation.js';

@@ -310,8 +310,8 @@ Firestoreにドキュメント単位のIAMが無いための代替であり、[d
 | コレクション | 内容 | 読み書きするService Account |
 |---|---|---|
 | `authorization` | Human Permission、Delegatable Permission、Organization Policy、Risk Policy、Policy Decisionの記録 | `sa-authorization` |
-| `capability_taxonomy` | 定義済みCapabilityの一覧 | `sa-authorization`（読み取り）。seed（投入） |
-| `catalog/tools` と `catalog/connectors` | Tool / Connector Definition | `sa-provisioner`（読み取り）。seed（投入） |
+| `capability_taxonomy` と `delegatable_permissions` | 定義済みCapabilityの一覧と委譲可否 | `sa-authorization`（権限の管理画面から読み書き。[03. §2.1](./03-authorization.md#21-権限の管理画面)）。seed（投入） |
+| `catalog/tools` と `catalog/connectors` | Tool / Connector Definition | `sa-provisioner`（読み取りと、マッピング画面からの `required_capability` の書き換え。[04. §5.1](./04-tool-catalog.md#51-権限とリソースのマッピング画面)）。seed（投入） |
 | `agents` | Agent Registration、Work Definition、Agent Definition、Provisioning Transaction | `sa-automation-app`、`sa-provisioner`、`sa-lifecycle` |
 | `dedicated_resources` | FULL_ISOLATIONで実行時に作った資源の台帳 | `sa-provisioner`、`sa-lifecycle` |
 | `idp_connections` | Human IdP Connection。Agentごとの暗号化Refresh Token（[05. §4.1](./05-identity.md#41-human-idp-connection)） | `sa-shared-agent-op`、`sa-op-<short>` |
@@ -335,6 +335,8 @@ Agent単位、またはユーザー単位で高速に読み書きするものは
 Internetへ公開するのは、Automation App、Google BridgeのOAuth Callback、Agent OPのOAuth Callback（`/xaa/callback`）、およびissuerのメタデータとJWKSだけである。
 Consent後のリダイレクト先はいずれもAutomation Appとし、Automation AppがProvisionerのTransaction再開をServer-to-Serverで呼ぶ（[06. §5](./06-oauth-bridge.md#5-google-consent)、[07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow)）。
 それ以外のCloud Run ServiceはIngressを内部に限定し、Cloud Run IAMで呼び出し元のService Accountを絞る。
+Authorization PlatformとAgent Provisionerが持つ管理画面もこの内側にあり、管理者は `gcloud run services proxy` で開く。
+`run.invoker` を持っているだけでは足りず、画面はGoogleが署名したID Tokenの `email` を `ADMIN_PRINCIPALS` と突き合わせる。
 Agent RuntimeはCloud Run Jobであり、受信するHTTPエンドポイントを持たない。
 
 FirestoreへPrivate IPで接続するなど、VPC内へ出る必要がある場合はDirect VPC Egressを使う。

@@ -177,6 +177,7 @@
 | `APP_NAME` | T-IAC-08（共通 env に追加） | T-IAC-25 の `firestore-guard.ts` | `access-matrix.json` のキーと一致するアプリ名 |
 | `ENABLE_GOOGLE_BRIDGE` | T-IAC-26（seed Job） | T-IAC-26 の `apps/seed/src/index.ts` | `true` または `false` |
 | `ALLOWED_CALLER_SAS` | T-IAC-08 | T-LIFE-01 の `internal-oidc.ts` | 許可 SA email の CSV |
+| `ADMIN_PRINCIPALS` | T-IAC-08（`authorization` と `provisioner` の service_specific_env） | `apps/authorization/src/config.ts` と `apps/provisioner/src/runtime.ts` | 管理コンソールを操作できる Google アカウント email の CSV。未設定は空で、だれも操作できない |
 | `DPOP_IAT_SKEW_SECONDS` | T-IAC-08 | T-AUTHZ-01 | 既定 60 |
 | `DPOP_JTI_TTL_SECONDS` | T-IAC-08 | T-AUTHZ-01 / T-IDP-18 | 既定 120 |
 

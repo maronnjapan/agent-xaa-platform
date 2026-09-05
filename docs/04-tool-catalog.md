@@ -16,7 +16,7 @@ Authorization Platformが決めるのは `calendar.event.read` までであり�
 
 位置づけ：
 
-- アプリではなく定義データである。Firestoreの `catalog_tools` と `catalog_connectors` に保持し、プラットフォーム管理者が管理する。AIは編集しない。
+- アプリではなく定義データである。Firestoreの `catalog_tools` と `catalog_connectors` に保持し、プラットフォーム管理者が管理する（§5.1の画面）。AIは編集しない。
 - 読むのはAgent Provisioner（Provisioning時にAgentが使えるToolとXAA設定を確定する）と、Tool Executor（Provisionerから渡されたTool Manifestに従って実行する）である。
 - Agent OPやAuthorization Platformはこの情報を持たない。
 
@@ -117,6 +117,31 @@ Effective Capability          Allowed Tools
 - Agent Runtime：Tool Manifest（Allowed ToolsとそのAPI定義）
 
 Agent生成後にRegistryへ問い合わせて動的にToolやaudienceを決めることはしない。
+
+### 5.1 権限とリソースのマッピング画面
+
+CapabilityとToolの対応は、Agent Provisionerの画面から変える。
+この画面がAuthorization Platformではなく、ましてAutomation Appでもなくここにあるのは、Catalogを持つのがProvisionerだからである（RULE-16、RULE-07）。
+
+| 画面 | パス | 何をするか |
+|---|---|---|
+| マッピング一覧 | `GET /admin/mappings` | Connector（Resource）ごとにToolを並べ、それぞれが必要とするCapabilityを表示する。Capabilityから見た対応表と、対応するToolが1つも無いCapabilityの警告も出す |
+| マッピングの保存 | `POST /admin/mappings` | 送られたToolの `required_capability` を書き換える |
+
+変えられるのは `required_capability` だけである。
+URL、HTTP Method、scope、audienceは画面からもどこからも実行時に変えられない。
+任意のURLをToolに与えられる画面は、RULE-17が防いでいる「Agentに任意HTTPを許す」ことと同じになるためである。
+
+送信されたToolまたはCapabilityが存在しない場合、1件も書かずに全体を拒否する。
+Capabilityの存在はCapability Taxonomyで確かめる。
+Taxonomyに無いCapabilityへ向いたToolは、Policy Engineがそれを落とすため、どの決定からも到達できないResourceになるからである。
+
+変更が効くのは、これ以降にProvisioningされるAgentである。
+実行中のAgentはProvisioning時に確定したTool Manifestで動き続ける（RULE-19）。
+
+seedのJobは `catalog_tools` を一度空にしてからYAMLを書き直すため、画面での変更を残すなら `infra/seed/tools/` の該当ファイルにも同じ `required_capability` を入れる。
+
+到達できるのは `ADMIN_PRINCIPALS` に挙げたGoogleアカウントだけであり、Agent ProvisionerはInternetへ公開しないため（RULE-37）、管理者は `gcloud run services proxy` 経由で開く。
 
 ## 6. Tool Executor
 

@@ -1,17 +1,21 @@
 import { Hono } from 'hono';
-import { controlPlaneAuth, createProtocolValidationEmitter, type ControlPlaneVariables } from '@xaa/control-plane-auth';
+import {
+  adminConsoleAuth, controlPlaneAuth, createProtocolValidationEmitter,
+  type AdminConsoleVariables, type ControlPlaneVariables,
+} from '@xaa/control-plane-auth';
 import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
 import type { DocumentStore } from '@xaa/gcp';
 import { createLogger, type Logger } from '@xaa/logging';
 import type { AuthorizationConfig } from './config.js';
 import { createAuthorizationStore } from './store/authorization-store.js';
+import { createAdminPermissionRoutes } from './routes/admin-permissions.js';
 import { createDecisionRoute } from './routes/decisions.js';
 import { createPermissionChangedRoute } from './routes/permission-changed.js';
 import type { VertexClient } from './ai/authorization-ai.js';
 import type { DecideDeps, DecisionStep } from './pipeline/decide.js';
 import type { ReprovisionClient } from './reevaluate/reprovision-client.js';
 
-type Env = { Variables: ControlPlaneVariables };
+type Env = { Variables: ControlPlaneVariables & AdminConsoleVariables['Variables'] };
 
 export interface AuthorizationDeps {
   config: AuthorizationConfig;
@@ -25,15 +29,22 @@ export interface AuthorizationDeps {
   recordStep?: (step: DecisionStep) => void;
   /** Called when a permission change narrows what an agent may do (RULE-14). */
   requestReprovision?: ReprovisionClient;
+  /** Test seam: resolves an admin console bearer token to the account it names. */
+  verifyAdmin?(token: string, audience: string): Promise<string | null>;
 }
 
 /**
  * The Authorization Platform. It decides what an agent may do, and it is the only
  * service that does.
  *
- * The route surface is four entries and only one of them is a GET: exposing the
- * taxonomy or the tool catalogue over HTTP would put the material for deciding
- * permissions into Automation App's hands (RULE-07).
+ * The decision surface is four entries and only one of them is a GET: exposing the
+ * taxonomy or the tool catalogue there would put the material for deciding permissions
+ * into Automation App's hands (RULE-07).
+ *
+ * The permission console under `/admin` is the deliberate exception, and it is an
+ * exception to the reader rather than to the rule: it is reached with a Google-signed
+ * token for an account named in `ADMIN_PRINCIPALS`, which the Automation App's service
+ * account is not, so RULE-07 still holds for every caller it was written about.
  */
 function createApp(deps: AuthorizationDeps): Hono {
   const logger = deps.logger ?? createLogger('authorization', 'policy_engine');
@@ -77,6 +88,19 @@ function createApp(deps: AuthorizationDeps): Hono {
     app.use(path, protect);
     app.route(path, decisions);
   }
+
+  /**
+   * The permission screens (docs 03 §2). The taxonomy and the delegation table are
+   * this app's own data, so the app that decides with them is the app that edits them.
+   */
+  app.use('/admin/*', adminConsoleAuth({
+    audience: deps.config.authzPublicBaseUrl,
+    allowedPrincipals: deps.config.adminPrincipals,
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    ...(deps.verifyAdmin ? { verify: deps.verifyAdmin } : {}),
+    onRefusal: (reason) => logger.warning('admin.refused', logContext(), { reason }),
+  }));
+  app.route('/admin', createAdminPermissionRoutes({ documents: deps.documents, logger }));
 
   // Pub/Sub push is authenticated by the platform (run.invoker plus the pusher's OIDC
   // token), so the human-facing DPoP chain does not apply here.

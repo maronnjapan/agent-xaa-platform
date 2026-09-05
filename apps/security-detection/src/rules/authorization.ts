@@ -1,6 +1,6 @@
 import { CAPABILITY_TO_SCOPE, type Capability } from '@xaa/contracts';
 import type { NormalizedEvent } from '../normalize/index.js';
-import type { RuleContext } from './context.js';
+import type { AgentRegistrationView, RuleContext } from './context.js';
 import { asList, hitFromEvent, withAgent } from './hit.js';
 import { THRESHOLDS } from './thresholds.js';
 import type { RuleHit } from './types.js';
@@ -17,9 +17,13 @@ export const STATUS_ERRORS: readonly string[] = ['401', '403'];
  * registration does not list, is not ordinary at any count: the Runtime cannot have
  * derived either from anything it was given, so one is already the whole story.
  *
- * The scope check goes through `CAPABILITY_TO_SCOPE` (DEC-SCOPE-03) rather than a table
- * of its own. A second mapping would drift from the one the Provisioner used to build
- * the manifest, and a drifted mapping accuses agents of asking for what they were issued.
+ * The scope check reads the agent's own registration, which holds the scopes the
+ * Provisioner injected when it built the manifest, and falls back to
+ * `CAPABILITY_TO_SCOPE` (DEC-SCOPE-03) for an agent whose registration this service
+ * cannot read. Neither is a second mapping of its own: a table here would drift from
+ * the one the Provisioner used, and a drifted mapping accuses agents of asking for what
+ * they were issued — which is exactly what a static table does once an administrator
+ * maps a capability of their own to a resource.
  */
 export function detectAuthorizationHits(context: RuleContext): RuleHit[] {
   return [...statusErrorHits(context), ...requestShapeHits(context)];
@@ -57,7 +61,7 @@ function requestShapeHits(context: RuleContext): RuleHit[] {
     const registration = context.registrations.get(agentId);
 
     if (baseline) {
-      const granted = scopesFor(baseline.effective_capabilities);
+      const granted = grantedScopes(registration, baseline.effective_capabilities);
       const requested = asList(event.attributes.requested_scope);
       const outside = requested.filter((scope) => !granted.has(scope));
       if (outside.length > 0) {
@@ -98,6 +102,15 @@ function exactMatchHits(input: {
     ruleId: input.ruleId, category: 'authorization', level: 'MEDIUM', event: input.event,
     detail: { observed: outside, expected: [...input.expected] },
   })];
+}
+
+/**
+ * What the agent was actually issued, in order of authority: the registration first,
+ * because it is the configuration the Agent OP itself checks each request against.
+ */
+function grantedScopes(registration: AgentRegistrationView | undefined, capabilities: readonly string[]): Set<string> {
+  if (registration?.scopes && registration.scopes.length > 0) return new Set(registration.scopes);
+  return scopesFor(capabilities);
 }
 
 function scopesFor(capabilities: readonly string[]): Set<string> {

@@ -84,6 +84,8 @@ locals {
       ACTIVITY_TOPIC             = "agent-activity-stream"
       TAXONOMY_VERSION           = "v1"
       AGENT_MAX_LIFETIME_SECONDS = tostring(var.agent_max_lifetime_seconds)
+      # The permission console. Empty leaves it reachable by nobody.
+      ADMIN_PRINCIPALS = join(",", var.admin_principals)
     }
     "provisioner" = {
       ISSUER                          = local.platform_endpoints.issuer
@@ -100,6 +102,8 @@ locals {
       JWKS_BUCKET                     = local.jwks_bucket
       PROVISIONER_SA_EMAIL            = module.service_accounts["provisioner"].email
       AGENT_PLATFORM_CLIENT_SECRET_ID = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.agent_platform
+      # The capability-to-resource mapping console. Empty leaves it reachable by nobody.
+      ADMIN_PRINCIPALS = join(",", var.admin_principals)
       DEDICATED_RUNTIME_INVOKER_SERVICES = jsonencode(compact([
         "projects/${var.project_id}/locations/${var.region}/services/resource-docs-as",
         "projects/${var.project_id}/locations/${var.region}/services/resource-finance-as",

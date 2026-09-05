@@ -14,6 +14,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 
 | 名前 | 型 | 既定値 | 効果 |
 |---|---|---|---|
+| `admin_principals` | list(string) | `[]` | 管理コンソール（権限とマッピング）を操作できる Google アカウントを指定する。空はだれも操作できない |
 | `agent_max_lifetime_seconds` | number | `86400` | Agent の Job timeout と全期限の上限を決める |
 | `audit_views_enabled` | bool | `true` | 保存済み検知 View を作る。Log Sink の宛先テーブルがまだ無い初回 apply でだけ false にする |
 | `enable_deny_policy` | bool | `false` | 監査データ削除を拒否する IAM Deny Policy を有効にする |
@@ -135,6 +136,34 @@ GOOGLE_CLOUD_PROJECT=<id> STORE_MODE=gcp PUBSUB_MODE=gcp \
 
 Automation App と Human IdP は `allUsers` へ公開され、ログイン情報は固定である。
 検証が終わったら `make demo-destroy` で破棄する。
+
+### 権限を作り、リソースへ対応付ける
+
+権限（Capability）そのものを作る画面と、権限をリソースへ対応付ける画面は別のアプリにある。
+どちらも Internet へ公開しないため（RULE-37）、ローカルへ proxy して開く。
+
+```bash
+gcloud run services proxy authorization --project=<id> --region=<region> --port=8081
+# http://localhost:8081/admin/permissions で権限を作る、直す、消す
+
+gcloud run services proxy provisioner --project=<id> --region=<region> --port=8082
+# http://localhost:8082/admin/mappings で権限をリソースの操作へ対応付ける
+```
+
+proxy が付ける ID Token の `email` を、アプリは `ADMIN_PRINCIPALS` と突き合わせる。
+`admin_principals` を空のまま apply した場合、`run.invoker` を持っていても画面は 403 を返す。
+
+```hcl
+# infra/tfvars/<env>.tfvars
+admin_principals = ["you@example.com"]
+```
+
+`make seed`（と `deploy-gcp-guide.sh` の seed 手順）は `capability_taxonomy`、`delegatable_permissions`、`catalog_tools` を一度空にしてから YAML を書き直す。
+画面で作った権限や変えた対応付けを残したいなら、`infra/seed/` の YAML にも同じ内容を入れる。
+
+作った権限は、リソースへ対応付けるまで誰にも付与されない。
+Organization Policy が、どの Connector にも対応しない Capability を拒否するためである。
+対応付けたあと、その権限を人へ渡すのは上の `pnpm perm:set` である。
 
 実行内容だけを確認する場合は `--dry-run` を付ける。
 

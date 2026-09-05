@@ -68,9 +68,13 @@ export const testConfig: ProvisionerConfig = {
   activityTopic: 'agent-activity-stream',
   dpopIatSkewSeconds: 60,
   internalCallers: ['sa-lifecycle@xaa-test.iam.gserviceaccount.com'],
+  adminPrincipals: ['admin@example.test'],
 };
 
 export const LIFECYCLE_CALLER = 'sa-lifecycle@xaa-test.iam.gserviceaccount.com';
+
+/** The one account `ADMIN_PRINCIPALS` names in these specs. */
+export const ADMIN_PRINCIPAL = 'admin@example.test';
 
 export interface AdminCall { method: string; name: string }
 
@@ -118,6 +122,8 @@ export interface ProvisionerHarness {
   revokedConnections: string[];
   deps: ProvisionerAppDeps;
   fetch(path: string, init?: RequestInit): Promise<Response>;
+  /** The same request, carrying a token for whoever is named (the admin by default). */
+  asAdmin(path: string, init?: RequestInit & { principal?: string }): Promise<Response>;
 }
 
 export async function createProvisionerHarness(options: {
@@ -182,6 +188,12 @@ export async function createProvisionerHarness(options: {
     // not on the allow-list is refused, and that is the email, not the signature.
     verifyInternalCaller: options.verifyInternalCaller
       ?? (async (token) => (token === 'lifecycle-token' ? LIFECYCLE_CALLER : null)),
+    /**
+     * Stands in for Google's OIDC verification on the console: the token is the account
+     * it was minted for, and a token minted for another service's URL resolves to
+     * nobody, so the audience check the real verifier makes is still exercised.
+     */
+    verifyAdmin: async (token, audience) => (audience === PROVISIONER_BASE ? token : null),
     fetchImpl: (async () => Response.json({
       keys: [{ ...(options.idpPublicJwk ?? {}), kid: 'idp-testkey', alg: 'RS256', use: 'sig' }],
     })) as unknown as typeof fetch,
@@ -210,6 +222,13 @@ export async function createProvisionerHarness(options: {
   return {
     documents, seedStore, admin, jobRuns, activity, logs, revokedConnections, deps,
     fetch: async (path, init) => app.fetch(new Request(new URL(path, PROVISIONER_BASE), init)),
+    asAdmin: async (path, init = {}) => {
+      const { principal = ADMIN_PRINCIPAL, ...request } = init;
+      return app.fetch(new Request(new URL(path, PROVISIONER_BASE), {
+        ...request,
+        headers: { ...(request.headers as Record<string, string> | undefined), Authorization: `Bearer ${principal}` },
+      }));
+    },
   };
 }
 

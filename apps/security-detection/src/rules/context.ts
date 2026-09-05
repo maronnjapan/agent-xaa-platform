@@ -5,7 +5,7 @@ import type { ProtocolViolationRecord } from '../pipeline/types.js';
 /**
  * The part of an Agent Registration a rule compares an observation against.
  *
- * Only the three fields that decide a verdict are read, and they are read as they are
+ * Only the four fields that decide a verdict are read, and they are read as they are
  * stored in `agents/{agent_id}/meta` (00b §3). Copying the whole registration in here
  * would invite a rule to reason about a field nobody decided it should see.
  */
@@ -13,6 +13,8 @@ export interface AgentRegistrationView {
   idp_connection_id?: string | null;
   allowed_audiences?: readonly string[];
   resources?: readonly string[];
+  /** The static XAA config the Provisioner injected: audiences, resources, scopes. */
+  scopes?: readonly string[];
 }
 
 /**
