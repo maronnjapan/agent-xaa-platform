@@ -91,6 +91,35 @@ describe('Document API', () => {
     expect(Number.isFinite(Date.parse(document.occurred_at))).toBe(true);
   });
 
+  /**
+   * The whole of what an agent can do to an existing document, using only what the Tool
+   * Catalog declares and only what a read gives back. The version is the part that made
+   * this impossible: `internal.document.update` sends the optimistic lock the API
+   * insists on, and the only place an agent can read one is the document itself.
+   */
+  it('updates a document from the version its own read returned', async () => {
+    const { docs, accessToken, keyPair } = await writer();
+    const documentId = await seedDocument(docs, 'testuser', { title: 'original' });
+
+    const read = await callResource(docs, {
+      method: 'GET', path: `/documents/${documentId}`, accessToken, keyPair, toolId: 'internal.document.get',
+    });
+    const { version } = await read.json() as { version: number };
+    expect(version).toBe(1);
+
+    const patched = await callResource(docs, {
+      method: 'PATCH', path: `/documents/${documentId}`, accessToken, keyPair, toolId: 'internal.document.update',
+      body: { version, title: '改題', body: '書き直した本文' },
+    });
+    expect(patched.status).toBe(200);
+    expect((await patched.json() as { version: number }).version).toBe(2);
+
+    const after = await callResource(docs, { method: 'GET', path: `/documents/${documentId}`, accessToken, keyPair });
+    const document = await after.json() as { title: string; body: string };
+    expect(document.title).toBe('改題');
+    expect(document.body).toBe('書き直した本文');
+  });
+
   it('answers 409 on a stale version and leaves the record alone', async () => {
     const { docs, accessToken, keyPair } = await writer();
     const documentId = await seedDocument(docs, 'testuser', { title: 'original' });

@@ -510,7 +510,7 @@ RULE-15（Capability と Tool の分離）と RULE-16（接続先情報は Catal
 
 **実装方針**
 - Tool は `internal.document.list`（`document.read` / GET `/documents` / `docs.read`）、`internal.document.get`（`document.read` / GET `/documents/{document_id}` / `docs.read`）、`internal.document.create`（`document.write` / POST `/documents` / `docs.write`）、`internal.document.update`（`document.write` / PATCH `/documents/{document_id}` / `docs.write`）の4件。
-- `response_schema` の allowlist は list が `document_id, type, title, occurred_at`、get がそれに `body` を加えた5件、create が `document_id, type, title`、update が `document_id, version, updated_at`。
+- `response_schema` の allowlist は list が `document_id, type, title, occurred_at`、get がそれに `body` と `version` を加えた6件、create が `document_id, type, title`、update が `document_id, version, updated_at`（get の `version` は specs §5.1 の表に無いが、これを返さないと Agent は更新に必要な楽観ロックの値を知る手段が無く、`internal.document.update` がどう呼んでも 400 になる。値は整数のカウンタであり、`body` まで読める相手に隠す意味は無い）。
 - Connector は `internal-docs-api` の1件。`resource_type=native_xaa`、`risk_level=medium`、接続先は `platform_endpoints` の `resource_docs_api_url` を参照する。
 - Capability Taxonomy への `document.read` と `document.write` の登録は T-AUTHZ-06 が持つ。ここで重複登録しない。
 - 破棄した別名（`docs.document.get`、`docs.document.update`、`document.content.read`、`document.content.write`）を書かない。
@@ -519,7 +519,7 @@ RULE-15（Capability と Tool の分離）と RULE-16（接続先情報は Catal
 **完了条件**
 - [~] seed 実行後に `catalog/tools` へ `internal.document.list`、`internal.document.get`、`internal.document.create`、`internal.document.update` の4件が存在する（デプロイ後に `scripts/deploy-gcp-guide.sh` が観測する）
 - [x] `tests/unit/resource/tool-catalog-docs.test.ts` が破棄した別名の不在を assert する（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
-- [x] 各 Tool の `response_schema` の allowlist キー集合が specs §5.1 の表と一致することを assert する（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
+- [x] 各 Tool の `response_schema` の allowlist キー集合が specs §5.1 の表と一致することを assert する（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`。get だけは上の実装方針のとおり `version` を1件加えた集合で固定する）
 - [x] `catalog/connectors` の `internal-docs-api` が `resource_type=native_xaa` かつ `risk_level=medium` である（実体は `packages/xaa-contracts/test/tool-catalog.spec.ts`）
 
 ---
