@@ -21,8 +21,54 @@ export class ResourceAsError extends Error {
  * refusal on the wire and two different findings in the audit trail.
  */
 export class ClientBindingError extends IdJagError {
-  constructor(readonly validationName: 'replayed_dpop_proof' | 'dpop_key_binding_mismatch') {
+  constructor(
+    readonly validationName: 'replayed_dpop_proof' | 'dpop_key_binding_mismatch',
+    readonly observation: ClientBindingObservation,
+  ) {
     super('invalid_grant', 'The assertion is missing cnf.jkt');
+  }
+}
+
+/**
+ * What the confirmation binding compared, as public values.
+ *
+ * The wire answer stays one `invalid_grant` for every way possession can fail; this
+ * is the other half of that split. Without it a deployment whose two sides disagree
+ * about the token endpoint is indistinguishable, in the audit trail, from a stolen
+ * key — both read `dpop_key_binding_mismatch` and nothing else.
+ *
+ * Every member is safe to record: a JWK thumbprint is derived from a public key and
+ * an `htu` is a URL. The proof itself is still never logged (RULE-38).
+ */
+export interface ClientBindingObservation {
+  /** Which comparison refused. */
+  step: 'assertion_cnf' | 'dpop_header' | 'proof' | 'thumbprint';
+  /** `cnf.jkt` from the ID-JAG. */
+  expected_jkt: string | null;
+  /** The thumbprint of the key the proof carries. */
+  presented_jkt: string | null;
+  /** The token endpoint this AS builds from `ISSUER`. */
+  expected_htu: string;
+  /** The `htu` the caller signed into the proof. */
+  presented_htu: string | null;
+}
+
+/**
+ * The two values the binding compares, read from the proof without verifying it.
+ *
+ * A rejected proof still has to name what it claimed, or `proof` and `thumbprint`
+ * are the same line in the log. Nothing read here is trusted for a decision.
+ */
+async function inspectProof(proof: string | undefined): Promise<{ htu: string | null; jkt: string | null }> {
+  if (!proof) return { htu: null, jkt: null };
+  try {
+    const { header, payload } = decodeJwsUnverified(proof);
+    const jwk = (header as { jwk?: unknown }).jwk;
+    let jkt: string | null = null;
+    try { if (jwk && typeof jwk === 'object') jkt = await jwkThumbprint(jwk as Parameters<typeof jwkThumbprint>[0]); } catch { jkt = null; }
+    return { htu: typeof payload.htu === 'string' ? payload.htu : null, jkt };
+  } catch {
+    return { htu: null, jkt: null };
   }
 }
 
@@ -140,26 +186,33 @@ export async function bindClientByCnf(options: {
   now?: () => number;
 }): Promise<string> {
   const cnf = options.payload.cnf;
-  if (!cnf || typeof cnf !== 'object' || typeof (cnf as Record<string, unknown>).jkt !== 'string') {
-    throw new ClientBindingError('dpop_key_binding_mismatch');
-  }
-  if (!options.dpopHeader) throw new ClientBindingError('dpop_key_binding_mismatch');
+  const expected = cnf && typeof cnf === 'object' && typeof (cnf as Record<string, unknown>).jkt === 'string'
+    ? (cnf as Record<string, unknown>).jkt as string
+    : null;
+  const presented = await inspectProof(options.dpopHeader);
+  const observe = (step: ClientBindingObservation['step']): ClientBindingObservation => ({
+    step, expected_jkt: expected, presented_jkt: presented.jkt,
+    expected_htu: options.tokenEndpoint, presented_htu: presented.htu,
+  });
+
+  if (expected === null) throw new ClientBindingError('dpop_key_binding_mismatch', observe('assertion_cnf'));
+  if (!options.dpopHeader) throw new ClientBindingError('dpop_key_binding_mismatch', observe('dpop_header'));
   try {
     const verified = await verifyDpopProof(options.dpopHeader, {
       method: 'POST', url: options.tokenEndpoint, jtiStore: options.jtiStore,
       iatWindowSeconds: 60, ...(options.now ? { now: options.now } : {}),
     });
-    const expected = (cnf as Record<string, unknown>).jkt as string;
     if (await jwkThumbprint(verified.publicJwk) !== expected) {
-      throw new ClientBindingError('dpop_key_binding_mismatch');
+      throw new ClientBindingError('dpop_key_binding_mismatch', observe('thumbprint'));
     }
     return expected;
   } catch (error) {
     if (error instanceof IdJagError) throw error;
     // Any failure to establish possession of the bound key is one answer: a
     // malformed proof, a replayed jti and a mismatched thumbprint are all
-    // indistinguishable to the caller. Only the recorded validation_name differs.
+    // indistinguishable to the caller. Only the recorded validation_name and the
+    // observation above differ.
     const replayed = error instanceof XaaCryptoError && error.code === 'replayed_dpop_proof';
-    throw new ClientBindingError(replayed ? 'replayed_dpop_proof' : 'dpop_key_binding_mismatch');
+    throw new ClientBindingError(replayed ? 'replayed_dpop_proof' : 'dpop_key_binding_mismatch', observe('proof'));
   }
 }

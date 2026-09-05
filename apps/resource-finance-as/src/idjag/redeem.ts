@@ -6,7 +6,7 @@ import { IdJagError } from '@maronn-openid-connect/experimental/id-jag';
 import { TOOL_IDS } from '@xaa/contracts';
 import {
   ClientBindingError, inspectAssertion, logIdJagRedemption, redeemIdJag, ResourceAsError,
-  type IdJagRedemptionLog, type RedeemStep,
+  type ClientBindingObservation, type IdJagRedemptionLog, type RedeemStep,
 } from '@xaa/resource-guard';
 import type { Context } from 'hono';
 
@@ -54,6 +54,7 @@ export async function redeemHandler(context: Context, params: Record<string, str
   const entry: IdJagRedemptionLog = {
     ...inspected, scope: params.scope ?? null, cnf_jkt: null, dpop_binding_result: null, token_issue_result: false,
     authz_decision: 'deny:unknown', validation_name: null,
+    dpop_binding_step: null, expected_jkt: null, presented_jkt: null, expected_htu: null, presented_htu: null,
   };
   const logContext = { request_id: '', trace_id: context.req.header('X-Cloud-Trace-Context')?.split('/')[0] ?? '', agent_id: null, human_subject: null };
 
@@ -117,6 +118,15 @@ export async function redeemHandler(context: Context, params: Record<string, str
     entry.authz_decision = `deny:${mapped.body.error}`;
     entry.validation_name = mapped.validationName;
     if (mapped.body.error === 'invalid_grant') entry.dpop_binding_result = entry.dpop_binding_result ?? false;
+    // The caller is told nothing more than `invalid_grant`; the log is where the
+    // refusal says which of the four comparisons it was.
+    if (mapped.observation) {
+      entry.dpop_binding_step = mapped.observation.step;
+      entry.expected_jkt = mapped.observation.expected_jkt;
+      entry.presented_jkt = mapped.observation.presented_jkt;
+      entry.expected_htu = mapped.observation.expected_htu;
+      entry.presented_htu = mapped.observation.presented_htu;
+    }
     context.header('Cache-Control', 'no-store');
     context.header('Pragma', 'no-cache');
     return context.json(mapped.body, mapped.status);
@@ -138,7 +148,12 @@ function narrowConstraints(constraints: Record<string, unknown> | undefined): Re
   return entry && typeof entry === 'object' ? entry as Record<string, unknown> : undefined;
 }
 
-function toError(error: unknown): { status: 400 | 403; body: { error: string; error_description: string }; validationName: string } {
+function toError(error: unknown): {
+  status: 400 | 403;
+  body: { error: string; error_description: string };
+  validationName: string;
+  observation?: ClientBindingObservation;
+} {
   if (error instanceof ResourceAsError) {
     return { status: 403, body: { error: error.code, error_description: 'The agent is not sufficiently isolated' }, validationName: error.code };
   }
@@ -148,6 +163,7 @@ function toError(error: unknown): { status: 400 | 403; body: { error: string; er
       // A confirmation-binding failure names which PROTOCOL_VIOLATION code it was;
       // every other IdJagError is named by its own OAuth error code.
       validationName: error instanceof ClientBindingError ? error.validationName : error.code,
+      ...(error instanceof ClientBindingError ? { observation: error.observation } : {}),
     };
   }
   return { status: 400, body: { error: 'invalid_request', error_description: 'The request could not be processed' }, validationName: 'invalid_request' };

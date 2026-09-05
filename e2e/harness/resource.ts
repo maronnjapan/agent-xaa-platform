@@ -198,11 +198,18 @@ export async function redeemForAccessToken(harness: ResourceHarness, options: {
   scope?: string;
   omitProof?: boolean;
   proofKeyPair?: Es256KeyPair;
+  /**
+   * The URL the proof is bound to. Defaults to this AS's own token endpoint; a test
+   * passes a different one to stand in for a deployment whose `ISSUER` and whose
+   * catalogue audience have drifted apart.
+   */
+  proofUrl?: string;
 }): Promise<Response> {
   const headers: Record<string, string> = { 'content-type': 'application/x-www-form-urlencoded' };
   if (!options.omitProof) {
     headers.DPoP = await createDpopProof({
-      method: 'POST', url: `${harness.asIssuer}/token`, keyPair: options.proofKeyPair ?? options.keyPair,
+      method: 'POST', url: options.proofUrl ?? `${harness.asIssuer}/token`,
+      keyPair: options.proofKeyPair ?? options.keyPair,
     });
   }
   return harness.as('/token', {
