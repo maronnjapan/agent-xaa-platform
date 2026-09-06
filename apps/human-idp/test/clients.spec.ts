@@ -3,8 +3,9 @@ import { createClientRegistry } from '../src/config/clients.js';
 import { testEnv } from './helpers.js';
 
 describe('client registry', () => {
-  it('registers exactly automation-app and agent-platform', () => {
-    expect([...createClientRegistry(testEnv).keys()].sort()).toEqual(['agent-platform', 'automation-app']);
+  it('registers one client per screen and no other', () => {
+    expect([...createClientRegistry(testEnv).keys()].sort())
+      .toEqual(['agent-platform', 'analysis-console', 'automation-app']);
   });
 
   it('registry has no other agent-prefixed client', () => {
@@ -25,9 +26,16 @@ describe('client registry', () => {
     const registry = createClientRegistry(testEnv);
     expect(registry.get('automation-app')?.redirectUris).toEqual([testEnv.automationAppRedirectUri]);
     expect(registry.get('agent-platform')?.redirectUris).toEqual([testEnv.agentOpCallbackUri]);
+    expect(registry.get('analysis-console')?.redirectUris).toEqual([testEnv.analysisConsoleRedirectUri]);
   });
 
-  it('registers both clients for the refresh_token grant with client_secret_basic', () => {
+  it('rejects an http redirect uri for the console too, in gcp mode', () => {
+    expect(() => createClientRegistry({
+      ...testEnv, storeMode: 'gcp', analysisConsoleRedirectUri: 'http://localhost:4000/callback',
+    })).toThrow(/https/);
+  });
+
+  it('registers every client for the refresh_token grant with client_secret_basic', () => {
     for (const client of createClientRegistry(testEnv).values()) {
       expect(client.grantTypes).toEqual(['authorization_code', 'refresh_token']);
       expect(client.tokenEndpointAuthMethod).toBe('client_secret_basic');

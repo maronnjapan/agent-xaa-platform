@@ -59,8 +59,7 @@
       "agents/*/state",
       "agent_instructions/**",
       "user_activity/**",
-      "authorization_decisions/**",
-      "security_findings/**"
+      "authorization_decisions/**"
     ],
     "write": [
       "sessions/**",
@@ -69,6 +68,18 @@
       "agent_definitions/**",
       "agent_instructions/**",
       "user_activity/**"
+    ]
+  },
+  "analysis-console": {
+    "read": [
+      "console_sessions/**",
+      "console_login_transactions/**",
+      "security_findings/**",
+      "agents/*/meta"
+    ],
+    "write": [
+      "console_sessions/**",
+      "console_login_transactions/**"
     ]
   },
   "agent-op": {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDpopProof, decodeJwsUnverified, generateEs256KeyPair, InMemoryJtiStore, jwkThumbprint } from '@xaa/crypto';
 import { bindDpop, DpopBindingError } from '../src/auth/dpop-token-binding.js';
 import { blanketDpopApplies } from '../src/config/dpop-required-audiences.js';
-import { AGENT_PLATFORM_CLIENT_ID, AUTOMATION_APP_CLIENT_ID } from '../src/config/clients.js';
+import { AGENT_PLATFORM_CLIENT_ID, ANALYSIS_CONSOLE_CLIENT_ID, AUTOMATION_APP_CLIENT_ID } from '../src/config/clients.js';
 
 const ISSUER = 'https://human-idp.test';
 
@@ -67,6 +67,9 @@ describe('DPoP token binding at /token', () => {
   it('binds the blanket flag to Control Plane clients only', () => {
     expect(blanketDpopApplies(AUTOMATION_APP_CLIENT_ID)).toBe(true);
     expect(blanketDpopApplies(AGENT_PLATFORM_CLIENT_ID)).toBe(false);
+    // The console holds `openid profile` and reaches no Control Plane audience, so it
+    // is on the same side of this line as the Agent OP's back-channel client.
+    expect(blanketDpopApplies(ANALYSIS_CONSOLE_CLIENT_ID)).toBe(false);
     expect(blanketDpopApplies('unregistered')).toBe(false);
   });
 

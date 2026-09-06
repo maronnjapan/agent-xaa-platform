@@ -14,6 +14,13 @@ import type { Element } from './element.js';
  */
 export function Layout(props: {
   title: string;
+  /**
+   * The Analysis Console, which is a separate deployment with its own login. It is in
+   * the navigation because a person who has just had an agent quarantined has to be
+   * able to find out why, and it is an absolute URL because it is another service —
+   * this app holds its address and never calls it.
+   */
+  analysisConsoleUrl: string;
   styles?: readonly string[];
   script?: string;
   data?: PageData;
@@ -32,7 +39,7 @@ export function Layout(props: {
         <nav className="app-nav">
           <a href="/">自動化をつくる</a>
           <a href="/activity">タイムライン</a>
-          <a href="/security">分析エージェントの判断</a>
+          <a href={props.analysisConsoleUrl}>分析エージェントの判断</a>
           <a href="/guide">使い方</a>
         </nav>
         <div id={ROOT_ID}>{props.children}</div>
@@ -65,9 +72,21 @@ export function renderDocument(element: Element): string {
  * would hydrate onto markup that does not match, and React would throw the server's
  * work away.
  */
-export function renderPage(input: { title: string; styles: readonly string[]; script: string; data: PageData }): string {
+export function renderPage(input: {
+  title: string;
+  analysisConsoleUrl: string;
+  styles: readonly string[];
+  script: string;
+  data: PageData;
+}): string {
   return renderDocument(
-    <Layout title={input.title} styles={input.styles} script={input.script} data={input.data}>
+    <Layout
+      title={input.title}
+      analysisConsoleUrl={input.analysisConsoleUrl}
+      styles={input.styles}
+      script={input.script}
+      data={input.data}
+    >
       <PageRoot data={input.data} />
     </Layout>,
   );

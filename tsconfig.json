@@ -38,6 +38,9 @@
       "path": "apps/automation-app"
     },
     {
+      "path": "apps/analysis-console"
+    },
+    {
       "path": "apps/authorization"
     },
     {

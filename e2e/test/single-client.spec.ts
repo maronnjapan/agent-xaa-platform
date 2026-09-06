@@ -103,7 +103,8 @@ describe('three agents, one registered client', () => {
       docsAs: await createAsClientResolver().findClient(PLATFORM_CLIENT_ID),
     };
     expect(after.humanIdp).toEqual(before.humanIdp);
-    expect(after.humanIdp).toEqual(['agent-platform', 'automation-app']);
+    // One client per screen a person logs in to, and none per agent.
+    expect(after.humanIdp).toEqual(['agent-platform', 'analysis-console', 'automation-app']);
     expect(after.docsAs).toEqual(before.docsAs);
 
     // And none of the three agents became a client of any of them.

@@ -2,7 +2,6 @@ import type {
   SecurityAnalysisSource, SecurityFindingType, SecurityFindingView,
   SecurityResponseState, SecurityReviewStatus, SecurityRiskLevel,
 } from '@xaa/contracts';
-import { LocalTime } from './local-time.js';
 import type { Element } from '../element.js';
 
 /**
@@ -62,6 +61,17 @@ function percent(confidence: number): string {
   return `${Math.round(confidence * 100)}%`;
 }
 
+/**
+ * The recorded instant, served as it was recorded.
+ *
+ * The `datetime` attribute is the record and never changes. The layout's inline script
+ * re-states the text in the reader's own zone once the browser has the page; with no
+ * script the reader keeps the UTC instant, which is still correct.
+ */
+function Instant(props: { at: string; className?: string }): Element {
+  return <time className={props.className} dateTime={props.at} title={props.at}>{props.at}</time>;
+}
+
 export function FindingCard(props: { finding: SecurityFindingView }): Element {
   const finding = props.finding;
   const analysis = finding.analysis;
@@ -78,15 +88,15 @@ export function FindingCard(props: { finding: SecurityFindingView }): Element {
         </span>
         <span data-field="finding_type">{FINDING_TYPES[finding.finding_type]}</span>
         <span data-field="risk_score">{finding.risk_score === null ? '—' : `スコア ${finding.risk_score}`}</span>
-        <LocalTime at={finding.detected_at} className="finding-at" />
+        <Instant at={finding.detected_at} className="finding-at" />
       </p>
 
       <dl className="finding-facts">
         <dt>見ていた区間</dt>
         <dd data-field="window">
-          <LocalTime at={finding.window_start} />
+          <Instant at={finding.window_start} />
           〜
-          <LocalTime at={finding.window_end} />
+          <Instant at={finding.window_end} />
         </dd>
         <dt>反応したルール</dt>
         <dd data-field="contributing_codes">

@@ -332,7 +332,17 @@ Agent単位、またはユーザー単位で高速に読み書きするものは
 
 ## 8. ネットワークと公開範囲
 
-Internetへ公開するのは、Automation App、Google BridgeのOAuth Callback、Agent OPのOAuth Callback（`/xaa/callback`）、およびissuerのメタデータとJWKSだけである。
+Internetへ公開するのは、人がログインして開く2つの画面（Automation App、Analysis Console）、Google BridgeのOAuth Callback、Agent OPのOAuth Callback（`/xaa/callback`）、およびissuerのメタデータとJWKSだけである。
+
+Analysis Consoleは、Security Detectionが下した判断を本人へ見せる画面である（[09. §7](./09-security-monitoring.md#7-判断を本人へ見せる)）。
+Automation Appの中の1画面ではなく別のデプロイ単位とし、Human IdPのclientも別に持つ。
+理由は2つある。
+1つは、判断を見る画面が、Agentを作る・止めるという操作の権限を一切必要としないことである。別アプリにすれば、そのSession は Control Plane の Access Token を1つも持たない。
+もう1つは、この画面が将来、運用者が全ユーザーのFindingを横断で見る画面になりうることである（[11. §8](./11-activity-timeline.md#8-今後の検討事項)）。その権限モデルは自分の分だけを見る画面のものと別であり、境界をアプリの外に置いておくほうが後から足しやすい。
+
+Analysis Consoleはどのサービスも呼ばない。
+Firestoreの `security_findings` と `agents/{agent_id}/meta` を[アクセス行列](../packages/gcp/src/access-matrix.json)の読み取り専用として読む。
+Security Detectionへ向かうinvokerエッジを作らないのは、T-SEC-08が検知を一方向の経路と決めているためである（[09. §4](./09-security-monitoring.md#4-正規化と保存)）。
 Consent後のリダイレクト先はいずれもAutomation Appとし、Automation AppがProvisionerのTransaction再開をServer-to-Serverで呼ぶ（[06. §5](./06-oauth-bridge.md#5-google-consent)、[07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow)）。
 それ以外のCloud Run ServiceはIngressを内部に限定し、Cloud Run IAMで呼び出し元のService Accountを絞る。
 Authorization PlatformとAgent Provisionerが持つ管理画面もこの内側にあり、管理者は `gcloud run services proxy` で開く。

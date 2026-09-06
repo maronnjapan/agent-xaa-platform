@@ -11,6 +11,7 @@ import type { Fetcher } from './oauth-flow.js';
 export const HUMAN_IDP_ISSUER = 'https://human-idp.test';
 export const AUTOMATION_REDIRECT_URI = 'https://automation-app.test/callback';
 export const AGENT_OP_CALLBACK_URI = 'https://agent-op-callback.test/xaa/callback';
+export const ANALYSIS_CONSOLE_REDIRECT_URI = 'https://analysis-console.test/callback';
 
 export const humanIdpEnv: HumanIdpEnv = {
   port: 8080,
@@ -30,8 +31,10 @@ export const humanIdpEnv: HumanIdpEnv = {
   dpopRequired: true,
   clientSecretAutomationApp: 'automation-secret',
   clientSecretAgentPlatform: 'agent-platform-secret',
+  clientSecretAnalysisConsole: 'analysis-console-secret',
   automationAppRedirectUri: AUTOMATION_REDIRECT_URI,
   agentOpCallbackUri: AGENT_OP_CALLBACK_URI,
+  analysisConsoleRedirectUri: ANALYSIS_CONSOLE_REDIRECT_URI,
   accessTokenExpiresIn: 3600,
 };
 

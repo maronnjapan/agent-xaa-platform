@@ -111,6 +111,49 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@22.18.1)(esbuild@0.27.7)(yaml@2.9.0))
 
+  apps/analysis-console:
+    dependencies:
+      '@hono/node-server':
+        specifier: 2.1.1
+        version: 2.1.1(hono@4.13.5)
+      '@xaa/contracts':
+        specifier: workspace:*
+        version: link:../../packages/xaa-contracts
+      '@xaa/crypto':
+        specifier: workspace:*
+        version: link:../../packages/xaa-crypto
+      '@xaa/gcp':
+        specifier: workspace:*
+        version: link:../../packages/gcp
+      '@xaa/logging':
+        specifier: workspace:*
+        version: link:../../packages/xaa-logging
+      hono:
+        specifier: 4.13.5
+        version: 4.13.5
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.1
+        version: 22.18.1
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 19.2.7
+        version: 19.2.7(@types/react@19.2.18)
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@22.18.1)(esbuild@0.27.7)(yaml@2.9.0))
+
   apps/authorization:
     dependencies:
       '@google-cloud/pubsub':

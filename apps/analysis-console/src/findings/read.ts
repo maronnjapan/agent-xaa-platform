@@ -7,10 +7,11 @@ import type { DocumentStore } from '@xaa/gcp';
  * Read out of the detector's own collection rather than asked for over HTTP, and that is
  * not a shortcut: T-SEC-08 makes the detector a one-way feed — applications log, it
  * reads, and nothing calls back, which `infra/tests/security-detection-inbound.sh`
- * enforces by refusing any invoker edge into it. A screen that had to reach it
- * synchronously would also be a screen that goes blank whenever it is redeploying. The
- * access matrix is the sanctioned way for one app to read another's rows (DEV-05), and
- * `security_findings/**` is now on this app's read list and on neither write list.
+ * enforces by refusing any invoker edge into it. A console that had to reach it
+ * synchronously would also be a console that goes blank whenever the detector is
+ * redeploying. The access matrix is the sanctioned way for one app to read another's
+ * rows (DEV-05), and `security_findings/**` is on this app's read list and on no write
+ * list anywhere in it.
  *
  * This app holds no opinion about any of it. It does not score, it does not judge, and
  * it writes no sentence about what it read: every readable string in a finding was
@@ -26,7 +27,7 @@ import type { DocumentStore } from '@xaa/gcp';
  * and `deviations`, which carry a `trace_id` each. Both are how the detector reaches
  * back into the audit trail, and neither belongs in a browser (RULE-38). Naming the
  * sixteen fields means a document that grows a seventeenth is invisible here until
- * somebody adds it deliberately, which is the same discipline `readAgentStatus` follows.
+ * somebody adds it deliberately.
  */
 export async function readFindingsFor(input: {
   documents: DocumentStore;
@@ -113,4 +114,34 @@ function isAnalysis(value: unknown): value is StoredAnalysis {
   const candidate = value as Record<string, unknown>;
   return ['deviation', 'judgement', 'impact']
     .every((aspect) => typeof candidate[aspect] === 'object' && candidate[aspect] !== null);
+}
+
+/**
+ * The agent's own state, for the heading each group of findings sits under.
+ *
+ * A judgement is easier to read next to what became of the agent: 「隔離」 beside a
+ * CRITICAL finding says the response was taken, and 「実行中」 beside one says it has
+ * not been. The registration is read by id — the ids come from the findings, which this
+ * app has already narrowed to the session's subject — and the state is compared with
+ * that subject again before it is used. A registration for somebody else's agent means
+ * the detector and the Provisioner disagree about who owns it, and the honest answer
+ * then is to show no state rather than the wrong one.
+ *
+ * An agent whose registration is gone is not an error: an agent that expired or was
+ * destroyed takes its `meta` with it, while its findings stay. Those get no state.
+ */
+export async function readAgentStates(input: {
+  documents: DocumentStore;
+  agentIds: readonly string[];
+  humanSubject: string;
+}): Promise<ReadonlyMap<string, string>> {
+  const states = new Map<string, string>();
+  for (const agentId of input.agentIds) {
+    const meta = await input.documents
+      .get<{ human_subject?: string; status?: string }>('agents', `${agentId}__meta`)
+      .catch(() => undefined);
+    if (!meta || meta.human_subject !== input.humanSubject) continue;
+    if (typeof meta.status === 'string') states.set(agentId, meta.status);
+  }
+  return states;
 }

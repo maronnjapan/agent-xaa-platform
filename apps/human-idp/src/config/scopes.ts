@@ -23,6 +23,11 @@ export type OperationScope = (typeof OPERATION_SCOPES)[number];
 export const CLIENT_ALLOWED_SCOPES: Readonly<Record<string, readonly SupportedScope[]>> = {
   'automation-app': ['openid', 'profile', 'workdef:submit', 'agent:provision', 'agent:revoke', 'agent:operate'],
   'agent-platform': ['openid', 'offline_access'],
+  // A name and nothing else. The console reads its own Firestore rows as itself and
+  // calls no Control Plane API, so an operation scope here would be a permission it
+  // has no use for — and would pull the blanket DPoP requirement in with it
+  // (`blanketDpopApplies` is read off this table).
+  'analysis-console': ['openid', 'profile'],
 };
 
 export const UNREGISTERED_SCOPE_DESCRIPTION = 'Requested scope is not registered for this client';

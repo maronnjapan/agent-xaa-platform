@@ -31,6 +31,13 @@ resource "google_secret_manager_secret_iam_member" "automation_client" {
   member    = module.service_accounts["automation_app"].member
 }
 
+resource "google_secret_manager_secret_iam_member" "analysis_console_client" {
+  project   = var.project_id
+  secret_id = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.analysis_console
+  role      = "roles/secretmanager.secretAccessor"
+  member    = module.service_accounts["analysis_console"].member
+}
+
 resource "google_secret_manager_secret_iam_member" "agent_op_client" {
   project   = var.project_id
   secret_id = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.agent_platform

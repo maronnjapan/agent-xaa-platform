@@ -31,7 +31,7 @@ GOOGLE_CLOUD_PROJECT=<project-id> STORE_MODE=gcp PUBSUB_MODE=gcp \
 | 5 | `/` | 「この内容で Agent を作る」 | Agent が作られ、動き出す |
 | 6 | `/agents/{agent_id}` | 「指示を追加する」「この Agent を止める」 | 実行中の Agent への追加指示と停止 |
 | 7 | `/activity` | Task をクリック | 終わった処理の再生 |
-| 8 | `/security` | 読むだけ | ログを分析するエージェントが自分の Agent をどう見ているか |
+| 8 | Analysis Console | 読むだけ | ログを分析するエージェントが自分の Agent をどう見ているか |
 
 段階1から5までは、ログイン後に開く1枚の画面（`/`）の中で上から下へ進む。
 
@@ -164,7 +164,14 @@ Agent の状態は変わらず、Security Detection にも何も届かない。
 
 Agent が動いている間、ログを分析するエージェントがその挙動を見ている。
 異常と判断すれば Agent は隔離され、判断が曖昧なときは人の確認へ回る（[09. §6](./09-security-monitoring.md#6-response)）。
-`/security` は、その分析が下した判断を Agent ごとに並べる画面である。
+その判断を読む画面は **Analysis Console** で、Automation App とは別のサイトである。
+Automation App の上部にある「分析エージェントの判断」から開ける。
+
+別サイトなので、初回は同じユーザー名とパスワードでもう一度ログインする。
+このログインで得られるのは名前だけで、Agent を作る・止めるといった権限は一切付かない（[09. §7.1](./09-security-monitoring.md#71-analysis-console)）。
+
+Agent ごとにまとまり、そのAgentが今どの状態か（`ACTIVE`、`QUARANTINED` など）が見出しの下に出る。
+Agent 名を押すと Automation App の Agent 画面へ戻る。
 
 1件ごとに次が出る。
 
@@ -183,6 +190,10 @@ Agent が動いている間、ログを分析するエージェントがその�
 承認・却下・停止のボタンは無く、Agent を止めるのは §6 の Agent 画面である。
 表示するのは自分の Agent だけで、他の利用者の Agent は出ない。
 
+分析エージェントが何も記録していない Agent は並ばない。
+この画面は Agent の一覧ではなく、判断の一覧だからである。
+Agent の一覧は Automation App にある。
+
 ## 9. うまくいかないとき
 
 | 症状 | 原因 | すること |
@@ -193,7 +204,8 @@ Agent が動いている間、ログを分析するエージェントがその�
 | Agent の使った Tool が `unknown` `failed` `invalid_tool_call` ばかり | 古い版で Agent が Tool を選べなかった | 最新の版を配備し直す（`scripts/deploy-gcp-guide.sh all`） |
 | 「この Agent を止める」が `invalid_token` になる | 古い版で停止要求の鍵の取得先が違った。またはログインから1時間が過ぎた | 最新の版を配備し直し、ログインし直す |
 | タイムラインに何も出ない | 終わった Task が無い | Agent の画面の状況確認で今の状態を見る |
-| `/security` にどの Agent も出ない | まだ Agent を作っていない | §4 から作業を書いて Agent を作る |
+| Analysis Console に何も出ない | まだ Agent が無いか、分析エージェントが何も記録していない | 何も記録が無いのは正常な状態である |
+| Analysis Console でログインを求められる | Automation App とは別のサイトで、Session も別である | 同じユーザー名とパスワードでログインする |
 | 画面がログイン画面へ戻る | セッションが切れた | もう一度ログインする |
 
 ## 10. 片付ける

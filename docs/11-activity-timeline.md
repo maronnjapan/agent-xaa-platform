@@ -290,7 +290,7 @@ lifecycle      Agentの終了                                     成功   10:05
 
 ## 7. アクセス制御
 
-- タイムラインの参照範囲はAccess Tokenの`sub`と一致する`human_subject`に限る（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)と同じ考え方）。[09. §7.1](./09-security-monitoring.md#71-画面)の画面も同じ範囲に閉じる。
+- タイムラインの参照範囲はAccess Tokenの`sub`と一致する`human_subject`に限る（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)と同じ考え方）。[09. §7.1](./09-security-monitoring.md#71-analysis-console)も同じ範囲に閉じる。
 - ブラウザはFirestoreへ直接アクセスしない。取得はAutomation Appの認証済みセッションを介してのみ行う（[§4](#4-配信経路)）。
 - [§6.2](#62-台本で補う)の台本再生も操作者自身のセッション範囲に閉じる。他ユーザーのタイムラインへ`is_simulated`イベントを注入することはできない。
 

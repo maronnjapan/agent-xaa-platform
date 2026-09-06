@@ -1,7 +1,6 @@
 import type { AgentStatusResponse } from '../agents/status.js';
 import type { TimelineTask } from '../activity/query.js';
 import type { HomeAgent, HomeWorkItem } from './pages/home.js';
-import type { AgentAnalysis } from './pages/security.js';
 
 /**
  * Everything a screen was rendered from, in one serialisable value.
@@ -20,7 +19,6 @@ export type PageData =
   | { page: 'home'; defaultMinutes: number; items: HomeWorkItem[]; agents: HomeAgent[]; defaultFrom: string; defaultTo: string }
   | { page: 'timeline'; tasks: TimelineTask[] }
   | { page: 'agent-detail'; agentId: string; status: AgentStatusResponse }
-  | { page: 'security'; agents: AgentAnalysis[] }
   | { page: 'work-definition-new'; defaultMinutes: number }
   | { page: 'guide' };
 

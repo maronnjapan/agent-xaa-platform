@@ -5,6 +5,8 @@
 export const ALLOWED_TARGETS: Readonly<Record<string, readonly string[]>> = {
   'automation-app': ['authorization-platform', 'agent-provisioner', 'lifecycle-manager', 'automation-app'],
   'agent-platform': [],
+  // It asks for no audience, so naming one is refused rather than ignored.
+  'analysis-console': [],
 };
 
 export const INVALID_TARGET_DESCRIPTION = 'The requested audience is not allowed for this client';

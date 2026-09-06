@@ -877,6 +877,7 @@ provision_secret_values() {
   phase 'アプリの Secret version を用意します。'
   add_generated_secret_version human-idp-automation-client-secret
   add_generated_secret_version human-idp-agent-platform-client-secret
+  add_generated_secret_version human-idp-analysis-console-client-secret
   if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
     if [[ "$SAAS_CONNECTOR_MODE" == google ]]; then
       add_google_oauth_secret_version
@@ -910,7 +911,7 @@ apply_demo() {
 
 wait_for_services() {
   phase 'Cloud Run Service の Ready 状態を待ちます。'
-  local -a services=(human-idp automation-app authorization provisioner lifecycle shared-agent-op agent-op-callback security-detection resource-finance-as resource-finance-api resource-docs-as resource-docs-api)
+  local -a services=(human-idp automation-app analysis-console authorization provisioner lifecycle shared-agent-op agent-op-callback security-detection resource-finance-as resource-finance-api resource-docs-as resource-docs-api)
   if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
     services+=(google-bridge google-bridge-callback)
     [[ "$SAAS_CONNECTOR_MODE" != stub ]] || services+=(stub-saas-op stub-saas-api)
@@ -1072,11 +1073,12 @@ grant_demo_permissions() {
 
 print_next_steps() {
   phase 'デプロイ後の使い方を表示します。'
-  local automation_app_url issuer_url
+  local automation_app_url issuer_url analysis_console_url
   if ((dry_run)); then
     print_command "${tf_command[@]}" -chdir=infra/envs/demo output -json service_urls
     automation_app_url="https://automation-app-<project-number>.$REGION.run.app"
     issuer_url="https://human-idp-<project-number>.$REGION.run.app"
+    analysis_console_url="https://analysis-console-<project-number>.$REGION.run.app"
   else
     # 案内の表示で全体を落とさない。output が読めなければ既定のホスト名の形を見せる。
     local urls
@@ -1085,6 +1087,8 @@ print_next_steps() {
       '."automation-app" // $fallback' <<<"$urls")
     issuer_url=$(jq -r --arg fallback "https://human-idp-<project-number>.$REGION.run.app" \
       '."human-idp" // $fallback' <<<"$urls")
+    analysis_console_url=$(jq -r --arg fallback "https://analysis-console-<project-number>.$REGION.run.app" \
+      '."analysis-console" // $fallback' <<<"$urls")
   fi
 
   local -a bridge_lines=()
@@ -1118,6 +1122,10 @@ print_next_steps() {
     '  4. 「必要な権限を調べる」で提示された Agent Definition を承認し、「この内容で Agent を作る」を押す。' \
     '  5. 実行の様子は同じ画面の「タイムライン」で追えます。' \
     '' \
+    "  Agent の挙動を見ているログ分析エージェントの判断: $analysis_console_url" \
+    '    別のサイトなので、初回はもう一度同じ ID とパスワードでログインします。' \
+    '    読むだけの画面です。Agent を止めるのは Automation App 側です。' \
+    '' \
     "  画面ごとの操作:  $automation_app_url/guide" \
     '                  docs/user-guide.md に同じ内容と、うまくいかないときの対処があります。' \
     '' \
@@ -1131,7 +1139,7 @@ print_next_steps() {
     '  破棄:' \
     "    PROJECT_ID=$PROJECT_ID REGION=$REGION DEMO_TFVARS=$DEMO_TFVARS TF='${tf_command[*]}' make demo-destroy"
 
-  warn 'Automation App と Human IdP はインターネットへ公開され、ログイン情報は固定です。検証が終わったら demo-destroy してください。'
+  warn 'Automation App、Analysis Console と Human IdP はインターネットへ公開され、ログイン情報は固定です。検証が終わったら demo-destroy してください。'
 }
 
 prepare_verify_impersonation() {

@@ -29,9 +29,9 @@ without_comments() {
   sed -E 's:^[[:space:]]*(#|//).*$::' "$1"
 }
 
-expected=(automation-app human-idp agent-op-callback google-bridge-callback stub-saas-op)
+expected=(automation-app analysis-console human-idp agent-op-callback google-bridge-callback stub-saas-op)
 
-# 1. `public_services` names exactly the five services that may face the internet.
+# 1. `public_services` names exactly the six services that may face the internet.
 block=$(sed -n '/public_services = setunion(/,/^  )/p' "$locals_file")
 [[ -n "$block" ]] || { echo 'public-surface: locals.public_services is missing' >&2; exit 1; }
 # Only the service names inside `toset([...])` are members of the set; the bare strings

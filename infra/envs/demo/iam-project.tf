@@ -6,7 +6,7 @@ locals {
   # confirmation binding, which surfaced as `dpop_key_binding_mismatch` on a proof that
   # was perfectly valid. `security` was missing for the same reason.
   datastore_users = toset([
-    "human_idp", "automation_app", "authorization", "provisioner", "lifecycle",
+    "human_idp", "automation_app", "analysis_console", "authorization", "provisioner", "lifecycle",
     "shared_agent_op", "resource_docs_as", "resource_docs_api", "resource_finance_as",
     "resource_finance_api", "agent_runtime", "google_bridge", "security", "seed",
     "stub_saas_op",

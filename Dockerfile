@@ -6,12 +6,12 @@ COPY packages ./packages
 COPY apps ./apps
 RUN pnpm install --frozen-lockfile
 
-# One `pnpm build` compiles every workspace project, so all 17 images can share a single
+# One `pnpm build` compiles every workspace project, so all 18 images can share a single
 # run of it — but only while nothing in this stage reads $APP. BuildKit folds the value of
 # every build argument a command references into that command's cache key, so the earlier
 # `test -n "$APP" && pnpm build` gave each app its own key and recompiled the whole
 # workspace once per image. The guard now lives in the stage below, where $APP is
-# unavoidable anyway, and this stage is a cache hit for images 2 through 17.
+# unavoidable anyway, and this stage is a cache hit for images 2 through 18.
 FROM deps AS build
 # security-detection imports security-rules/*.json, so tsc needs the directory present.
 # It is copied after the install because editing a rule must not make pnpm resolve

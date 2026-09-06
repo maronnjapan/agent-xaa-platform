@@ -225,7 +225,7 @@ describe('the app shell', () => {
     expect(await response.json()).toEqual({ status: 'ok', app: 'automation-app' });
   });
 
-  it('loads exactly the fourteen documented variables', () => {
+  it('loads exactly the fifteen documented variables', () => {
     const loaded = loadConfig({
       ISSUER: config.issuer,
       CLIENT_SECRET_AUTOMATION_APP: config.clientSecret,
@@ -234,10 +234,11 @@ describe('the app shell', () => {
       AGENT_PROVISIONER_URL: config.agentProvisionerUrl,
       LIFECYCLE_MANAGER_URL: config.lifecycleManagerUrl,
       DOCS_API_URL: config.docsApiUrl,
+      ANALYSIS_CONSOLE_URL: config.analysisConsoleUrl,
       ACTIVITY_TOPIC: config.activityTopic,
       VERTEX_MODEL: config.vertexModel,
     });
-    expect(Object.keys(loaded)).toHaveLength(14);
+    expect(Object.keys(loaded)).toHaveLength(15);
     expect(loaded.clientId).toBe('automation-app');
     expect(loaded.defaultAgentLifetimeMinutes).toBe(60);
     expect(() => loadConfig({})).toThrow(/ISSUER is required/);

@@ -28,8 +28,9 @@ locals {
       # shorter than the session is a session that stops working while it is still
       # valid: the stop button, five minutes after logging in, answered `invalid_token`.
       ACCESS_TOKEN_EXPIRES_IN     = "3600"
-      AUTOMATION_APP_REDIRECT_URI = "${local.run_url["automation-app"]}/callback"
-      AGENT_OP_CALLBACK_URI       = "${local.run_url["agent-op-callback"]}/xaa/callback"
+      AUTOMATION_APP_REDIRECT_URI   = "${local.run_url["automation-app"]}/callback"
+      AGENT_OP_CALLBACK_URI         = "${local.run_url["agent-op-callback"]}/xaa/callback"
+      ANALYSIS_CONSOLE_REDIRECT_URI = "${local.run_url["analysis-console"]}/callback"
     }
     "shared-agent-op" = {
       MODE                       = "token"
@@ -76,8 +77,18 @@ locals {
       AGENT_PROVISIONER_URL      = local.run_url["provisioner"]
       LIFECYCLE_MANAGER_URL      = local.run_url["lifecycle"]
       DOCS_API_URL               = local.resource_servers.docs.resource
+      ANALYSIS_CONSOLE_URL       = local.run_url["analysis-console"]
       ACTIVITY_TOPIC             = "agent-activity-stream"
       AGENT_MAX_LIFETIME_SECONDS = tostring(var.agent_max_lifetime_seconds)
+    }
+    # The screen that shows what Security Detection decided. Four variables and no
+    # more: it calls no other service, so there is no URL here to call one with. What
+    # it reads, it reads from Firestore under the access matrix, because T-SEC-08
+    # forbids any application from invoking the detector.
+    "analysis-console" = {
+      ISSUER             = local.platform_endpoints.issuer
+      PUBLIC_BASE_URL    = local.run_url["analysis-console"]
+      AUTOMATION_APP_URL = local.run_url["automation-app"]
     }
     "authorization" = {
       ISSUER                     = local.platform_endpoints.issuer
@@ -288,10 +299,20 @@ locals {
             secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.agent_platform
             version = "latest"
           }
+          CLIENT_SECRET_ANALYSIS_CONSOLE = {
+            secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.analysis_console
+            version = "latest"
+          }
         } : {},
         name == "automation-app" ? {
           CLIENT_SECRET_AUTOMATION_APP = {
             secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.automation_app
+            version = "latest"
+          }
+        } : {},
+        name == "analysis-console" ? {
+          CLIENT_SECRET_ANALYSIS_CONSOLE = {
+            secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.analysis_console
             version = "latest"
           }
         } : {},

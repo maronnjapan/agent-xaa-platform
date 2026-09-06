@@ -21,6 +21,7 @@ export const config: AutomationAppConfig = {
   agentProvisionerUrl: 'https://provisioner.test',
   lifecycleManagerUrl: 'https://lifecycle.test',
   docsApiUrl: 'https://resource-docs-api.test',
+  analysisConsoleUrl: 'https://analysis-console.test',
   activityTopic: 'agent-activity-stream',
   defaultAgentLifetimeMinutes: 60,
   vertexModel: 'test-model',
@@ -71,8 +72,6 @@ export interface Harness {
   runtimeSeed: DocumentStore;
   /** Scoped as authorization: decisions are written by the Authorization Platform. */
   authorizationSeed: DocumentStore;
-  /** Scoped as security-detection: a finding is written by the detector, never here. */
-  detectorSeed: DocumentStore;
   session: Session;
   auditLines: string[];
   /** The structured lines the app writes, so a refusal's reason can be asserted. */
@@ -106,7 +105,6 @@ export async function startAutomationApp(options: {
   const seed = createFirestoreDocumentStore(firestore, 'provisioner');
   const runtimeSeed = createFirestoreDocumentStore(firestore, 'agent-runtime');
   const authorizationSeed = createFirestoreDocumentStore(firestore, 'authorization');
-  const detectorSeed = createFirestoreDocumentStore(firestore, 'security-detection');
   const sessions = createSessionStore(documents);
   const session = await sessions.create({
     human_subject: subject,
@@ -154,7 +152,7 @@ export async function startAutomationApp(options: {
 
   const cookie = `xaa_session=${session.session_id}`;
   return {
-    documents, seed, runtimeSeed, authorizationSeed, detectorSeed, session, auditLines, logLines, upstream, cookie,
+    documents, seed, runtimeSeed, authorizationSeed, session, auditLines, logLines, upstream, cookie,
     fetch: (path, init = {}) => app.fetch(new Request(new URL(path, 'https://automation-app.test'), {
       ...init,
       headers: { cookie, ...(init.headers as Record<string, string> | undefined) },

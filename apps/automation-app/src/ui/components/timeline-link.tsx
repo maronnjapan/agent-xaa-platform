@@ -1,7 +1,6 @@
 import type { Element } from '../element.js';
 
 export const TIMELINE_NOTE = '完了した処理だけを再生します。実行中の処理は状況確認で見てください。';
-export const ANALYSIS_LINK_TEXT = '分析エージェントの判断を見る';
 
 /**
  * A separate section, with the caveat always visible.
@@ -17,8 +16,6 @@ export function TimelineLink(props: { agentId: string }): Element {
       <h2>タイムライン</h2>
       <a href={`/activity?agent_id=${encodeURIComponent(props.agentId)}`}>この Agent の記録を見る</a>
       <p className="timeline-note">{TIMELINE_NOTE}</p>
-      {/* The other record of this agent: what it did, and what the analyser made of it. */}
-      <a href="/security">{ANALYSIS_LINK_TEXT}</a>
     </section>
   );
 }

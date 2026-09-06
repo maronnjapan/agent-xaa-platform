@@ -46,6 +46,11 @@ macOS と Linux はターミナルで、Windows は [WSL2](https://learn.microso
 作業を書くところから Agent を止めるところまでの手順は [docs/user-guide.md](./docs/user-guide.md) にある。
 同じ案内は、ログイン後の画面の「使い方」（`/guide`）にも置いてある。
 
+画面は2つある。
+Automation App は作業を書いて Agent を作り、動かし、止めるところである。
+Analysis Console は、Agent の挙動を見ているログ分析エージェントが何をどう判断したかを読むところで、別のサイトとして立ち上がる（[docs/09 §7](./docs/09-security-monitoring.md#7-判断を本人へ見せる)）。
+どちらも同じ Human IdP でログインするが、Session は別なので初回はそれぞれでログインする。
+
 ## 実行内容だけを確認する
 
 GCP を変更せずに、実行するコマンドの一覧だけを見る。
@@ -56,7 +61,7 @@ PROJECT_ID=<project-id> BILLING_ACCOUNT_ID=<XXXXXX-XXXXXX-XXXXXX> scripts/deploy
 
 ## 片付ける
 
-Automation App と Human IdP はインターネットへ公開され、ログイン情報は固定である。
+Automation App、Analysis Console と Human IdP はインターネットへ公開され、ログイン情報は固定である。
 検証が終わったら破棄する。
 
 ```bash

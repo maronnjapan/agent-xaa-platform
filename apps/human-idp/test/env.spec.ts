@@ -17,8 +17,10 @@ const complete: NodeJS.ProcessEnv = {
   DPOP_REQUIRED: 'true',
   CLIENT_SECRET_AUTOMATION_APP: 'a',
   CLIENT_SECRET_AGENT_PLATFORM: 'b',
+  CLIENT_SECRET_ANALYSIS_CONSOLE: 'c',
   AUTOMATION_APP_REDIRECT_URI: testEnv.automationAppRedirectUri,
   AGENT_OP_CALLBACK_URI: testEnv.agentOpCallbackUri,
+  ANALYSIS_CONSOLE_REDIRECT_URI: testEnv.analysisConsoleRedirectUri,
   ACCESS_TOKEN_EXPIRES_IN: '3600',
 };
 
@@ -49,8 +51,8 @@ describe('human-idp environment contract', () => {
     expect(loadEnv({ ...complete, DPOP_REQUIRED: 'false' }).dpopRequired).toBe(false);
   });
 
-  it('has a 16-entry required array matching ENV_KEYS', () => {
-    expect(schema.required).toHaveLength(16);
+  it('has an 18-entry required array matching ENV_KEYS', () => {
+    expect(schema.required).toHaveLength(18);
     expect([...schema.required].sort()).toEqual([...ENV_KEYS].sort());
     expect(Object.keys(schema.properties).sort()).toEqual([...ENV_KEYS].sort());
   });
