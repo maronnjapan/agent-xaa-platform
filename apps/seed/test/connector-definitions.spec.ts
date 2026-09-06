@@ -117,6 +117,20 @@ describe('connector definitions the seed writes for the Bridge', () => {
       .toThrow(/GOOGLE_OAUTH_CLIENT_ID/);
   });
 
+  /**
+   * The redirect URI a person registers at Google carries the connector id, and the
+   * Bridge's callback route reads it back out of the path to look the connector up. A
+   * default here that names something `connector_definitions` does not hold sends the
+   * person to Google, brings them back, and stops at `invalid_target` with the consent
+   * already given. The guide prints the URI before the apply, so the two are held
+   * together here rather than found out on the way back.
+   */
+  it('the deploy guide builds the redirect URI from the id the definitions are written under', () => {
+    const guide = readFileSync(new URL('../../../scripts/deploy-gcp-guide.sh', import.meta.url).pathname, 'utf8');
+    const fallback = guide.match(/GOOGLE_CONNECTOR_ID=\$\{GOOGLE_CONNECTOR_ID:-([a-z0-9-]+)\}/)?.[1];
+    expect(fallback).toBe(BRIDGED_CONNECTOR_ID);
+  });
+
   it('an unknown connector mode is refused', () => {
     expect(() => bridgeConnectorDefinitions({ ...stubEnv, SAAS_CONNECTOR_MODE: 'other' }, endpoints)).toThrow(/SAAS_CONNECTOR_MODE/);
   });

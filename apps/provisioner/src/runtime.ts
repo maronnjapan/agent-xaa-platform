@@ -63,15 +63,13 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   const logger = createLogger('provisioner', 'provisioner');
 
   const agentOp = createAgentOpClient({ baseUrl: config.sharedAgentOpUrl, identityToken });
-  // DEC-SCOPE-04. With the Bridge off, Terraform writes no address here, the seed
-  // leaves the bridged catalogue rows out, and no provisioning ever reaches for this.
-  // The placeholder the endpoints file carries in that case is not a base URL either,
-  // so it is treated as absent rather than turned into a client that would resolve
-  // every call to `https://disabled.invalid`.
-  const bridgeUrl = env.BRIDGE_INTERNAL_URL ?? '';
-  const bridge = bridgeUrl.startsWith('https://') && !bridgeUrl.includes('disabled.invalid')
-    ? createBridgeClient({ baseUrl: bridgeUrl, identityToken })
-    : undefined;
+  // DEC-SCOPE-04. Terraform leaves this empty when the Bridge is not deployed, the
+  // same way it leaves `CALLER_SA_SLOTS` empty for a list with nobody on it. Empty is
+  // read as "no Bridge" rather than as an address: with the Bridge off the seed leaves
+  // the bridged catalogue rows out, so no provisioning reaches for this at all, and a
+  // client built over a placeholder would only turn that into a confusing timeout.
+  const bridgeUrl = (env.BRIDGE_INTERNAL_URL ?? '').trim();
+  const bridge = bridgeUrl === '' ? undefined : createBridgeClient({ baseUrl: bridgeUrl, identityToken });
 
   return {
     config,

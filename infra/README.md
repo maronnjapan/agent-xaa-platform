@@ -96,6 +96,7 @@ SSO 署名鍵は Human IdP が初回アクセス時に生成し、KMS で包ん�
 IAM 到達性検証では、実行者に不足している `roles/iam.serviceAccountTokenCreator` を対象 Service Account にだけ一時付与し、検証後に削除する。
 
 Bridge を有効にする場合、Bridge が読む `connector_definitions` の行は seed Job が書く。
+OAuth client の作り方から画面の操作までを通した手順は[docs/google-bridge-setup.md](../docs/google-bridge-setup.md)にある。
 `saas_connector_mode=stub` では `stub-saas-calendar` の1件を配備した stub SaaS へ向けて書き、client secret は stub が受け付ける固定値をスクリプトが `stub-bridge-client-secret` に登録する。
 
 ```bash
@@ -106,8 +107,12 @@ scripts/deploy-gcp-guide.sh all
 外部 Google OAuth を有効にする場合は、Google Auth Platform で Web application の OAuth client を作り、secret をファイルから渡す。
 secret は `GOOGLE_OAUTH_CLIENT_SECRET_FILE`、または値を直接渡す `GOOGLE_OAUTH_CLIENT_SECRET` で受け取る。どちらも無く、Secret Manager にも有効な version が無ければ、起動直後の検査がそれを指摘して終わる。
 承認済みリダイレクト URI は project number と region から決まるため、スクリプトが確定した値を表示する。
-client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡し、Terraform 変数 `google_oauth_client_id` を通して seed が `google-workspace` の行に書く。
-catalog には Google Calendar を呼ぶ Tool を定義していないため、`google` モードで動くのは Bridge の同意と接続の保持までである。
+client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡し、Terraform 変数 `google_oauth_client_id` を通して seed が接続先定義の行に書く。
+その行の id は catalog が名指す bridged connector と同じ `stub-saas-calendar` で、どちらのモードでもこの1件である。
+Bridge は connector id で定義を引くため、redirect URI に別の名前を入れると Google から戻った callback が `invalid_target` で止まる。
+catalog にある calendar の Tool は stub SaaS の URL の形で書かれており、Tool ID の全集合は 00b が8件に固定している。
+そのため `google` モードで確かめられるのは、OAuth client と同意画面と redirect URI が正しいこと、そして Connection と Agent Binding が作られるところまでである。
+Tool 呼び出しまで通すのは `stub` モードである。
 
 ```bash
 ENABLE_GOOGLE_BRIDGE=true \

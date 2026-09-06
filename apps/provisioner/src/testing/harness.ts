@@ -9,7 +9,7 @@ import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore
 import { createLogger } from '@xaa/logging';
 import { readFileSync, readdirSync } from 'node:fs';
 import { parse } from 'yaml';
-import { PLATFORM_CLIENT_ID } from '@xaa/contracts';
+import { PLATFORM_CLIENT_ID, RESOURCE_SCOPES } from '@xaa/contracts';
 import type { ActivityEvent, CatalogConnector, CatalogTool, IsolationLevel } from '@xaa/contracts';
 import createApp, { type ProvisionerAppDeps } from '../app.js';
 import { createTransactionStore } from '../transaction/store.js';
@@ -82,6 +82,9 @@ export interface BridgeCall { method: string; connectorId: string; scopes: strin
 
 export const BRIDGE_CONSENT_URL = 'https://google-bridge-callback.test/stub-saas-calendar/oauth/start';
 
+/** The scope the one bridged tool asks for, from the shared table rather than spelled out. */
+const BRIDGED_SCOPE = RESOURCE_SCOPES.find((scope) => scope.startsWith('calendar.'))!;
+
 /**
  * The Bridge as the Provisioner sees it: three calls and a recorder.
  *
@@ -117,7 +120,7 @@ export function recordingBridge(options: {
       return {
         status: options.verifyStatus ?? 'READY',
         connection_id: `conn-verified-${input.transactionId}`,
-        granted_scopes: ['calendar.read'],
+        granted_scopes: [BRIDGED_SCOPE],
       };
     },
     async createBinding(input) {
