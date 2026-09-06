@@ -2,18 +2,38 @@
 # get and approve), so the payments a demo approves have to arrive here.
 #
 # Each row is the seed shape: no payment_id, no status and no approval fields. The Job
-# mints a stable id from the row's own content, so re-seeding rewrites the same three
+# mints a stable id from the row's own content, so re-seeding rewrites the same four
 # documents back to `pending_approval` rather than piling up new ones.
-- requester_subject: testuser
-  amount: 120000
-  currency: JPY
-  counterparty: ACME 株式会社
-  memo: 2026年1月分 クラウド利用料
+#
+# The amounts are chosen against the ceiling the platform itself attaches, not against
+# what a real invoice looks like. `risk-001` adds `max_amount: 100000` to
+# `finance.payment.approve` (infra/seed/policies/risk.yaml), the Provisioner merges it
+# into the Tool's constraints, and the Tool Executor refuses anything above it before a
+# request leaves the Agent. Three rows sit under that ceiling so the demo can be
+# completed, and the last one sits above it on purpose so the ceiling is visible as a
+# refusal rather than only as a number in a policy file. Seeding four rows that a
+# demo can only ever approve one of reads as the Finance path being broken.
+#
+# packages/xaa-contracts/test/finance-chain.spec.ts reads this file and risk.yaml
+# together, so raising the ceiling without revisiting the rows fails there.
 - requester_subject: testuser
   amount: 48000
   currency: JPY
   counterparty: 北山デザイン事務所
   memo: ロゴ制作の委託費
+- requester_subject: testuser
+  amount: 72600
+  currency: JPY
+  counterparty: ACME 株式会社
+  memo: 2026年1月分 クラウド利用料
+- requester_subject: testuser
+  amount: 100000
+  currency: JPY
+  counterparty: 三田翻訳
+  memo: 利用規約の英訳 一式
+# Above the ceiling on purpose. An Agent that tries this one is stopped by the Tool
+# Executor with `constraint_violation` and the payment stays `pending_approval`, which
+# is what "承認は人が引き取る" looks like from the Agent's side.
 - requester_subject: testuser
   amount: 2400000
   currency: JPY

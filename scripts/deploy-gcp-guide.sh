@@ -1036,6 +1036,13 @@ verify_deployment() {
   # 一致しない辺だけを測り直し、既定で最大 REACHABILITY_SETTLE_SECONDS 秒待つ。
   say 'IAM の反映待ちのため、一致しない辺は反映されるまで測り直します。残り時間は測り直すたびに表示されます。'
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash infra/tests/verify-all.sh
+  # 上は「誰が誰を呼べるか」を測る。ここから先は「Finance の処理が実際に動くか」を訊く。
+  # Resource AS が署名鍵を持って応答するか、Resource API が Access Token 無しの呼び出しを
+  # 401 で断るか、そして Catalog・Taxonomy・Risk Policy・Human Permission の行が
+  # 揃っているかである。どれが欠けても画面には「Agent は作られたが何もしない」としか出ない。
+  say 'Finance の Resource AS と API が応答するか、権限の行が揃っているかを確認します。'
+  run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" DEMO_LOGIN_USER="$DEMO_LOGIN_USER" \
+    bash infra/tests/finance-api.sh
   cleanup_verify_bindings
   if ((dry_run)); then
     print_command "${tf_command[@]}" -chdir=infra/envs/demo output -json platform_endpoints

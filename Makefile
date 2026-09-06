@@ -1,7 +1,7 @@
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 REGISTRY ?= xaa
 
-.PHONY: install typecheck lint test test-integration images ci bootstrap state-bucket adopt-kms shared-apply audit-views ensure-secrets demo-apply seed verify purge-runtime demo-destroy destroy-all all
+.PHONY: install typecheck lint test test-integration images ci bootstrap state-bucket adopt-kms shared-apply audit-views ensure-secrets demo-apply seed verify verify-finance purge-runtime demo-destroy destroy-all all
 install:
 	pnpm install --frozen-lockfile
 typecheck:
@@ -97,6 +97,16 @@ verify:
 	@echo "Measure allowed and denied Cloud Run edges, forbidden roles, and the invoker matrix"
 	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" TF="$(TF)" bash scripts/verify-impersonation.sh bash infra/tests/verify-all.sh
 
+# Separate from `verify` because it asks a different kind of question and can only be
+# asked later. `verify` measures IAM, which exists the moment apply returns; this asks
+# whether the Finance services answer and whether the permissions behind them are
+# seeded, and the seed Job runs after the apply. Speaking as sa-agent-runtime needs the
+# same impersonation wrapper.
+verify-finance:
+	@echo "Ask the deployed Finance Resource AS and API whether they answer, and whether the permissions behind them are seeded"
+	@test -n "$(PROJECT_ID)" || { echo "PROJECT_ID is required" >&2; exit 2; }
+	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" TF="$(TF)" bash scripts/verify-impersonation.sh bash infra/tests/finance-api.sh
+
 purge-runtime:
 	@echo "Delete runtime-owned Dedicated OP services, jobs, service accounts, and key versions"
 	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" bash scripts/purge-runtime-resources.sh
@@ -122,7 +132,7 @@ destroy-all:
 # do the same thing. state-bucket, adopt-kms, and ensure-secrets are no-ops on a project
 # that already has all three; they are what makes a run after destroy-all work.
 all:
-	@echo "Apply shared state, build immutable images, apply and verify demo state, seed definition data, then add the detection views"
+	@echo "Apply shared state, build immutable images, apply and verify demo state, seed definition data, check the Finance path answers, then add the detection views"
 	$(MAKE) state-bucket PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
 	$(MAKE) adopt-kms PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
 	$(MAKE) shared-apply PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
@@ -130,4 +140,5 @@ all:
 	$(MAKE) images REGISTRY="$(REGION)-docker.pkg.dev/$(PROJECT_ID)/xaa"
 	$(MAKE) demo-apply PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" DEMO_TFVARS="$(DEMO_TFVARS)"
 	$(MAKE) seed PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
+	$(MAKE) verify-finance PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"
 	$(MAKE) audit-views PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)"

@@ -235,6 +235,16 @@ Human IdP は SSO 署名鍵を最初のリクエストで作り、そのとき�
 最初にサービスをまたぐ呼び出し（「必要な権限を調べる」）だけが `invalid_token` になり、画面には「権限を判定する仕組みに届きませんでした」と出る。
 `idp-` の鍵が1本も無い場合、Job は `jwks.json` を書き換えずに失敗する。
 既存の集約を鍵の欠けたものへ置き換えると、動いていた配備がその場で止まるためである。
+`make verify-finance PROJECT_ID=<id>` は、seed のあとに Finance の経路そのものを訊く。
+`make verify` の三つが測るのは IAM の辺であり、「Agent が支払を読んで承認できるか」ではない。
+その間には Resource AS の署名鍵、Resource API のガード、`catalog_tools` と `capability_taxonomy` と `risk_policies` の行、ログインユーザーの Human Permission があり、どれが欠けても画面には「Agent は作られたが何もしない」としか出ない。
+`infra/tests/finance-api.sh` はそれぞれを名指しで確認する。
+Resource AS が ID-JAG の grant profile を広告し `fin-as-` の鍵を公開しているか、Resource API が Access Token 無しの呼び出しを 401 で断るか、seed 済みの行が揃っているか、承認待ちの支払のうち少なくとも1件が `risk-001` の `max_amount` 以下かである。
+最後の1件は、全額が上限超過の seed が「Tool Executor が全部断る Finance」に見えるためである。
+`make verify` と分けてあるのは、読む対象が seed Job の書いたデータであり、apply 直後にはまだ無いからである。
+`make all` は seed のあとにこれを実行する。
+同じ照合をリポジトリ側のファイルに対して行うのは `packages/xaa-contracts/test/finance-chain.spec.ts` で、こちらは CI が毎回走らせる。
+
 `make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
 View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。
 BigQuery は存在しないテーブルを参照する View を作成時に拒否するため、`shared-apply` はテーブルの有無を GCP に問い合わせ、無ければ View を作らずに進み、このターゲットが後から作る。
