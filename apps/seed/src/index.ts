@@ -4,7 +4,7 @@ import {
   COLLECTIONS, compile, documentSchema, documentSeedSchema, paymentSchema, paymentSeedSchema,
   platformEndpointsSchema, type PlatformEndpoints, type StoredDocument, type StoredPayment,
 } from '@xaa/contracts';
-import { getFirestore } from '@xaa/gcp';
+import { getFirestore, type Firestore } from '@xaa/gcp';
 import { parse } from 'yaml';
 import { BRIDGED_CONNECTOR_ID, CONNECTOR_DEFINITIONS, bridgeConnectorDefinitions } from './connector-definitions.js';
 import { applyBridgedToolShape } from './bridged-tool.js';
@@ -38,17 +38,48 @@ export function withoutBridgedRows<T extends { connector_id: string }>(rows: T[]
 
 export { BRIDGED_CONNECTOR_ID } from './connector-definitions.js';
 
-export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<void> {
+/**
+ * Where the seed reads from and what it writes to.
+ *
+ * On GCP both are Google's: the endpoints object and the YAML files live in the
+ * platform config bucket, and the rows go to Firestore. Neither is what the seed is
+ * *about* — it is about which catalogue, taxonomy and permission rows this deployment
+ * holds — so both are arguments. A deployment with the files on disk and the documents
+ * in memory (the local runner) seeds through this same function, and therefore writes
+ * exactly the rows the deployed one writes.
+ */
+export interface SeedSources {
+  readEndpoints(): Promise<unknown>;
+  /** Every `*.yaml` under the seed root, keyed by its path relative to that root. */
+  readSeedFiles(): Promise<Map<string, string>>;
+  firestore: Firestore;
+}
+
+function gcpSources(env: NodeJS.ProcessEnv): SeedSources {
   if (!env.SEED_BUCKET || !env.PLATFORM_ENDPOINTS_URI) throw new Error('seed environment is incomplete');
   const storage = new Storage();
-  const endpoints = await downloadJson(storage, env.PLATFORM_ENDPOINTS_URI);
+  return {
+    readEndpoints: () => downloadJson(storage, env.PLATFORM_ENDPOINTS_URI!),
+    async readSeedFiles() {
+      const [files] = await storage.bucket(env.SEED_BUCKET!).getFiles({ prefix: 'seed/' });
+      const contents = new Map<string, string>();
+      for (const file of files.filter((entry) => entry.name.endsWith('.yaml'))) {
+        const [content] = await file.download();
+        contents.set(file.name.replace(/^seed\//, ''), content.toString('utf8'));
+      }
+      return contents;
+    },
+    get firestore() { return getFirestore({ signer: 'kms', vertex: 'live', pubsub: 'gcp', store: 'gcp' }, env); },
+  };
+}
+
+export async function runSeed(env: NodeJS.ProcessEnv = process.env, sources: SeedSources = gcpSources(env)): Promise<void> {
+  const endpoints = await sources.readEndpoints();
   const validateEndpoints: (value: unknown) => asserts value is PlatformEndpoints = compile(platformEndpointsSchema);
   validateEndpoints(endpoints);
-  const [files] = await storage.bucket(env.SEED_BUCKET).getFiles({ prefix: 'seed/' });
   const records = new Map<string, unknown>();
-  for (const file of files.filter((entry) => entry.name.endsWith('.yaml'))) {
-    const [content] = await file.download();
-    records.set(file.name.replace(/^seed\//, ''), parse(resolveSeedPlaceholders(content.toString('utf8'), endpoints)));
+  for (const [name, content] of await sources.readSeedFiles()) {
+    records.set(name, parse(resolveSeedPlaceholders(content, endpoints)));
   }
   const bridged = env.ENABLE_GOOGLE_BRIDGE === 'true';
   const connectors = withoutBridgedRows(
@@ -70,7 +101,7 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
   // Resolved here, before Firestore is opened: a missing client id must not first empty
   // the collections the rows below were going to replace.
   const connectorDefinitions = bridgeConnectorDefinitions(env, endpoints);
-  const firestore = getFirestore({ signer: 'kms', vertex: 'live', pubsub: 'gcp', store: 'gcp' }, env);
+  const { firestore } = sources;
   for (const collection of DATA_COLLECTIONS) {
     const snapshots = await firestore.collection(collection).listDocuments();
     for (let offset = 0; offset < snapshots.length; offset += 400) {

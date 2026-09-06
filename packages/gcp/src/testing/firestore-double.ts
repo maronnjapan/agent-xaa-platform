@@ -81,6 +81,15 @@ export function createFirestoreDouble(): Firestore {
       const docs = rows(name, filters, limit);
       return { docs, size: docs.length, empty: docs.length === 0 };
     },
+    /**
+     * Every document reference in the collection, without reading any of them. The
+     * seed uses it to empty the collections it is about to replace, so a double
+     * without it cannot run the seed — and the seed is what puts the catalogue, the
+     * taxonomy and the permission rows in front of every other component.
+     */
+    async listDocuments() {
+      return [...documentsOf(name).keys()].map((id) => docRef(name, id));
+    },
   });
 
   const firestore = {

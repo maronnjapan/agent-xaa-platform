@@ -25,6 +25,7 @@ export * from './identifiers.js';
 export * from './isolation.js';
 export * from './library-surface.js';
 export * from './log-constants.js';
+export * from './loopback.js';
 export * from './modes.js';
 export * from './oauth-errors.js';
 export * from './protocol-violation.js';

@@ -1,9 +1,13 @@
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 REGISTRY ?= xaa
 
-.PHONY: install typecheck lint test test-integration images ci bootstrap state-bucket adopt-kms shared-apply audit-views ensure-secrets demo-apply seed verify verify-finance purge-runtime demo-destroy destroy-all all
+.PHONY: install local typecheck lint test test-integration images ci bootstrap state-bucket adopt-kms shared-apply audit-views ensure-secrets demo-apply seed verify verify-finance purge-runtime demo-destroy destroy-all all
 install:
 	pnpm install --frozen-lockfile
+
+# The whole platform on this machine, with no GCP and no Docker (docs/local-development.md).
+local:
+	pnpm local
 typecheck:
 	pnpm typecheck
 lint:

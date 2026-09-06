@@ -26,7 +26,9 @@ for (const file of await packageFiles()) {
   }
   for (const [field, allowKey] of [['dependencies', 'runtime'], ['devDependencies', 'dev']]) {
     for (const [name, version] of Object.entries(pkg[field] ?? {})) {
-      const isWorkspace = name.startsWith('@xaa/') && String(version).startsWith('workspace:');
+      // A `workspace:` version names a package in this repository, whatever it is
+      // called: `seed` and `jwks-publish` carry no scope and are no less ours for it.
+      const isWorkspace = String(version).startsWith('workspace:');
       if (!isWorkspace && !allowed[allowKey].includes(name)) violations.push([file, name, `not in ${allowKey} allowlist`]);
       if (forbidden.has(name)) violations.push([file, name, 'explicitly forbidden dependency']);
       if (!isWorkspace && /[\^~*xX<>]/.test(String(version))) violations.push([file, name, `version is not exact: ${version}`]);

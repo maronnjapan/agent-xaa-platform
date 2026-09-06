@@ -3,7 +3,36 @@
 自律型 AI エージェントに、人間から委譲された権限の範囲内だけで社内 API と外部 SaaS を使わせるための認証認可基盤である。
 設計は [docs/](./docs/README.md)、GCP の構成と運用は [infra/README.md](./infra/README.md) にある。
 
-## 初めて動かす
+## 手元で動かす
+
+GCP も課金も要らない。
+Node.js 22 と pnpm があれば、基盤全体が手元のパソコン1台の上で動く。
+Docker は要らず、データベースのインストールも要らない。
+
+```bash
+git clone https://github.com/maronnjapan/agent-xaa-platform.git
+cd agent-xaa-platform
+pnpm install --frozen-lockfile
+pnpm local
+```
+
+`http://127.0.0.1:8080` を開き、`testuser` / `password` でログインする。
+
+既定ではモデルを呼ばないので、ToDo から Agent Definition を作る段階で止まる。
+最後まで通すには実行モデルを1つ指定する。
+Gemini に限らず、手元の Claude Code や Codex も使える。
+
+```bash
+MODEL_PROVIDER=cli MODEL_CLI=claude-code pnpm local           # Claude Code
+MODEL_PROVIDER=cli MODEL_CLI=codex pnpm local                 # Codex
+MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=... pnpm local     # Anthropic API
+MODEL_PROVIDER=openai OPENAI_API_KEY=... pnpm local           # OpenAI 互換 API
+```
+
+止めると ToDo も Agent も消える。
+ポートの一覧、設定できること、配備した基盤との違いは [docs/local-development.md](./docs/local-development.md) にある。
+
+## GCP へ配備する
 
 GCP、Terraform、プログラミングの知識は要らない。
 必要なのは、Google アカウント、クレジットカード（請求先アカウントの作成に使う。初回は無料トライアルのクレジットが付く）、パソコン1台である。

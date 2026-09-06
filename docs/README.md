@@ -4,6 +4,7 @@
 内容は各文書（[01](./01-overview.md)〜[10](./10-design-rules.md)）にあり、本ファイルには要約と構成だけを置く。
 
 設計ではなく、デプロイしたサイトを画面から操作する手順は[サイトの使い方](./user-guide.md)にある。
+GCP へ配備せず手元のパソコン1台で基盤全体を動かす手順は[ローカルで動かす](./local-development.md)にある。
 既定では配備しない Google Bridge を有効にして通すまでの手順は[Google Bridge を試す](./google-bridge-setup.md)にある。
 
 ## 要約
