@@ -25,12 +25,19 @@ export const ROUTES = [
  */
 export const ADMIN_ROUTES = [
   { method: 'GET', path: '/admin' },
+  { method: 'GET', path: '/admin/console.css' },
   { method: 'GET', path: '/admin/permissions' },
   { method: 'GET', path: '/admin/permissions/new' },
   { method: 'GET', path: '/admin/permissions/:capability_id' },
+  { method: 'GET', path: '/admin/permissions/:capability_id/delete' },
   { method: 'POST', path: '/admin/permissions' },
   { method: 'POST', path: '/admin/permissions/:capability_id' },
   { method: 'POST', path: '/admin/permissions/:capability_id/delete' },
+  // Who holds a permission. The subject is a parameter here and nowhere in the screens
+  // a person opens for themselves, which is the difference between a console and a
+  // cross-user view of somebody's own screen (RULE-56).
+  { method: 'GET', path: '/admin/holders' },
+  { method: 'POST', path: '/admin/holders' },
 ] as const;
 
 export const DECISION_RESPONSE_KEYS = ['decision_id', 'status', 'effective_capabilities', 'security_profile', 'denied'] as const;

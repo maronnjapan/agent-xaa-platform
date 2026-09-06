@@ -23,6 +23,7 @@
       "work_definitions/**",
       "dpop_jti/**",
       "permission_change_receipts/**",
+      "human_permissions/**",
       "capability_taxonomy/**",
       "delegatable_permissions/**"
     ]

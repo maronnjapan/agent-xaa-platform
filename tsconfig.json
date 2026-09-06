@@ -26,6 +26,9 @@
       "path": "packages/xaa-docs-check"
     },
     {
+      "path": "packages/xaa-admin-ui"
+    },
+    {
       "path": "apps/seed"
     },
     {

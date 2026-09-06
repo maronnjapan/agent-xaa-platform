@@ -142,18 +142,25 @@ GOOGLE_CLOUD_PROJECT=<id> STORE_MODE=gcp PUBSUB_MODE=gcp \
 Automation App と Human IdP は `allUsers` へ公開され、ログイン情報は固定である。
 検証が終わったら `make demo-destroy` で破棄する。
 
-### 権限を作り、リソースへ対応付ける
+### 権限とドキュメントを画面から直す
 
-権限（Capability）そのものを作る画面と、権限をリソースへ対応付ける画面は別のアプリにある。
-どちらも Internet へ公開しないため（RULE-37）、ローカルへ proxy して開く。
+権限（Capability）を作る画面、権限を人へ渡す画面、権限をリソースへ対応付ける画面、ドキュメントを直す画面は、それぞれのデータを持つアプリにある。
+どれも Internet へ公開しないため（RULE-37）、ローカルへ proxy して開く。
 
 ```bash
 gcloud run services proxy authorization --project=<id> --region=<region> --port=8081
 # http://localhost:8081/admin/permissions で権限を作る、直す、消す
+# http://localhost:8081/admin/holders    で権限を人へ渡す、取り上げる
 
 gcloud run services proxy provisioner --project=<id> --region=<region> --port=8082
 # http://localhost:8082/admin/mappings で権限をリソースの操作へ対応付ける
+
+gcloud run services proxy resource-docs-api --project=<id> --region=<region> --port=8083
+# http://localhost:8083/admin/documents でドキュメントを作る、直す、消す
 ```
+
+`/admin/holders` は `pnpm perm:set` と同じことを画面から行う。
+どちらの経路でも、権限が狭まった人の実行中 Agent はその場で再評価される（RULE-14）。
 
 proxy が付ける ID Token の `email` を、アプリは `ADMIN_PRINCIPALS` と突き合わせる。
 `admin_principals` を空のまま apply した場合、`run.invoker` を持っていても画面は 403 を返す。
@@ -163,8 +170,9 @@ proxy が付ける ID Token の `email` を、アプリは `ADMIN_PRINCIPALS` �
 admin_principals = ["you@example.com"]
 ```
 
-`make seed`（と `deploy-gcp-guide.sh` の seed 手順）は `capability_taxonomy`、`delegatable_permissions`、`catalog_tools` を一度空にしてから YAML を書き直す。
-画面で作った権限や変えた対応付けを残したいなら、`infra/seed/` の YAML にも同じ内容を入れる。
+`make seed`（と `deploy-gcp-guide.sh` の seed 手順）は `capability_taxonomy`、`delegatable_permissions`、`human_permissions`、`catalog_tools` を一度空にしてから YAML を書き直す。
+画面で作った権限、渡した権限、変えた対応付けを残したいなら、`infra/seed/` の YAML にも同じ内容を入れる。
+`documents` は空にしないので、画面で作ったドキュメントは seed をもう一度流しても残る。
 
 作った権限は、リソースへ対応付けるまで誰にも付与されない。
 Organization Policy が、どの Connector にも対応しない Capability を拒否するためである。

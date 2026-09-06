@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
+import { ADMIN_CONSOLE_CSS, ADMIN_STYLESHEET_PATH } from '@xaa/admin-ui';
 import {
   adminConsoleAuth, controlPlaneAuth, createProtocolValidationEmitter,
   type AdminConsoleVariables, type ControlPlaneVariables,
 } from '@xaa/control-plane-auth';
 import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
+import type { ActivityEvent } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 import { createLogger, type Logger } from '@xaa/logging';
 import type { AuthorizationConfig } from './config.js';
@@ -100,15 +102,28 @@ function createApp(deps: AuthorizationDeps): Hono {
     ...(deps.verifyAdmin ? { verify: deps.verifyAdmin } : {}),
     onRefusal: (reason) => logger.warning('admin.refused', logContext(), { reason }),
   }));
-  app.route('/admin', createAdminPermissionRoutes({ documents: deps.documents, logger }));
+  app.get(ADMIN_STYLESHEET_PATH, (context) =>
+    context.body(ADMIN_CONSOLE_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8' }));
+
+  /**
+   * What a permission change owes the agents already running (RULE-14).
+   *
+   * One value, used twice: the console writes a grant and re-evaluates from it, and the
+   * subscription re-evaluates from a `pnpm perm:set` announcement. Two sets of
+   * dependencies would be two re-evaluations that could disagree about what a permission
+   * change reaches.
+   */
+  const reevaluation = {
+    store, logger, clock,
+    ...(publish ? { publish: async (event: ActivityEvent) => { await publish({ ...event }); } } : {}),
+    ...(deps.requestReprovision ? { requestReprovision: deps.requestReprovision } : {}),
+  };
+
+  app.route('/admin', createAdminPermissionRoutes({ documents: deps.documents, logger, reevaluation }));
 
   // Pub/Sub push is authenticated by the platform (run.invoker plus the pusher's OIDC
   // token), so the human-facing DPoP chain does not apply here.
-  app.route('/internal/events/human-permission-changed', createPermissionChangedRoute({
-    store, logger, clock,
-    ...(publish ? { publish: async (event) => { await publish({ ...event }); } } : {}),
-    ...(deps.requestReprovision ? { requestReprovision: deps.requestReprovision } : {}),
-  }));
+  app.route('/internal/events/human-permission-changed', createPermissionChangedRoute(reevaluation));
 
   return app as unknown as Hono;
 }

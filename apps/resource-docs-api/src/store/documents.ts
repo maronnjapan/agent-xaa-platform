@@ -70,6 +70,25 @@ export function createDocumentRepository(store: DocumentStore, now: () => number
     },
 
     /**
+     * Removes one of an owner's documents, and reports whether there was one.
+     *
+     * Nothing an agent can reach calls this: the API exposes no DELETE, because a
+     * delegated permission to write is not a permission to make a record stop having
+     * existed. It is here for the console (docs 04 §2.1), where a person clears out
+     * their own documents, and it is scoped by owner for the same reason `get` is —
+     * another owner's document is not this caller's to delete, and answering that it
+     * was missing rather than forbidden is what keeps its existence unconfirmed.
+     */
+    async remove(documentId: string, ownerSubject: string): Promise<boolean> {
+      return store.transaction(async (tx) => {
+        const current = await tx.get<StoredDocument>('documents', documentId);
+        if (!current || current.owner_subject !== ownerSubject) return false;
+        tx.delete('documents', documentId);
+        return true;
+      });
+    },
+
+    /**
      * Optimistic locking inside one transaction: the read and the write cannot be
      * split by a concurrent update.
      */

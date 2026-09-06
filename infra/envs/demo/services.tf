@@ -221,6 +221,8 @@ locals {
       # T-APP-05: the one other caller `serviceIdentity` ever accepts, and only for
       # `POST /documents` with `type: 'daily_report'` (see internal-write.ts).
       AUTOMATION_APP_SA_EMAIL = module.service_accounts["automation_app"].email
+      # The document console. Empty leaves it reachable by nobody.
+      ADMIN_PRINCIPALS = join(",", var.admin_principals)
     }
     "resource-finance-as" = {
       PUBLIC_BASE_URL      = local.run_url["resource-finance-as"]
