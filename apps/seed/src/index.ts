@@ -7,6 +7,7 @@ import {
 import { getFirestore } from '@xaa/gcp';
 import { parse } from 'yaml';
 import { BRIDGED_CONNECTOR_ID, CONNECTOR_DEFINITIONS, bridgeConnectorDefinitions } from './connector-definitions.js';
+import { applyBridgedToolShape } from './bridged-tool.js';
 import { resolveSeedPlaceholders } from './resolve.js';
 import { validateSeed, type CapabilitySeed, type ConnectorSeed, type HumanPermissionSeed, type ToolSeed } from './validate.js';
 
@@ -53,8 +54,13 @@ export async function runSeed(env: NodeJS.ProcessEnv = process.env): Promise<voi
   const connectors = withoutBridgedRows(
     [...records].filter(([name]) => name.startsWith('connectors/')).map(([, value]) => value as ConnectorSeed), bridged,
   );
-  const tools = withoutBridgedRows(
-    [...records].filter(([name]) => name.startsWith('tools/')).map(([, value]) => value as ToolSeed), bridged,
+  // Shaped after the filter and before the validation: a row that `google` mode rewrote
+  // still has to satisfy the same schema and the same naming rules as the one on disk.
+  const tools = applyBridgedToolShape(
+    withoutBridgedRows(
+      [...records].filter(([name]) => name.startsWith('tools/')).map(([, value]) => value as ToolSeed), bridged,
+    ),
+    env,
   );
   const capabilities = (records.get('capabilities.yaml') as CapabilitySeed[] | undefined) ?? [];
   // The naming rule is checked before the deletion below: a taxonomy that would be

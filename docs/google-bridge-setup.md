@@ -16,13 +16,14 @@ Bridge は既定で配備されない（`enable_google_bridge = false`）。
 | 接続先 | 同じプロジェクトへ配備する stub SaaS | 本物の Google |
 | 用意するもの | 無し | Google OAuth client（本書の§3） |
 | 同意画面 | stub のログイン画面 | Google のアカウント選択と同意 |
-| 確かめられること | 同意から Tool 呼び出しまでの全部 | OAuth client、同意画面、Connection の保持まで |
-| Tool 呼び出し | 通る | 通らない（§4） |
+| 確かめられること | 同意から Tool 呼び出しまでの全部 | 左に加えて、本物の OAuth client と同意画面と redirect URI |
+| Tool 呼び出し | 通る | 通る（Google Calendar を実際に読む） |
 
-Bridge の仕組みそのもの（ID-JAG の検証、Connection と Agent Binding の2層、Refresh Token の保持、Access Token の払い出し）を端から端まで見るなら `stub` を使う。
+Bridge の仕組みそのもの（ID-JAG の検証、Connection と Agent Binding の2層、Refresh Token の保持、Access Token の払い出し）だけを見るなら `stub` で足りる。
 用意するものが無く、Google アカウントも要らない。
 
 `google` は、作った OAuth client と同意画面と redirect URI が正しいかを、本物の Google 相手に確かめるためのモードである。
+Agent は最後に、本物の Google Calendar から自分の予定を読む。
 
 ## 2. stub モードで通す
 
@@ -54,9 +55,32 @@ Connection は Agent ではなく人に属し、Agent が持つのはそこか�
 
 ## 3. google モードで使う OAuth client を用意する
 
+手順をひととおり案内するスクリプトがある。
+以下の§3.1〜§3.4を自分で読んで設定してもよいし、次を実行して画面の指示に従ってもよい。
+
+```bash
+PROJECT_ID=<project-id> scripts/google-bridge-guide.sh all
+```
+
+| サブコマンド | 何をするか |
+|---|---|
+| `doctor` | 手元のツールと GCP の前提だけを確認する |
+| `enable` | Calendar API を有効にする。これをしないと§3.3の一覧にスコープが出ない |
+| `client` | 本節の4ページと、貼り付ける redirect URI を確定して表示する |
+| `deploy` | google モードで `scripts/deploy-gcp-guide.sh all` を呼ぶ |
+| `verify` | 配備済みの環境へ、Google 経路が通る状態かを項目ごとに訊く |
+| `constants` | スクリプトがリポジトリから読んでいる値を出す。GCP へは触らない |
+
+貼り付ける値はスクリプトの中に書き写されていない。
+スコープもパスも connector id も実装から読むため、実装が変わればスクリプトの表示も変わる。
+読めなくなったことは `scripts/checks/google-bridge-guide.sh` が CI で検出する。
+
+`verify` が確かめるのは、Calendar API が有効か、client secret の version があるか、
+接続先定義が Google を向いているか、`scope_map` が翻訳しているか、そして Tool が Google のパスを呼ぶかである。
+Google 側の設定は API から読めないため、redirect URI の一致だけは目で確かめる。
+
 Google 側で作るのは、ウェブアプリケーション種別の OAuth client 1つである。
 Google Cloud Console の4ページを上から順に設定する。
-`scripts/deploy-gcp-guide.sh` は、必要な設定が足りないとこの4つの URL と、貼り付ける redirect URI を表示して終わる。
 
 ### 3.1 ブランディング
 
@@ -128,14 +152,27 @@ Secret Manager の `google-oauth-client-secret` へ version として入り、Br
 画面の操作は§2と同じで、同意画面が Google のものになる。
 承認して戻ると Connection ができ、Agent Binding が作られ、Agent が動き出す。
 
-### Tool 呼び出しがどこで止まるか
+### Tool 呼び出しが Google へ届く仕組み
 
-Agent が実際にカレンダーを読もうとすると、Google は 404 を返す。
-catalog にある calendar の Tool は stub SaaS の URL の形（`/calendar/events`）で書かれており、Google の API はその位置に無いためである。
-Tool ID の全集合は[実装規約](../tasks/00b-conventions.md)が8件に固定しているので、Google 用の Tool を1件足すという回避もしていない。
+catalog にある calendar の Tool は1件で、Tool ID の全集合は[実装規約](../tasks/00b-conventions.md)が8件に固定している。
+Google 用の Tool を足すことはできないので、同じ1件を、接続先の SaaS が実際に serve している形で書き出す。
 
-つまり `google` モードで確かめられるのは、OAuth client と同意画面と redirect URI が正しいこと、そして Connection と Agent Binding が正しく作られることまでである。
-Tool 呼び出しまで含めて通したいときは `stub` モードを使う。
+seed が `google` モードのとき書き換えるのは2つだけである（`apps/seed/src/bridged-tool.ts`）。
+
+| 何を | stub | google |
+|---|---|---|
+| `api.path` | `/calendar/events` | `/calendar/v3/calendars/primary/events` |
+| `response_schema.allowlist` | `event_id` ほか | 上に `id` を足す（Google は event の id を `id` と呼ぶ） |
+
+Tool ID も connector ID も、要求する Capability も、同意で求める scope も両モードで同じである。
+書き換わるのは「そのホストのどこに予定があるか」と「予定が自分の id を何と呼ぶか」の2つで、どちらも identity ではない。
+
+allowlist は削除リストではなく複製リストなので（REQ-04-023）、`id` を足しても stub モードの結果は変わらない。
+応答に無い名前は複製されないだけである。
+
+`calendar-json.googleapis.com` は `google` モードのときだけ有効にする（`infra/envs/demo/services-bridge.tf`）。
+`scripts/google-bridge-guide.sh enable` も同じものを有効にする。
+そちらが先に要るのは、Google Auth Platform が「有効になっている API のスコープ」しか一覧に出さないためである。
 
 ## 5. 通ったかどうかを確かめる
 
@@ -152,6 +189,16 @@ Firestore には次の行ができている。
 | `bridge_connections` | 人ごとの Connection。Refresh Token は KMS で暗号化された状態でだけ入る |
 | `agent_bindings` | Agent ごとの Binding。Connection から切り出した範囲と、Agent の有効期限が入る |
 
+Agent が予定を読んだかどうかは、Agent の画面の実行ログに出る。
+`stub.calendar.events.list` の行に、送った先が `https://www.googleapis.com/calendar/v3/calendars/primary/events` であることと、返ってきた予定が並ぶ。
+Google のカレンダーが空なら結果も空になるので、確かめるなら先に予定を1件入れておく。
+
+配備済みの環境が Google 経路として成立しているかは、次でまとめて訊ける。
+
+```bash
+PROJECT_ID=<project-id> GOOGLE_OAUTH_CLIENT_ID=<client-id> scripts/google-bridge-guide.sh verify
+```
+
 同意が返ってこないまま30分が過ぎた Provisioning Transaction は、Lifecycle の sweep が `ABANDONED` にする。
 その場合は作業内容の確定からやり直す。
 
@@ -165,6 +212,9 @@ Firestore には次の行ができている。
 | 承認して戻ると「認可を完了できませんでした」 | redirect URI の connector id が `connector_definitions` の id と違う | 同上 |
 | 同意画面まで進んで `access_denied` | テストユーザーに自分のアカウントが入っていない | §3.2 で追加する |
 | Agent は作られるが SaaS 呼び出しが `invalid_bridge_binding` | Agent Binding が無い | Provisioning のタイムラインに「外部サービスと接続しました」があるかを見る |
+| Tool 呼び出しが `resource_api_error` で status 404 | seed が stub モードのまま走っている | `scripts/google-bridge-guide.sh verify` が Tool のパスを見る。`make seed` を google モードで流し直す |
+| Tool 呼び出しが `resource_api_error` で status 403 | Calendar API が有効になっていない | `scripts/google-bridge-guide.sh enable` |
+| 予定が1件も返らない | Google のカレンダーが空 | 対象アカウントのカレンダーへ予定を1件入れる |
 | 権限を調べても calendar が出ない | `calendar.event.read` の Human Permission が無い | §2 の `perm:set` |
 
 ## 7. 片付ける
@@ -177,4 +227,5 @@ PROJECT_ID=<project-id> make demo-destroy
 ```
 
 Google 側に残るのは OAuth client と同意画面の設定である。
+Calendar API の有効化も残るが、費用は発生しない。
 プロジェクトごと消さないなら、`https://console.cloud.google.com/auth/clients?project=<project-id>` から client を削除する。

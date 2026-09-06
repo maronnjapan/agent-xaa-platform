@@ -824,7 +824,10 @@ guide_google_oauth_client() {
     '       この2つは GOOGLE_OAUTH_CLIENT_ID と GOOGLE_OAUTH_CLIENT_SECRET_FILE で渡します。' \
     '' \
     "  redirect URI の connector id を変える場合は GOOGLE_CONNECTOR_ID=<id> を指定して実行し直してください。" \
-    "  作成済みの client は https://console.cloud.google.com/auth/clients?project=$PROJECT_ID で見られます。"
+    "  作成済みの client は https://console.cloud.google.com/auth/clients?project=$PROJECT_ID で見られます。" \
+    '' \
+    '  この4ページだけを案内し、設定できたかを項目ごとに確かめるスクリプトがあります。' \
+    "    PROJECT_ID=$PROJECT_ID scripts/google-bridge-guide.sh all"
 }
 
 add_google_oauth_secret_version() {

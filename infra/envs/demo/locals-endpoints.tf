@@ -23,12 +23,11 @@ locals {
     # what that becomes is the calendar Tool's `authorization.resource` — the claim the
     # Bridge matches a connector definition against, whole-string, at `/token`.
     #
-    # In `google` mode it is Google's API host, so that claim names something real. It is
-    # not a working base URL for the Tool: the Tool's path is the stub's shape, and 00b
-    # fixes the eight Tool ids, so there is no Google-shaped Tool to swap in. `google`
-    # mode is for proving the OAuth client, the consent screen and the connection;
-    # `stub` mode is what exercises a bridged Tool call end to end
-    # (docs/google-bridge-setup.md).
+    # In `google` mode it is Google's API host, so that claim names something real — and
+    # it is also the base URL the Tool calls. 00b fixes the eight Tool ids, so `google`
+    # mode brings no Tool of its own; the seed writes the same one in the shape Google
+    # serves, which is a different path under this host and one more name on the response
+    # allow list (apps/seed/src/bridged-tool.ts, docs/google-bridge-setup.md §4).
     stub_saas_op_issuer = var.enable_google_bridge ? (
       var.saas_connector_mode == "stub" ? local.run_url["stub-saas-op"] : "https://www.googleapis.com"
     ) : "https://disabled.invalid"
