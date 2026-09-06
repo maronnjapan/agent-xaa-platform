@@ -118,6 +118,8 @@ Options:
   CONFIRM_PROJECT_ID         指定した場合だけ PROJECT_ID との一致を検査する誤操作防止
   DEMO_LOGIN_USER            権限を付与するログインユーザー。testuser または otheruser
   GRANT_DEMO_PERMISSIONS     0 のときデモ用 Human Permission の付与を省く
+  REACHABILITY_SETTLE_SECONDS 到達性検証で、一致しない辺を測り直し続ける秒数。
+                             既定値は 420。IAM の反映は数分かかるため 0 にはしない
   SKIP_ORG_POLICY_CHECK      1 のとき組織ポリシーの事前確認を省く
   AUTO_FIX_ORG_POLICY        既定は1。ドメイン制限共有の例外をプロジェクトへ自動で追加する
   DEMO_TFVARS                demo state の変数ファイル。既定値は infra/tfvars/deploy.tfvars
@@ -429,6 +431,9 @@ quality_gate() {
   run "${pnpm_command[@]}" test:integration
   run "${pnpm_command[@]}" test:e2e
   run "${pnpm_command[@]}" check:docs
+  # static-all.sh の no-firestore-sdk-in-frontend はブラウザ束ねを読む。束ねは生成物で
+  # コミットしていないため、無ければ「読まずに成功」ではなく失敗する。先に作る。
+  run "${pnpm_command[@]}" build:client
   run bash infra/tests/static-all.sh
   run "${tf_command[@]}" fmt -check -recursive infra
 
@@ -1026,6 +1031,10 @@ verify_deployment() {
   phase 'IAM 到達性と権限を検証します。'
   verify_automation_login_registration
   prepare_verify_impersonation
+  # apply 直後の binding は、書かれていてもまだ効いていない。効くまでの間、許可した
+  # 呼び出しは 403 で返り、配備が壊れているのと区別がつかない。reachability は
+  # 一致しない辺だけを測り直し、既定で最大 REACHABILITY_SETTLE_SECONDS 秒待つ。
+  say 'IAM の反映待ちのため、一致しない辺は反映されるまで測り直します。残り時間は測り直すたびに表示されます。'
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash infra/tests/verify-all.sh
   cleanup_verify_bindings
   if ((dry_run)); then

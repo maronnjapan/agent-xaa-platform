@@ -222,6 +222,11 @@ import する件数と1件ごとの進行は標準出力に出る。
 拒否ケースのうち FULL_ISOLATION の Agent 自身の Service Account と Dedicated OP を名指すものは、Provisioner が実行時に作る対象であり、まだ存在しないプロジェクトでは skipped と表示して測定しない。
 ingress が internal のサービスも同じく skipped になる。VPC を持たないこの構成では Google Frontend が IAM を読む前に 404 を返すため、プロジェクトの外にいる実行者からは測りようがない（`infra/spike/RESULT.md` (a)）。
 現在それに当たるのは `sa-pubsub-push` → `security-detection` の1本で、この経路が到達することは spike の (a) が Pub/Sub push で実測している。
+apply が返った時点の `roles/run.invoker` は、まだ Google Frontend に届いていない。
+届くまでの間、許可したはずの呼び出しは 403 を返し、配備が壊れているのと見分けがつかない。
+`reachability.sh` は一致しなかった辺だけを測り直し、既定で最大 420 秒（`REACHABILITY_SETTLE_SECONDS`）待ってから失敗として報告する。
+infra-destroy のあとの deploy は全サービスと全 binding を1回の apply で作るため、この待ちは省けない。
+
 `make seed PROJECT_ID=<id>` は JWKS 集約 Job の完了後に seed Job を実行する。
 `make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
 View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。

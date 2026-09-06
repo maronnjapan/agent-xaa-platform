@@ -88,6 +88,11 @@ seed:
 # The measurement speaks as each calling Service Account, which the runner is not allowed
 # to do until it holds roles/iam.serviceAccountTokenCreator on them. The wrapper adds what
 # is missing, waits for it to take effect, and removes it again afterwards.
+#
+# The roles/run.invoker bindings the measurement then reads have the same delay, and the
+# apply above may have written all of them a minute ago. reachability.sh re-measures the
+# edges that do not match yet for up to REACHABILITY_SETTLE_SECONDS (420 by default), so
+# a run right after an apply reports IAM as it settles rather than as it was mid-flight.
 verify:
 	@echo "Measure allowed and denied Cloud Run edges, forbidden roles, and the invoker matrix"
 	PROJECT_ID="$(PROJECT_ID)" REGION="$(REGION)" TF="$(TF)" bash scripts/verify-impersonation.sh bash infra/tests/verify-all.sh

@@ -142,6 +142,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # no-persistent-connection.sh greps the browser bundle, which is build output and is
+      # not committed. It fails when the file is absent rather than passing on an empty
+      # scan, so the bundle has to exist before the checks run.
+      - run: pnpm build:client
       - run: node scripts/check-runtime-credentials.mjs
       - run: node scripts/check-no-dynamic-resolve.mjs
       - run: bash scripts/check-status-write-path.sh
@@ -173,8 +177,16 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: node scripts/check-oidc-patches.mjs
+  # no-firestore-sdk-in-frontend.sh, one of the three, reads the browser bundle. It is
+  # build output and is not committed, and the check fails when it is absent rather than
+  # reporting success on a directory it never looked into, so this job builds it.
   infra-static-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:client
       - run: bash infra/tests/run-static-checks.sh

@@ -30,49 +30,85 @@ accounts=$(gcloud iam service-accounts list --project="$project_id" --format='va
 deployed=$(gcloud run services list --project="$project_id" --region="$region" \
   --format='csv[no-heading](metadata.name,metadata.annotations."run.googleapis.com/ingress",status.url)') || { echo 'reachability: the deployed services cannot be listed' >&2; exit 2; }
 
+# A Cloud Run IAM change is not in effect the moment `apply` returns. The binding reaches
+# the front end minutes later, and until it does an allowed caller is answered 403 while a
+# just-revoked one is still let in — both read exactly like a broken deployment. A deploy
+# that follows infra-destroy creates every service and every binding at once, so the first
+# pass measures a policy that is written and not yet enforced.
+#
+# So keep asking. Each pass re-measures only the edges that did not match, which costs one
+# pass on a project whose IAM has long since settled, and a mismatch is a failure only once
+# the window below has closed. The default is the propagation time Google documents as the
+# worst case; REACHABILITY_SETTLE_SECONDS=0 measures once and reports what it saw.
+settle_seconds=${REACHABILITY_SETTLE_SECONDS:-420}
+retry_seconds=${REACHABILITY_RETRY_SECONDS:-15}
+
+pending=()
+while IFS= read -r row; do pending+=("$row"); done < <(jq -c '.[]' <<<"$cases")
+deadline=$(( $(date +%s) + settle_seconds ))
+failures=()
 status=0
-while IFS= read -r row; do
-  caller=$(jq -r '.caller_sa' <<<"$row")
-  target=$(jq -r '.target' <<<"$row")
-  path=$(jq -r '.path' <<<"$row")
-  expected=$(jq -r '.expect' <<<"$row")
-  row=$(awk -F, -v name="$target" '$1 == name { print; exit }' <<<"$deployed")
-  if [[ -z "$row" ]]; then
-    printf 'reachability / %s / %s / skipped: the service is not deployed\n' "${caller:-anonymous}" "$target"
-    continue
-  fi
-  IFS=, read -r _ ingress observed <<<"$row"
-  if [[ "$ingress" == internal* ]]; then
-    printf 'reachability / %s / %s / skipped: ingress=%s answers 404 to every caller outside the project\n' "${caller:-anonymous}" "$target" "$ingress"
-    continue
-  fi
-  # Terraform's URL first, and not only because it is at hand: DEC-IAC-05 computes it from
-  # the project number rather than reading it back, so calling the computed URL is what
-  # measures the formula. A service Terraform knows nothing about — a Dedicated OP the
-  # Provisioner made — is called at the URL Cloud Run reports for it instead.
-  url=$(jq -r --arg target "$target" '.[$target] // empty' <<<"$urls")
-  [[ -n "$url" ]] || url=$observed
-  if [[ -z "$url" ]]; then
-    printf 'reachability / %s / %s / skipped: the service reports no URL\n' "${caller:-anonymous}" "$target"
-    continue
-  fi
-  headers=()
-  if [[ -n "$caller" ]]; then
-    email="${caller}@${project_id}.iam.gserviceaccount.com"
-    if ! grep -Fxq "$email" <<<"$accounts"; then
-      printf 'reachability / %s / %s / skipped: the service account does not exist\n' "$caller" "$target"
+
+while :; do
+  unsettled=()
+  failures=()
+  for row in "${pending[@]}"; do
+    caller=$(jq -r '.caller_sa' <<<"$row")
+    target=$(jq -r '.target' <<<"$row")
+    path=$(jq -r '.path' <<<"$row")
+    expected=$(jq -r '.expect' <<<"$row")
+    service=$(awk -F, -v name="$target" '$1 == name { print; exit }' <<<"$deployed")
+    if [[ -z "$service" ]]; then
+      printf 'reachability / %s / %s / skipped: the service is not deployed\n' "${caller:-anonymous}" "$target"
       continue
     fi
-    token=$(gcloud auth print-identity-token --project="$project_id" --impersonate-service-account="$email" --audiences="$url" 2>/dev/null) || {
-      printf 'reachability: %s cannot be impersonated; roles/iam.serviceAccountTokenCreator on it is required\n' "$email" >&2
-      exit 2
-    }
-    headers=(-H "Authorization: Bearer $token")
-  fi
-  actual=$(curl -sS -o /dev/null -w '%{http_code}' "${headers[@]}" "$url$path" || true)
-  if [[ "$actual" != "$expected" ]]; then
-    printf 'reachability / %s / %s / expected=%s / actual=%s\n' "${caller:-anonymous}" "$target" "$expected" "$actual" >&2
-    status=1
-  fi
-done < <(jq -c '.[]' <<<"$cases")
+    IFS=, read -r _ ingress observed <<<"$service"
+    if [[ "$ingress" == internal* ]]; then
+      printf 'reachability / %s / %s / skipped: ingress=%s answers 404 to every caller outside the project\n' "${caller:-anonymous}" "$target" "$ingress"
+      continue
+    fi
+    # Terraform's URL first, and not only because it is at hand: DEC-IAC-05 computes it from
+    # the project number rather than reading it back, so calling the computed URL is what
+    # measures the formula. A service Terraform knows nothing about — a Dedicated OP the
+    # Provisioner made — is called at the URL Cloud Run reports for it instead.
+    url=$(jq -r --arg target "$target" '.[$target] // empty' <<<"$urls")
+    [[ -n "$url" ]] || url=$observed
+    if [[ -z "$url" ]]; then
+      printf 'reachability / %s / %s / skipped: the service reports no URL\n' "${caller:-anonymous}" "$target"
+      continue
+    fi
+    headers=()
+    if [[ -n "$caller" ]]; then
+      email="${caller}@${project_id}.iam.gserviceaccount.com"
+      if ! grep -Fxq "$email" <<<"$accounts"; then
+        printf 'reachability / %s / %s / skipped: the service account does not exist\n' "$caller" "$target"
+        continue
+      fi
+      token=$(gcloud auth print-identity-token --project="$project_id" --impersonate-service-account="$email" --audiences="$url" 2>/dev/null) || {
+        printf 'reachability: %s cannot be impersonated; roles/iam.serviceAccountTokenCreator on it is required\n' "$email" >&2
+        exit 2
+      }
+      headers=(-H "Authorization: Bearer $token")
+    fi
+    # A request that never answers would hold the whole window. It counts as a mismatch,
+    # which is to say it is measured again on the next pass.
+    actual=$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${headers[@]}" "$url$path" || true)
+    [[ "$actual" == "$expected" ]] && continue
+    unsettled+=("$row")
+    failures+=("$(printf 'reachability / %s / %s / expected=%s / actual=%s' "${caller:-anonymous}" "$target" "$expected" "$actual")")
+  done
+
+  ((${#unsettled[@]})) || break
+  now=$(date +%s)
+  if ((now >= deadline)); then status=1; break; fi
+  printf 'reachability: %d edge(s) do not match yet; a Cloud Run IAM change takes minutes to take effect. Measuring them again in %ds, and calling it a failure %ds from now.\n' \
+    "${#unsettled[@]}" "$retry_seconds" "$((deadline - now))"
+  sleep "$retry_seconds"
+  pending=("${unsettled[@]}")
+done
+
+if ((${#failures[@]})); then
+  printf '%s\n' "${failures[@]}" >&2
+  ((settle_seconds > 0)) && printf 'reachability: the edges above were still answering this %ds after the first measurement, which is longer than an IAM change takes to reach the front end\n' "$settle_seconds" >&2
+fi
 exit "$status"

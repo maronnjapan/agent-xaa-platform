@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/src/server.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/bundle-client.mjs",
+    "build": "tsc -p tsconfig.json && pnpm run build:client",
+    "build:client": "node scripts/bundle-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest --config ../../vitest.package.config.ts run"
   },
