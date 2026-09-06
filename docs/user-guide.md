@@ -37,9 +37,12 @@ GOOGLE_CLOUD_PROJECT=<project-id> STORE_MODE=gcp PUBSUB_MODE=gcp \
 ## 3. ログインする
 
 Automation App の URL を開くと Human IdP のログイン画面へ飛ぶ。
-ユーザー名とパスワードを入れると、認可要求が続けて5回走る。
+ユーザー名とパスワードを入れると、必要な権限を全部並べた同意画面が1枚出る。
+そこに出る `agent:operate`、`workdef:submit`、`agent:provision`、`agent:revoke` が、この画面が以後あなたの代わりに行える操作の全部である。
+同意すると認可要求が続けて5回走る。
 最初の1回で ID Token を取り、残りの4回で Automation App、Authorization Platform、Agent Provisioner、Lifecycle Manager それぞれ宛のアクセストークンを取る。
-パスワードを聞かれるのは最初の1回だけで、画面が何度か切り替わるのはこのためである。
+アクセストークンは1枚につき宛先1つと権限1つで、同意済みなので2回目以降は画面が出ない。
+パスワードと同意を聞かれるのは最初の1回だけで、画面が何度か切り替わるのはこのためである。
 
 戻ってきた先が「自動化をつくる」の画面である。
 

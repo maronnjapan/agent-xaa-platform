@@ -7,7 +7,7 @@ import {
 } from '@xaa/crypto';
 import type { DocumentStore } from '@xaa/gcp';
 import type { AutomationAppConfig } from '../config.js';
-import { buildAuthorizationRequest } from './oidc-login.js';
+import { buildAuthorizationRequest, LOGIN_SCOPE } from './oidc-login.js';
 import {
   SESSION_COOKIE, SESSION_TOKEN_AUDIENCES, SESSION_TTL_SECONDS, readSessionCookie,
   type SessionAudience, type SessionStore,
@@ -21,6 +21,26 @@ const TOKEN_PLAN: ReadonlyArray<{ audience: SessionAudience; scope: string }> = 
   { audience: 'agent-provisioner', scope: 'agent:provision' },
   { audience: 'lifecycle-manager', scope: 'agent:revoke' },
 ];
+
+/**
+ * Every scope this login will need, named in the first request rather than one at a
+ * time.
+ *
+ * A person is asked once, and the question lists the whole of what they are agreeing
+ * to. Before this, each leg of the plan asked for its own scope and the Human IdP had
+ * no record of consent for it, so the consent screen came back four more times, each
+ * showing one line — which reads as four separate demands and tells nobody what the
+ * app will actually do.
+ *
+ * It is built from `TOKEN_PLAN` rather than written out, so a fifth audience cannot be
+ * added to the plan and left out of the question.
+ *
+ * The legs themselves still ask for one operation scope each: this is what the person
+ * consents to, not what any one token carries. The Human IdP maps one operation scope
+ * to one audience, so each Access Token still names the single audience it is for and
+ * carries the single scope that audience checks.
+ */
+export const CONSENT_SCOPE = [LOGIN_SCOPE, ...TOKEN_PLAN.map((target) => target.scope)].join(' ');
 
 interface LoginTransaction {
   stage: number;
@@ -55,8 +75,13 @@ export function createLoginRoutes(input: {
   app.get('/login', async (context) => {
     const keyPair = await generateEs256KeyPair();
     const privateJwk = await webcrypto.subtle.exportKey('jwk', keyPair.privateKey);
+    // The one leg the person sees. It names every scope the plan below will collect,
+    // so the consent screen states the whole delegation at once; the ID Token is what
+    // this leg is exchanged for, and the Access Token it also returns names no Control
+    // Plane audience (only the OP's UserInfo endpoint), so nothing is opened by asking.
     const request = await buildAuthorizationRequest({
       issuer: input.config.issuer, clientId: input.config.clientId, redirectUri,
+      scope: CONSENT_SCOPE,
     });
     await input.documents.create('login_transactions', request.state, {
       stage: -1,
@@ -123,6 +148,9 @@ export function createLoginRoutes(input: {
     const nextStage = transaction.stage + 1;
     if (nextStage < TOKEN_PLAN.length) {
       const target = TOKEN_PLAN[nextStage]!;
+      // One operation scope, because one Access Token is for one audience. The person
+      // is not asked again: `CONSENT_SCOPE` already covers this one, so the Human IdP
+      // finds the consent on record and redirects straight back with a code.
       const request = await buildAuthorizationRequest({
         issuer: input.config.issuer,
         clientId: input.config.clientId,

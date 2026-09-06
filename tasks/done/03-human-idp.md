@@ -333,7 +333,8 @@ REQ-02-011 の「1値に固定する」を DEV-12 に従って読み替えた実
 
 **実装方針**
 - 対応表は `SCOPE_TO_AUDIENCE` として次の4行で固定する。`workdef:submit` → `authorization-platform`、`agent:provision` → `agent-provisioner`、`agent:revoke` → `lifecycle-manager`、`agent:operate` → `automation-app`。
-- 決定の順序を次に固定する。(1) 要求 scope から操作 scope を抜き出す、(2) 対応表で audience 集合へ写す、(3) 集合が2要素以上なら `invalid_scope`、(4) `audience` パラメータが無ければ写した1件を採用、(5) `audience` パラメータがあり写した値とバイト一致しなければ `invalid_target`。
+- 決定の順序を次に固定する。(1) 要求 scope から操作 scope を抜き出す、(2) 対応表で audience 集合へ写す、(3) 集合が2要素以上なら audience を `undefined` のままにし、`audience` パラメータがあれば `invalid_scope`、(4) `audience` パラメータが無ければ写した1件を採用、(5) `audience` パラメータがあり写した値とバイト一致しなければ `invalid_target`。
+- (3) は当初「2要素以上なら要求ごと `invalid_scope`」だった。改訂(2026-09-06)。**要求は通し、audience を付けない。** 守るべき性質は「そういう要求を断ること」ではなく「1枚の Access Token が2つの audience を持たないこと」であり、audience を付けなければ後者はより強く守られる。この経路の Access Token の `aud` は OP 自身の UserInfo エンドポイントだけになり、Control Plane のどのアプリにも届かない。これで Automation App は必要な scope を全部並べた同意を1回で取れる（T-APP-01）。Access Token は従来どおり操作 scope 1つずつ取り、1枚の宛先も権限も1つのままである。
 - 操作 scope が1つも無い要求（`scope=openid` や `scope=openid offline_access`）では audience を `undefined` のままにする。この経路の ID Token の `aud` は client_id であり、これが `automation-app` と `agent-platform` の2値を生む。5種の audience は「ID Token 2種（client_id 由来）」と「Access Token 3種（対応表由来）」の合算で満たす。
 - `/token` 側の `buildAccessTokenAudience({ userInfoEndpoint, requested, issuer })` の呼び出しを変更しない。`userInfoEndpoint` を外すと core の UserInfo 検証が通らなくなる。
 - `packages/xaa-contracts/src/audience.ts` に `audienceIncludes(aud: string | string[], expected: string): boolean` を置く。配列化したうえで要素の厳密等価だけで判定し、`startsWith` や `includes(substring)` を使わない。Control Plane 各アプリはこの関数で `aud` を検証する。
@@ -342,7 +343,9 @@ REQ-02-011 の「1値に固定する」を DEV-12 に従って読み替えた実
 - [x] `scope=openid workdef:submit` で得た Access Token の `aud` が `audienceIncludes(aud, 'authorization-platform')` で true になり、`aud` の要素数が 2 である（実体は `e2e/test/access-token-audience.spec.ts`）
 - [x] `scope=openid agent:provision` で得た Access Token が `audienceIncludes(aud, 'agent-provisioner')` で true になる（実体は `e2e/test/access-token-audience.spec.ts`）
 - [x] `packages/xaa-contracts/test/audience.spec.ts::element match, no prefix/substring match` が `authorization-platform-x` と `authorization` の両方で false を返して緑になる
-- [x] `scope=openid workdef:submit agent:provision` が `invalid_scope` になる（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] 操作 scope を4つ並べた要求で得た Access Token の `aud` が `["{issuer}/userinfo"]` だけになり、4つの audience のいずれも含まない（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] `scope=openid workdef:submit agent:provision` に `audience=agent-provisioner` を添えた要求が `invalid_scope` になる（実体は `e2e/test/access-token-audience.spec.ts`）
+- [x] 全 scope を並べた同意のあと、操作 scope 1つずつの認可要求が同意画面を出さずに code を返す（実体は `e2e/test/login-id-token.spec.ts`）
 
 ---
 
