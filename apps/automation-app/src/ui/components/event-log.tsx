@@ -1,7 +1,8 @@
 import type { ActivityRecord } from '@xaa/contracts';
 import { emphasisClass } from '../replay/emphasis.js';
-import { REPLAY_NODES } from '../replay/nodes.js';
+import { labelOf, roleTextOf } from '../roles.js';
 import { DetailDisclosure } from './detail-disclosure.js';
+import { LocalTime } from './local-time.js';
 import { OutcomeBadge } from './outcome-badge.js';
 import { RecordView } from './record-view.js';
 import type { Element } from '../element.js';
@@ -19,57 +20,57 @@ export interface LogEvent {
 }
 
 export const EVENT_LOG_CAPTION = '起きたことを順番に';
-export const EVENT_LOG_NOTE = '上から順に、この処理で実際に起きたことです。各行の文章は、それを行った側がその場で書いたものです。図の再生に合わせて、いま説明している行が強調されます。';
+export const EVENT_LOG_NOTE = '上から順に、この処理で実際に起きたことです。各行の頭に、それを行った箱の名前と、その箱が何をするところかを書いています。文章はそれを行った側がその場で書いたものです。図の再生に合わせて、いま説明している行が強調されます。';
 
 /**
- * Which box on the diagram published a line, named the way the box is named.
- *
- * The picture and the text have to agree about what to call things, or a person
- * reading 「Agent Runtime が…」 beside a box captioned something else has two systems
- * to reconcile instead of one. A source with no box of its own — Lifecycle Manager,
- * Security Detection — is shown as it was published rather than given a name here;
- * naming it would be this file inventing vocabulary, which is what RULE-54 forbids.
- */
-function sourceLabel(source: string): string {
-  return REPLAY_NODES.find((node) => node.id === source)?.label ?? source;
-}
-
-/**
- * The whole of a finished task, in words, above and beside its replay.
+ * The whole of a finished task, in words, below its replay.
  *
  * It is rendered by the server and always present, which is the point: the animation
  * shows the shape of what happened, and this shows what happened. Someone who never
  * presses play, or who cannot watch an animation at all, loses nothing but the motion.
  *
- * Each row carries its `event_id` so the browser can mark the one the replay has
- * reached. The browser sets an attribute and nothing else — the words are all here,
- * server-rendered, exactly as their publishers wrote them. The `<time>` keeps the
- * instant as recorded; the browser may show it in the reader's own clock, and the
- * recorded value stays on the element.
+ * Each row names the part that published it and, beside the name, what that part is
+ * for. A log whose every line began `agent-op` and assumed the reader knew what an
+ * Agent OP was is a log only its authors could read — which is what people said about
+ * it. The name and the phrase both come from the one role dictionary the diagram draws
+ * its boxes from, so the picture and the text cannot call the same part two things.
+ *
+ * Which row the replay has reached is a prop rather than an attribute the browser
+ * pokes in afterwards: one state, held by the task's replay, rendered by both halves.
  */
-export function EventLog(props: { taskId: string; taskKey?: string; events: readonly LogEvent[] }): Element {
+export function EventLog(props: {
+  taskId: string;
+  taskKey?: string;
+  events: readonly LogEvent[];
+  /** The event the picture is currently on, if it is playing. */
+  currentEventId?: string | null;
+}): Element {
+  const current = props.currentEventId ?? null;
+  const currentIndex = current === null ? -1 : props.events.findIndex((event) => event.event_id === current);
   return (
-    <section class="event-log" data-event-log={props.taskId} data-log-key={props.taskKey ?? props.taskId}>
+    <section className="event-log" data-event-log={props.taskId} data-log-key={props.taskKey ?? props.taskId}>
       <h3>{EVENT_LOG_CAPTION}</h3>
-      <p class="event-log-note">{EVENT_LOG_NOTE}</p>
+      <p className="event-log-note">{EVENT_LOG_NOTE}</p>
       <ol>
         {props.events.map((event, index) => (
           <li
-            class="event-entry"
+            key={event.event_id}
+            className="event-entry"
             data-event-id={event.event_id}
             data-entry-index={String(index)}
             data-source={event.source}
             data-emphasis={emphasisClass(event.outcome, event.phase)}
-            data-entry-state="waiting"
+            data-entry-state={entryState(index, currentIndex)}
           >
-            <p class="event-head">
-              <span class="event-order">{String(index + 1)}</span>
-              <span class="event-source">{sourceLabel(event.source)}</span>
-              <time class="event-time" datetime={event.occurred_at}>{event.occurred_at}</time>
+            <p className="event-head">
+              <span className="event-order">{String(index + 1)}</span>
+              <span className="event-source">{labelOf(event.source)}</span>
+              <span className="event-source-role" data-field="event-source-role">{roleTextOf(event.source)}</span>
+              <LocalTime className="event-time" at={event.occurred_at} />
               <OutcomeBadge outcome={event.outcome} phase={event.phase} />
             </p>
-            <p class="event-title">{event.title}</p>
-            <p class="event-message">{event.message}</p>
+            <p className="event-title">{event.title}</p>
+            <p className="event-message">{event.message}</p>
             <RecordView {...(event.record ? { record: event.record } : {})} />
             <DetailDisclosure {...(event.detail ? { detail: event.detail } : {})} />
           </li>
@@ -77,4 +78,15 @@ export function EventLog(props: { taskId: string; taskKey?: string; events: read
       </ol>
     </section>
   );
+}
+
+/**
+ * Three states rather than two: an entry the replay has passed reads differently from
+ * one it has not reached yet, and a person who paused halfway needs to see where the
+ * boundary is. Before anything plays, every entry is waiting — which is true.
+ */
+function entryState(index: number, currentIndex: number): 'waiting' | 'current' | 'played' {
+  if (currentIndex < 0) return 'waiting';
+  if (index === currentIndex) return 'current';
+  return index < currentIndex ? 'played' : 'waiting';
 }

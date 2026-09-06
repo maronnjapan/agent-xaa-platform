@@ -306,3 +306,204 @@
 }
 
 .replay[data-replay-state="idle"] .caption-head { display: none; }
+
+/*
+ * The picture and the reasoning, side by side.
+ *
+ * They are one step's two halves — what moved, and why it moved — so they are read
+ * together or not at all. On a narrow screen they stack, picture first, because the
+ * picture is what a person pressed play for.
+ */
+.replay-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 39rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 68rem) {
+  .replay-stage { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* How far through the steps the replay is, as a bar rather than only as a count. */
+.replay-track {
+  flex: 1 1 6rem;
+  min-width: 4rem;
+  height: 4px;
+  border-radius: 2px;
+  background: #e3e6ea;
+  overflow: hidden;
+}
+
+.replay-track-fill {
+  display: block;
+  height: 100%;
+  background: #2f6fb5;
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* A box can be pressed for the longer description of what it is. */
+.replay-node { cursor: pointer; }
+.replay-node:focus-visible rect { stroke: #1a4f9c; stroke-width: 3; }
+
+.replay-role-open {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.replay-role-open button {
+  padding: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+/*
+ * What the agent was thinking on the step the picture is on.
+ *
+ * The diagram answers "what went where"; this answers "why". Every word in it is a
+ * label, a message, a quotation or a value the publisher wrote — the panel supplies the
+ * four headings and the marks beside the verdicts, and nothing else (RULE-54).
+ */
+.thinking {
+  padding: 0.75rem 1rem;
+  border: 1px solid #d5d5dd;
+  border-radius: 8px;
+  background: #fbfcfe;
+  font-size: 0.9rem;
+  min-height: 12rem;
+  box-sizing: border-box;
+}
+
+.thinking-caption {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #5b5b66;
+  letter-spacing: 0.02em;
+}
+
+.thinking-idle,
+.thinking-none {
+  margin: 0;
+  color: #5b5b66;
+}
+
+.thinking-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.25rem;
+}
+
+.thinking-actor {
+  font-weight: 700;
+  color: #24313b;
+}
+
+.thinking-actor-role,
+.thinking-step {
+  font-size: 0.8rem;
+  color: #5f7080;
+}
+
+.thinking-step {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.thinking-headline {
+  margin: 0 0 0.6rem;
+  font-weight: 700;
+  color: #1b1b1f;
+}
+
+.thinking-beat {
+  margin: 0.6rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e7e9ee;
+}
+
+.thinking-beat-heading {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  color: #5b5b66;
+  font-weight: 700;
+}
+
+/* The four beats read as a sequence, so each carries its own mark down the left. */
+.thinking-beat[data-beat="read"] { border-left: 3px solid #9db4c8; padding-left: 0.6rem; }
+.thinking-beat[data-beat="thought"] { border-left: 3px solid #7c6bb5; padding-left: 0.6rem; }
+.thinking-beat[data-beat="decided"] { border-left: 3px solid #2f6fb5; padding-left: 0.6rem; }
+.thinking-beat[data-beat="checks"] { border-left: 3px solid #1d5c33; padding-left: 0.6rem; }
+
+.thinking-label {
+  margin: 0.35rem 0 0.1rem;
+  font-weight: 700;
+  color: #24313b;
+}
+
+.thinking-message {
+  margin: 0 0 0.25rem;
+  color: #4a5560;
+}
+
+/* The model's own words, set as a quotation so they are not read as the screen's. */
+.thinking-quote {
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.7rem;
+  border-left: 3px solid #7c6bb5;
+  background: #f7f5fc;
+  white-space: pre-wrap;
+}
+
+.thinking-text {
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.6rem;
+  background: #f4f5f7;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thinking-fields {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.thinking-fields th {
+  width: 9rem;
+  padding: 0.15rem 0.4rem 0.15rem 0;
+  text-align: left;
+  color: #5b5b66;
+  font-weight: 400;
+  vertical-align: top;
+}
+
+.thinking-fields td {
+  padding: 0.15rem 0;
+  word-break: break-word;
+}
+
+.thinking-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thinking-checks li {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr;
+  gap: 0.15rem 0.5rem;
+  margin: 0.3rem 0;
+}
+
+.thinking-checks .check-message {
+  grid-column: 2;
+  color: #4a5560;
+  font-size: 0.85rem;
+}

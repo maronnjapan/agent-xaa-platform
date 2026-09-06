@@ -22,12 +22,12 @@ const STYLE_TYPE = 'text/css; charset=utf-8';
  * The stylesheets are looked for in `public/` first — where the build copies them —
  * and in the source tree second, so a checkout that has not been built still serves a
  * styled page.
+ *
+ * There is one script rather than one per screen: the screens are one React
+ * application, and a bundle per page would ship the framework four times.
  */
 export const STATIC_ASSETS: Readonly<Record<string, StaticAsset>> = {
-  '/agent-detail.js': { contentType: SCRIPT_TYPE, files: ['public/agent-detail.js'] },
-  '/home.js': { contentType: SCRIPT_TYPE, files: ['public/home.js'] },
-  '/timeline.js': { contentType: SCRIPT_TYPE, files: ['public/timeline.js'] },
-  '/work-definition.js': { contentType: SCRIPT_TYPE, files: ['public/work-definition.js'] },
+  '/app.js': { contentType: SCRIPT_TYPE, files: ['public/app.js'] },
   '/styles/app.css': {
     contentType: STYLE_TYPE,
     files: ['public/styles/app.css', 'src/ui/styles/app.css'],

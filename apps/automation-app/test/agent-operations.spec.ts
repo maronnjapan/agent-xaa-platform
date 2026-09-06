@@ -1,11 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { AGENT_STATUS_RESPONSE_KEYS } from '../src/agents/status.js';
 import { AUDIT_OPERATIONS } from '../src/audit/logger.js';
 import { instructionRequestSchema } from '../src/schemas/index.js';
 import { AGENT_ID, SUBJECT, seedAgent, startAutomationApp } from './helpers.js';
-import { STOP_ACCEPTED, start as startAgentDetail } from '../../automation-app/client/src/agent-detail.js';
-import { FakeDocument, FakeElement, element } from './fake-dom.js';
 
 const repoRoot = new URL('../../../', import.meta.url).pathname;
 const OTHER_AGENT = 'agent-zzzzzzzzzzzzzzzzzzzzzzzzzz';
@@ -130,62 +128,6 @@ describe('stopping an agent', () => {
     const response = await harness.fetch(`/api/agents/${AGENT_ID}/stop`, { method: 'POST' });
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: 'agent_already_destroyed' });
-  });
-
-  /**
-   * What the person is told, which for this button is the whole of the feedback.
-   *
-   * A stop destroys the agent, so the screen has no state left to re-read: the
-   * ownership guard answers 404 for an agent that is gone, and the reload every other
-   * button ends with would race the cleanup and land the person on a JSON refusal for
-   * the agent they had just successfully stopped. The answer is shown in place
-   * instead — which is only worth anything if it actually says the stop was taken.
-   */
-  describe('what the button says afterwards', () => {
-    const json = (body: unknown, status: number): Response =>
-      new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-
-    async function press(answer: Response): Promise<{
-      button: FakeElement; status: FakeElement; reloads: () => number;
-    }> {
-      const document_ = new FakeDocument();
-      const root = element(document_, 'body');
-      let reloads = 0;
-      Object.defineProperty(root, 'location', { value: { reload: () => { reloads += 1; } } });
-      root.appendChild(element(document_, 'button', { 'data-action': 'stop', 'data-agent-id': AGENT_ID }));
-      root.appendChild(element(document_, 'p', { 'data-field': 'control-status', 'data-status': '' }));
-      const button = root.querySelector('button[data-action="stop"]')!;
-      const status = root.querySelector('[data-field="control-status"]')!;
-
-      const original = globalThis.fetch;
-      globalThis.fetch = (async () => answer) as unknown as typeof fetch;
-      try {
-        startAgentDetail(root as unknown as Document);
-        button.dispatch('click');
-        await vi.waitFor(() => { expect(status.textContent).not.toBe(''); });
-      } finally {
-        globalThis.fetch = original;
-      }
-      return { button, status, reloads: () => reloads };
-    }
-
-    it('says the stop was taken, and leaves the button pressed', async () => {
-      const { button, status, reloads } = await press(json({ status: 'stopping' }, 200));
-      expect(status.textContent).toBe(STOP_ACCEPTED);
-      expect(status.getAttribute('data-status')).toBe('done');
-      expect(button.disabled).toBe(true);
-      // The message is the whole answer, so nothing may throw it away by re-reading a
-      // page the agent no longer has.
-      expect(reloads()).toBe(0);
-    });
-
-    it('says a refusal in the words of the refusal, and gives the button back', async () => {
-      const { button, status, reloads } = await press(json({ error: 'not_found' }, 404));
-      expect(status.textContent).toBe('見つかりませんでした。画面を更新してください。');
-      expect(status.getAttribute('data-status')).toBe('error');
-      expect(button.disabled).toBe(false);
-      expect(reloads()).toBe(0);
-    });
   });
 
   it('depends on neither the Cloud Run nor the KMS client', async () => {

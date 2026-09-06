@@ -22,15 +22,15 @@ export const EXECUTION_LOG_EMPTY = 'まだ何も実行していません。最�
  */
 export function ExecutionLog(props: { records: readonly ActivityRecord[] }): Element {
   return (
-    <section class="execution-log" data-section="execution-log">
+    <section className="execution-log" data-section="execution-log">
       <h2>{EXECUTION_LOG_HEADING}</h2>
-      <p class="execution-log-note">{EXECUTION_LOG_NOTE}</p>
+      <p className="execution-log-note">{EXECUTION_LOG_NOTE}</p>
       {props.records.length === 0
-        ? <p class="execution-log-empty" data-field="execution-log-empty">{EXECUTION_LOG_EMPTY}</p>
+        ? <p className="execution-log-empty" data-field="execution-log-empty">{EXECUTION_LOG_EMPTY}</p>
         : (
-          <ol class="execution-steps">
+          <ol className="execution-steps">
             {props.records.map((record, index) => (
-              <li class="execution-step" data-execution-step={String(record.step ?? index + 1)}>
+              <li key={`${record.step ?? index + 1}:${index}`} className="execution-step" data-execution-step={String(record.step ?? index + 1)}>
                 <RecordView record={record} open={index === 0} />
               </li>
             ))}

@@ -11,7 +11,8 @@ import {
   PRESENTED_CAPABILITIES, PRESENTED_CAPABILITIES_REORDERED, PRESENTED_CAPABILITIES_WIDENED,
 } from './fixtures/presented-capabilities.fixture.js';
 import { AGENT_ID, startAutomationApp, type Harness } from './helpers.js';
-import { failureMessage } from '../../automation-app/client/src/messages.js';
+import { failureMessage } from '../src/ui/actions/messages.js';
+import { html as render } from './render.js';
 
 const definition = {
   work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED' as const,
@@ -53,8 +54,8 @@ describe('the requested lifetime', () => {
     }
   });
 
-  it('renders the configured default with the fixed bounds', async () => {
-    const html = String(await LifetimeInput({ defaultMinutes: 120 }));
+  it('renders the configured default with the fixed bounds', () => {
+    const html = render(LifetimeInput({ defaultMinutes: 120 }));
     expect(html).toContain('value="120"');
     expect(html).toContain('min="1"');
     expect(html).toContain('max="1440"');

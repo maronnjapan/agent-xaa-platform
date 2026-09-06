@@ -1,4 +1,6 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { webcrypto } from 'node:crypto';
 import {
   drainActivityQueueForTesting, resetActivityPublisherForTesting, type ActivityEvent,
@@ -15,10 +17,9 @@ import { decideTaskOutcome } from '@xaa/agent-runtime/src/telemetry/task-outcome
 import { storeActivityEvent } from '@xaa/automation-app/src/activity/subscriber';
 import { readTimeline } from '@xaa/automation-app/src/activity/query';
 import { TimelinePage } from '@xaa/automation-app/src/ui/pages/timeline';
-import { buildReplayPlan } from '@xaa/automation-app/client/src/replay-plan';
-import { playReplay } from '@xaa/automation-app/client/src/replay';
-import { REPLAY_STEP_MS } from '@xaa/automation-app/client/src/replay-config';
-import { SOURCE_TO_NODE } from '@xaa/automation-app/src/ui/replay/nodes';
+import { buildReplayPlan } from '@xaa/automation-app/src/ui/replay/plan';
+import { buildFrame } from '@xaa/automation-app/src/ui/replay/geometry';
+import { SOURCE_TO_NODE, visibleNodeIds } from '@xaa/automation-app/src/ui/replay/nodes';
 import { createLogger } from '@xaa/logging';
 import { AGENT_OP_BASE, startAgentOp } from '../../harness/agent-op.js';
 import { HUMAN_IDP_ISSUER, idpPublicJwk } from '../../harness/human-idp.js';
@@ -26,9 +27,9 @@ import { startResource } from '../../harness/resource.js';
 import { nativeManifest } from '../../harness/agent-runtime.js';
 import { startAutomationAppHarness } from '../../harness/automation-app.js';
 import { humanIdToken } from '../runtime/native-xaa-path.spec.js';
-import { replayCanvas } from '../../support/replay-dom.js';
 
-const render = async (element: unknown): Promise<string> => String(await element);
+/** The markup a browser is served, before any script has run. */
+const render = (page: unknown): string => renderToStaticMarkup(page as never);
 const silent = createLogger('agent-runtime', 'agent_runtime', () => {});
 
 /**
@@ -168,7 +169,7 @@ describe('demo D-1: an out-of-permission instruction', () => {
 
     // And the replay stops before the Finance API rather than reaching it.
     const tasks = await readTimeline({ documents: automation.documents, humanSubject });
-    const html = await render(TimelinePage({ tasks }));
+    const html = render(createElement(TimelinePage, { tasks }));
     expect(html).toContain('data-node="resource-api"');
     expect(html.match(/data-reached="false"/g)!.length).toBeGreaterThan(0);
 
@@ -182,27 +183,19 @@ describe('demo D-1: an out-of-permission instruction', () => {
       ...(entry.detail ? { detail: entry.detail as Record<string, unknown> } : {}),
       ...(entry.record ? { record: entry.record } : {}),
     }));
-    const plan = buildReplayPlan(events, (source) => SOURCE_TO_NODE[source] ?? null);
+    const plan = buildReplayPlan(events, (source: string) => SOURCE_TO_NODE[source] ?? null);
     const blockedSteps = plan.filter((step) => step.blocked);
     expect(blockedSteps).toHaveLength(1);
     expect(blockedSteps[0]!.stopRatio).toBe(0.6);
     expect(blockedSteps[0]!.to).toBe('resource-api');
 
-    // Played, not just planned: the drawing a person watches carries one refusal, and
-    // the box it was heading for is the one left explicitly unreached.
-    const root = replayCanvas();
-    vi.useFakeTimers();
-    try {
-      playReplay(root as unknown as HTMLElement, events as never);
-      vi.advanceTimersByTime(REPLAY_STEP_MS * (events.length + 1));
-    } finally {
-      vi.useRealTimers();
-    }
-    expect(root.getAttribute('data-replay-state')).toBe('finished');
-    expect(root.querySelectorAll('[data-blocked="true"]')).toHaveLength(1);
-    const unreached = root.querySelectorAll('[data-reached="false"]');
-    expect(unreached).toHaveLength(1);
-    expect(unreached[0]!.getAttribute('data-node')).toBe('resource-api');
+    // Drawn, not just planned: the frame the canvas renders for that step carries one
+    // refusal, and the box it was heading for is the one left explicitly unreached.
+    const frame = buildFrame(blockedSteps[0]!, visibleNodeIds(events));
+    expect(frame.unreached).toBe('resource-api');
+    expect(frame.reached).toBeNull();
+    expect(frame.stopAt).not.toBeNull();
+    expect(plan.filter((step) => buildFrame(step, visibleNodeIds(events)).unreached !== null)).toHaveLength(1);
   });
 });
 

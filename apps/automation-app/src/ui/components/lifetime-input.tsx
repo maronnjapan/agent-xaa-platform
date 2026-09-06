@@ -12,14 +12,14 @@ import type { Element } from '../element.js';
  */
 export function LifetimeInput(props: { defaultMinutes: number }): Element {
   return (
-    <label class="lifetime-input">
+    <label className="lifetime-input">
       希望する稼働時間（分）
       <input
         type="number"
         name="requested_lifetime_minutes"
         min={String(MIN_LIFETIME_MINUTES)}
         max={String(MAX_LIFETIME_MINUTES)}
-        value={String(props.defaultMinutes)}
+        defaultValue={String(props.defaultMinutes)}
       />
     </label>
   );

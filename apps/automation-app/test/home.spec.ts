@@ -5,9 +5,9 @@ import { capabilitiesHash } from '../src/agent-definition/approval.js';
 import { APPROVAL_NOTE } from '../src/ui/components/agent-definition-panel.js';
 import { STOP_NOTE } from '../src/ui/components/agent-controls.js';
 import { HOME_LEAD } from '../src/ui/pages/home.js';
-import { actionUrl, afterProvision, dayRange, isHomeAction } from '../../automation-app/client/src/home-actions.js';
-import { failureMessage } from '../../automation-app/client/src/messages.js';
-import { toWorkDefinitionBody } from '../../automation-app/client/src/work-definition-request.js';
+import { actionUrl, afterProvision, dayRange, isHomeAction } from '../src/ui/actions/home-actions.js';
+import { failureMessage } from '../src/ui/actions/messages.js';
+import { toWorkDefinitionBody } from '../src/ui/actions/work-definition-request.js';
 import { PRESENTED_CAPABILITIES } from './fixtures/presented-capabilities.fixture.js';
 
 /**
@@ -110,7 +110,7 @@ describe('the home screen', () => {
     expect(html).toContain('data-page="home"');
     expect(html).toContain(HOME_LEAD);
     expect(html).toContain('data-form="work-definition"');
-    expect(html).toContain('<script type="module" src="/home.js">');
+    expect(html).toContain('src="/app.js"');
     expect(html).toContain('href="/styles/app.css"');
   });
 
@@ -203,9 +203,9 @@ describe('the home screen', () => {
     expect(html).toContain('毎朝の日報をまとめる');
   });
 
-  it('serves the script and the stylesheet the page names', async () => {
+  it('serves the one bundle and the stylesheet the page names', async () => {
     const harness = await startAutomationApp();
-    const script = await harness.fetch('/home.js');
+    const script = await harness.fetch('/app.js');
     expect(script.status).toBe(200);
     expect(script.headers.get('content-type')).toContain('javascript');
     expect(await script.text()).toContain('/api/work-definitions/');
@@ -270,7 +270,7 @@ describe('the agent screen', () => {
     expect(html).toContain('data-form="instruction"');
     expect(html).toContain('data-action="stop"');
     expect(html).toContain(STOP_NOTE);
-    expect(html).toContain('<script type="module" src="/agent-detail.js">');
+    expect(html).toContain('src="/app.js"');
   });
 
   it("shows no controls for someone else's agent, because the page is not served at all", async () => {

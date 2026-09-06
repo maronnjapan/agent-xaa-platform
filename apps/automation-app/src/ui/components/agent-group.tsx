@@ -17,15 +17,15 @@ export function AgentGroup(props: {
   tasks: readonly TaskRowProps[];
 }): Element {
   return (
-    <section class="agent-group" data-run-id={props.runId} data-agent-id={props.agentId ?? ''}>
+    <section className="agent-group" data-run-id={props.runId} data-agent-id={props.agentId ?? ''}>
       <h2>{props.purpose}</h2>
-      <p class="agent-group-meta">
+      <p className="agent-group-meta">
         {props.agentId === null
           ? <span data-field="agent-missing">{NO_AGENT_YET}</span>
-          : <span class="agent-group-id" data-field="agent-id">{props.agentId}</span>}
+          : <span className="agent-group-id" data-field="agent-id">{props.agentId}</span>}
       </p>
-      <ol class="task-list">
-        {props.tasks.map((task) => <TaskRow {...task} />)}
+      <ol className="task-list">
+        {props.tasks.map((task) => <TaskRow key={task.task_id} {...task} />)}
       </ol>
     </section>
   );

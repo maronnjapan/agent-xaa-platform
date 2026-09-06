@@ -8,17 +8,23 @@ import { readAgentStatus } from '../agents/status.js';
 import { readTimeline, type TimelineTask } from '../activity/query.js';
 import { createWorkDefinitionStore } from '../work-definition/store.js';
 import { createAgentDefinitionStore } from '../agent-definition/approval.js';
-import { readAsset } from './assets.js';
-import { Layout, renderDocument } from './layout.js';
-import { GuidePage } from './pages/guide.js';
-import { HomePage, type HomeAgent, type HomeWorkItem } from './pages/home.js';
-import { TimelinePage } from './pages/timeline.js';
-import { AgentDetailPage } from './pages/agent-detail.js';
-import { WorkDefinitionNewPage } from './pages/work-definition-new.js';
+import { readAsset, STATIC_ASSETS } from './assets.js';
+import { renderPage } from './layout.js';
+import type { HomeAgent, HomeWorkItem } from './pages/home.js';
 
 type Env = UserVariables & AgentOwnerVariables;
 
 const STYLES = ['/styles/app.css', '/styles/emphasis.css', '/styles/replay.css'] as const;
+
+/**
+ * One bundle for every screen (DEC-APP-06, revised).
+ *
+ * The four screens are one React application, and four bundles would each carry their
+ * own copy of the framework. Which screen it renders comes from the value the server
+ * wrote into the document, not from the script's name — so a page still runs only its
+ * own code.
+ */
+const SCRIPT = '/app.js';
 
 /** How far back the suggestion form looks by default. */
 const SUGGESTION_WINDOW_DAYS = 7;
@@ -33,7 +39,7 @@ export interface PageRouteDeps {
 }
 
 /**
- * The pages a person actually looks at, and the two files they load.
+ * The pages a person actually looks at, and the files they load.
  *
  * They are here rather than in `app.ts` so the screens and the API keep separate route
  * tables, but they run behind the same two guards as the API: `requireUser` decides
@@ -57,10 +63,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   const workDefinitions = createWorkDefinitionStore(deps.documents);
   const agentDefinitions = createAgentDefinitionStore(deps.documents);
 
-  for (const path of [
-    '/agent-detail.js', '/home.js', '/timeline.js', '/work-definition.js',
-    '/styles/app.css', '/styles/emphasis.css', '/styles/replay.css',
-  ]) {
+  for (const path of Object.keys(STATIC_ASSETS)) {
     app.get(path, (context) => {
       const asset = readAsset(path);
       if (!asset) return context.json({ error: 'not_found' }, 404);
@@ -89,17 +92,19 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
       definition,
       agentDefinition: presented.find((candidate) => candidate.work_definition_id === definition.work_definition_id),
     }));
-    return context.html(await renderDocument(
-      <Layout title="自動化をつくる" styles={STYLES} script="/home.js">
-        <HomePage
-          defaultMinutes={deps.config.defaultAgentLifetimeMinutes}
-          items={items}
-          agents={agentsOf(tasks)}
-          defaultFrom={isoDate(now() - SUGGESTION_WINDOW_DAYS * 86_400_000)}
-          defaultTo={isoDate(now())}
-        />
-      </Layout>,
-    ));
+    return context.html(renderPage({
+      title: '自動化をつくる',
+      styles: STYLES,
+      script: SCRIPT,
+      data: {
+        page: 'home',
+        defaultMinutes: deps.config.defaultAgentLifetimeMinutes,
+        items,
+        agents: agentsOf(tasks),
+        defaultFrom: isoDate(now() - SUGGESTION_WINDOW_DAYS * 86_400_000),
+        defaultTo: isoDate(now()),
+      },
+    }));
   });
 
   /**
@@ -110,12 +115,8 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
    * every step it describes is a button on a screen that requires a session, and a
    * guide readable by someone who cannot reach any of them would only mislead.
    */
-  app.get('/guide', asUser, async (context) =>
-    context.html(await renderDocument(
-      <Layout title="使い方" styles={STYLES}>
-        <GuidePage />
-      </Layout>,
-    )));
+  app.get('/guide', asUser, (context) =>
+    context.html(renderPage({ title: '使い方', styles: STYLES, script: SCRIPT, data: { page: 'guide' } })));
 
   app.get('/activity', asUser, async (context) => {
     const agentId = context.req.query('agent_id');
@@ -123,11 +124,9 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     // Narrowing by agent is a filter over the person's own timeline, never a widening
     // of it: the subject still comes from the session and nowhere else.
     const shown = agentId ? tasks.filter((task) => task.agent_id === agentId) : tasks;
-    return context.html(await renderDocument(
-      <Layout title="アクティビティ" styles={STYLES} script="/timeline.js">
-        <TimelinePage tasks={shown} />
-      </Layout>,
-    ));
+    return context.html(renderPage({
+      title: 'アクティビティ', styles: STYLES, script: SCRIPT, data: { page: 'timeline', tasks: shown },
+    }));
   });
 
   app.get('/agents/:agent_id', asUser, requireAgentOwner({
@@ -135,19 +134,18 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   }), async (context) => {
     const agentId = context.get('agentId');
     const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
-    return context.html(await renderDocument(
-      <Layout title="Agent の状況" styles={STYLES} script="/agent-detail.js">
-        <AgentDetailPage agentId={agentId} status={status} />
-      </Layout>,
-    ));
+    return context.html(renderPage({
+      title: 'Agent の状況', styles: STYLES, script: SCRIPT, data: { page: 'agent-detail', agentId, status },
+    }));
   });
 
-  app.get('/work-definitions/new', asUser, async (context) =>
-    context.html(await renderDocument(
-      <Layout title="新しい作業を定義する" styles={STYLES} script="/work-definition.js">
-        <WorkDefinitionNewPage defaultMinutes={deps.config.defaultAgentLifetimeMinutes} />
-      </Layout>,
-    )));
+  app.get('/work-definitions/new', asUser, (context) =>
+    context.html(renderPage({
+      title: '新しい作業を定義する',
+      styles: STYLES,
+      script: SCRIPT,
+      data: { page: 'work-definition-new', defaultMinutes: deps.config.defaultAgentLifetimeMinutes },
+    })));
 
   return app;
 }

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
 import {
   drainActivityQueueForTesting, resetActivityPublisherForTesting, validateActivityEvent, type ActivityEvent,
 } from '@xaa/contracts';
@@ -7,16 +8,11 @@ import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline, taskKeyOf } from '../src/activity/query.js';
 import { NO_AGENT_YET } from '../src/ui/components/agent-group.js';
 import { RecordView, HOPS_CAPTION } from '../src/ui/components/record-view.js';
-import { ReplayCanvas, REPLAY_CAPTION_IDLE } from '../src/ui/components/replay-canvas.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
-import { REPLAY_NODES, SOURCE_TO_NODE } from '../src/ui/replay/nodes.js';
-import { buildReplayPlan } from '../../automation-app/client/src/replay-plan.js';
-import { playReplay, showLocalTimes } from '../../automation-app/client/src/replay.js';
-import { REPLAY_STEP_MS } from '../../automation-app/client/src/replay-config.js';
-import { FakeDocument, FakeElement, element } from './fake-dom.js';
+import { SOURCE_TO_NODE } from '../src/ui/replay/nodes.js';
+import { buildReplayPlan } from '../src/ui/replay/plan.js';
 import { AGENT_ID, SUBJECT, seedAgent, startAutomationApp, type Harness } from './helpers.js';
-
-const render = async (node: unknown): Promise<string> => String(await node);
+import { html as render } from './render.js';
 const AGENT_B = 'agent-bbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 let counter = 0;
@@ -111,7 +107,7 @@ describe('one agent, one story', () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0]).toMatchObject({ run_id: 'decision:dec_c', agent_id: null, purpose: '支払を確認する', status: 'running' });
 
-    const html = await render(TimelinePage({ tasks }));
+    const html = render(createElement(TimelinePage, { tasks }));
     expect(html).toContain(NO_AGENT_YET);
     expect(html).toContain('data-run-id="decision:dec_c"');
   });
@@ -146,7 +142,7 @@ describe('one agent, one story', () => {
       ...story({ agent: AGENT_B, work: 'wd_b', decision: 'dec_b', from: 60, purpose: 'B' }),
     ]);
     const tasks = await readTimeline({ documents: harness.documents, humanSubject: SUBJECT });
-    const html = await render(TimelinePage({ tasks }));
+    const html = render(createElement(TimelinePage, { tasks }));
     for (const task of tasks) {
       expect(html).toContain(`data-replay-key="${taskKeyOf(task)}"`);
       expect(html).toContain(`data-log-key="${taskKeyOf(task)}"`);
@@ -308,8 +304,8 @@ describe('what the Automation App says about its own steps', () => {
 });
 
 describe('what the record panel shows in the open', () => {
-  it('shows prose as a quotation and folds a body', async () => {
-    const html = await render(RecordView({
+  it('shows prose as a quotation and folds a body', () => {
+    const html = render(RecordView({
       record: {
         headline: 'h',
         sections: [
@@ -355,102 +351,5 @@ describe('the plan with words on it', () => {
       ] },
     }], nodeIdFor);
     expect(plan.map((step) => [step.kind, step.label])).toEqual([['move', 'ID-JAG を要求'], ['move', 'ID-JAG を受領']]);
-  });
-});
-
-describe('the replay as it speaks', () => {
-  const document_ = new FakeDocument();
-
-  function canvas(): FakeElement {
-    const root = element(document_, 'div', { class: 'replay', 'data-replay-state': 'idle' });
-    const svg = element(document_, 'svg');
-    svg.appendChild(element(document_, 'g', { 'data-arrows': 'true' }));
-    for (const node of REPLAY_NODES) {
-      svg.appendChild(element(document_, 'g', {
-        'data-node': node.id, 'data-reached': 'false', 'data-active': '', 'data-x': String(node.x), 'data-y': String(node.y),
-      }));
-    }
-    svg.appendChild(element(document_, 'g', { 'data-labels': 'true' }));
-    svg.appendChild(element(document_, 'g', { 'data-dots': 'true' }));
-    svg.appendChild(element(document_, 'text', { 'data-banner': 'true' }));
-    root.appendChild(svg);
-    const caption = element(document_, 'div', { 'data-caption': 'true', 'data-caption-state': 'idle' });
-    for (const field of ['caption-step', 'caption-route', 'caption-label', 'caption-message']) {
-      caption.appendChild(element(document_, 'span', { 'data-field': field }));
-    }
-    root.appendChild(caption);
-    return root;
-  }
-
-  function play(root: FakeElement, events: unknown[]): void {
-    vi.useFakeTimers();
-    try {
-      playReplay(root as unknown as HTMLElement, events as never);
-      vi.advanceTimersByTime(REPLAY_STEP_MS * (events.length + 2));
-    } finally {
-      vi.useRealTimers();
-    }
-  }
-
-  const field = (root: FakeElement, name: string): string => root.querySelectorAll(`[data-field="${name}"]`)[0]!.textContent;
-
-  it('writes the route, the exchange and the sentence under the picture, and on the arrow', () => {
-    const root = canvas();
-    play(root, [{
-      event_id: 'a', occurred_at: at(0), source: 'agent-runtime', phase: 'tool_call', outcome: 'success', message: 'm',
-      record: { hops: [{ from: 'agent-runtime', to: 'agent-op', label: 'ID-JAG を要求', outcome: 'info', message: 'Agent OP に身元を求めました。' }] },
-    }]);
-    expect(field(root, 'caption-step')).toBe('1 / 1');
-    expect(field(root, 'caption-route')).toBe('Agent Runtime → Agent OP');
-    expect(field(root, 'caption-label')).toBe('ID-JAG を要求');
-    expect(field(root, 'caption-message')).toBe('Agent OP に身元を求めました。');
-    expect(root.querySelectorAll('[data-caption]')[0]!.getAttribute('data-caption-state')).toBe('playing');
-    const labels = root.querySelectorAll('[data-arrow-label]');
-    expect(labels).toHaveLength(1);
-    expect(labels[0]!.textContent).toBe('ID-JAG を要求');
-    // The two boxes involved are lit, told apart, and nothing else is.
-    const lit = root.querySelectorAll('[data-node]').filter((node) => node.getAttribute('data-active') !== '');
-    expect(lit.map((node) => [node.getAttribute('data-node'), node.getAttribute('data-active')]))
-      .toEqual([['agent-op', 'to'], ['agent-runtime', 'from']]);
-  });
-
-  it('pulses the box for a step that stayed inside it', () => {
-    const root = canvas();
-    play(root, [{ event_id: 'a', occurred_at: at(0), source: 'authorization', phase: 'authorization', outcome: 'info', title: '権限を決定しました', message: '許可：x' }]);
-    expect(root.querySelectorAll('[data-pulse="true"]')).toHaveLength(1);
-    expect(root.querySelectorAll('[data-arrow-label]')).toHaveLength(0);
-    expect(field(root, 'caption-route')).toBe('Authorization Platform');
-    expect(field(root, 'caption-label')).toBe('権限を決定しました');
-    const box = root.querySelectorAll('[data-node="authorization-platform"]')[0]!;
-    expect(box.getAttribute('data-active')).toBe('self');
-    expect(box.getAttribute('data-reached')).toBe('true');
-  });
-
-  it('serves the caption empty and explains what will appear there', async () => {
-    const html = await render(ReplayCanvas({ taskId: 'task-1', taskKey: 'agent-a:task-1', events: [{ source: 'agent-runtime' }] }));
-    expect(html).toContain('data-caption="true"');
-    expect(html).toContain('data-caption-state="idle"');
-    expect(html).toContain(REPLAY_CAPTION_IDLE);
-    expect(html).toContain('data-labels="true"');
-    expect(html).toContain('data-replay-key="agent-a:task-1"');
-  });
-});
-
-describe('the recorded instants in the reader\'s clock', () => {
-  it('rewrites the text, keeps the recorded value, and leaves a bad one alone', () => {
-    const document_ = new FakeDocument();
-    const root = element(document_, 'div');
-    const good = element(document_, 'time', { datetime: '2026-01-01T00:00:00.000Z' });
-    good.textContent = '2026-01-01T00:00:00.000Z';
-    const bad = element(document_, 'time', { datetime: 'not a time' });
-    bad.textContent = 'not a time';
-    root.appendChild(good);
-    root.appendChild(bad);
-    showLocalTimes(root as never);
-    expect(good.getAttribute('datetime')).toBe('2026-01-01T00:00:00.000Z');
-    expect(good.getAttribute('title')).toBe('2026-01-01T00:00:00.000Z');
-    expect(good.textContent).not.toBe('2026-01-01T00:00:00.000Z');
-    expect(good.textContent).toMatch(/2026/);
-    expect(bad.textContent).toBe('not a time');
   });
 });

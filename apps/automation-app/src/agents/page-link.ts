@@ -9,3 +9,19 @@
 export function agentPagePath(agentId: string): string {
   return `/agents/${encodeURIComponent(agentId)}`;
 }
+
+/**
+ * The two things a person can ask of an agent, as the paths they are asked at.
+ *
+ * They are here for the same reason the page path is: every route under
+ * `/api/agents/:agent_id` runs behind `requireAgentOwner`, and a screen that assembled
+ * its own path would be the start of a second way in. The screens import these; they
+ * do not build them.
+ */
+export function agentInstructionsPath(agentId: string): string {
+  return `/api${agentPagePath(agentId)}/instructions`;
+}
+
+export function agentStopPath(agentId: string): string {
+  return `/api${agentPagePath(agentId)}/stop`;
+}

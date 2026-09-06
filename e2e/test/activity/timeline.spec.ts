@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { resetActivityPublisherForTesting, validateActivityEvent, type ActivityEvent } from '@xaa/contracts';
 import { createFirestoreDouble } from '@xaa/gcp';
 import { storeActivityEvent } from '@xaa/automation-app/src/activity/subscriber';
@@ -6,7 +8,8 @@ import { TimelinePage } from '@xaa/automation-app/src/ui/pages/timeline';
 import { readTimeline } from '@xaa/automation-app/src/activity/query';
 import { startAutomationAppHarness, type AutomationHarness } from '../../harness/automation-app.js';
 
-const render = async (element: unknown): Promise<string> => String(await element);
+/** The markup a browser is served, before any script has run. */
+const render = (page: unknown): string => renderToStaticMarkup(page as never);
 
 function event(overrides: Partial<ActivityEvent>): ActivityEvent {
   return validateActivityEvent({
@@ -49,7 +52,7 @@ describe('the timeline list', () => {
       [agentOne, 'provisioning'], [agentOne, 'task-1'], [agentOne, 'task-2'], [agentOne, 'lifecycle'],
     ]);
 
-    const html = await render(TimelinePage({
+    const html = render(createElement(TimelinePage, {
       tasks: await readTimeline({ documents: harness.documents, humanSubject: 'testuser' }),
     }));
     const groups = [...html.matchAll(/<section class="agent-group" data-run-id="[^"]*" data-agent-id="([^"]*)"/g)].map((match) => match[1]);
@@ -67,7 +70,7 @@ describe('the timeline list', () => {
   it('renders a running task as a disabled row with no replay canvas', async () => {
     const harness = await startAutomationAppHarness();
     await seed(harness, [event({ event_id: '1', task_id: 'task-1', phase: 'tool_call', detail: { event_type: 'TOOL_SUCCEEDED' } })]);
-    const html = await render(TimelinePage({
+    const html = render(createElement(TimelinePage, {
       tasks: await readTimeline({ documents: harness.documents, humanSubject: 'testuser' }),
     }));
     expect(html).toContain('data-status="running"');
@@ -82,7 +85,7 @@ describe('the timeline list', () => {
       event_id: '1', task_id: 'task-1', phase: 'tool_call', outcome: 'blocked',
       occurred_at: '2026-01-01T09:00:00.000Z', detail: { event_type: 'TASK_BLOCKED', purpose: '支払を承認する' },
     })]);
-    const html = await render(TimelinePage({
+    const html = render(createElement(TimelinePage, {
       tasks: await readTimeline({ documents: harness.documents, humanSubject: 'testuser' }),
     }));
     expect(html).toContain('支払を承認する');

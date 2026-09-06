@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
 import { validateActivityEvent, type ActivityEvent, type ActivityRecord } from '@xaa/contracts';
 import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline } from '../src/activity/query.js';
@@ -9,13 +10,10 @@ import { ReplayCanvas, REPLAY_LEGEND } from '../src/ui/components/replay-canvas.
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { REPLAY_NODES, visibleNodeIds } from '../src/ui/replay/nodes.js';
-import { buildReplayPlan } from '../../automation-app/client/src/replay-plan.js';
-import { playReplay } from '../../automation-app/client/src/replay.js';
-import { REPLAY_STEP_MS } from '../../automation-app/client/src/replay-config.js';
-import { FakeDocument, FakeElement, element } from './fake-dom.js';
+import { buildReplayPlan } from '../src/ui/replay/plan.js';
+import { REPLAY_STEP_MS } from '../src/ui/replay/config.js';
 import { AGENT_ID, SUBJECT, startAutomationApp } from './helpers.js';
-
-const render = async (node: unknown): Promise<string> => String(await node);
+import { html as render } from './render.js';
 
 /**
  * One tool call as the Runtime records it: what the agent decided, what it checked,
@@ -47,8 +45,8 @@ const record: ActivityRecord = {
 };
 
 describe('the record panel', () => {
-  it('shows every word its publisher wrote, and adds none of its own', async () => {
-    const html = await render(RecordView({ record }));
+  it('shows every word its publisher wrote, and adds none of its own', () => {
+    const html = render(RecordView({ record }));
     for (const text of [
       record.headline,
       '許可されたツールに入っているか', '2 件に含まれていました。',
@@ -66,16 +64,16 @@ describe('the record panel', () => {
    * sentence. A screen that phrased a status code as 「拒否されました」 would be judging
    * a record it did not make, and would rewrite the past when its wording changed.
    */
-  it('never turns a value into a verdict of its own', async () => {
-    const bare = await render(RecordView({
+  it('never turns a value into a verdict of its own', () => {
+    const bare = render(RecordView({
       record: { headline: 'h', sections: [{ id: 's', label: 'ラベル', fields: [{ label: 'HTTP ステータス', value: '403' }] }] },
     }));
     expect(bare).toContain('403');
     for (const invented of ['拒否されました', '失敗しました', 'エラー']) expect(bare).not.toContain(invented);
   });
 
-  it('shows the checks in the open and folds the technical values away', async () => {
-    const html = await render(RecordView({ record }));
+  it('shows the checks in the open and folds the technical values away', () => {
+    const html = render(RecordView({ record }));
     // The checks answer "did anything stop this", so they are not behind a disclosure.
     const outsideDisclosures = html.split(/<details[\s\S]*?<\/details>/g).join('');
     expect(outsideDisclosures).toContain('許可されたツールに入っているか');
@@ -90,24 +88,24 @@ describe('the record panel', () => {
 });
 
 describe('the execution log on the agent screen', () => {
-  it('says so plainly when the agent has not done anything yet', async () => {
-    const html = await render(ExecutionLog({ records: [] }));
+  it('says so plainly when the agent has not done anything yet', () => {
+    const html = render(ExecutionLog({ records: [] }));
     expect(html).toContain(EXECUTION_LOG_HEADING);
     expect(html).toContain(EXECUTION_LOG_EMPTY);
   });
 
   /** The beginning and the end are what people open; the middle is one click away. */
-  it('opens the first step and folds the rest', async () => {
+  it('opens the first step and folds the rest', () => {
     const second: ActivityRecord = { ...record, step: 2, headline: '二手目' };
-    const html = await render(ExecutionLog({ records: [record, second] }));
+    const html = render(ExecutionLog({ records: [record, second] }));
     expect(html).toContain('data-execution-step="1"');
     expect(html).toContain('data-execution-step="2"');
     expect((html.match(/data-section-id="request" open=""/g) ?? [])).toHaveLength(1);
     expect((html.match(/data-section-id="request"/g) ?? [])).toHaveLength(2);
   });
 
-  it('sits on the agent page without becoming a timeline', async () => {
-    const html = await render(AgentDetailPage({
+  it('sits on the agent page without becoming a timeline', () => {
+    const html = render(AgentDetailPage({
       agentId: 'agent-a',
       status: {
         agent_status: 'ACTIVE', remaining_seconds: 100, current_task: 'task-1',
@@ -132,8 +130,8 @@ describe('the written log beside a replay', () => {
     ...overrides,
   }) as ActivityEvent;
 
-  it('gives every event a numbered entry the animation can point at', async () => {
-    const html = await render(EventLog({
+  it('gives every event a numbered entry the animation can point at', () => {
+    const html = render(EventLog({
       taskId: 'task-1',
       events: [
         { ...event(), record },
@@ -152,8 +150,8 @@ describe('the written log beside a replay', () => {
     expect(html).toContain('Agent Runtime');
   });
 
-  it('is rendered by the server, so it reads with no animation at all', async () => {
-    const html = await render(TimelinePage({
+  it('is rendered by the server, so it reads with no animation at all', () => {
+    const html = render(createElement(TimelinePage, {
       tasks: [{
         run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '日報をまとめる', status: 'completed',
         terminal_outcome: 'success', completed_at: '2026-01-01T00:00:10.000Z',
@@ -165,8 +163,8 @@ describe('the written log beside a replay', () => {
     expect(html).toContain('送ったリクエスト');
   });
 
-  it('adds no replay and no log for a task that has not finished', async () => {
-    const html = await render(TimelinePage({
+  it('adds no replay and no log for a task that has not finished', () => {
+    const html = render(createElement(TimelinePage, {
       tasks: [{ run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '実行中の作業', status: 'running' }],
     }));
     expect(html).not.toContain('class="replay"');
@@ -175,17 +173,21 @@ describe('the written log beside a replay', () => {
 });
 
 describe('the diagram', () => {
-  it('captions every box with what it is for', async () => {
+  it('captions every box with what it is for', () => {
     expect(REPLAY_NODES.every((node) => node.role.trim() !== '')).toBe(true);
-    const html = await render(ReplayCanvas({ taskId: 'task-1', events: [{ source: 'agent-runtime', record }] }));
+    const html = render(ReplayCanvas({
+      taskId: 'task-1', visible: visibleNodeIds([{ source: 'agent-runtime', record }]), state: 'idle', total: 1,
+    }));
     expect(html).toContain('Agent Runtime');
     expect(html).toContain('Agent が動く場所');
     // Explaining the picture is part of the picture, not part of any event.
     for (const line of REPLAY_LEGEND) expect(html).toContain(line);
   });
 
-  it('offers the four controls a person needs to read a step rather than watch it', async () => {
-    const html = await render(ReplayCanvas({ taskId: 'task-1', events: [{ source: 'agent-runtime' }] }));
+  it('offers the four controls a person needs to read a step rather than watch it', () => {
+    const html = render(ReplayCanvas({
+      taskId: 'task-1', visible: visibleNodeIds([{ source: 'agent-runtime' }]), state: 'idle', total: 1,
+    }));
     for (const action of ['replay-play', 'replay-pause', 'replay-step', 'replay-restart']) {
       expect(html).toContain(`data-action="${action}"`);
     }
@@ -242,102 +244,6 @@ describe('the plan the canvas plays', () => {
     }], nodeIdFor);
     expect(plan).toHaveLength(1);
     expect(plan[0]).toMatchObject({ from: 'agent-runtime', to: 'resource-api', blocked: true });
-  });
-});
-
-describe('the replay as a thing a person can stop', () => {
-  const document_ = new FakeDocument();
-
-  function canvas(): FakeElement {
-    const root = element(document_, 'div', { class: 'replay', 'data-replay-state': 'idle' });
-    const svg = element(document_, 'svg');
-    for (const node of REPLAY_NODES) {
-      svg.appendChild(element(document_, 'g', {
-        'data-node': node.id, 'data-reached': 'false', 'data-x': String(node.x), 'data-y': String(node.y),
-      }));
-    }
-    svg.appendChild(element(document_, 'g', { 'data-arrows': 'true' }));
-    svg.appendChild(element(document_, 'g', { 'data-labels': 'true' }));
-    svg.appendChild(element(document_, 'g', { 'data-dots': 'true' }));
-    svg.appendChild(element(document_, 'text', { 'data-banner': 'true' }));
-    root.appendChild(svg);
-    const caption = element(document_, 'div', { 'data-caption': 'true', 'data-caption-state': 'idle' });
-    for (const field of ['caption-step', 'caption-route', 'caption-label', 'caption-message']) {
-      caption.appendChild(element(document_, 'span', { 'data-field': field }));
-    }
-    root.appendChild(caption);
-    root.appendChild(element(document_, 'span', { 'data-field': 'replay-progress' }));
-    return root;
-  }
-
-  const said = (root: FakeElement, field: string): string =>
-    root.querySelectorAll(`[data-field="${field}"]`)[0]!.textContent;
-
-  function log(...eventIds: string[]): FakeElement {
-    const list = element(document_, 'ol', { 'data-event-log': 'task-1' });
-    for (const id of eventIds) {
-      list.appendChild(element(document_, 'li', { 'data-event-id': id, 'data-entry-state': 'waiting' }));
-    }
-    return list;
-  }
-
-  const events = [
-    { event_id: 'ev-1', occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success', message: '一番目', detail: { target: 'resource-as' } },
-    { event_id: 'ev-2', occurred_at: '2026-01-01T00:01:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success', message: '二番目', detail: { target: 'resource-api' } },
-  ];
-
-  const states = (list: FakeElement): (string | null)[] =>
-    list.children.map((entry) => entry.getAttribute('data-entry-state'));
-
-  it('counts the steps as it goes', () => {
-    const root = canvas();
-    vi.useFakeTimers();
-    try {
-      playReplay(root as unknown as HTMLElement, events as never);
-      vi.advanceTimersByTime(REPLAY_STEP_MS * 3);
-    } finally {
-      vi.useRealTimers();
-    }
-    expect(root.querySelectorAll('[data-field="replay-progress"]')[0]!.textContent).toBe('2 / 2');
-    expect(root.getAttribute('data-replay-state')).toBe('finished');
-  });
-
-  it('marks the entry it is on, and the ones it has passed', () => {
-    const root = canvas();
-    const list = log('ev-1', 'ev-2');
-    vi.useFakeTimers();
-    try {
-      const controller = playReplay(root as unknown as HTMLElement, events as never, { log: list as never });
-      expect(states(list)).toEqual(['current', 'waiting']);
-      controller.pause();
-      // Paused after one step, so the boundary between shown and not-shown is visible.
-      expect(root.getAttribute('data-replay-state')).toBe('paused');
-      vi.advanceTimersByTime(REPLAY_STEP_MS * 5);
-      expect(states(list)).toEqual(['current', 'waiting']);
-
-      controller.next();
-      expect(states(list)).toEqual(['played', 'current']);
-      expect(root.getAttribute('data-replay-state')).toBe('finished');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('steps one at a time without ever starting the clock', () => {
-    const root = canvas();
-    vi.useFakeTimers();
-    try {
-      const controller = playReplay(root as unknown as HTMLElement, events as never, { autoplay: false } as never);
-      expect(root.querySelectorAll('[data-dots]')[0]!.children).toHaveLength(0);
-      controller.next();
-      expect(said(root, 'caption-message')).toBe('一番目');
-      // Nothing is scheduled: a paused replay stays where it was put.
-      vi.advanceTimersByTime(REPLAY_STEP_MS * 5);
-      expect(said(root, 'caption-message')).toBe('一番目');
-      expect(said(root, 'caption-step')).toBe('1 / 2');
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });
 

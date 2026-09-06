@@ -14,6 +14,13 @@ for root in "${roots[@]}"; do
   [[ -d "$root" ]] || { echo "missing scan root: $root" >&2; exit 1; }
 done
 
+# The bundle is build output and is not committed, so a run that has not built it would
+# scan an empty directory and report success without having looked at anything.
+[[ -f apps/automation-app/public/app.js ]] || {
+  echo 'apps/automation-app/public/app.js is missing; run pnpm build before this check' >&2
+  exit 1
+}
+
 if ! node scripts/checks/code-grep.mjs 'firebase|@firebase|firestore\.googleapis\.com|onSnapshot' "${roots[@]}" >&2; then
   echo 'Firestore SDK is forbidden in browser assets' >&2
   exit 1

@@ -12,7 +12,7 @@ export const BLOCKED_GUIDANCE_TEXT = 'この Agent の権限は変更できま�
  */
 export function BlockedGuidance(): Element {
   return (
-    <aside class="blocked-guidance" data-section="blocked-guidance">
+    <aside className="blocked-guidance" data-section="blocked-guidance">
       <p>{BLOCKED_GUIDANCE_TEXT}</p>
       <a href="/work-definitions/new" data-action="new-work-definition">新しい作業を定義する</a>
     </aside>

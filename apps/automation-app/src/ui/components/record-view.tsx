@@ -1,5 +1,6 @@
 import type { ActivityRecord, ActivityRecordCheck, ActivityRecordHop, ActivityRecordSection } from '@xaa/contracts';
-import { REPLAY_NODES } from '../replay/nodes.js';
+import { labelOf, roleTextOf } from '../roles.js';
+import { isProse } from '../replay/thinking.js';
 import type { Element } from '../element.js';
 
 /**
@@ -41,22 +42,17 @@ export function RecordView(props: { record?: ActivityRecord; open?: boolean }): 
   const record = props.record;
   if (!record) return null;
   return (
-    <div class="record" data-record="true">
-      <p class="record-headline" data-field="record-headline">{record.headline}</p>
+    <div className="record" data-record="true">
+      <p className="record-headline" data-field="record-headline">{record.headline}</p>
       {record.checks && record.checks.length > 0 ? <ChecksTable checks={record.checks} /> : null}
       {(record.sections ?? []).map((section) => (
         isProse(section)
-          ? <ProseView section={section} />
-          : <SectionView section={section} open={props.open === true} />
+          ? <ProseView key={section.id} section={section} />
+          : <SectionView key={section.id} section={section} open={props.open === true} />
       ))}
       {record.hops && record.hops.length > 0 ? <HopsList hops={record.hops} /> : null}
     </div>
   );
-}
-
-/** Prose is what the publisher said it was: `format: 'text'` with something written. */
-function isProse(section: ActivityRecordSection): boolean {
-  return section.format === 'text' && typeof section.text === 'string' && section.text.trim() !== '';
 }
 
 /**
@@ -68,14 +64,14 @@ function isProse(section: ActivityRecordSection): boolean {
  */
 function ChecksTable(props: { checks: readonly ActivityRecordCheck[] }): Element {
   return (
-    <section class="record-checks" data-record-checks="true">
+    <section className="record-checks" data-record-checks="true">
       <h4>{CHECKS_CAPTION}</h4>
       <ul>
         {props.checks.map((check) => (
-          <li data-check-id={check.id} data-check-result={check.result}>
-            <span class="check-mark" data-check-mark={check.result}>{CHECK_MARKS[check.result]}</span>
-            <span class="check-label">{check.label}</span>
-            <span class="check-message">{check.message}</span>
+          <li key={check.id} data-check-id={check.id} data-check-result={check.result}>
+            <span className="check-mark" data-check-mark={check.result}>{CHECK_MARKS[check.result]}</span>
+            <span className="check-label">{check.label}</span>
+            <span className="check-message">{check.message}</span>
           </li>
         ))}
       </ul>
@@ -94,10 +90,10 @@ function ChecksTable(props: { checks: readonly ActivityRecordCheck[] }): Element
 function ProseView(props: { section: ActivityRecordSection }): Element {
   const section = props.section;
   return (
-    <section class="record-prose" data-section-id={section.id} data-prose="true">
-      <p class="record-prose-label">{section.label}</p>
-      {section.message ? <p class="record-message">{section.message}</p> : null}
-      <blockquote class="record-quote">{section.text}</blockquote>
+    <section className="record-prose" data-section-id={section.id} data-prose="true">
+      <p className="record-prose-label">{section.label}</p>
+      {section.message ? <p className="record-message">{section.message}</p> : null}
+      <blockquote className="record-quote">{section.text}</blockquote>
       <FieldsTable section={section} />
     </section>
   );
@@ -114,12 +110,12 @@ function ProseView(props: { section: ActivityRecordSection }): Element {
 function SectionView(props: { section: ActivityRecordSection; open: boolean }): Element {
   const section = props.section;
   return (
-    <details class="record-section" data-section-id={section.id} {...(props.open ? { open: true } : {})}>
+    <details className="record-section" data-section-id={section.id} {...(props.open ? { open: true } : {})}>
       <summary>{section.label}</summary>
-      {section.message ? <p class="record-message">{section.message}</p> : null}
+      {section.message ? <p className="record-message">{section.message}</p> : null}
       <FieldsTable section={section} />
       {section.text === undefined ? null : (
-        <pre class="record-text" data-text-format={section.format ?? 'text'}>{section.text}</pre>
+        <pre className="record-text" data-text-format={section.format ?? 'text'}>{section.text}</pre>
       )}
     </details>
   );
@@ -129,10 +125,10 @@ function FieldsTable(props: { section: ActivityRecordSection }): Element | null 
   const fields = props.section.fields ?? [];
   if (fields.length === 0) return null;
   return (
-    <table class="record-fields">
+    <table className="record-fields">
       <tbody>
-        {fields.map((field) => (
-          <tr>
+        {fields.map((field, index) => (
+          <tr key={`${index}:${field.label}`}>
             <th scope="row">{field.label}</th>
             <td>{field.value}</td>
           </tr>
@@ -140,11 +136,6 @@ function FieldsTable(props: { section: ActivityRecordSection }): Element | null 
       </tbody>
     </table>
   );
-}
-
-/** A box's name as the diagram prints it; a source with no box keeps its own name. */
-function boxLabel(id: string): string {
-  return REPLAY_NODES.find((node) => node.id === id)?.label ?? id;
 }
 
 /**
@@ -155,18 +146,19 @@ function boxLabel(id: string): string {
  */
 function HopsList(props: { hops: readonly ActivityRecordHop[] }): Element {
   return (
-    <details class="record-hops" data-record-hops="true">
+    <details className="record-hops" data-record-hops="true">
       <summary>{HOPS_CAPTION}</summary>
       <ol>
         {props.hops.map((hop, index) => (
-          <li data-hop-index={String(index)} data-hop-outcome={hop.outcome}>
-            <span class="hop-route">
-              <span class="hop-from">{boxLabel(hop.from)}</span>
-              <span class="hop-arrow" aria-hidden="true">→</span>
-              <span class="hop-to">{boxLabel(hop.to)}</span>
+          <li key={index} data-hop-index={String(index)} data-hop-outcome={hop.outcome}>
+            <span className="hop-route">
+              <span className="hop-from">{labelOf(hop.from)}</span>
+              <span className="hop-arrow" aria-hidden="true">→</span>
+              <span className="hop-to">{labelOf(hop.to)}</span>
             </span>
-            <span class="hop-label">{hop.label}</span>
-            <span class="hop-message">{hop.message}</span>
+            <span className="hop-role" data-field="hop-role">{roleTextOf(hop.to)}</span>
+            <span className="hop-label">{hop.label}</span>
+            <span className="hop-message">{hop.message}</span>
           </li>
         ))}
       </ol>

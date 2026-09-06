@@ -1,3 +1,5 @@
+import { roleOf, type ActorRole } from '../roles.js';
+
 export interface ReplayNode {
   id: string;
   label: string;
@@ -5,7 +7,21 @@ export interface ReplayNode {
   role: string;
   x: number;
   y: number;
+  /** The rest of what this box is, for the panel a person opens beside the picture. */
+  actor: ActorRole;
 }
+
+/** Where each box sits. The only thing about a box that is not in `roles.ts`. */
+const COORDINATES: ReadonlyArray<readonly [string, number, number]> = [
+  ['human-user', 80, 60],
+  ['automation-app', 260, 60],
+  ['authorization-platform', 440, 60],
+  ['agent-provisioner', 620, 60],
+  ['agent-op', 80, 220],
+  ['agent-runtime', 260, 220],
+  ['resource-as', 440, 220],
+  ['resource-api', 620, 220],
+];
 
 /**
  * The replay diagram, drawn once and never computed.
@@ -16,23 +32,20 @@ export interface ReplayNode {
  * both times — that is what makes "the arrow stopped before the Finance API" a thing
  * they can recognise (DEC-APP-06).
  *
- * `role` is the second line inside each box. It describes the platform's own parts and
- * is the same on every replay, which is what keeps it a caption rather than an opinion
- * about an event: a person who has never read docs 05 cannot otherwise tell why an
- * arrow going to "Agent OP" matters, and a diagram nobody can read is not a diagram.
+ * The name and the phrase inside each box are not written here: they come from
+ * `roles.ts`, which is also where the written log gets the name it prints and where
+ * the panel beside the picture gets the longer description. One dictionary, so the
+ * picture, the log and the panel cannot end up calling the same part three things.
  *
  * Nothing here imports a graph library; there is nothing to lay out.
  */
-export const REPLAY_NODES: readonly ReplayNode[] = [
-  { id: 'human-user', label: '利用者', role: '指示する人', x: 80, y: 60 },
-  { id: 'automation-app', label: 'Automation App', role: '画面と記録', x: 260, y: 60 },
-  { id: 'authorization-platform', label: 'Authorization Platform', role: '権限を決める', x: 440, y: 60 },
-  { id: 'agent-provisioner', label: 'Agent Provisioner', role: 'Agent を作る', x: 620, y: 60 },
-  { id: 'agent-op', label: 'Agent OP', role: '身元を発行する', x: 80, y: 220 },
-  { id: 'agent-runtime', label: 'Agent Runtime', role: 'Agent が動く場所', x: 260, y: 220 },
-  { id: 'resource-as', label: 'Resource AS', role: 'Access Token を出す', x: 440, y: 220 },
-  { id: 'resource-api', label: 'Resource API', role: 'データを持つ', x: 620, y: 220 },
-];
+export const REPLAY_NODES: readonly ReplayNode[] = COORDINATES.map(([id, x, y]) => {
+  const actor = roleOf(id);
+  // A coordinate for a part the dictionary does not have is a typo, and one that would
+  // otherwise show as an unlabelled box on every replay.
+  if (!actor) throw new Error(`no role for replay node: ${id}`);
+  return { id, label: actor.label, role: actor.role, x, y, actor };
+});
 
 /**
  * The frame the boxes sit in.
@@ -49,7 +62,7 @@ export const REPLAY_VIEWBOX = `0 0 ${REPLAY_WIDTH} ${REPLAY_HEIGHT}`;
 /**
  * Half a box, in the diagram's own units.
  *
- * Exported because the browser needs them too: an arrow has to end on the edge of the
+ * Exported because the geometry needs them too: an arrow has to end on the edge of the
  * destination rather than at its centre, or a step that stopped short would still be
  * drawn on top of the box it never reached. One pair of numbers, so the picture and
  * the geometry cannot disagree.
@@ -65,7 +78,8 @@ export const NODE_HALF_HEIGHT = 30;
  *
  * They act on an agent rather than talking to one, so drawing an arrow from them
  * would invent a call that never happened. Their events still appear — as a line of
- * text across the middle of the canvas — but they move nothing.
+ * text across the middle of the canvas, and as a named part in the panel beside it —
+ * but they move nothing.
  */
 export const SOURCE_TO_NODE: Readonly<Record<string, string>> = {
   'human-user': 'human-user',
@@ -82,6 +96,11 @@ export const SOURCE_TO_NODE: Readonly<Record<string, string>> = {
 
 export function nodeIdFor(source: string): string | null {
   return SOURCE_TO_NODE[source] ?? null;
+}
+
+/** Where a box's centre is, by id. */
+export function nodeAt(id: string): ReplayNode | null {
+  return REPLAY_NODES.find((node) => node.id === id) ?? null;
 }
 
 interface NodeSourceEvent {

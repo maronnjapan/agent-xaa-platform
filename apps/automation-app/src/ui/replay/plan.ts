@@ -1,4 +1,4 @@
-import { REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from './replay-config.js';
+import { REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from './config.js';
 
 export interface ReplayHop {
   from: string;

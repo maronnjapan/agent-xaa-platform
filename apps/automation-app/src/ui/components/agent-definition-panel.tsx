@@ -1,4 +1,5 @@
 import type { AgentDefinition } from '../../agent-definition/approval.js';
+import type { HomeAction } from '../actions/home-actions.js';
 import type { Element } from '../element.js';
 
 export const APPROVAL_NOTE = '承認するまで Agent は作られません。内容を読んでから承認してください。';
@@ -14,14 +15,22 @@ export const APPROVAL_NOTE = '承認するまで Agent は作られません。�
  * Approval and provisioning are two buttons rather than one. The gap between them is
  * the whole point of RULE-08: the set below is hashed at the moment it is approved,
  * and provisioning is refused if it has moved since.
+ *
+ * The panel presses nothing itself. Both buttons hand the action back to the card,
+ * which is where the one refusal message for this piece of work is shown.
  */
-export function AgentDefinitionPanel(props: { definition: AgentDefinition }): Element {
+export function AgentDefinitionPanel(props: {
+  definition: AgentDefinition;
+  busy?: boolean;
+  onAct?: (action: HomeAction, agentDefinitionId: string) => void;
+}): Element {
   const approved = props.definition.approved_at !== null;
+  const id = props.definition.agent_definition_id;
   return (
     <section
-      class="agent-definition"
+      className="agent-definition"
       data-section="agent-definition"
-      data-agent-definition-id={props.definition.agent_definition_id}
+      data-agent-definition-id={id}
       data-approved={String(approved)}
     >
       <h4>提示された Agent Definition</h4>
@@ -30,7 +39,7 @@ export function AgentDefinitionPanel(props: { definition: AgentDefinition }): El
         <dd>
           <ul data-field="presented-capabilities">
             {props.definition.presented_capabilities.map((capability) => (
-              <li data-capability={capability}>{capability}</li>
+              <li key={capability} data-capability={capability}>{capability}</li>
             ))}
           </ul>
         </dd>
@@ -44,7 +53,9 @@ export function AgentDefinitionPanel(props: { definition: AgentDefinition }): El
             <button
               type="button"
               data-action="provision"
-              data-agent-definition-id={props.definition.agent_definition_id}
+              data-agent-definition-id={id}
+              disabled={props.busy === true}
+              onClick={() => props.onAct?.('provision', id)}
             >
               この内容で Agent を作る
             </button>
@@ -56,7 +67,9 @@ export function AgentDefinitionPanel(props: { definition: AgentDefinition }): El
             <button
               type="button"
               data-action="approve"
-              data-agent-definition-id={props.definition.agent_definition_id}
+              data-agent-definition-id={id}
+              disabled={props.busy === true}
+              onClick={() => props.onAct?.('approve', id)}
             >
               この権限で承認する
             </button>

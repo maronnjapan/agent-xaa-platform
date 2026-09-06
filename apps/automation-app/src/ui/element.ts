@@ -1,7 +1,12 @@
-import type { HtmlEscapedString } from 'hono/utils/html';
+import type { ReactElement } from 'react';
 
 /**
- * What a Hono JSX component returns. Named here so the components do not each reach
- * into hono's internals, and so nothing has to invent a global `JSX` namespace.
+ * What a component returns, named here so no file has to reach into React's types for
+ * the one name it needs.
+ *
+ * The screens are React components rendered twice from the same source: once on the
+ * server, into the HTML a browser is served, and once in the browser, over that same
+ * HTML (DEC-APP-06, revised). Naming the return type in one place is what let that
+ * change be a change of renderer rather than a change of every file's imports.
  */
-export type Element = HtmlEscapedString | Promise<HtmlEscapedString>;
+export type Element = ReactElement | null;

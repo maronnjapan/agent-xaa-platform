@@ -30,10 +30,10 @@ export function TaskRow(props: TaskRowProps): Element {
   const running = props.status === 'running';
   const key = props.run_id ? `${props.run_id}:${props.task_id}` : props.task_id;
   return (
-    <li class="task-row">
+    <li className="task-row">
       <button
         type="button"
-        class={`task-button ${running ? 'is-running' : ''}`}
+        className={`task-button ${running ? 'is-running' : ''}`}
         data-task-id={props.task_id}
         data-task-key={key}
         data-outcome={props.terminal_outcome ?? ''}
@@ -41,13 +41,13 @@ export function TaskRow(props: TaskRowProps): Element {
         {...(running ? { disabled: true } : {})}
       >
         {props.simulated ? <SimulatedBadge position="row" /> : null}
-        <span class="col-purpose">{props.purpose}</span>
-        <span class="col-task-id">{props.task_id}</span>
-        <span class="col-outcome">
+        <span className="col-purpose">{props.purpose}</span>
+        <span className="col-task-id">{props.task_id}</span>
+        <span className="col-outcome">
           {running ? '実行中' : <OutcomeBadge outcome={props.terminal_outcome ?? 'info'} phase={props.phase ?? 'tool_call'} />}
         </span>
-        <span class="col-completed-at">
-          {props.completed_at ? <time datetime={props.completed_at}>{props.completed_at}</time> : ''}
+        <span className="col-completed-at">
+          {props.completed_at ? <time dateTime={props.completed_at}>{props.completed_at}</time> : ''}
         </span>
       </button>
       <DetailDisclosure {...(props.detail ? { detail: props.detail } : {})} simulated={props.simulated === true} />

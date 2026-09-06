@@ -8,6 +8,8 @@
  * there is no second, form-encoded route into any of them.
  */
 
+import { agentPagePath } from '../../agents/page-link.js';
+
 export type HomeAction = 'confirm' | 'submit' | 'approve' | 'provision';
 
 const ACTION_PATHS: Record<HomeAction, (id: string) => string> = {
@@ -42,7 +44,7 @@ export function afterProvision(body: { consent_url?: unknown; agent_id?: unknown
     return { kind: 'navigate', url: body.consent_url };
   }
   if (typeof body.agent_id === 'string' && body.agent_id !== '') {
-    return { kind: 'navigate', url: `/agents/${encodeURIComponent(body.agent_id)}` };
+    return { kind: 'navigate', url: agentPagePath(body.agent_id) };
   }
   return { kind: 'reload' };
 }

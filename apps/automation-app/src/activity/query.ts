@@ -2,6 +2,8 @@ import { classifyTaskId, isTerminalEvent, type ActivityEvent } from '@xaa/contra
 import type { DocumentStore } from '@xaa/gcp';
 import { ACTIVITY_COLLECTION } from './subscriber.js';
 
+export { taskKeyOf } from './task-key.js';
+
 /**
  * The fields every row of the list carries.
  *
@@ -30,10 +32,6 @@ export interface CompletedTask extends TaskBase {
 
 export type TimelineTask = RunningTask | CompletedTask;
 
-/** The one string the page and the browser both build to find a task's canvas. */
-export function taskKeyOf(task: Pick<TimelineTask, 'run_id' | 'task_id'>): string {
-  return `${task.run_id}:${task.task_id}`;
-}
 
 /**
  * The name the terminal table is written in, which two producers spell in two places.

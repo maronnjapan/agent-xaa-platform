@@ -1,6 +1,7 @@
+import type { RefObject } from 'react';
+import { readWorkDefinitionForm, type WorkDefinitionBody } from '../actions/work-definition-request.js';
 import { LifetimeInput } from './lifetime-input.js';
 import type { Element } from '../element.js';
-
 
 /**
  * The blank description of work, which is where every agent starts.
@@ -13,11 +14,26 @@ import type { Element } from '../element.js';
  * It is a component rather than part of a page because two screens open on it: the
  * home screen, where the work is described and then carried through to an agent, and
  * the standalone page the blocked guidance points at. One form means one set of field
- * names for the browser half to read.
+ * names, and one reading of them into the body that is posted.
+ *
+ * The fields are uncontrolled. What the person is typing is theirs until they submit,
+ * and holding every keystroke in React state would put the draft somewhere the server
+ * has not seen and the person cannot see either.
  */
-export function WorkDefinitionForm(props: { defaultMinutes: number }): Element {
+export function WorkDefinitionForm(props: {
+  defaultMinutes: number;
+  formRef?: RefObject<HTMLFormElement | null>;
+  onSubmit?: (body: WorkDefinitionBody) => void;
+}): Element {
   return (
-    <form data-form="work-definition">
+    <form
+      data-form="work-definition"
+      ref={props.formRef}
+      onSubmit={(event) => {
+        event.preventDefault();
+        props.onSubmit?.(readWorkDefinitionForm(event.currentTarget));
+      }}
+    >
       <label>
         目的
         <input type="text" name="purpose" required />

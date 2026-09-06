@@ -18,11 +18,17 @@
     "@xaa/vertex": "workspace:*",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
-    "hono": "4.13.5"
+    "hono": "4.13.5",
+    "motion": "13.2.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@types/node": "22.18.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
     "esbuild": "0.27.7",
+    "happy-dom": "20.14.0",
     "typescript": "5.9.2",
     "vitest": "4.1.11"
   },

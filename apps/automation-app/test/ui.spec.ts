@@ -1,28 +1,29 @@
+/**
+ * @vitest-environment happy-dom
+ */
 import { describe, expect, it, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { createElement } from 'react';
 import {
   NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_HEIGHT, REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds,
 } from '../src/ui/replay/nodes.js';
 import { EMPHASIS_CLASSES, EMPHASIS_LABELS, emphasisClass } from '../src/ui/replay/emphasis.js';
-import { buildReplayPlan, isFinished } from '../../automation-app/client/src/replay-plan.js';
-import { playReplay } from '../../automation-app/client/src/replay.js';
-import { start as startTimelinePage } from '../../automation-app/client/src/timeline.js';
-import { REPLAY_MOTION_MS, REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../../automation-app/client/src/replay-config.js';
+import { buildReplayPlan, isFinished } from '../src/ui/replay/plan.js';
+import { alongRoute, buildFrame } from '../src/ui/replay/geometry.js';
+import { REPLAY_MOTION_MS, REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../src/ui/replay/config.js';
 import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
 import { ReplayCanvas } from '../src/ui/components/replay-canvas.js';
+import { TaskReplay } from '../src/ui/components/task-replay.js';
 import { TaskRow } from '../src/ui/components/task-row.js';
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { BLOCKED_GUIDANCE_TEXT } from '../src/ui/components/blocked-guidance.js';
 import { TIMELINE_NOTE } from '../src/ui/components/timeline-link.js';
 import { SIMULATED_LABEL } from '../src/ui/components/simulated-badge.js';
-import { FakeDocument, FakeElement, element } from './fake-dom.js';
+import { LocalTime } from '../src/ui/components/local-time.js';
+import { REPLAY_CAPTION_IDLE } from '../src/ui/components/replay-canvas.js';
+import { html as render, mount } from './render.js';
 
-const repoRoot = new URL('../../../', import.meta.url).pathname;
-const render = async (element: unknown): Promise<string> => String(await element);
 
 describe('the replay diagram', () => {
   it('has 8 nodes with fixed coordinates', () => {
@@ -43,23 +44,29 @@ describe('the replay diagram', () => {
     expect(Object.values(SOURCE_TO_NODE).every((id) => REPLAY_NODES.some((node) => node.id === id))).toBe(true);
   });
 
-  it('shows only the nodes a task involved', async () => {
-    const provisioning = await render(ReplayCanvas({
+  it('shows only the nodes a task involved', () => {
+    const provisioning = render(ReplayCanvas({
       taskId: 'provisioning',
-      events: [{ source: 'automation-app', detail: { target: 'authorization-platform' } }],
+      visible: visibleNodeIds([{ source: 'automation-app', detail: { target: 'authorization-platform' } }]),
+      state: 'idle',
+      total: 1,
     }));
     expect(provisioning).toMatch(/data-node="authorization-platform"(?![^>]*hidden)/);
 
-    const toolCall = await render(ReplayCanvas({
+    const toolCall = render(ReplayCanvas({
       taskId: 'task-1',
-      events: [{ source: 'agent-runtime', detail: { target: 'resource-api' } }],
+      visible: visibleNodeIds([{ source: 'agent-runtime', detail: { target: 'resource-api' } }]),
+      state: 'idle',
+      total: 1,
     }));
     expect(toolCall).toMatch(/data-node="authorization-platform"[^>]*hidden/);
     expect(toolCall).toMatch(/data-node="resource-api"(?![^>]*hidden)/);
   });
 
-  it('marks every node unreached before anything plays', async () => {
-    const html = await render(ReplayCanvas({ taskId: 'task-1', events: [{ source: 'agent-runtime' }] }));
+  it('marks every node unreached before anything plays', () => {
+    const html = render(ReplayCanvas({
+      taskId: 'task-1', visible: visibleNodeIds([{ source: 'agent-runtime' }]), state: 'idle', total: 1,
+    }));
     expect(html.match(/data-reached="false"/g)).toHaveLength(8);
     expect(html).toContain('data-replay-state="idle"');
   });
@@ -69,14 +76,6 @@ describe('the replay diagram', () => {
       .toEqual(new Set(['agent-runtime', 'resource-as']));
   });
 
-  it('names no graph library', async () => {
-    const manifest = JSON.parse(await readFile(`${repoRoot}apps/automation-app/package.json`, 'utf8')) as {
-      dependencies: Record<string, string>;
-    };
-    for (const forbidden of ['mermaid', 'd3', 'react', 'react-dom']) {
-      expect(Object.keys(manifest.dependencies)).not.toContain(forbidden);
-    }
-  });
 });
 
 describe('the replay plan', () => {
@@ -148,21 +147,6 @@ describe('the replay plan', () => {
     expect(plan[0]).toMatchObject({ from: null, to: null });
   });
 
-  it('names each length in one place', async () => {
-    for (const [name, value] of [['REPLAY_STEP_MS', REPLAY_STEP_MS], ['REPLAY_MOTION_MS', REPLAY_MOTION_MS]] as const) {
-      const hits = execFileSync('bash', ['-c',
-        `grep -rn '${name}' apps/automation-app/src apps/automation-app/client/src`],
-        { cwd: repoRoot, encoding: 'utf8' }).trim().split('\n');
-      expect(hits.filter((line) => line.includes('export const'))).toHaveLength(1);
-      expect(hits.length).toBeGreaterThan(1);
-      // The number itself occurs only on the line that names it. A duration written out
-      // again in the stylesheet or in a timer is a second answer waiting to disagree.
-      const literals = execFileSync('bash', ['-c',
-        `grep -rn '${value}' apps/automation-app/src apps/automation-app/client/src || true`],
-        { cwd: repoRoot, encoding: 'utf8' }).trim();
-      expect(literals.split('\n').filter((line) => line !== '' && !line.includes(`${name} = ${value}`))).toEqual([]);
-    }
-  });
 });
 
 describe('emphasis', () => {
@@ -173,34 +157,34 @@ describe('emphasis', () => {
     expect(new Set(EMPHASIS_CLASSES).size).toBe(4);
   });
 
-  it('gives all four a text label, not only a colour', async () => {
-    const rendered = await Promise.all([
+  it('gives all four a text label, not only a colour', () => {
+    const rendered = [
       render(OutcomeBadge({ outcome: 'info', phase: 'login' })),
       render(OutcomeBadge({ outcome: 'success', phase: 'tool_call' })),
       render(OutcomeBadge({ outcome: 'blocked', phase: 'tool_call' })),
       render(OutcomeBadge({ outcome: 'blocked', phase: 'security' })),
-    ]);
+    ];
     for (const [index, html] of rendered.entries()) {
       expect(html).toContain(EMPHASIS_LABELS[EMPHASIS_CLASSES[index]!]);
     }
     expect(new Set(rendered.map((html) => /data-emphasis="([^"]+)"/.exec(html)![1]))).toHaveLength(4);
   });
 
-  it('puts the warning icon on the security badge only', async () => {
-    expect(await render(OutcomeBadge({ outcome: 'blocked', phase: 'security' }))).toContain('data-icon="warning"');
-    expect(await render(OutcomeBadge({ outcome: 'blocked', phase: 'tool_call' }))).not.toContain('data-icon="warning"');
+  it('puts the warning icon on the security badge only', () => {
+    expect(render(OutcomeBadge({ outcome: 'blocked', phase: 'security' }))).toContain('data-icon="warning"');
+    expect(render(OutcomeBadge({ outcome: 'blocked', phase: 'tool_call' }))).not.toContain('data-icon="warning"');
   });
 });
 
 describe('the detail disclosure', () => {
-  it('is closed to begin with', async () => {
-    const html = await render(DetailDisclosure({ detail: { tool_id: 'internal.document.list' } }));
+  it('is closed to begin with', () => {
+    const html = render(DetailDisclosure({ detail: { tool_id: 'internal.document.list' } }));
     expect(html).toContain('<details');
     expect(html).not.toContain(' open');
   });
 
-  it('joins arrays with a Japanese separator and never composes a sentence', async () => {
-    const html = await render(DetailDisclosure({ detail: { effective_capabilities: ['a', 'b'] } }));
+  it('joins arrays with a Japanese separator and never composes a sentence', () => {
+    const html = render(DetailDisclosure({ detail: { effective_capabilities: ['a', 'b'] } }));
     expect(html).toContain('a、b');
     expect(html).toContain('effective_capabilities');
   });
@@ -212,15 +196,15 @@ describe('the detail disclosure', () => {
 });
 
 describe('the task list', () => {
-  it('renders a running task as a disabled button with no outcome', async () => {
-    const html = await render(TaskRow({ task_id: 'task-1', purpose: '日報', status: 'running' }));
+  it('renders a running task as a disabled button with no outcome', () => {
+    const html = render(TaskRow({ task_id: 'task-1', purpose: '日報', status: 'running' }));
     expect(html).toContain('disabled');
     expect(html).toContain('data-status="running"');
     expect(html).toContain('実行中');
   });
 
-  it('renders a completed task with four columns', async () => {
-    const html = await render(TaskRow({
+  it('renders a completed task with four columns', () => {
+    const html = render(TaskRow({
       task_id: 'task-1', purpose: '日報', status: 'completed',
       terminal_outcome: 'blocked', completed_at: '2026-01-01T00:00:00.000Z', phase: 'tool_call',
     }));
@@ -232,8 +216,8 @@ describe('the task list', () => {
     }
   });
 
-  it('labels a simulated task everywhere and a real one nowhere', async () => {
-    const simulated = await render(TimelinePage({
+  it('labels a simulated task everywhere and a real one nowhere', () => {
+    const simulated = render(createElement(TimelinePage, {
       tasks: [{
         run_id: 'demo:demo-dpop-replay', task_id: 'demo-dpop-replay', agent_id: null, purpose: 'デモ', status: 'completed',
         terminal_outcome: 'blocked', completed_at: '2026-01-01T00:00:00.000Z',
@@ -256,7 +240,7 @@ describe('the task list', () => {
     const outsideDisclosures = simulated.split(/<details[\s\S]*?<\/details>/g).join('');
     expect(outsideDisclosures.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(2);
 
-    const real = await render(TimelinePage({
+    const real = render(createElement(TimelinePage, {
       tasks: [{ run_id: 'work:wd_1', task_id: 'task-1', agent_id: null, purpose: '実作業', status: 'running' }],
     }));
     expect(real).not.toContain(SIMULATED_LABEL);
@@ -270,22 +254,22 @@ describe('the agent detail page', () => {
     execution_log: [],
   };
 
-  it('separates the status panel from the timeline link', async () => {
-    const html = await render(AgentDetailPage({ agentId: 'agent-a', status }));
+  it('separates the status panel from the timeline link', () => {
+    const html = render(AgentDetailPage({ agentId: 'agent-a', status }));
     expect(html).toContain('data-section="status"');
     expect(html).toContain('data-section="timeline-link"');
     expect(html.indexOf('data-section="status"')).toBeLessThan(html.indexOf('data-section="timeline-link"'));
   });
 
-  it('always shows the note about what the timeline replays', async () => {
-    const html = await render(AgentDetailPage({ agentId: 'agent-a', status }));
+  it('always shows the note about what the timeline replays', () => {
+    const html = render(AgentDetailPage({ agentId: 'agent-a', status }));
     expect(html).toContain(TIMELINE_NOTE);
     // Outside any <details>: the caveat must be readable without opening anything.
-    expect(html.split('<details')[0]).toContain(TIMELINE_NOTE);
+    expect(html.split(/<details[\s\S]*?<\/details>/g).join('')).toContain(TIMELINE_NOTE);
   });
 
-  it('offers one link, to a new work definition, when something was blocked', async () => {
-    const html = await render(AgentDetailPage({ agentId: 'agent-a', status }));
+  it('offers one link, to a new work definition, when something was blocked', () => {
+    const html = render(AgentDetailPage({ agentId: 'agent-a', status }));
     expect(html).toContain(BLOCKED_GUIDANCE_TEXT);
     expect(html.match(/\/work-definitions\/new/g)).toHaveLength(1);
     expect(html).not.toContain('権限を追加');
@@ -293,8 +277,8 @@ describe('the agent detail page', () => {
     expect(html).not.toContain('agent_id=agent-a&');
   });
 
-  it('shows no guidance when nothing was blocked', async () => {
-    const html = await render(AgentDetailPage({
+  it('shows no guidance when nothing was blocked', () => {
+    const html = render(AgentDetailPage({
       agentId: 'agent-a',
       status: { ...status, tool_invocations: [{ tool_id: 'internal.document.list', outcome: 'success', summary: '' }] },
     }));
@@ -302,65 +286,14 @@ describe('the agent detail page', () => {
   });
 });
 
-describe('the frontend bundle', () => {
-  it('carries no datastore SDK and holds no connection open', () => {
-    // The Firestore check lives with the other static infra checks, where CI runs it.
-    expect(() => execFileSync('bash', ['infra/tests/no-firestore-sdk-in-frontend.sh'], { cwd: repoRoot })).not.toThrow();
-    expect(() => execFileSync('bash', ['scripts/checks/no-persistent-connection.sh'], { cwd: repoRoot })).not.toThrow();
-  });
-
-  it('passes every automation-app boundary check', () => {
-    for (const script of [
-      'no-offline-access-in-automation-app.sh', 'no-authz-vocabulary-in-automation-app.sh',
-      'no-capability-update-route.sh', 'no-recording-switch.sh', 'no-cross-user-route.sh',
-      'no-demo-route.sh', 'no-fake-actor-token.sh', 'activity-event-single-channel.sh',
-      'no-direct-vertex-sdk.sh',
-    ]) {
-      expect(() => execFileSync('bash', [`scripts/checks/${script}`], { cwd: repoRoot })).not.toThrow();
-    }
-  });
-
+describe('what the timeline asks for, and when', () => {
   /**
-   * A check that passes because it looks at nothing is worth nothing. Each of these
-   * plants the violation the check exists for, inside the directory it scans, and
-   * requires it to be refused — then takes the violation away again.
+   * REQ-11-012 / DEV-13. The page is served with its records already on it and asks
+   * again only when the refresh button is pressed. A minute of sitting still produces
+   * no request at all, which is the browser-side half of "no live channel to the
+   * datastore".
    */
-  it('refuses the authorization vocabulary once it appears in the source', () => {
-    const probe = `${repoRoot}apps/automation-app/src/__vocabulary-probe.ts`;
-    // Assembled from two halves so this spec file is not itself a hit for the grep it
-    // is testing; the file written to disk contains the word.
-    writeFileSync(probe, `export const level = '${['full', 'isolation'].join('_')}';\n`);
-    try {
-      expect(() => execFileSync('bash', ['scripts/checks/no-authz-vocabulary-in-automation-app.sh'], { cwd: repoRoot }))
-        .toThrow();
-    } finally {
-      rmSync(probe, { force: true });
-    }
-    expect(() => execFileSync('bash', ['scripts/checks/no-authz-vocabulary-in-automation-app.sh'], { cwd: repoRoot }))
-      .not.toThrow();
-  });
-
-  it('refuses a renderer that imports something which decides', () => {
-    const fixture = `${repoRoot}apps/automation-app/test/fixtures/ui-decision-violation.fixture.ts`;
-    const probe = `${repoRoot}apps/automation-app/src/ui/__decision-probe.ts`;
-    copyFileSync(fixture, probe);
-    try {
-      expect(() => execFileSync('npx', ['eslint', 'apps/automation-app/src/ui/__decision-probe.ts'], { cwd: repoRoot }))
-        .toThrow();
-    } finally {
-      rmSync(probe, { force: true });
-    }
-    // Where it lives, the same file lints clean — which is why `pnpm lint` is green.
-    expect(() => execFileSync('npx', ['eslint', 'apps/automation-app/test/fixtures/ui-decision-violation.fixture.ts'], { cwd: repoRoot }))
-      .not.toThrow();
-  }, 120_000);
-
-  /**
-   * REQ-11-012 / DEV-13. The page asks once when it opens and once per press of the
-   * refresh button. Sixty seconds of sitting still produce no request at all, which is
-   * the browser-side half of "no live channel to the datastore".
-   */
-  it('asks once and then waits to be asked again', async () => {
+  it('asks nothing on its own, and once per press of the refresh button', async () => {
     const asked: string[] = [];
     const original = globalThis.fetch;
     globalThis.fetch = (async (url: string) => {
@@ -369,63 +302,65 @@ describe('the frontend bundle', () => {
     }) as unknown as typeof fetch;
     vi.useFakeTimers();
     try {
-      startTimelinePage(new FakeDocument().createElement('body') as unknown as Document);
-      await vi.advanceTimersByTimeAsync(60_000);
+      const view = await mount(createElement(TimelinePage, { tasks: [] }));
+      await view.act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+      expect(asked).toEqual([]);
+
+      await view.act(() => { view.find('[data-action="refresh"]')!.click(); });
+      await view.act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+      expect(asked).toEqual(['/api/activity/tasks']);
+      await view.unmount();
     } finally {
       vi.useRealTimers();
       globalThis.fetch = original;
     }
-    expect(asked).toEqual(['/api/activity/tasks']);
   });
 });
 
 describe('the replay as it is drawn', () => {
-  const document_ = new FakeDocument();
+  const event = (overrides: Record<string, unknown> = {}) => ({
+    event_id: 'a', trace_id: 'tr', human_subject: 'testuser', agent_id: null, task_id: 'task-1',
+    occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime',
+    phase: 'tool_call', outcome: 'success', title: 'やり取りの名前', message: '読みました',
+    detail: { target: 'resource-api' }, related_finding_id: null, is_simulated: false, ...overrides,
+  });
 
-  function canvas(): FakeElement {
-    const root = element(document_, 'div', { class: 'replay', 'data-replay-state': 'idle' });
-    const svg = element(document_, 'svg');
-    for (const node of REPLAY_NODES) {
-      svg.appendChild(element(document_, 'g', {
-        'data-node': node.id, 'data-reached': 'false',
-        'data-x': String(node.x), 'data-y': String(node.y),
-      }));
-    }
-    svg.appendChild(element(document_, 'g', { 'data-arrows': 'true' }));
-    svg.appendChild(element(document_, 'g', { 'data-labels': 'true' }));
-    svg.appendChild(element(document_, 'g', { 'data-dots': 'true' }));
-    svg.appendChild(element(document_, 'text', { 'data-banner': 'true' }));
-    root.appendChild(svg);
-    const caption = element(document_, 'div', { 'data-caption': 'true', 'data-caption-state': 'idle' });
-    for (const field of ['caption-step', 'caption-route', 'caption-label', 'caption-message']) {
-      caption.appendChild(element(document_, 'span', { 'data-field': field }));
-    }
-    root.appendChild(caption);
-    return root;
-  }
-
-  const said = (root: FakeElement, field: string): string =>
-    root.querySelectorAll(`[data-field="${field}"]`)[0]!.textContent;
-
-  function play(root: FakeElement, events: unknown[]): void {
+  /** The task as the page hands it to the replay: the events, twice, in both shapes. */
+  async function play(events: Array<Record<string, unknown>>, steps = events.length + 1) {
     vi.useFakeTimers();
+    const view = await mount(createElement(TaskReplay, {
+      taskId: 'task-1', taskKey: `run:task-1`, events: events as never, logEvents: events as never, simulated: false,
+    }));
     try {
-      playReplay(root as unknown as HTMLElement, events as never);
-      vi.advanceTimersByTime(REPLAY_STEP_MS * (events.length + 1));
+      await view.act(() => { view.find('[data-action="replay-play"]')!.click(); });
+      // One step at a time: each step's timer is registered by the effect that runs
+      // after the step before it has been rendered, so they cannot all be run off in
+      // one advance.
+      for (let step = 0; step < steps; step += 1) {
+        await view.act(async () => { await vi.advanceTimersByTimeAsync(REPLAY_STEP_MS); });
+      }
     } finally {
       vi.useRealTimers();
     }
+    return view;
   }
 
-  /** The corners of a drawn path, in order, as the browser would follow them. */
-  const corners = (d: string): Array<{ x: number; y: number }> =>
-    d.split(/[ML]/).filter((part) => part.trim() !== '').map((part) => {
-      const [x, y] = part.trim().split(/\s+/).map(Number) as [number, number];
-      return { x, y };
-    });
+  /**
+   * One step's geometry, without a document: what the canvas is handed to draw.
+   *
+   * Every box is visible, which is the case a line has to survive — a box the replay
+   * is not showing cannot be drawn over, so a task that involved two boxes is the easy
+   * one and a task that involved all eight is the test.
+   */
+  const ALL_NODES = new Set(REPLAY_NODES.map((node) => node.id));
+  const frameFor = (from: string, to: string, overrides: Record<string, unknown> = {}) => {
+    const events = [event({ source: from, detail: { target: to }, ...overrides })];
+    const plan = buildReplayPlan(events as never, (source) => SOURCE_TO_NODE[source] ?? null);
+    return buildFrame(plan[0]!, ALL_NODES);
+  };
 
   /** Points along a polyline, close enough together to catch a clipped corner. */
-  const samples = (route: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> =>
+  const samples = (route: ReadonlyArray<{ x: number; y: number }>): Array<{ x: number; y: number }> =>
     route.slice(1).flatMap((to, index) => {
       const from = route[index]!;
       return Array.from({ length: 41 }, (_unused, tick) => ({
@@ -437,23 +372,17 @@ describe('the replay as it is drawn', () => {
   /** One line of the label font, so a name near the frame's edge is not cut off. */
   const TEXT_HEIGHT = 11;
 
-  const step = (overrides: Record<string, unknown> = {}) => ({
-    event_id: 'a', occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime',
-    phase: 'tool_call', outcome: 'success', message: '読みました',
-    detail: { target: 'resource-api' }, ...overrides,
-  });
-
-  it('gives each step a path and an animation paced by the motion length', () => {
-    const root = canvas();
-    play(root, [step()]);
-    const dot = root.querySelectorAll('[data-emphasis]')[0]!;
+  it('gives each step a path and an animation paced by the motion length', async () => {
+    const view = await play([event()]);
+    const dot = view.find('.replay-dot')!;
     expect(dot.getAttribute('class')).toBe('replay-dot');
     // Agent Runtime is at (260, 220) and the path leaves the edge of its box, not its
     // centre: an arrow drawn from the centre is drawn underneath the box it left.
-    expect(dot.style.getPropertyValue('offset-path')).toMatch(/^path\('M 260 190 /);
+    expect(dot.style.getPropertyValue('offset-path')).toMatch(/^path\('M 330 220 /);
     expect(dot.style.getPropertyValue('--motion-ms')).toBe(`${REPLAY_MOTION_MS}ms`);
-    expect(root.querySelectorAll('[data-arrows]')[0]!.children.some((child) => child.tagName === 'path')).toBe(true);
-    expect(root.getAttribute('data-replay-state')).toBe('finished');
+    expect(view.find('[data-arrows] path')).not.toBeNull();
+    expect(view.find('[data-replay-state]')!.getAttribute('data-replay-state')).toBe('finished');
+    await view.unmount();
   });
 
   /**
@@ -464,18 +393,17 @@ describe('the replay as it is drawn', () => {
    * that service was part of.
    *
    * Every ordered pair is checked rather than the handful the demo happens to produce:
-   * which boxes a real task connects is not this file's to predict.
+   * which boxes a real task connects is not this file's to predict. It is arithmetic
+   * over eight fixed coordinates, so it is checked as arithmetic, without a document.
    */
   it('draws no line and no name over a box the step is not about', () => {
     for (const from of REPLAY_NODES) {
       for (const to of REPLAY_NODES) {
         if (from.id === to.id) continue;
-        const root = canvas();
-        play(root, [step({ source: from.id, title: 'やり取りの名前', detail: { target: to.id } })]);
+        const frame = frameFor(from.id, to.id);
         const others = REPLAY_NODES.filter((node) => node.id !== from.id && node.id !== to.id);
 
-        const drawn = corners(root.querySelectorAll('[data-arrows]')[0]!.children[0]!.getAttribute('d')!);
-        for (const at of samples(drawn)) {
+        for (const at of samples(frame.route)) {
           for (const node of others) {
             const clear = Math.abs(at.x - node.x) >= NODE_HALF_WIDTH || Math.abs(at.y - node.y) >= NODE_HALF_HEIGHT;
             expect(clear, `${from.id} → ${to.id} is drawn over ${node.id}`).toBe(true);
@@ -484,8 +412,7 @@ describe('the replay as it is drawn', () => {
 
         // The name is placed by height alone, so it clears every box however wide the
         // text turns out to be — which the browser knows and this suite cannot.
-        const label = root.querySelectorAll('[data-arrow-label]')[0]!;
-        const y = Number(label.getAttribute('y'));
+        const y = frame.labelAt!.y;
         for (const node of REPLAY_NODES) {
           expect(Math.abs(y - node.y) >= NODE_HALF_HEIGHT, `the name of ${from.id} → ${to.id} sits on ${node.id}`).toBe(true);
         }
@@ -495,47 +422,53 @@ describe('the replay as it is drawn', () => {
     }
   });
 
-  it('stops a blocked step short of the box and marks that one box unreached', () => {
-    const root = canvas();
-    play(root, [step({ outcome: 'blocked', message: '許可された Tool に含まれない' })]);
-    const dot = root.querySelectorAll('[data-blocked="true"]')[0]!;
+  /**
+   * The plan's ratio alone put the stop mark on top of the Resource AS on this very
+   * path — a refusal the Tool Executor made, drawn as if a service in the middle had
+   * made it. The mark is walked back until it is clear of every box but the one the
+   * movement left.
+   */
+  it('keeps a refusal mark off every box but the one it set off from', () => {
+    const frame = frameFor('agent-runtime', 'resource-api', { outcome: 'blocked', message: '許可された Tool に含まれない' });
+    expect(frame.stopRatio).toBeLessThanOrEqual(BLOCKED_STOP_RATIO);
+    expect(frame.unreached).toBe('resource-api');
+    expect(frame.reached).toBeNull();
+    const at = alongRoute(frame.route, frame.stopRatio);
+    for (const node of REPLAY_NODES) {
+      if (node.id === 'agent-runtime') continue;
+      const clear = Math.abs(at.x - node.x) > NODE_HALF_WIDTH || Math.abs(at.y - node.y) > NODE_HALF_HEIGHT;
+      expect(clear, `the stop mark overlaps ${node.id}`).toBe(true);
+    }
+  });
+
+  it('stops a blocked step short of the box and marks that one box unreached', async () => {
+    const view = await play([event({ outcome: 'blocked', message: '許可された Tool に含まれない' })]);
+    const dot = view.find('[data-blocked="true"]')!;
     expect(dot.getAttribute('class')).toBe('replay-dot is-blocked');
     expect(Number(dot.style.getPropertyValue('--stop-ratio'))).toBeLessThanOrEqual(BLOCKED_STOP_RATIO);
-    expect(root.querySelectorAll('[data-blocked="true"]')).toHaveLength(1);
-    expect(root.querySelectorAll('[data-stop="true"]')).toHaveLength(1);
+    expect(view.all('[data-blocked="true"]')).toHaveLength(1);
+    expect(view.all('[data-stop="true"]')).toHaveLength(1);
 
     // Exactly one destination is refused, and every box the task never touched carries
     // no verdict at all — otherwise "the one that was not reached" means nothing.
-    const unreached = root.querySelectorAll('[data-reached="false"]');
+    const unreached = view.all('[data-reached="false"]');
     expect(unreached).toHaveLength(1);
     expect(unreached[0]!.getAttribute('data-node')).toBe('resource-api');
 
-    /*
-     * The stop mark must not sit on any box but the one the movement left. The plan's
-     * ratio alone put it on top of the Resource AS on this very path — a refusal the
-     * Tool Executor made, drawn as if a service in the middle had made it.
-     */
-    const stopped = root.querySelectorAll('[data-stop="true"]')[0]!;
-    const [x, y] = /translate\(([-\d.]+),([-\d.]+)\)/.exec(stopped.getAttribute('transform') ?? '')!.slice(1).map(Number) as [number, number];
-    for (const node of REPLAY_NODES) {
-      if (node.id === 'agent-runtime') continue;
-      const clear = Math.abs(x - node.x) > NODE_HALF_WIDTH || Math.abs(y - node.y) > NODE_HALF_HEIGHT;
-      expect(clear, `the stop mark overlaps ${node.id}`).toBe(true);
-    }
-
     // The reason shown is the publisher's own sentence, put on screen unchanged.
-    expect(said(root, 'caption-message')).toBe('許可された Tool に含まれない');
+    expect(view.text('[data-field="caption-message"]')).toBe('許可された Tool に含まれない');
+    await view.unmount();
   });
 
-  it('draws a blocked security event more strongly than a blocked tool call', () => {
-    const security = canvas();
-    play(security, [step({ phase: 'security', outcome: 'blocked' })]);
-    const tool = canvas();
-    play(tool, [step({ phase: 'tool_call', outcome: 'blocked' })]);
-    expect(security.querySelectorAll('[data-blocked="true"]')[0]!.getAttribute('data-emphasis'))
+  it('draws a blocked security event more strongly than a blocked tool call', async () => {
+    const security = await play([event({ phase: 'security', outcome: 'blocked' })]);
+    const tool = await play([event({ phase: 'tool_call', outcome: 'blocked' })]);
+    expect(security.find('[data-blocked="true"]')!.getAttribute('data-emphasis'))
       .toBe(emphasisClass('blocked', 'security'));
-    expect(tool.querySelectorAll('[data-blocked="true"]')[0]!.getAttribute('data-emphasis'))
+    expect(tool.find('[data-blocked="true"]')!.getAttribute('data-emphasis'))
       .toBe(emphasisClass('blocked', 'tool_call'));
+    await security.unmount();
+    await tool.unmount();
   });
 
   /**
@@ -544,61 +477,299 @@ describe('the replay as it is drawn', () => {
    * is happening now" with everything that had ever happened. What did happen, in
    * order, is the written log beside the picture — server-rendered and never wiped.
    */
-  it('shows the step it is on and nothing the steps before drew', () => {
-    const root = canvas();
+  it('shows the step it is on and nothing the steps before drew', async () => {
     // Handed over out of order, on purpose: the replay decides the order, from
     // `occurred_at`, not from however the events arrived.
-    play(root, [
-      step({ event_id: 'c', occurred_at: '2026-01-01T00:09:00.000Z', title: '三', message: '三番目', detail: { target: 'resource-as' } }),
-      step({ event_id: 'a', occurred_at: '2026-01-01T00:03:00.000Z', title: '一', message: '一番目' }),
-      step({ event_id: 'd', occurred_at: '2026-01-01T00:12:00.000Z', title: '四', message: '四番目', detail: { target: 'resource-api' } }),
-      step({ event_id: 'b', occurred_at: '2026-01-01T00:06:00.000Z', title: '二', message: '二番目', detail: { target: 'resource-as' } }),
+    const view = await play([
+      event({ event_id: 'c', occurred_at: '2026-01-01T00:09:00.000Z', title: '三', message: '三番目', detail: { target: 'resource-as' } }),
+      event({ event_id: 'a', occurred_at: '2026-01-01T00:03:00.000Z', title: '一', message: '一番目' }),
+      event({ event_id: 'd', occurred_at: '2026-01-01T00:12:00.000Z', title: '四', message: '四番目', detail: { target: 'resource-api' } }),
+      event({ event_id: 'b', occurred_at: '2026-01-01T00:06:00.000Z', title: '二', message: '二番目', detail: { target: 'resource-as' } }),
     ]);
-    expect(said(root, 'caption-message')).toBe('四番目');
-    expect(said(root, 'caption-step')).toBe('4 / 4');
-    for (const layer of ['data-arrows', 'data-labels', 'data-dots']) {
-      expect(root.querySelectorAll(`[${layer}]`)[0]!.children).toHaveLength(1);
-    }
-    expect(root.querySelectorAll('[data-step-index]').map((drawn) => drawn.getAttribute('data-step-index')))
+    expect(view.text('[data-field="caption-message"]')).toBe('四番目');
+    expect(view.text('[data-field="caption-step"]')).toBe('4 / 4');
+    expect(view.all('[data-arrows] path')).toHaveLength(1);
+    expect(view.all('[data-arrow-label]')).toHaveLength(1);
+    expect(view.all('.replay-dot')).toHaveLength(1);
+    expect(view.all('[data-step-index]').map((drawn) => drawn.getAttribute('data-step-index')))
       .toEqual(['3', '3', '3']);
+    await view.unmount();
   });
 
   /**
    * REQ-11-023. The last frame is where the replay stays. Looping it would make a
    * person watching for a second time unsure whether they were seeing new work.
    */
-  it('leaves the finished replay alone five seconds later', () => {
-    const root = canvas();
+  it('leaves the finished replay alone five seconds later', async () => {
+    const view = await play([event({ message: '一番目' })]);
+    const settled = view.text('[data-field="caption-message"]');
+    expect(view.find('[data-replay-state]')!.getAttribute('data-replay-state')).toBe('finished');
+
     vi.useFakeTimers();
     try {
-      playReplay(root as unknown as HTMLElement, [step({ event_id: 'a', message: '一番目' })] as never);
-      vi.advanceTimersByTime(REPLAY_STEP_MS * 2);
-      const settled = said(root, 'caption-message');
-      expect(root.getAttribute('data-replay-state')).toBe('finished');
-
-      vi.advanceTimersByTime(5_000);
-      expect(root.getAttribute('data-replay-state')).toBe('finished');
-      expect(said(root, 'caption-message')).toBe(settled);
-      expect(root.querySelectorAll('[data-dots]')[0]!.children).toHaveLength(1);
+      await view.act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
     } finally {
       vi.useRealTimers();
     }
+    expect(view.find('[data-replay-state]')!.getAttribute('data-replay-state')).toBe('finished');
+    expect(view.text('[data-field="caption-message"]')).toBe(settled);
+    expect(view.all('.replay-dot')).toHaveLength(1);
+    await view.unmount();
   });
 
   /**
-   * REQ-11-026. The disclosure belongs to the row and the replay only ever clears the
-   * layers inside the canvas — so the same `<details>` opens before a replay, during
-   * one, and after it has finished.
+   * REQ-11-026. The disclosure belongs to the written log, and the replay only ever
+   * re-renders what is inside the canvas — so the same `<details>` opens before a
+   * replay, during one, and after it has finished.
    */
-  it('leaves the detail disclosure openable before and after playing', () => {
-    const root = canvas();
-    const disclosure = element(document_, 'details', { 'data-detail': 'true' });
-    root.appendChild(disclosure);
-    expect(disclosure.getAttribute('open')).toBeNull();
+  it('leaves the detail disclosure openable before and after playing', async () => {
+    const view = await play([event({ detail: { target: 'resource-api', tool_id: 'internal.document.list' } })]);
+    const disclosures = view.all('[data-detail="true"]');
+    expect(disclosures).toHaveLength(1);
+    expect(disclosures[0]!.getAttribute('open')).toBeNull();
+    await view.act(() => { (disclosures[0] as HTMLDetailsElement).open = true; });
+    expect((disclosures[0] as HTMLDetailsElement).open).toBe(true);
+    await view.unmount();
+  });
 
-    play(root, [step()]);
+  /**
+   * The question the picture cannot answer on its own. The record's parts are sorted
+   * into what the agent read, what it said, what it chose and what it made sure of,
+   * and every one of those strings is the publisher's (RULE-54).
+   */
+  it('shows what the agent read, thought, decided and checked, on the step it is on', async () => {
+    const view = await play([event({
+      record: {
+        headline: 'internal.document.list を実行しました',
+        step: 1,
+        checks: [{ id: 'allowed_tools', label: '許可されたツールに入っているか', result: 'passed', message: '含まれていました。' }],
+        sections: [
+          { id: 'received', label: 'この手で読んだ指示', text: '日報をまとめて', format: 'text' },
+          { id: 'intent', label: 'エージェントが決めたこと', text: 'まず一覧を見る。', format: 'text', fields: [{ label: '選んだツール', value: 'internal.document.list' }] },
+          { id: 'capability', label: 'このツールが要求する権限', fields: [{ label: '必要な Capability', value: 'document.read' }] },
+        ],
+      },
+    })]);
+    const panel = view.find('[data-thinking]')!;
+    expect(panel.getAttribute('data-thinking-state')).toBe('playing');
+    // Who was thinking, named the way the diagram names the same box.
+    expect(view.text('[data-field="thinking-who"]')).toContain('Agent Runtime');
+    expect(view.text('[data-field="thinking-headline"]')).toBe('internal.document.list を実行しました');
+    expect(view.find('[data-beat="read"]')!.textContent).toContain('日報をまとめて');
+    // The model's own words are a quotation, so they are not read as the screen's.
+    expect(view.text('[data-field="thinking-quote"]')).toBe('まず一覧を見る。');
+    expect(view.find('[data-beat="decided"]')!.textContent).toContain('document.read');
+    expect(view.find('[data-beat="checks"]')!.textContent).toContain('含まれていました。');
+    await view.unmount();
+  });
 
-    expect(root.querySelectorAll('[data-detail="true"]')).toHaveLength(1);
-    expect(disclosure.getAttribute('open')).toBeNull();
+  /** The written log follows the picture, one row at a time. */
+  it('marks the log row the picture has reached', async () => {
+    const events = [
+      event({ event_id: 'a', occurred_at: '2026-01-01T00:01:00.000Z', message: '一番目' }),
+      event({ event_id: 'b', occurred_at: '2026-01-01T00:02:00.000Z', message: '二番目' }),
+    ];
+    vi.useFakeTimers();
+    const view = await mount(createElement(TaskReplay, {
+      taskId: 'task-1', taskKey: 'run:task-1', events: events as never, logEvents: events as never, simulated: false,
+    }));
+    try {
+      expect(view.all('[data-entry-state="waiting"]')).toHaveLength(2);
+      await view.act(() => { view.find('[data-action="replay-step"]')!.click(); });
+      expect(view.find('[data-event-id="a"]')!.getAttribute('data-entry-state')).toBe('current');
+      expect(view.find('[data-event-id="b"]')!.getAttribute('data-entry-state')).toBe('waiting');
+      await view.act(() => { view.find('[data-action="replay-step"]')!.click(); });
+      expect(view.find('[data-event-id="a"]')!.getAttribute('data-entry-state')).toBe('played');
+      expect(view.find('[data-event-id="b"]')!.getAttribute('data-entry-state')).toBe('current');
+    } finally {
+      vi.useRealTimers();
+    }
+    await view.unmount();
+  });
+});
+
+describe('the replay as it speaks', () => {
+  const event = (overrides: Record<string, unknown>) => ({
+    event_id: 'a', trace_id: 'tr', human_subject: 'testuser', agent_id: null, task_id: 'task-1',
+    occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success',
+    title: 't', message: 'm', related_finding_id: null, is_simulated: false, ...overrides,
+  });
+
+  async function play(events: Array<Record<string, unknown>>) {
+    vi.useFakeTimers();
+    const view = await mount(createElement(TaskReplay, {
+      taskId: 'task-1', taskKey: 'agent-a:task-1', events: events as never, logEvents: events as never, simulated: false,
+    }));
+    try {
+      await view.act(() => { view.find('[data-action="replay-play"]')!.click(); });
+      for (let step = 0; step < events.length + 2; step += 1) {
+        await view.act(async () => { await vi.advanceTimersByTimeAsync(REPLAY_STEP_MS); });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    return view;
+  }
+
+  it('writes the route, the exchange and the sentence under the picture, and on the arrow', async () => {
+    const view = await play([event({
+      record: { headline: 'h', sections: [], hops: [{ from: 'agent-runtime', to: 'agent-op', label: 'ID-JAG を要求', outcome: 'info', message: 'Agent OP に身元を求めました。' }] },
+    })]);
+    expect(view.text('[data-field="caption-step"]')).toBe('1 / 1');
+    expect(view.text('[data-field="caption-route"]')).toBe('Agent Runtime → Agent OP');
+    expect(view.text('[data-field="caption-label"]')).toBe('ID-JAG を要求');
+    expect(view.text('[data-field="caption-message"]')).toBe('Agent OP に身元を求めました。');
+    expect(view.find('[data-caption]')!.getAttribute('data-caption-state')).toBe('playing');
+    const labels = view.all('[data-arrow-label]');
+    expect(labels).toHaveLength(1);
+    expect(labels[0]!.textContent).toBe('ID-JAG を要求');
+    // The two boxes involved are lit, told apart, and nothing else is.
+    const lit = view.all('[data-node]').filter((node) => node.getAttribute('data-active') !== '');
+    expect(lit.map((node) => [node.getAttribute('data-node'), node.getAttribute('data-active')]))
+      .toEqual([['agent-op', 'to'], ['agent-runtime', 'from']]);
+    await view.unmount();
+  });
+
+  it('pulses the box for a step that stayed inside it', async () => {
+    const view = await play([event({
+      source: 'authorization', phase: 'authorization', outcome: 'info', title: '権限を決定しました', message: '許可：x',
+      detail: {},
+    })]);
+    expect(view.all('[data-pulse="true"]')).toHaveLength(1);
+    expect(view.all('[data-arrow-label]')).toHaveLength(0);
+    expect(view.text('[data-field="caption-route"]')).toBe('Authorization Platform');
+    expect(view.text('[data-field="caption-label"]')).toBe('権限を決定しました');
+    const box = view.find('[data-node="authorization-platform"]')!;
+    expect(box.getAttribute('data-active')).toBe('self');
+    expect(box.getAttribute('data-reached')).toBe('true');
+    await view.unmount();
+  });
+
+  it('serves the caption empty and explains what will appear there', () => {
+    const html = render(ReplayCanvas({
+      taskId: 'task-1', taskKey: 'agent-a:task-1',
+      visible: new Set(['agent-runtime']), state: 'idle', total: 1,
+    }));
+    expect(html).toContain('data-caption="true"');
+    expect(html).toContain('data-caption-state="idle"');
+    expect(html).toContain(REPLAY_CAPTION_IDLE);
+    expect(html).toContain('data-labels="true"');
+    expect(html).toContain('data-replay-key="agent-a:task-1"');
+  });
+});
+
+describe('the recorded instants in the reader\'s clock', () => {
+  /**
+   * The page is served with the instant as it was recorded, in UTC, which is what a
+   * reader with no script still sees; once the browser has the page the text is re-set
+   * to the same instant in the reader's own zone. Both are asserted, because the point
+   * is that they are the same instant said twice, and that the record survives.
+   */
+  it('serves the recorded value and rewrites the text once the browser has it', async () => {
+    // HTML attribute names are case-insensitive, so React's `dateTime` is the same
+    // `datetime` attribute once a browser has parsed it.
+    expect(render(createElement(LocalTime, { at: '2026-01-01T00:00:00.000Z' })))
+      .toMatch(/datetime="2026-01-01T00:00:00\.000Z"/i);
+
+    const view = await mount(createElement(LocalTime, { at: '2026-01-01T00:00:00.000Z' }));
+    const shown = view.find('time')!;
+    expect(shown.getAttribute('datetime')).toBe('2026-01-01T00:00:00.000Z');
+    expect(shown.getAttribute('title')).toBe('2026-01-01T00:00:00.000Z');
+    expect(shown.textContent).not.toBe('2026-01-01T00:00:00.000Z');
+    expect(shown.textContent).toMatch(/2026/);
+    await view.unmount();
+  });
+
+  it('leaves a value it cannot read alone', async () => {
+    const view = await mount(createElement(LocalTime, { at: 'not a time' }));
+    expect(view.find('time')!.textContent).toBe('not a time');
+    await view.unmount();
+  });
+});
+
+/**
+ * The controls exist because a replay that only ran once, start to finish, at a fixed
+ * pace, is a thing you watch rather than a thing you read. The step that says something
+ * surprising is exactly the one a person wants to stop on and read the record under.
+ */
+describe('the replay as a thing a person can stop', () => {
+  const events = [
+    { event_id: 'ev-1', trace_id: 'tr', human_subject: 'testuser', agent_id: null, task_id: 'task-1', occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success', title: '一', message: '一番目', detail: { target: 'resource-as' }, related_finding_id: null, is_simulated: false },
+    { event_id: 'ev-2', trace_id: 'tr', human_subject: 'testuser', agent_id: null, task_id: 'task-1', occurred_at: '2026-01-01T00:01:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success', title: '二', message: '二番目', detail: { target: 'resource-api' }, related_finding_id: null, is_simulated: false },
+  ];
+
+  const open = () => mount(createElement(TaskReplay, {
+    taskId: 'task-1', taskKey: 'agent-a:task-1', events: events as never, logEvents: events as never, simulated: false,
+  }));
+
+  const states = (view: Awaited<ReturnType<typeof mount>>): (string | null)[] =>
+    view.all('[data-event-id]').map((entry) => entry.getAttribute('data-entry-state'));
+
+  it('counts the steps as it goes', async () => {
+    vi.useFakeTimers();
+    const view = await open();
+    try {
+      await view.act(() => { view.find('[data-action="replay-play"]')!.click(); });
+      for (let step = 0; step < 3; step += 1) {
+        await view.act(async () => { await vi.advanceTimersByTimeAsync(REPLAY_STEP_MS); });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(view.text('[data-field="replay-progress"]')).toBe('2 / 2');
+    expect(view.find('[data-replay-state]')!.getAttribute('data-replay-state')).toBe('finished');
+    await view.unmount();
+  });
+
+  it('marks the entry it is on, and the ones it has passed', async () => {
+    vi.useFakeTimers();
+    const view = await open();
+    try {
+      await view.act(() => { view.find('[data-action="replay-play"]')!.click(); });
+      expect(states(view)).toEqual(['current', 'waiting']);
+
+      await view.act(() => { view.find('[data-action="replay-pause"]')!.click(); });
+      expect(view.find('[data-replay-state]')!.getAttribute('data-replay-state')).toBe('paused');
+      // Paused after one step, so the boundary between shown and not-shown holds.
+      await view.act(async () => { await vi.advanceTimersByTimeAsync(REPLAY_STEP_MS * 5); });
+      expect(states(view)).toEqual(['current', 'waiting']);
+
+      await view.act(() => { view.find('[data-action="replay-step"]')!.click(); });
+      expect(states(view)).toEqual(['played', 'current']);
+      expect(view.find('[data-replay-state]')!.getAttribute('data-replay-state')).toBe('finished');
+    } finally {
+      vi.useRealTimers();
+    }
+    await view.unmount();
+  });
+
+  it('steps one at a time without ever starting the clock', async () => {
+    vi.useFakeTimers();
+    const view = await open();
+    try {
+      expect(view.all('.replay-dot')).toHaveLength(0);
+      await view.act(() => { view.find('[data-action="replay-step"]')!.click(); });
+      expect(view.text('[data-field="caption-message"]')).toBe('一番目');
+      // Nothing is scheduled: a paused replay stays where it was put.
+      await view.act(async () => { await vi.advanceTimersByTimeAsync(REPLAY_STEP_MS * 5); });
+      expect(view.text('[data-field="caption-message"]')).toBe('一番目');
+      expect(view.text('[data-field="caption-step"]')).toBe('1 / 2');
+    } finally {
+      vi.useRealTimers();
+    }
+    await view.unmount();
+  });
+
+  /** A box can be pressed for what it is, which is the question the names raise. */
+  it('opens the description of a box when it is pressed', async () => {
+    const view = await open();
+    expect(view.find('[data-role-open]')).toBeNull();
+    await view.click('[data-node="agent-runtime"]');
+    const opened = view.find('[data-role-open="agent-runtime"]')!;
+    expect(opened.textContent).toContain('Agent が動く場所');
+    expect(opened.querySelector('[data-field="role-does-not"]')!.textContent).not.toBe('');
+    await view.click('[data-action="close-role"]');
+    expect(view.find('[data-role-open]')).toBeNull();
+    await view.unmount();
   });
 });

@@ -12,16 +12,16 @@ import type { Element } from '../element.js';
  */
 export function StatusPanel(props: { status: AgentStatusResponse }): Element {
   return (
-    <section data-section="status" class="status-panel">
+    <section data-section="status" className="status-panel">
       <h2>状況確認</h2>
       <dl>
         <dt>状態</dt><dd data-field="agent_status">{props.status.agent_status}</dd>
         <dt>残り時間（秒）</dt><dd data-field="remaining_seconds">{String(props.status.remaining_seconds)}</dd>
         <dt>実行中のタスク</dt><dd data-field="current_task">{props.status.current_task ?? '—'}</dd>
       </dl>
-      <ol class="tool-invocations">
-        {props.status.tool_invocations.map((invocation) => (
-          <li data-tool-id={invocation.tool_id} data-outcome={invocation.outcome}>
+      <ol className="tool-invocations">
+        {props.status.tool_invocations.map((invocation, index) => (
+          <li key={`${invocation.tool_id}:${index}`} data-tool-id={invocation.tool_id} data-outcome={invocation.outcome}>
             {invocation.tool_id}／{invocation.outcome}／{invocation.summary}
           </li>
         ))}
