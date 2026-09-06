@@ -235,6 +235,129 @@ describe('step5, redemption at the resource AS', () => {
   });
 });
 
+/**
+ * REQ-05-090 says an agent's tokens live for one Job Execution; it never said each
+ * tool call needs its own. The three requests behind an Access Token — subject token,
+ * ID-JAG, redemption — were being made again for every call, for a token the
+ * Execution was still holding, and the delegation they re-established was the same one
+ * every time.
+ */
+describe('the Access Token this Execution already holds', () => {
+  const silent = { logger: console as never, logContext: {} as never, stageWrite: () => {} };
+
+  it('asks the Agent OP and the Resource AS once, however many calls follow', async () => {
+    const context = await testContext();
+    const { http, calls } = testHttp(context, happyPath());
+    const deps = { context, http, ...silent };
+
+    for (const toolId of ['internal.document.list', 'internal.document.get', 'internal.document.list']) {
+      expect(await executeTool(deps, { tool_id: toolId, parameters: { id: 'd1' } }))
+        .toMatchObject({ outcome: 'success' });
+    }
+
+    // Three calls, two tools, one credential: both document tools name the same
+    // audience, resource and scope, so calls two and three found what call one left.
+    expect(calls.filter((call) => call.url.startsWith(`${AGENT_OP}/xaa/subject-token`))).toHaveLength(1);
+    expect(calls.filter((call) => call.url.startsWith(`${AGENT_OP}/xaa/token`))).toHaveLength(1);
+    expect(calls.filter((call) => call.url === `${DOCS_AS}/token`)).toHaveLength(1);
+    // The resource is still called once per tool call. Nothing about the work is cached.
+    expect(calls.filter((call) => call.url.startsWith(DOCS_API))).toHaveLength(3);
+  });
+
+  it('presents a reused token the way the redemption said to', async () => {
+    const context = await testContext();
+    const { http, calls } = testHttp(context, happyPath());
+    const deps = { context, http, ...silent };
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+
+    const resourceCalls = calls.filter((call) => call.url.startsWith(DOCS_API));
+    expect(resourceCalls).toHaveLength(2);
+    for (const call of resourceCalls) {
+      const headers = call.init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe('DPoP access.token.value');
+      // A fresh proof each time, bound to the same token: the DPoP `jti` is what a
+      // resource replays against, so reusing the token must not reuse the proof.
+      expect(decodeJwsUnverified(headers.DPoP!).payload.ath).toBe(await sha256Base64Url('access.token.value'));
+    }
+    const jtis = resourceCalls.map((call) => decodeJwsUnverified((call.init.headers as Record<string, string>).DPoP!).payload.jti);
+    expect(new Set(jtis).size).toBe(2);
+  });
+
+  it('keeps one token per audience, resource and scope', async () => {
+    const base = docsManifest();
+    const writer = {
+      ...base.tools[1]!,
+      authorization: { ...base.tools[1]!.authorization, scope: 'docs.write' },
+    };
+    const context = await testContext({ manifest: { ...base, tools: [base.tools[0]!, writer] } });
+    const { http, calls } = testHttp(context, happyPath());
+    const deps = { context, http, ...silent };
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+    await executeTool(deps, { tool_id: 'internal.document.get', parameters: { id: 'd1' } });
+
+    // The key is what the token may be used for, not which tool asked for it, so the
+    // wider scope is fetched rather than borrowed from the narrower one.
+    expect(calls.filter((call) => call.url === `${DOCS_AS}/token`)).toHaveLength(2);
+    expect(calls
+      .filter((call) => call.url.startsWith(`${AGENT_OP}/xaa/token`))
+      .map((call) => new URLSearchParams(call.init.body as string).get('scope')))
+      .toEqual(['docs.read', 'docs.write']);
+  });
+
+  it('exchanges again once the held token is inside its last thirty seconds', async () => {
+    const context = await testContext();
+    const { http, calls } = testHttp(context, happyPath());
+    let clock = Date.now();
+    const deps = { context, http, ...silent, now: () => clock };
+
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+    // The AS said 300 seconds; the skew makes the last 30 of them unusable.
+    clock += 271_000;
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+
+    expect(calls.filter((call) => call.url.startsWith(`${AGENT_OP}/xaa/token`))).toHaveLength(2);
+    expect(calls.filter((call) => call.url === `${DOCS_AS}/token`)).toHaveLength(2);
+    // The subject token outlives both exchanges, so the OP is not asked for a second.
+    expect(calls.filter((call) => call.url.startsWith(`${AGENT_OP}/xaa/subject-token`))).toHaveLength(1);
+  });
+
+  it('says reused, and names no stage nothing was asked of', async () => {
+    const context = await testContext();
+    const lines: string[] = [];
+    const { http } = testHttp(context, happyPath());
+    const deps = { context, http, logger: console as never, logContext: {} as never, stageWrite: (line: string) => lines.push(line) };
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+    lines.length = 0;
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+
+    const stages = lines.map((line) => JSON.parse(line) as { stage: string; outcome: string | null });
+    expect(stages.map((entry) => entry.stage)).toEqual([
+      'agent_intent', 'tool_selection', 'required_capability', 'auth_mapping', 'access_token', 'resource_api',
+    ]);
+    expect(stages.find((entry) => entry.stage === 'access_token')?.outcome).toBe('reused');
+    expect(stages.at(-1)).toMatchObject({ stage: 'resource_api', outcome: 'success' });
+  });
+
+  it('still refuses a tool and still stops an expired agent', async () => {
+    const manifest = { ...docsManifest(), expires_at: new Date(Date.now() + 200).toISOString() };
+    const context = await testContext({ manifest });
+    const { http, calls } = testHttp(context, happyPath());
+    const deps = { context, http, ...silent };
+    expect(await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} }))
+      .toMatchObject({ outcome: 'success' });
+
+    // A token in hand is not permission: every gate above step4 runs on every call.
+    expect(await executeTool(deps, { tool_id: 'internal.finance.payment.approve', parameters: {} }))
+      .toMatchObject({ outcome: 'blocked', error_code: 'tool_not_allowed' });
+    const before = calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    expect(await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} }))
+      .toMatchObject({ outcome: 'failed', error_code: 'agent_expired' });
+    expect(calls).toHaveLength(before);
+  });
+});
+
 describe('the redeemer is chosen once, from the manifest', () => {
   it('returns one redeemer per type', () => {
     const native = docsManifest().tools[0]!;
@@ -499,6 +622,30 @@ describe('the bridged path', () => {
     expect(headers.Authorization).toBe('Bearer saas-token');
     // DEC-ID-13: nothing outward-facing is DPoP-bound.
     expect(headers).not.toHaveProperty('DPoP');
+  });
+
+  it('reuses the token the bridge handed back', async () => {
+    const context = await testContext({ manifest: { ...docsManifest(), tools: [bridged] } });
+    const { http, calls } = testHttp(context, (url) => {
+      if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
+      if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE });
+      if (url === `${bridge}/token`) return json({ access_token: 'saas-token', expires_in: 3600 });
+      return json({ documents: [{ document_id: 'd1' }] });
+    });
+    const deps = { context, http, logger: console as never, logContext: {} as never, stageWrite: () => {} };
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+
+    // A bridged redemption is an exchange at the Agent OP and a round trip through the
+    // Bridge to the SaaS's own OAuth AS, whose rate limits are not this platform's to
+    // spend. The second call presents the same Bearer token it already had.
+    expect(calls.filter((call) => call.url === `${bridge}/token`)).toHaveLength(1);
+    const saas = calls.filter((call) => call.url.startsWith(DOCS_API));
+    expect(saas).toHaveLength(2);
+    for (const call of saas) {
+      expect((call.init.headers as Record<string, string>).Authorization).toBe('Bearer saas-token');
+      expect(call.init.headers as Record<string, string>).not.toHaveProperty('DPoP');
+    }
   });
 
   it('reports a bridge failure without switching to the native path', async () => {

@@ -1,5 +1,6 @@
 import { JWT_BEARER_GRANT_TYPE } from '@xaa/contracts';
 import { asResourceAccessToken } from '../../http/resource-authorization.js';
+import { accessTokenKey, type HeldAccessToken } from '../../tokens/token-store.js';
 import type { Redeemer } from './redeem-id-jag.js';
 
 /**
@@ -47,10 +48,14 @@ export const redeemViaBridge: Redeemer = async (input) => {
     };
   }
   const expiresAt = now + (typeof payload.expires_in === 'number' ? payload.expires_in : 300) * 1000;
-  return {
+  const held: HeldAccessToken = {
     accessToken: asResourceAccessToken(payload.access_token, 'bridge'),
-    expiresAt,
-    idJagJti: undefined,
     binding: 'bearer',
   };
+  // Kept for the same reason as the native path's token, and it matters more here: a
+  // bridged redemption is an exchange at the Agent OP *and* a round trip through the
+  // Bridge to the SaaS's own OAuth AS, whose rate limits are not this platform's to
+  // spend. Nothing about the token's lifetime changes by being remembered.
+  input.context.tokens.set(accessTokenKey(input.tool.authorization), held, expiresAt);
+  return { ...held, expiresAt, idJagJti: undefined };
 };

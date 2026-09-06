@@ -106,6 +106,37 @@ describe('the record a successful tool call leaves behind', () => {
   });
 });
 
+/**
+ * The second call of a run, when the first one's Access Token is still good. The
+ * record has to say so in its own words: a panel copied from the first call would
+ * describe an exchange with the Agent OP that this step never made.
+ */
+describe('the record a reused Access Token leaves behind', () => {
+  it('says the token was already in hand, and draws no exchange', async () => {
+    const context = await testContext();
+    const { http } = testHttp(context, happyPath());
+    const deps = { context, http, logger: silentLogger, logContext, stageWrite: () => {} };
+    await executeTool(deps, { tool_id: 'internal.document.list', parameters: {} });
+
+    const recorder = createExecutionRecorder({ step: 2, toolId: 'internal.document.list', intent: { parameters: {} } });
+    const record = recorder.build(await executeTool({ ...deps, recorder }, {
+      tool_id: 'internal.document.list', parameters: {},
+    }));
+
+    expect(() => validateActivityRecord(record)).not.toThrow();
+    expect(sectionOf(record, 'access_token')?.message).toContain('何も送っていません');
+    expect(sectionOf(record, 'access_token')?.fields).toContainEqual({ label: '提示方法', value: 'dpop' });
+    // Two movements, not six: the Agent OP and the Resource AS were not part of this
+    // step, and an arrow to either would draw a request that was never sent.
+    expect((record.hops ?? []).map((hop) => [hop.from, hop.to])).toEqual([
+      ['agent-runtime', 'resource-api'],
+      ['resource-api', 'agent-runtime'],
+    ]);
+    expect(JSON.stringify(record)).not.toMatch(JWT_ANYWHERE);
+    expect(JSON.stringify(record)).not.toContain('access.token.value');
+  });
+});
+
 describe('the record a refusal leaves behind', () => {
   it('says what was refused, what was allowed instead, and that nothing was sent', async () => {
     const record = await recordOf('internal.finance.payment.approve');

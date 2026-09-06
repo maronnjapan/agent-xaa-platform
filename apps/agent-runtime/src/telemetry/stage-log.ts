@@ -7,6 +7,12 @@ import { randomBytes } from 'node:crypto';
  * says where it stopped. Nothing back-fills the remaining stages with a failure marker,
  * because a line saying "we reached the resource API and failed" is not the same claim
  * as "we never got there", and the detection queries read the difference.
+ *
+ * The one other way a line is missing is a call that reused an Access Token this
+ * Execution already held: `agent_op`, `id_jag` and `token_endpoint` are absent because
+ * nothing was asked of those services, and `access_token` says `reused` where a fresh
+ * one says `bound`. The two readings do not collide — a run that stopped has no line
+ * after the gap, and a reuse carries on to `resource_api`.
  */
 export const STAGES = [
   'agent_intent', 'tool_selection', 'required_capability', 'auth_mapping',

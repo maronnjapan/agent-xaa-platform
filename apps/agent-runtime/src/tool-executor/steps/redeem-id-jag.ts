@@ -3,21 +3,19 @@ import { JWT_BEARER_GRANT_TYPE, PLATFORM_CLIENT_ID } from '@xaa/contracts';
 import type { ExecutionContext } from '../../context/execution-context.js';
 import type { RuntimeHttpClient } from '../../http/http-client.js';
 import type { ToolDefinition } from '../../manifest/load.js';
-import { asResourceAccessToken, type ResourceAccessToken } from '../../http/resource-authorization.js';
-import { accessTokenKey } from '../../tokens/token-store.js';
+import { asResourceAccessToken } from '../../http/resource-authorization.js';
+import { accessTokenKey, type HeldAccessToken, type LiveAccessToken } from '../../tokens/token-store.js';
 import type { ToolFailed } from '../errors.js';
 
-export interface RedeemedAccessToken {
-  accessToken: ResourceAccessToken;
-  expiresAt: number;
+/**
+ * What a redemption produced: the token, how it is presented, until when — and the
+ * `jti` of the grant it came from, which the store has no use for and does not keep.
+ *
+ * The `binding` is the redeemer's decision, not the caller's, so the header can never
+ * contradict what was issued.
+ */
+export interface RedeemedAccessToken extends LiveAccessToken {
   idJagJti: string | undefined;
-  /**
-   * How the token is presented on the next hop. A Resource AS issues a DPoP-bound
-   * token and checks the proof; a SaaS reached over the Bridge issued its own Bearer
-   * token and knows nothing of this platform's keys (DEC-ID-13). The redeemer decides
-   * this, not the caller, so the header can never contradict what was issued.
-   */
-  binding: 'dpop' | 'bearer';
 }
 
 export type Redeemer = (input: {
@@ -70,14 +68,16 @@ export const redeemIdJag: Redeemer = async (input) => {
     };
   }
   const expiresAt = now + (typeof payload.expires_in === 'number' ? payload.expires_in : 300) * 1000;
-  input.context.tokens.set(accessTokenKey(input.tool.authorization), payload.access_token, expiresAt);
-  return {
+  const held: HeldAccessToken = {
     accessToken: asResourceAccessToken(payload.access_token, 'resource-as'),
-    expiresAt,
-    // The jti identifies the grant in the logs; the assertion itself never appears there.
-    idJagJti: readJti(input.idJag),
     binding: 'dpop',
   };
+  // Stored under the audience, resource and scope it was issued for, which is exactly
+  // the question the next tool call asks: not "which tool is this" but "what may this
+  // token be used for". Two tools sharing one authorization share the one token.
+  input.context.tokens.set(accessTokenKey(input.tool.authorization), held, expiresAt);
+  // The jti identifies the grant in the logs; the assertion itself never appears there.
+  return { ...held, expiresAt, idJagJti: readJti(input.idJag) };
 };
 
 function readJti(idJag: string): string | undefined {

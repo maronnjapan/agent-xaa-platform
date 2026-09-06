@@ -40,6 +40,7 @@ export interface ExecutionRecorder {
   authorizationMapped(input: { audience: string; resource: string; scope: string }): void;
   idJagIssued(input: { audience: string }): void;
   accessTokenBound(input: { audience: string; binding: string; expiresAt: string }): void;
+  accessTokenReused(input: { audience: string; binding: string; expiresAt: string }): void;
   requestBuilt(input: { method: string; url: string; body?: string | undefined; dropped: readonly string[] }): void;
   responseReceived(input: { status: number; latencyMs: number; body: unknown; allowlist: readonly string[] }): void;
   stopped(input: { stage: string; errorCode: string; status?: number }): void;
@@ -253,6 +254,26 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
         id: 'access_token',
         label: '受け取った Access Token',
         message: '残すのは、いつまで有効かと、どう提示したかだけです。',
+        fields: [
+          { label: '有効期限', value: expiresAt },
+          { label: '提示方法', value: binding },
+        ],
+      });
+    },
+
+    /**
+     * The same fact as `accessTokenBound`, minus the two exchanges — so it is said in
+     * its own words rather than by reusing that panel and leaving a reader to wonder
+     * where the Agent OP went.
+     *
+     * No hop is drawn: nothing left the process to get this token, and an arrow to the
+     * Agent OP would describe a request that was never sent.
+     */
+    accessTokenReused({ audience, binding, expiresAt }) {
+      sections.push({
+        id: 'access_token',
+        label: '前に受け取った Access Token',
+        message: `この Execution が先に ${audience} から受け取った Access Token を、まだ期限内なのでそのまま使いました。Agent OP と Resource AS へは何も送っていません。`,
         fields: [
           { label: '有効期限', value: expiresAt },
           { label: '提示方法', value: binding },

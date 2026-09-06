@@ -54,10 +54,10 @@ describe('the Runtime Flow, Document side', () => {
 
     expect(result).toMatchObject({ outcome: 'success' });
 
-    const accessToken = runtime.context.tokens.get(
+    const held = runtime.context.tokens.get(
       `at:${docs.asIssuer}|${docs.resourceUri}|docs.read`, Date.now(),
     )!;
-    const claims = decodeJwtPayload(accessToken);
+    const claims = decodeJwtPayload(held.accessToken);
     const jkt = await jwkThumbprint(runtime.context.dpop.publicJwk);
 
     // (1) the ID-JAG's subject is the delegating human, (2) its actor is this agent,

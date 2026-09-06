@@ -55,7 +55,7 @@ describe('the Runtime Flow, Finance side', () => {
     const jkt = await jwkThumbprint(runtime.context.dpop.publicJwk);
     const idJag = decodeJwtPayload(runtime.context.tokens.get('idjag:internal.finance.payment.list', Date.now())!);
     const accessToken = decodeJwtPayload(
-      runtime.context.tokens.get(`at:${finance.asIssuer}|${finance.resourceUri}|finance.tx.read`, Date.now())!,
+      runtime.context.tokens.get(`at:${finance.asIssuer}|${finance.resourceUri}|finance.tx.read`, Date.now())!.accessToken,
     );
 
     expect(idJag.sub).toBe('testuser');
