@@ -1,18 +1,18 @@
 /**
  * How long one step moves for, and how long it stays before the next one starts.
  *
- * Two numbers, both between one and two seconds. The replay used to run one step every
- * 800ms with the motion filling the whole of it, which meant the dot landed and the
- * next step wiped it in the same instant: a person reading the caption that named the
- * step was still on the previous sentence. The motion now takes 1.2s and the finished
- * frame is left standing for the remaining 0.6s, so every step is something to read
- * rather than something that goes past.
+ * The motion takes 1.2s and the finished frame is then left standing until the step is
+ * up, so most of a step is a still picture with its caption under it. The step used to
+ * be 1.8s, which was long enough to see the dot arrive and too short to read the
+ * sentence that arrived with it: people watching said the words went past before they
+ * had finished them. 4.5s leaves about three seconds of standing still — a caption and
+ * the reasoning beside it, read once, without reaching for 「一時停止」.
  *
- * Longer than this would turn a tool call's eight exchanges into a quarter of a minute
- * of sitting still, which is what 「一時停止」 and 「次へ」 are for instead.
+ * Longer again would turn a tool call's four exchanges into half a minute of waiting,
+ * which is what 「一時停止」 and 「次へ」 are for instead.
  */
 export const REPLAY_MOTION_MS = 1200;
-export const REPLAY_STEP_MS = 1800;
+export const REPLAY_STEP_MS = 4500;
 
 /**
  * How far along the arrow a blocked step stops.

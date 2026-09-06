@@ -3,7 +3,7 @@ import { agentInstructionsPath, agentStopPath } from '../../agents/page-link.js'
 import { failureMessage } from '../actions/messages.js';
 import type { Element } from '../element.js';
 
-export const STOP_NOTE = '止めた Agent は元に戻せません。同じ作業をさせるには、作業を定義するところからやり直します。';
+export const STOP_NOTE = '止めた Agent は元に戻せません。同じ作業をさせるには作り直します。';
 
 /**
  * What the button says once the Lifecycle Manager has taken the stop.

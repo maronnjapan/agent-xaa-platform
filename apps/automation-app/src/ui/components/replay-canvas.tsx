@@ -14,20 +14,20 @@ export const REPLAY_LEGEND_CAPTION = 'この図の見方';
  * How to read the picture, written next to the picture.
  *
  * A person who has not read docs 05 sees eight boxes and a moving dot. These lines are
- * what turn that into a claim they can check — and the fifth one is the whole
+ * what turn that into a claim they can check — and the third one is the whole
  * demonstration: a refusal is an arrow that stops, and nothing else on the canvas
  * looks like that.
+ *
+ * Five lines, one fact each. There were nine, and three of them described parts of the
+ * screen a person can simply look at — the panel beside the picture, the account below
+ * it, the name that appears on the arrow. A legend nobody finishes explains nothing.
  */
 export const REPLAY_LEGEND: readonly string[] = [
-  '上の段は人と、権限を決める側です。下の段は Agent と、Agent が触るリソースです。',
-  '箱の名前の下に、その箱が何をするところかを書いています。押すと、もう少し詳しい説明が出ます。',
-  '丸は1回のやり取りです。出どころから相手へ動き、矢印のそばにそのやり取りの名前が出ます。',
-  '図に出るのは、いま動いている1回分だけです。次へ進むと前の矢印と文字は消えます。',
-  '止められたやり取りは、相手に届く手前で止まります。届かなかった箱は点線のままです。',
-  '箱の中だけで起きたこと（判断や登録）は、矢印を出さずにその箱を光らせます。',
-  '図の右（画面が狭いときは下）に、その手で Agent が何を読み、何を考え、何を決め、何を確かめたかが出ます。',
-  '起きたことの全部は、図の下の一覧に順番どおり残ります。再生中の行が強調されます。',
-  'この処理に出てこなかった箱は表示しません。出ている箱が、関わったものの全部です。',
+  '上の段は人と権限を決める側、下の段は Agent とリソースです。',
+  '丸は1回のやり取りです。図に出るのは、いま動いている1回分だけです。',
+  '止められたやり取りは、相手に届く手前で止まります。',
+  '箱の中だけで起きたことは、矢印を出さずにその箱が光ります。',
+  '箱を押すと説明が出ます。出ていない箱は、この処理に関わっていません。',
 ];
 
 export const REPLAY_CAPTION_IDLE = '再生を押すと、ここに1手ずつ説明が出ます。';
@@ -74,8 +74,8 @@ type MotionStyle = CSSProperties & Record<'--motion-ms' | '--stop-ratio', string
  * it comes off the event, never composed (RULE-54).
  *
  * It holds the current step and only the current step, and so does the canvas. What
- * did happen, in order and in full, is the written log below — server-rendered from
- * the same events, complete, and never wiped by the picture.
+ * did happen, in order and in full, is the account under 「やったこと」 — server-rendered
+ * from the same events, complete, and never wiped by the picture.
  *
  * The controls exist because a replay that only ran once, start to finish, at a fixed
  * pace, is a thing you watch rather than a thing you read. A step that says something

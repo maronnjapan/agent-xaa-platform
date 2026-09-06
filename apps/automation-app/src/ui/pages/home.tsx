@@ -112,7 +112,7 @@ export function HomePage(props: {
 
       <section className="card" data-section="suggest">
         <h2>自動化できそうな作業を探す</h2>
-        <p>記録に残っている作業から候補を挙げます。書きたい内容が決まっているなら飛ばして構いません。</p>
+        <p>記録に残っている作業から候補を挙げます。書く内容が決まっているなら飛ばせます。</p>
         <form
           data-form="suggestions"
           onSubmit={(event) => {

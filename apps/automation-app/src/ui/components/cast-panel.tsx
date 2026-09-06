@@ -2,7 +2,7 @@ import { ACTOR_ROLES, LANE_LABELS, rolesFor, type ActorRole } from '../roles.js'
 import type { Element } from '../element.js';
 
 export const CAST_CAPTION = 'この記録に出てくるもの';
-export const CAST_NOTE = '名前だけでは何をするところか分からないので、役割を並べておきます。どの箱も、できることとできないことが決まっています。「しないこと」の側が、この仕組みの要点です。';
+export const CAST_NOTE = 'この記録に出てきたものだけを並べています。図の箱を押しても同じ説明が出ます。';
 export const CAST_DOES = 'すること';
 export const CAST_DOES_NOT = 'しないこと';
 

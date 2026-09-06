@@ -4,7 +4,8 @@ import { validateActivityEvent, type ActivityEvent, type ActivityRecord } from '
 import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline } from '../src/activity/query.js';
 import { RecordView } from '../src/ui/components/record-view.js';
-import { EventLog, EVENT_LOG_CAPTION } from '../src/ui/components/event-log.js';
+import { EventLog } from '../src/ui/components/event-log.js';
+import { RUN_RECORD_CAPTION, RUN_STAGES_CAPTION } from '../src/ui/components/run-replay.js';
 import { ExecutionLog, EXECUTION_LOG_EMPTY, EXECUTION_LOG_HEADING } from '../src/ui/components/execution-log.js';
 import { ReplayCanvas, REPLAY_LEGEND } from '../src/ui/components/replay-canvas.js';
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
@@ -138,7 +139,6 @@ describe('the written log beside a replay', () => {
         { ...event({ event_id: 'ev-2', outcome: 'blocked', phase: 'security', title: '遮断しました', message: '検知しました。' }) },
       ],
     }));
-    expect(html).toContain(EVENT_LOG_CAPTION);
     expect(html).toContain('data-event-log="task-1"');
     expect(html).toContain('data-event-id="ev-1"');
     expect(html).toContain('data-event-id="ev-2"');
@@ -161,6 +161,10 @@ describe('the written log beside a replay', () => {
     expect(html).toContain('data-event-log="task-1"');
     expect(html).toContain(record.headline);
     expect(html).toContain('送ったリクエスト');
+    // The account sits under its own heading, after the picture rather than inside it.
+    expect(html).toContain(RUN_STAGES_CAPTION);
+    expect(html).toContain(RUN_RECORD_CAPTION);
+    expect(html.indexOf('data-run-stages=')).toBeLessThan(html.indexOf('data-run-record='));
   });
 
   it('adds no replay and no log for a task that has not finished', () => {

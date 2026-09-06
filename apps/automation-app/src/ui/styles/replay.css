@@ -206,7 +206,7 @@
 }
 
 /* Nothing has played yet, so nothing is dimmed: the log reads on its own. */
-.replay[data-replay-state="idle"] ~ .event-log .event-entry[data-entry-state="waiting"] {
+.event-log[data-log-state="idle"] .event-entry[data-entry-state="waiting"] {
   opacity: 1;
 }
 

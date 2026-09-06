@@ -8,6 +8,7 @@ import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline, taskKeyOf } from '../src/activity/query.js';
 import { NO_AGENT_YET } from '../src/ui/components/agent-group.js';
 import { RecordView, HOPS_CAPTION } from '../src/ui/components/record-view.js';
+import { RUN_RECORD_CAPTION, RUN_STAGES_CAPTION } from '../src/ui/components/run-replay.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { SOURCE_TO_NODE } from '../src/ui/replay/nodes.js';
 import { buildReplayPlan } from '../src/ui/replay/plan.js';
@@ -133,6 +134,34 @@ describe('one agent, one story', () => {
     ]);
     const tasks = await readTimeline({ documents: harness.documents, humanSubject: SUBJECT });
     expect(tasks[0]).toMatchObject({ run_id: AGENT_B, purpose: '日報をまとめる', status: 'completed' });
+  });
+
+  /**
+   * The pictures of one agent's tasks are next to each other, and every account of them
+   * comes after. They used to alternate, and an account runs long enough that no two
+   * pictures were ever on screen together.
+   */
+  it('puts an agent\'s pictures together, and the accounts of them after', async () => {
+    const harness = await startAutomationApp();
+    await seed(harness, story({ agent: AGENT_ID, work: 'wd_a', decision: 'dec_a', from: 0, purpose: 'A' }));
+    const tasks = await readTimeline({ documents: harness.documents, humanSubject: SUBJECT });
+    expect(tasks).toHaveLength(2);
+    const html = render(createElement(TimelinePage, { tasks }));
+
+    const stages = html.indexOf('data-run-stages=');
+    const record = html.indexOf('data-run-record=');
+    expect(stages).toBeGreaterThan(-1);
+    expect(record).toBeGreaterThan(stages);
+    expect(html).toContain(RUN_STAGES_CAPTION);
+    expect(html).toContain(RUN_RECORD_CAPTION);
+    // Both of this agent's canvases stand before the first of its accounts.
+    for (const task of tasks) {
+      expect(html.indexOf(`data-replay-key="${taskKeyOf(task)}"`)).toBeLessThan(record);
+      expect(html.indexOf(`data-log-key="${taskKeyOf(task)}"`)).toBeGreaterThan(record);
+    }
+    // Nothing is playing, so no row of any account is dimmed.
+    expect(html).toContain('data-log-state="idle"');
+    expect(html).not.toContain('data-log-state="playing"');
   });
 
   it('keys each canvas and log by agent and task together', async () => {

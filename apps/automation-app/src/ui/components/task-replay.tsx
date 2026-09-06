@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityEvent } from '@xaa/contracts';
 import { REPLAY_STEP_MS } from '../replay/config.js';
 import { buildFrame } from '../replay/geometry.js';
@@ -7,7 +7,6 @@ import { buildReplayPlan, type ReplayEvent } from '../replay/plan.js';
 import { thinkingByEvent } from '../replay/thinking.js';
 import { roleOf } from '../roles.js';
 import { RoleCard } from './cast-panel.js';
-import { EventLog, type LogEvent } from './event-log.js';
 import { ReplayCanvas, type ReplayControls } from './replay-canvas.js';
 import { ThinkingPanel } from './thinking-panel.js';
 import type { Element } from '../element.js';
@@ -18,14 +17,15 @@ type ReplayState = 'idle' | 'playing' | 'paused' | 'finished';
 const NOTHING_PLAYED = -1;
 
 /**
- * One finished task: the picture, what the agent was thinking on the step the picture
- * is on, and the whole of it in writing underneath.
+ * One finished task as a moving picture: the diagram, and what the agent was thinking
+ * on the step the diagram is on.
  *
- * The three read one state. Before this was React they read three: the server rendered
- * the log, a script drew the canvas by hand, and a second script marked the log rows —
- * so which row was current and which step was drawn were two answers that had to be
- * kept in step by hand. Here the step index is held once, and the canvas, the panel and
- * the log are all rendered from it.
+ * The written account of the same task is no longer underneath it. The pictures of one
+ * agent's tasks are shown one after another, and the accounts of all of them follow
+ * (see `RunReplay`), so a person watching two tasks in a row is not made to scroll past
+ * a hundred lines of log between them. Which row of that account the picture has
+ * reached is still one answer rather than two: this holds the step index and reports
+ * the event it is on, and the log renders from what it reports.
  *
  * The server renders it with nothing played, which is exactly what a person sees before
  * they press 再生 — so the markup a browser is handed is the markup React would have
@@ -35,12 +35,13 @@ const NOTHING_PLAYED = -1;
  * make a viewer doubt what they just saw, and one that started on load would take the
  * decision to watch away from them.
  */
-export function TaskReplay(props: {
+export function TaskStage(props: {
   taskId: string;
   taskKey: string;
   events: readonly ActivityEvent[];
-  logEvents: readonly LogEvent[];
   simulated: boolean;
+  /** Told which event the picture is on, so the account below can mark that row. */
+  onCurrentEvent?: (eventId: string | null) => void;
 }): Element {
   const plan = useMemo(() => buildReplayPlan(props.events as readonly ReplayEvent[], nodeIdFor), [props.events]);
   const visible = useMemo(() => visibleNodeIds(props.events), [props.events]);
@@ -74,6 +75,16 @@ export function TaskReplay(props: {
   const currentEventId = step?.eventId ?? null;
   const opened = openNode === null ? null : roleOf(openNode);
 
+  /*
+   * Reported from an effect rather than during the render that moved the step, because
+   * the listener is a second component's state: setting it while this one is rendering
+   * is React telling itself to render again mid-render. Held in a ref so a parent that
+   * passes a fresh closure each time does not restart the reporting.
+   */
+  const report = useRef(props.onCurrentEvent);
+  useEffect(() => { report.current = props.onCurrentEvent; });
+  useEffect(() => { report.current?.(currentEventId); }, [currentEventId]);
+
   return (
     <div className="task-replay-body" data-task-replay={props.taskKey}>
       <div className="replay-stage">
@@ -102,12 +113,6 @@ export function TaskReplay(props: {
           </div>
         )
         : null}
-      <EventLog
-        taskId={props.taskId}
-        taskKey={props.taskKey}
-        events={props.logEvents}
-        currentEventId={currentEventId}
-      />
     </div>
   );
 }

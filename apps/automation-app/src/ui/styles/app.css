@@ -142,11 +142,10 @@ button[disabled] { opacity: 0.5; cursor: progress; }
 
 /*
  * The written account of what an agent did: on its own screen while it is running, and
- * under each replay once a task has finished. Both render the same records, so they
+ * under 「やったこと」 once a task has finished. Both render the same records, so they
  * share one set of rules rather than drifting into two looks for one thing.
  */
-.execution-log-note,
-.event-log-note {
+.execution-log-note {
   margin: 0.25rem 0 1rem;
   color: var(--muted);
   font-size: 0.9rem;
@@ -339,8 +338,29 @@ button[disabled] { opacity: 0.5; cursor: progress; }
   font-size: 0.85rem;
 }
 
+/*
+ * One agent's pictures, then one agent's accounts.
+ *
+ * They used to alternate, and an account is long enough that no two pictures were ever
+ * on screen together. The pictures are now stacked with only their own headings between
+ * them, so the run reads as a sequence; the writing follows underneath.
+ */
+.run-stages,
+.run-record { margin-top: 1.75rem; }
+
+.run-stages > h3,
+.run-record > h3 { margin: 0; }
+
+.run-note {
+  margin: 0.2rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.run-record .task-record + .task-record { margin-top: 1.5rem; }
+
 /* Which of an agent's tasks this replay is, when the agent has more than one. */
-.task-replay { margin-top: 2rem; }
+.task-replay { margin-top: 1.25rem; }
 
 .task-replay > h2 { margin-bottom: 0; }
 
@@ -375,12 +395,14 @@ button[disabled] { opacity: 0.5; cursor: progress; }
 .task-button:not(.is-running) { cursor: pointer; }
 .task-button:not(.is-running):hover { border-color: var(--accent); }
 
-.task-replay > h3 {
+.task-replay > h4,
+.task-record > h4 {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.6rem;
-  margin-bottom: 0;
+  margin: 0;
+  font-size: 1rem;
 }
 
 .task-replay-count { font-variant-numeric: tabular-nums; }

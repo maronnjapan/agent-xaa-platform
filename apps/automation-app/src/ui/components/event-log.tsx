@@ -19,11 +19,8 @@ export interface LogEvent {
   record?: ActivityRecord;
 }
 
-export const EVENT_LOG_CAPTION = '起きたことを順番に';
-export const EVENT_LOG_NOTE = '上から順に、この処理で実際に起きたことです。各行の頭に、それを行った箱の名前と、その箱が何をするところかを書いています。文章はそれを行った側がその場で書いたものです。図の再生に合わせて、いま説明している行が強調されます。';
-
 /**
- * The whole of a finished task, in words, below its replay.
+ * The whole of a finished task, in words, under 「やったこと」.
  *
  * It is rendered by the server and always present, which is the point: the animation
  * shows the shape of what happened, and this shows what happened. Someone who never
@@ -36,7 +33,9 @@ export const EVENT_LOG_NOTE = '上から順に、この処理で実際に起き�
  * its boxes from, so the picture and the text cannot call the same part two things.
  *
  * Which row the replay has reached is a prop rather than an attribute the browser
- * pokes in afterwards: one state, held by the task's replay, rendered by both halves.
+ * pokes in afterwards: one state, held by the task's picture, rendered by both halves.
+ * The section says whether any picture is on it at all, because a log nothing is
+ * playing against has no passed rows to dim — every row of it reads at full strength.
  */
 export function EventLog(props: {
   taskId: string;
@@ -48,9 +47,12 @@ export function EventLog(props: {
   const current = props.currentEventId ?? null;
   const currentIndex = current === null ? -1 : props.events.findIndex((event) => event.event_id === current);
   return (
-    <section className="event-log" data-event-log={props.taskId} data-log-key={props.taskKey ?? props.taskId}>
-      <h3>{EVENT_LOG_CAPTION}</h3>
-      <p className="event-log-note">{EVENT_LOG_NOTE}</p>
+    <section
+      className="event-log"
+      data-event-log={props.taskId}
+      data-log-key={props.taskKey ?? props.taskId}
+      data-log-state={current === null ? 'idle' : 'playing'}
+    >
       <ol>
         {props.events.map((event, index) => (
           <li

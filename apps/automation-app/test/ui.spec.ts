@@ -13,7 +13,7 @@ import { REPLAY_MOTION_MS, REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../src/ui/
 import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
 import { ReplayCanvas } from '../src/ui/components/replay-canvas.js';
-import { TaskReplay } from '../src/ui/components/task-replay.js';
+import { RunReplay } from '../src/ui/components/run-replay.js';
 import { TaskRow } from '../src/ui/components/task-row.js';
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
@@ -24,6 +24,25 @@ import { LocalTime } from '../src/ui/components/local-time.js';
 import { REPLAY_CAPTION_IDLE } from '../src/ui/components/replay-canvas.js';
 import { html as render, mount } from './render.js';
 
+
+/**
+ * One finished task, mounted the way the timeline mounts it: the picture in
+ * 「動きを見る」 and its account in 「やったこと」, sharing one step index.
+ */
+function oneTask(input: { taskId: string; taskKey: string; events: Array<Record<string, unknown>> }) {
+  return createElement(RunReplay, {
+    runId: 'run',
+    tasks: [{
+      taskId: input.taskId,
+      taskKey: input.taskKey,
+      purpose: '作業',
+      completedAt: '2026-01-01T00:00:10.000Z',
+      events: input.events as never,
+      logEvents: input.events as never,
+      simulated: false,
+    }],
+  });
+}
 
 describe('the replay diagram', () => {
   it('has 8 nodes with fixed coordinates', () => {
@@ -96,16 +115,18 @@ describe('the replay plan', () => {
   });
 
   /**
-   * A step a person can read. Under a second, the dot arrived before the caption naming
-   * it had been read; over two, a tool call's eight exchanges become a wait. The motion
-   * is the shorter of the two so every step ends with the picture standing still.
+   * A step a person can read to the end. The motion is over in a second or so; the rest
+   * of the step is the finished picture standing still with its caption under it, which
+   * is the part that gets read. Under four seconds the sentence went past unfinished;
+   * over five, a tool call's four exchanges become a wait.
    */
-  it('gives a step between one and two seconds, and leaves it standing at the end', () => {
-    for (const length of [REPLAY_MOTION_MS, REPLAY_STEP_MS]) {
-      expect(length).toBeGreaterThanOrEqual(1_000);
-      expect(length).toBeLessThanOrEqual(2_000);
-    }
-    expect(REPLAY_MOTION_MS).toBeLessThan(REPLAY_STEP_MS);
+  it('leaves every step standing for seconds, not for the length of its motion', () => {
+    expect(REPLAY_STEP_MS).toBeGreaterThanOrEqual(4_000);
+    expect(REPLAY_STEP_MS).toBeLessThanOrEqual(5_000);
+    expect(REPLAY_MOTION_MS).toBeGreaterThanOrEqual(1_000);
+    expect(REPLAY_MOTION_MS).toBeLessThanOrEqual(2_000);
+    // Most of a step is the picture standing still, not the dot moving.
+    expect(REPLAY_STEP_MS - REPLAY_MOTION_MS).toBeGreaterThanOrEqual(REPLAY_MOTION_MS);
   });
 
   /**
@@ -328,9 +349,7 @@ describe('the replay as it is drawn', () => {
   /** The task as the page hands it to the replay: the events, twice, in both shapes. */
   async function play(events: Array<Record<string, unknown>>, steps = events.length + 1) {
     vi.useFakeTimers();
-    const view = await mount(createElement(TaskReplay, {
-      taskId: 'task-1', taskKey: `run:task-1`, events: events as never, logEvents: events as never, simulated: false,
-    }));
+    const view = await mount(oneTask({ taskId: 'task-1', taskKey: 'run:task-1', events }));
     try {
       await view.act(() => { view.find('[data-action="replay-play"]')!.click(); });
       // One step at a time: each step's timer is registered by the effect that runs
@@ -500,14 +519,14 @@ describe('the replay as it is drawn', () => {
    * REQ-11-023. The last frame is where the replay stays. Looping it would make a
    * person watching for a second time unsure whether they were seeing new work.
    */
-  it('leaves the finished replay alone five seconds later', async () => {
+  it('leaves the finished replay alone several steps later', async () => {
     const view = await play([event({ message: '一番目' })]);
     const settled = view.text('[data-field="caption-message"]');
     expect(view.find('[data-replay-state]')!.getAttribute('data-replay-state')).toBe('finished');
 
     vi.useFakeTimers();
     try {
-      await view.act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+      await view.act(async () => { await vi.advanceTimersByTimeAsync(REPLAY_STEP_MS * 3); });
     } finally {
       vi.useRealTimers();
     }
@@ -570,9 +589,7 @@ describe('the replay as it is drawn', () => {
       event({ event_id: 'b', occurred_at: '2026-01-01T00:02:00.000Z', message: '二番目' }),
     ];
     vi.useFakeTimers();
-    const view = await mount(createElement(TaskReplay, {
-      taskId: 'task-1', taskKey: 'run:task-1', events: events as never, logEvents: events as never, simulated: false,
-    }));
+    const view = await mount(oneTask({ taskId: 'task-1', taskKey: 'run:task-1', events }));
     try {
       expect(view.all('[data-entry-state="waiting"]')).toHaveLength(2);
       await view.act(() => { view.find('[data-action="replay-step"]')!.click(); });
@@ -597,9 +614,7 @@ describe('the replay as it speaks', () => {
 
   async function play(events: Array<Record<string, unknown>>) {
     vi.useFakeTimers();
-    const view = await mount(createElement(TaskReplay, {
-      taskId: 'task-1', taskKey: 'agent-a:task-1', events: events as never, logEvents: events as never, simulated: false,
-    }));
+    const view = await mount(oneTask({ taskId: 'task-1', taskKey: 'agent-a:task-1', events }));
     try {
       await view.act(() => { view.find('[data-action="replay-play"]')!.click(); });
       for (let step = 0; step < events.length + 2; step += 1) {
@@ -698,9 +713,7 @@ describe('the replay as a thing a person can stop', () => {
     { event_id: 'ev-2', trace_id: 'tr', human_subject: 'testuser', agent_id: null, task_id: 'task-1', occurred_at: '2026-01-01T00:01:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success', title: '二', message: '二番目', detail: { target: 'resource-api' }, related_finding_id: null, is_simulated: false },
   ];
 
-  const open = () => mount(createElement(TaskReplay, {
-    taskId: 'task-1', taskKey: 'agent-a:task-1', events: events as never, logEvents: events as never, simulated: false,
-  }));
+  const open = () => mount(oneTask({ taskId: 'task-1', taskKey: 'agent-a:task-1', events }));
 
   const states = (view: Awaited<ReturnType<typeof mount>>): (string | null)[] =>
     view.all('[data-event-id]').map((entry) => entry.getAttribute('data-entry-state'));

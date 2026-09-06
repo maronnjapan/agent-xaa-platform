@@ -3,7 +3,7 @@ import { RecordView } from './record-view.js';
 import type { Element } from '../element.js';
 
 export const EXECUTION_LOG_HEADING = '実行ログ';
-export const EXECUTION_LOG_NOTE = 'Agent が1手ごとに何を選び、どこへ何を送り、何が返り、実行前に何を確かめたかです。Agent 自身が書いた文章もそのまま載せています。';
+export const EXECUTION_LOG_NOTE = '1手ごとに、選んだ Tool、送った内容、返ってきた内容、実行前の確認が出ます。動いている最中でも読めます。';
 export const EXECUTION_LOG_EMPTY = 'まだ何も実行していません。最初の手が終わると、ここに出ます。';
 
 /**

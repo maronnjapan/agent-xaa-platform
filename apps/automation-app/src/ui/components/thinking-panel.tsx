@@ -16,8 +16,8 @@ export const THINKING_HEADINGS = {
   checks: '実行前に確かめたこと',
 } as const;
 
-export const THINKING_IDLE = '再生を押すと、その手で Agent が何を読み、何を考え、何を決め、何を確かめたかが、ここに1手ずつ出ます。';
-export const THINKING_NONE = 'この手には、発行元が残した内訳がありません。上の説明が、この手について書かれたことの全部です。';
+export const THINKING_IDLE = '再生を押すと、その手で Agent が考えたことがここに出ます。';
+export const THINKING_NONE = 'この手の内訳は残っていません。図に添えた説明が全部です。';
 
 /** The four verdicts a check can carry, as the record spells them. */
 const CHECK_MARKS: Readonly<Record<ActivityRecordCheck['result'], string>> = {
