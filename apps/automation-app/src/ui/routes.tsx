@@ -1,16 +1,19 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
+import type { SecurityFindingView } from '@xaa/contracts';
 import type { AutomationAppConfig } from '../config.js';
 import type { SessionStore } from '../auth/session-store.js';
 import { requireUser, type UserVariables } from '../auth/require-user.js';
 import { requireAgentOwner, type AgentOwnerVariables } from '../agents/require-owner.js';
 import { readAgentStatus } from '../agents/status.js';
+import { readFindingsFor } from '../agents/findings.js';
 import { readTimeline, type TimelineTask } from '../activity/query.js';
 import { createWorkDefinitionStore } from '../work-definition/store.js';
 import { createAgentDefinitionStore } from '../agent-definition/approval.js';
 import { readAsset, STATIC_ASSETS } from './assets.js';
 import { renderPage } from './layout.js';
 import type { HomeAgent, HomeWorkItem } from './pages/home.js';
+import type { AgentAnalysis } from './pages/security.js';
 
 type Env = UserVariables & AgentOwnerVariables;
 
@@ -118,6 +121,33 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   app.get('/guide', asUser, (context) =>
     context.html(renderPage({ title: '使い方', styles: STYLES, script: SCRIPT, data: { page: 'guide' } })));
 
+  /**
+   * What the log analyser decided about this person's agents.
+   *
+   * One query, by the session's own subject, and the grouping happens afterwards. The
+   * alternative — list the person's agents first, then ask about each — would read the
+   * same rows through a longer path and would miss a finding against an agent that never
+   * reached the timeline, which is the one case where a person most wants to be told.
+   *
+   * The purpose beside each agent comes from that person's own timeline, because a
+   * finding names an agent and not the work it was made for. An agent with a finding and
+   * no timeline row still gets its section, under its id alone: a judgement is worth
+   * showing even when nothing else about the agent is known here.
+   */
+  app.get('/security', asUser, async (context) => {
+    const humanSubject = context.get('humanSubject');
+    const [findings, tasks] = await Promise.all([
+      readFindingsFor({ documents: deps.documents, humanSubject }),
+      readTimeline({ documents: deps.documents, humanSubject }),
+    ]);
+    return context.html(renderPage({
+      title: '分析エージェントの判断',
+      styles: STYLES,
+      script: SCRIPT,
+      data: { page: 'security', agents: groupByAgent(findings, agentsOf(tasks)) },
+    }));
+  });
+
   app.get('/activity', asUser, async (context) => {
     const agentId = context.req.query('agent_id');
     const tasks = await readTimeline({ documents: deps.documents, humanSubject: context.get('humanSubject') });
@@ -148,6 +178,39 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     })));
 
   return app;
+}
+
+/**
+ * The findings, filed under the agent each one is about.
+ *
+ * Every agent the person has gets a section, so an agent with nothing against it says so
+ * rather than being missing — "the analyser found nothing" and "the analyser was never
+ * mentioned" are different answers, and a screen that showed only the bad news would
+ * leave a person unable to tell them apart. Agents named only by a finding are appended
+ * after the ones the timeline knows, under the id the finding carried.
+ *
+ * A finding with no `agent_id` — the platform-wide kind — is not shown here. It is not
+ * about anybody's agent, and putting it on every person's screen would be this app
+ * deciding who a platform incident concerns (RULE-54).
+ */
+function groupByAgent(
+  findings: readonly SecurityFindingView[],
+  known: readonly HomeAgent[],
+): AgentAnalysis[] {
+  const byAgent = new Map<string, SecurityFindingView[]>();
+  for (const finding of findings) {
+    if (finding.agent_id === null) continue;
+    byAgent.set(finding.agent_id, [...(byAgent.get(finding.agent_id) ?? []), finding]);
+  }
+  const named = new Set(known.map((agent) => agent.agentId));
+  return [
+    ...known.map((agent) => ({
+      agentId: agent.agentId, purpose: agent.purpose, findings: byAgent.get(agent.agentId) ?? [],
+    })),
+    ...[...byAgent.keys()]
+      .filter((agentId) => !named.has(agentId))
+      .map((agentId) => ({ agentId, purpose: '', findings: byAgent.get(agentId) ?? [] })),
+  ];
 }
 
 /**

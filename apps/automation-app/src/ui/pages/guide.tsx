@@ -62,6 +62,7 @@ export function GuidePage(): Element {
         <p>「指示を追加する」で追加の指示を送れます。承認した権限の外の操作は、指示しても実行されません。</p>
         <p>「この Agent を止める」で即座に止まります。止めた Agent は元に戻せません。</p>
         <p>終わった処理は<a href="/activity">タイムライン</a>で見ます。Agent ごとに、動きの再生が並び、そのあとに「やったこと」が続きます。</p>
+        <p>Agent の挙動はログを分析するエージェントが見ています。その判断は<a href="/security">分析エージェントの判断</a>で読めます。読むだけの画面で、ここから止めることはできません。</p>
       </section>
 
       <section className="card" data-step="notes">
@@ -86,6 +87,8 @@ export function GuidePage(): Element {
           <dd>「一時停止」で止まり、「次へ」で1手ずつ進みます。「やったこと」はいつでも読めます。</dd>
           <dt>箱の名前が分からない</dt>
           <dd>タイムラインの先頭の「この記録に出てくるもの」を開くか、図の箱を押してください。</dd>
+          <dt>Agent が急に隔離された</dt>
+          <dd>ログを分析するエージェントが異常と判断しました。何をどう判断したかは<a href="/security">分析エージェントの判断</a>に出ます。</dd>
         </dl>
       </section>
     </main>

@@ -6,6 +6,8 @@ Security Detection（[09](./09-security-monitoring.md)）は、ログから異�
 
 本書が定義する**アクティビティタイムライン**は、判断そのものを行わない。Policy Engine、Tool Executor、Security Detectionがすでに下した決定を、操作している本人が時系列で追えるように見せるだけの画面である。用途は2つある。
 
+Security Detectionの判断そのもの（Risk Score、AIの4観点、推奨する対応）を読む画面は本書の範囲外であり、[09. §7](./09-security-monitoring.md#7-判断を本人へ見せる)にある。タイムラインが答えるのは「自分の作業に何が起きたか」であり、あちらが答えるのは「見張っている側が自分のAgentをどう見ているか」で、問いが違う。
+
 | 用途 | 内容 |
 |---|---|
 | 通常利用時の可視化 | 自分のログインから、自動化の提案、権限の決定、Agentの実行、外部Resourceへのアクセスまでを一連の流れとして見せる |
@@ -288,7 +290,7 @@ lifecycle      Agentの終了                                     成功   10:05
 
 ## 7. アクセス制御
 
-- タイムラインの参照範囲はAccess Tokenの`sub`と一致する`human_subject`に限る（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)と同じ考え方）。
+- タイムラインの参照範囲はAccess Tokenの`sub`と一致する`human_subject`に限る（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)と同じ考え方）。[09. §7.1](./09-security-monitoring.md#71-画面)の画面も同じ範囲に閉じる。
 - ブラウザはFirestoreへ直接アクセスしない。取得はAutomation Appの認証済みセッションを介してのみ行う（[§4](#4-配信経路)）。
 - [§6.2](#62-台本で補う)の台本再生も操作者自身のセッション範囲に閉じる。他ユーザーのタイムラインへ`is_simulated`イベントを注入することはできない。
 

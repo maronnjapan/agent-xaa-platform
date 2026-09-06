@@ -1,6 +1,7 @@
 import { AgentDetailPage } from './pages/agent-detail.js';
 import { GuidePage } from './pages/guide.js';
 import { HomePage } from './pages/home.js';
+import { SecurityPage } from './pages/security.js';
 import { TimelinePage } from './pages/timeline.js';
 import { WorkDefinitionNewPage } from './pages/work-definition-new.js';
 import type { PageData } from './page-data.js';
@@ -30,6 +31,8 @@ export function PageRoot(props: { data: PageData }): Element {
       );
     case 'timeline':
       return <TimelinePage tasks={data.tasks} />;
+    case 'security':
+      return <SecurityPage agents={data.agents} />;
     case 'agent-detail':
       return <AgentDetailPage agentId={data.agentId} status={data.status} />;
     case 'work-definition-new':

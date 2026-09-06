@@ -13,6 +13,7 @@ import { needsHumanReview } from './response/review.js';
 import { requestTransition, type LifecycleSender, type TransitionOutcome } from './response/dispatch.js';
 import { emitQuarantineEvent } from './activity/quarantine-event.js';
 import { createInternalBatchRoutes } from './routes/internal-batch.js';
+import type { StoredFinding } from './findings/stored.js';
 import type { RuleHitRow } from './batch/signing-key-misuse.js';
 
 export interface SecurityDetectionDeps {
@@ -35,10 +36,7 @@ export interface SecurityDetectionDeps {
   publishActivity?(event: ActivityEvent): Promise<void>;
 }
 
-export interface StoredFinding extends SecurityFinding {
-  recommended_response?: ResponseState;
-  confidence?: number;
-}
+export type { StoredFinding } from './findings/stored.js';
 
 /** One batch of raw log payloads, taken through the six stages and dispatched. */
 export type DetectionRun = (payloads: readonly unknown[]) => Promise<void>;
@@ -164,10 +162,19 @@ export function createSecurityDetection(deps: SecurityDetectionDeps): { app: Hon
         const response = parsed?.recommendation.response ?? fallbackResponse(finding.risk_level ?? 'MEDIUM');
         const confidence = parsed?.recommendation.confidence ?? 0;
         const hold = needsHumanReview({ response, confidence, fromFallback: parsed === null });
+        // The whole answer, not only the part that decides. What the model said about the
+        // deviation, the likelihood and the blast radius is the reasoning behind the
+        // recommendation, and a finding that kept only the verdict would leave the person
+        // reviewing it — and the person whose agent it is — with a state change and no
+        // account of why. `analysis_source` says which of the two produced the verdict, so
+        // a fallback is never read as something the model concluded.
         await deps.documents.update('security_findings', finding.finding_id, {
           review_status: hold ? 'pending' : 'none',
           recommended_response: response,
           confidence,
+          analysis_source: parsed === null ? 'fallback' : 'model',
+          analyzed_at: new Date(now()).toISOString(),
+          ...(parsed ? { analysis: parsed } : {}),
         });
         if (hold) {
           logger.warning('security_finding_pending_review', {
