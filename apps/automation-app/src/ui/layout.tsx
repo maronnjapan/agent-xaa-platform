@@ -32,6 +32,7 @@ export function Layout(props: {
         <nav className="app-nav">
           <a href="/">自動化をつくる</a>
           <a href="/activity">タイムライン</a>
+          <a href="/security">分析エージェントの判断</a>
           <a href="/guide">使い方</a>
         </nav>
         <div id={ROOT_ID}>{props.children}</div>

@@ -33,6 +33,10 @@ function required(env: NodeJS.ProcessEnv, key: string): string {
  * Taxonomy URL, no resource list and no isolation threshold. Automation App is the
  * screen a person uses; the decisions belong to the Authorization Platform (RULE-07),
  * and giving this app a way to read the vocabulary is how that boundary erodes.
+ *
+ * There is no Security Detection URL either, and that absence is load-bearing rather
+ * than an oversight: T-SEC-08 makes the detector a one-way feed, so this app reads what
+ * it decided out of Firestore under the access matrix and never calls it.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AutomationAppConfig {
   return {

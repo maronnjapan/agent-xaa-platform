@@ -59,7 +59,8 @@
       "agents/*/state",
       "agent_instructions/**",
       "user_activity/**",
-      "authorization_decisions/**"
+      "authorization_decisions/**",
+      "security_findings/**"
     ],
     "write": [
       "sessions/**",
