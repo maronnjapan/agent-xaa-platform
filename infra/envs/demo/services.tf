@@ -107,6 +107,12 @@ locals {
       JWKS_BUCKET                     = local.jwks_bucket
       PROVISIONER_SA_EMAIL            = module.service_accounts["provisioner"].email
       AGENT_PLATFORM_CLIENT_SECRET_ID = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.agent_platform
+      # Where the Provisioner asks for a SaaS connection and narrows one into a binding
+      # (T-PROV-16). `locals-endpoints.tf` puts the disabled placeholder here when the
+      # Bridge is not deployed, and the service reads that as "no Bridge client" rather
+      # than as an address — the `provisioner -> google-bridge` invoker edge exists only
+      # on the same condition, so there is nothing to call either way.
+      BRIDGE_INTERNAL_URL = local.platform_endpoints.bridge_internal_url
       # The capability-to-resource mapping console. Empty leaves it reachable by nobody.
       ADMIN_PRINCIPALS = join(",", var.admin_principals)
       # What a Dedicated Agent's own Service Account must be able to invoke: the same

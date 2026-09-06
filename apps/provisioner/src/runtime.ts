@@ -10,6 +10,7 @@ import { createLogger } from '@xaa/logging';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
 import { createAgentOpClient } from './agent/idp-connection.js';
+import { createBridgeClient } from './bridge/connection.js';
 import { startedExecutionName } from './job/execution-name.js';
 import { qualifiedJobName } from './job/job-name.js';
 import { createTransactionStore } from './transaction/store.js';
@@ -62,6 +63,15 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   const logger = createLogger('provisioner', 'provisioner');
 
   const agentOp = createAgentOpClient({ baseUrl: config.sharedAgentOpUrl, identityToken });
+  // DEC-SCOPE-04. With the Bridge off, Terraform writes no address here, the seed
+  // leaves the bridged catalogue rows out, and no provisioning ever reaches for this.
+  // The placeholder the endpoints file carries in that case is not a base URL either,
+  // so it is treated as absent rather than turned into a client that would resolve
+  // every call to `https://disabled.invalid`.
+  const bridgeUrl = env.BRIDGE_INTERNAL_URL ?? '';
+  const bridge = bridgeUrl.startsWith('https://') && !bridgeUrl.includes('disabled.invalid')
+    ? createBridgeClient({ baseUrl: bridgeUrl, identityToken })
+    : undefined;
 
   return {
     config,
@@ -98,6 +108,7 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
     // raw topic write here would put events on the stream the subscriber then drops.
     publishActivity: publishActivityEvent,
     agentOp,
+    ...(bridge ? { bridge } : {}),
     createDedicated: (input) => createDedicatedResources({
       admin,
       ledger: input.ledger,

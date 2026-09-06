@@ -15,6 +15,7 @@ import { verifyBridgeIdJag } from './idjag/verify.js';
 import { verifyCnfBinding } from './dpop/cnf-binding.js';
 import { resolveBinding } from './token/resolve-binding.js';
 import { resolveEffectiveScope, difference, isSubset, parseScope } from './token/effective-scope.js';
+import { toPlatformScopes, toProviderScopes } from './scope/provider-scope.js';
 import { buildTokenResponse } from './token/response.js';
 import { runRefreshGrant, type SecretReader } from './saas/refresh-grant.js';
 import { createConnectorCipher, type KmsCipher } from './kms/connector-cipher.js';
@@ -143,7 +144,10 @@ export function createInternalApp(deps: BridgeDeps): Hono {
       const grant = await runRefreshGrant({
         connector,
         refreshToken: await cipher.decryptRefreshToken(resolved.connection.encrypted_refresh_token),
-        scope,
+        // The narrowed scope, in the SaaS's own names. What comes back to the agent is
+        // the platform's `scope` below: the agent never sees a provider scope name, and
+        // has nothing to do with one if it did.
+        scope: toProviderScopes(connector, scope),
         readSecret: deps.readSecret,
         bridgeFetch: wiring.bridgeFetch,
         allowedHosts: allowedHostsFor({ connector, jwksUrl: deps.config.jwksUrl }),
@@ -357,7 +361,10 @@ export function createCallbackApp(deps: BridgeDeps): Hono {
       client_id: connector.client_id,
       redirect_uri: `${deps.config.bridgeCallbackBaseUrl}/${connectorId}/oauth/callback`,
       response_type: 'code',
-      scope: transaction.required_scopes.join(' '),
+      // Translated on the way out: what this platform calls `calendar.read` has to
+      // reach the SaaS under the name that SaaS knows, or the consent screen the
+      // person is being sent to answers `invalid_scope` (scope/provider-scope.ts).
+      scope: toProviderScopes(connector, transaction.required_scopes).join(' '),
       state,
       code_challenge: pkce.challenge,
       code_challenge_method: 'S256',
@@ -377,8 +384,18 @@ export function createCallbackApp(deps: BridgeDeps): Hono {
     const consumed = await wiring.consent.consumeState(state);
     if (!consumed) return context.json({ error: 'invalid_state' }, 400);
 
+    // Back to the same route the Agent OP's callback uses, with no code on it. The
+    // Automation App answers a return trip that carries no code with its consent
+    // failure page, so the person lands on a page that exists and is told to start
+    // again — where `/consent/failed` was a path no app has ever served, and a browser
+    // sent there got the Automation App's 404 after every failed SaaS consent.
+    //
+    // `reason` is this Bridge's own vocabulary and not the SaaS's wording about
+    // someone's account, so it may travel; the Automation App ignores it and shows the
+    // same page either way.
     const fail = (reason: string): Response => {
-      const location = `${deps.config.automationAppBaseUrl}/consent/failed?transaction_id=${encodeURIComponent(consumed.transaction_id)}&reason=${reason}`;
+      const location = `${deps.config.automationAppBaseUrl}/provisioning/resume`
+        + `?transaction_id=${encodeURIComponent(consumed.transaction_id)}&reason=${encodeURIComponent(reason)}`;
       assertNoTokenInRedirect(location);
       emitCallbackLog(wiring.logger, wiring.logContext, { connector_id: connectorId, transaction_id: consumed.transaction_id, result: reason });
       return context.redirect(location, 302);
@@ -414,7 +431,11 @@ export function createCallbackApp(deps: BridgeDeps): Hono {
       humanSubject: consumed.human_subject,
       externalSubject,
       refreshToken: await cipher.encryptRefreshToken(payload.refresh_token),
-      grantedScopes: typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : consumed.required_scopes,
+      // And back on the way in, so the connection is written in the one vocabulary
+      // every containment check downstream is computed in.
+      grantedScopes: typeof payload.scope === 'string'
+        ? toPlatformScopes(connector, payload.scope.split(' ').filter(Boolean))
+        : consumed.required_scopes,
       maxAgeSeconds: connector.connection_max_age_seconds,
       now: wiring.now(),
     });
@@ -424,7 +445,14 @@ export function createCallbackApp(deps: BridgeDeps): Hono {
       transaction_id: consumed.transaction_id, connection_id: connection.connection_id,
     }, wiring.now());
 
-    const location = `${deps.config.automationAppBaseUrl}/consent/complete?transaction_id=${encodeURIComponent(consumed.transaction_id)}&code=${encodeURIComponent(oneTimeCode)}`;
+    // The same landing route the Agent OP's callback uses. There is one place a
+    // consent can come back to, because there is one thing to do on the way back:
+    // present the code on the person's own session and let the Provisioner carry the
+    // provisioning on. `/consent/complete` was a second name for that, and no app
+    // ever served it — every Bridge consent ended on the Automation App's 404 with
+    // the code still unspent.
+    const location = `${deps.config.automationAppBaseUrl}/provisioning/resume`
+      + `?transaction_id=${encodeURIComponent(consumed.transaction_id)}&code=${encodeURIComponent(oneTimeCode)}`;
     assertNoTokenInRedirect(location);
     emitCallbackLog(wiring.logger, wiring.logContext, { connector_id: connectorId, transaction_id: consumed.transaction_id, result: 'completed' });
     return context.redirect(location, 302);
