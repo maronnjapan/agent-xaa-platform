@@ -6,11 +6,19 @@
  * sentence for an unknown refusal would describe something nobody checked.
  */
 const MESSAGES: Record<string, string> = {
-  work_definition_not_confirmed: '先に作業内容を確定してください。',
+  work_definition_not_confirmed: '先に ToDo の内容を確定してください。',
+  todo_not_draft: 'この ToDo は確定済みのため、内容は書き換えられません。',
+  todo_closed: 'この ToDo はすでに完了か取り下げになっています。',
+  agent_still_running: 'Agent がまだ動いています。先に Agent の画面で止めてから取り下げてください。',
   approval_required: '先に提示された権限を承認してください。',
   capabilities_changed: '提示した権限が変わりました。もう一度「必要な権限を調べる」からやり直してください。',
   already_approved: 'すでに承認済みです。',
   lifetime_out_of_range: '希望する稼働時間は 1〜1440 の整数（分）で指定してください。',
+  title_required: 'タイトルを書いてください。',
+  text_too_long: '文章が長すぎます。短くしてください。',
+  too_many_items: '項目が多すぎます。50 件までにしてください。',
+  invalid_priority: '優先度は 高・中・低 のどれかです。',
+  invalid_due_on: '期限は日付（YYYY-MM-DD）で指定してください。',
   agent_not_active: 'この Agent は動いていないため、指示を受け取れません。',
   not_found: '見つかりませんでした。画面を更新してください。',
   // The call to the Authorization Platform did not land. Naming it separately is

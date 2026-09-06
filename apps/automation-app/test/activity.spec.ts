@@ -85,7 +85,7 @@ describe('the four Automation App emitters', () => {
   it('writes Japanese titles and messages, never blank', async () => {
     await emitProposed({ humanSubject: SUBJECT }, { purpose: '経費精算', workDefinitionId: 'wd_1' });
     const [entry] = drainActivityQueueForTesting();
-    expect(entry!.message).toBe('「経費精算」を自動化の候補として保存しました。');
+    expect(entry!.message).toBe('「経費精算」を ToDo として登録しました。');
     for (const text of [entry!.title, entry!.message]) {
       expect(text.trim()).not.toBe('');
       // eslint-disable-next-line no-control-regex
@@ -135,11 +135,11 @@ describe('the four Automation App emitters', () => {
     const asUser = (path: string, init: RequestInit = {}): Promise<Response> =>
       harness.fetch(path, { ...init, headers: { ...(init.headers as Record<string, string>), cookie } });
 
-    const created = await (await asUser('/api/work-definitions', {
+    const created = await (await asUser('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '毎朝の日報をまとめる' }),
+      body: JSON.stringify({ title: '毎朝の日報をまとめる' }),
     })).json() as { work_definition_id: string };
-    await asUser(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+    await asUser(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
     await seedAgent(harness, { state: { agent_status: 'ACTIVE' } });
     expect((await asUser(`/api/agents/${AGENT_ID}/stop`, { method: 'POST' })).status).toBe(200);
 

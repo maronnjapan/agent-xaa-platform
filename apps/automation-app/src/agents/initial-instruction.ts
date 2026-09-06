@@ -1,10 +1,11 @@
 import type { DocumentStore } from '@xaa/gcp';
 import { addInstruction, AgentNotActive, type StoredInstruction } from './instructions.js';
-import type { WorkDefinition } from '../work-definition/model.js';
+import type { TodoPriority, WorkDefinition } from '../work-definition/model.js';
+
+export const PRIORITY_WORDS: Readonly<Record<TodoPriority, string>> = { high: '高', normal: '中', low: '低' };
 
 /**
- * The work definition, in the words the person confirmed, as the new agent's first
- * instruction.
+ * The ToDo, in the words the person confirmed, as the new agent's first instruction.
  *
  * Nothing else carries it. The Runtime starts from ten environment values (00b §2) and
  * a Tool Manifest, none of which says what the agent is *for*: `TASK_ID` is an id, and
@@ -18,21 +19,27 @@ import type { WorkDefinition } from '../work-definition/model.js';
  * and nothing else, so this cannot widen what the agent may do. A first instruction
  * naming a tool the manifest lacks is refused by step2 exactly like a later one.
  *
- * It is the confirmed text, never the draft: `submit` refuses a definition that is not
+ * The context the person wrote travels here whole: it is the background an agent
+ * working unattended cannot ask for, and the done criteria are how it knows to stop.
+ * It is the confirmed text, never the draft: `submit` refuses a ToDo that is not
  * CONFIRMED, so what reaches here is what the person read before they approved the
  * permissions derived from it.
  */
 export function buildInitialInstruction(definition: WorkDefinition): string {
-  const section = (heading: string, lines: readonly string[]): string[] =>
+  const list = (heading: string, lines: readonly string[]): string[] =>
     (lines.length === 0 ? [] : [heading, ...lines.map((line) => `- ${line}`)]);
+  const block = (heading: string, body: string): string[] => (body === '' ? [] : [heading, body]);
 
   return [
-    'これがあなたに委譲された作業です。使用できるツールの範囲で進めてください。',
-    `目的: ${definition.purpose}`,
-    `内容: ${definition.description}`,
-    ...section('手順:', definition.operations),
-    ...section('確認したいこと:', definition.user_confirmations),
-    ...section('注意点:', definition.safety_notes),
+    'これがあなたに任された ToDo です。使用できるツールの範囲で進め、完了条件を満たしたら作業を終えてください。',
+    `タイトル: ${definition.title}`,
+    ...block('内容:', definition.description),
+    ...block('背景と前提（実行時のコンテキスト）:', definition.context),
+    ...list('完了条件:', definition.done_criteria),
+    ...list('手順:', definition.steps),
+    ...list('注意点:', definition.notes),
+    `優先度: ${PRIORITY_WORDS[definition.priority]}`,
+    ...(definition.due_on === null ? [] : [`期限: ${definition.due_on}`]),
   ].join('\n');
 }
 

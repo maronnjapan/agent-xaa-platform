@@ -71,9 +71,9 @@ activity_event:
 | phase | event_type | 発生元 | 出典 | 表示例 |
 |---|---|---|---|---|
 | login | LOGGED_IN | Automation App | [05. §1](./05-identity.md#1-human-identity-provider) | ログインしました |
-| work_definition | PROPOSED | Automation App | [02. §1](./02-automation-design.md#1-基本方針) | 「{purpose}」を自動化の候補として保存しました |
+| work_definition | PROPOSED | Automation App | [02. §1](./02-automation-design.md#1-基本方針) | 「{purpose}」を ToDo として登録しました |
 | work_definition | DRAFT_REVISED | Automation App | [02. §2](./02-automation-design.md#2-automation-design-aiが決めること決めないこと) | Automation Design AIが「{purpose}」の内容を書き直しました |
-| work_definition | CONFIRMED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | 作業内容を確定しました |
+| work_definition | CONFIRMED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | ToDo の内容を確定しました |
 | authorization | DECISION_REQUESTED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | 「{purpose}」の作業内容をAuthorization Platformへ送り、必要な権限の決定を求めました |
 | authorization | CAPABILITY_DECIDED | Authorization Platform | [03. §6](./03-authorization.md#6-policy-engine) | 許可：{allowed}／却下：{denied}（理由：{reason}） |
 | authorization | ISOLATION_DECIDED | Authorization Platform | [03. §7](./03-authorization.md#7-security-profile) | isolation_level={level}に決定（risk_score {n}） |
@@ -82,7 +82,7 @@ activity_event:
 | provisioning | PROVISION_REQUESTED／PROVISION_REFUSED | Automation App | [07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow) | Agentの作成を依頼しました／Agentを作れませんでした |
 | provisioning | CONSENT_REQUIRED | Agent Provisioner | [07. §3.2](./07-lifecycle.md#32-provisioning-transaction) | {connector}への追加の同意が必要です |
 | provisioning | AGENT_PROVISIONED | Agent Provisioner | [07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow) | Agentを作成しました（有効期限{expires_at}） |
-| work_definition | INSTRUCTION_ADDED | Automation App | [02. §5](./02-automation-design.md#5-実行中agentの操作) | Agentに作業内容を伝えました／Agentに追加の指示を出しました |
+| work_definition | INSTRUCTION_ADDED | Automation App | [02. §5](./02-automation-design.md#5-実行中agentの操作) | Agentに ToDo を伝えました／Agentに追加の指示を出しました |
 | tool_call | TOOL_SUCCEEDED | Agent Runtime | [04. §6](./04-tool-catalog.md#6-tool-executor) | {tool_id}を実行しました |
 | tool_call | TOOL_BLOCKED | Agent Runtime | [04. §7](./04-tool-catalog.md#7-agentに任意httpを許さない) | {tool_id}は許可されたToolに含まれないため拒否しました |
 | security | PROTOCOL_VIOLATION | 要求を受けたアプリ（Agent OP、Tool Executor等） | [09. §5.1](./09-security-monitoring.md#51-protocol-validation) | {検証名}に違反したため要求を拒否しました |

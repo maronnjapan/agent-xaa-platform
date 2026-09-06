@@ -4,10 +4,11 @@ import { AGENT_ID, SUBJECT, seedAgent, startAutomationApp, type Harness } from '
 import { capabilitiesHash } from '../src/agent-definition/approval.js';
 import { APPROVAL_NOTE } from '../src/ui/components/agent-definition-panel.js';
 import { STOP_NOTE } from '../src/ui/components/agent-controls.js';
-import { HOME_LEAD } from '../src/ui/pages/home.js';
+import { HOME_LEAD, NO_TODOS } from '../src/ui/pages/home.js';
+import { AGENT_RUNNING_NOTE } from '../src/ui/components/todo-card.js';
 import { actionUrl, afterProvision, dayRange, isHomeAction } from '../src/ui/actions/home-actions.js';
 import { failureMessage } from '../src/ui/actions/messages.js';
-import { toWorkDefinitionBody } from '../src/ui/actions/work-definition-request.js';
+import { toTodoBody } from '../src/ui/actions/todo-request.js';
 import { PRESENTED_CAPABILITIES } from './fixtures/presented-capabilities.fixture.js';
 
 /**
@@ -24,10 +25,11 @@ async function seedWorkDefinition(harness: Harness, overrides: Record<string, un
   const id = String(overrides.work_definition_id ?? 'wd_1');
   await harness.documents.set('work_definitions', id, {
     work_definition_id: id, human_subject: SUBJECT, status: 'DRAFT',
-    purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
-    operations: ['作業記録を読む', '日報を作る'], user_confirmations: ['内容を確認する'],
-    safety_notes: ['社外に送らない'], requested_lifetime_minutes: 120,
-    created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+    title: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
+    context: '作業記録は「業務記録」フォルダにある', done_criteria: ['日報が1件保存されている'],
+    steps: ['作業記録を読む', '日報を作る'], notes: ['社外に送らない'],
+    priority: 'normal', due_on: null, requested_lifetime_minutes: 120, source: 'screen', agent_id: null,
+    created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', completed_at: null,
     ...overrides,
   });
   return id;
@@ -49,8 +51,8 @@ async function seedAgentDefinition(harness: Harness, overrides: Record<string, u
 /**
  * What the Authorization Platform leaves in `work_definitions`: the structured Work
  * Definition it derives from the request. Same collection, same person, different shape
- * — `target_resources` and `constraints` instead of `status`, `user_confirmations` and
- * `safety_notes` (apps/authorization/src/work-definition/build.ts).
+ * — `target_resources` and `constraints` instead of `status`, `done_criteria` and
+ * `notes` (apps/authorization/src/work-definition/build.ts).
  */
 async function seedAuthorizationWorkDefinition(harness: Harness, id = 'wd_authz'): Promise<string> {
   await harness.authorizationSeed.set('work_definitions', id, {
@@ -67,7 +69,7 @@ describe('the home screen', () => {
    * The 500 a person met right after logging in. `work_definitions` is one collection
    * for the platform and the Authorization Platform writes its own shape into it, so a
    * query by `human_subject` returned rows this screen cannot render, and the first
-   * `user_confirmations.map` threw before any of the page reached the browser.
+   * list it mapped threw before any of the page reached the browser.
    */
   it('renders when the Authorization Platform has written its own row for the same person', async () => {
     const harness = await startAutomationApp();
@@ -79,7 +81,7 @@ describe('the home screen', () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     // The person's own draft is there, and the other writer's row is not listed at all.
-    expect(html).toContain('data-work-definition-id="wd_1"');
+    expect(html).toContain('data-todo-id="wd_1"');
     expect(html).not.toContain('wd_authz');
   });
 
@@ -92,7 +94,7 @@ describe('the home screen', () => {
     const harness = await startAutomationApp();
     const id = await seedAuthorizationWorkDefinition(harness);
 
-    for (const path of [`/api/work-definitions/${id}/confirm`, `/api/work-definitions/${id}/submit`]) {
+    for (const path of [`/api/todos/${id}/confirm`, `/api/todos/${id}/submit`, `/api/todos/${id}/complete`]) {
       const response = await harness.fetch(path, { method: 'POST' });
       expect(response.status).toBe(404);
       expect(await response.json()).toEqual({ error: 'not_found' });
@@ -109,7 +111,8 @@ describe('the home screen', () => {
     expect(html.startsWith('<!doctype html>')).toBe(true);
     expect(html).toContain('data-page="home"');
     expect(html).toContain(HOME_LEAD);
-    expect(html).toContain('data-form="work-definition"');
+    expect(html).toContain('data-form="todo"');
+    expect(html).toContain(NO_TODOS);
     expect(html).toContain('src="/app.js"');
     expect(html).toContain('href="/styles/app.css"');
   });
@@ -140,28 +143,96 @@ describe('the home screen', () => {
     await seedWorkDefinition(harness);
     await seedWorkDefinition(harness, { work_definition_id: 'wd_other', human_subject: 'someone-else' });
     const html = await (await harness.fetch('/')).text();
-    expect(html).toContain('data-work-definition-id="wd_1"');
-    expect(html).not.toContain('data-work-definition-id="wd_other"');
+    expect(html).toContain('data-todo-id="wd_1"');
+    expect(html).not.toContain('data-todo-id="wd_other"');
     expect(html).toContain('毎朝の日報をまとめる');
+    // The context the agent will be given, and the criteria it will stop on, are on the card.
+    expect(html).toContain('作業記録は「業務記録」フォルダにある');
+    expect(html).toContain('日報が1件保存されている');
   });
 
-  it('offers a draft the rewrite and the confirmation, and nothing further', async () => {
+  it('offers a draft the rewrite, the edit, the confirmation and the withdrawal, and nothing further', async () => {
     const harness = await startAutomationApp();
     await seedWorkDefinition(harness);
     const html = await (await harness.fetch('/')).text();
     expect(html).toContain('data-action="confirm"');
+    expect(html).toContain('data-action="cancel"');
     expect(html).toContain('data-form="revise"');
-    // The permissions cannot be asked for until the person has settled what the work is.
+    expect(html).toContain('data-section="edit"');
+    // The permissions cannot be asked for until the person has settled what the work is,
+    // and a draft nobody has started is not something to mark done.
     expect(html).not.toContain('data-action="submit"');
     expect(html).not.toContain('data-action="approve"');
+    expect(html).not.toContain('data-action="complete"');
   });
 
-  it('offers a confirmed definition the permission question', async () => {
+  it('offers a confirmed ToDo the permission question, and the two ways to close it', async () => {
     const harness = await startAutomationApp();
     await seedWorkDefinition(harness, { status: 'CONFIRMED' });
     const html = await (await harness.fetch('/')).text();
     expect(html).toContain('data-action="submit"');
+    expect(html).toContain('data-action="complete"');
+    expect(html).toContain('data-action="cancel"');
     expect(html).not.toContain('data-action="confirm"');
+    expect(html).not.toContain('data-section="edit"');
+  });
+
+  it('shows the agent carrying a ToDo in progress, and withholds withdrawal while it runs', async () => {
+    const harness = await startAutomationApp();
+    await seedWorkDefinition(harness, { status: 'IN_PROGRESS', agent_id: AGENT_ID });
+    await seedAgent(harness, { state: { agent_status: 'ACTIVE' } });
+    const html = await (await harness.fetch('/')).text();
+    expect(html).toContain('data-section="todo-agent"');
+    expect(html).toContain(`href="/agents/${AGENT_ID}"`);
+    expect(html).toContain('<span data-field="agent-status">ACTIVE</span>');
+    expect(html).toContain('data-action="complete"');
+    expect(html).toContain(AGENT_RUNNING_NOTE);
+    expect(html).not.toContain('data-action="cancel"');
+    // No verdict yet: the card says so rather than guessing (RULE-59).
+    expect(html).toContain('data-outcome=""');
+  });
+
+  it('prints the verdict the Runtime reached, off the timeline, once the task has ended', async () => {
+    const harness = await startAutomationApp();
+    await seedWorkDefinition(harness, { status: 'IN_PROGRESS', agent_id: AGENT_ID });
+    await seedAgent(harness, { status: 'DESTROYED', state: { agent_status: 'DESTROYED' } });
+    const event = validateActivityEvent({
+      event_id: 'ev-done', trace_id: 'tr-1', human_subject: SUBJECT, agent_id: AGENT_ID, task_id: 'task-1',
+      occurred_at: '2026-01-01T01:00:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success',
+      title: '作業が完了しました', message: '指示された作業をすべて完了しました。',
+      detail: { event_type: 'TASK_COMPLETED', purpose: '毎朝の日報をまとめる' },
+      related_finding_id: null, is_simulated: false,
+    }) as ActivityEvent;
+    await harness.documents.set('user_activity', event.event_id, { ...event, expire_at: '2026-01-08T00:00:00.000Z' });
+
+    const html = await (await harness.fetch('/')).text();
+    expect(html).toContain('data-outcome="TASK_COMPLETED"');
+    expect(html).toContain('指示された作業を最後まで行いました');
+    // The agent has stopped, so the ToDo can be withdrawn as well as completed.
+    expect(html).toContain('data-action="cancel"');
+    expect(html).toContain('data-action="complete"');
+  });
+
+  it('folds closed ToDos under the open ones, with no button on them', async () => {
+    const harness = await startAutomationApp();
+    await seedWorkDefinition(harness, { work_definition_id: 'wd_open', priority: 'high' });
+    await seedWorkDefinition(harness, { work_definition_id: 'wd_done', status: 'DONE', completed_at: '2026-01-02T00:00:00.000Z' });
+    await seedWorkDefinition(harness, { work_definition_id: 'wd_gone', status: 'CANCELLED', completed_at: '2026-01-03T00:00:00.000Z' });
+    const html = await (await harness.fetch('/')).text();
+    const archive = html.slice(html.indexOf('data-section="closed-todos"'));
+    expect(archive).toContain('data-todo-id="wd_done"');
+    expect(archive).toContain('data-todo-id="wd_gone"');
+    expect(archive).not.toContain('data-action=');
+    expect(html.indexOf('data-todo-id="wd_open"')).toBeLessThan(html.indexOf('data-section="closed-todos"'));
+  });
+
+  it('marks a due date that has passed', async () => {
+    const harness = await startAutomationApp({ now: () => Date.parse('2026-02-10T09:00:00.000Z') });
+    await seedWorkDefinition(harness, { work_definition_id: 'wd_late', due_on: '2026-02-01' });
+    await seedWorkDefinition(harness, { work_definition_id: 'wd_soon', due_on: '2026-02-20' });
+    const html = await (await harness.fetch('/')).text();
+    expect(html).toContain('data-overdue="true">期限 2026-02-01（期限切れ）');
+    expect(html).toContain('data-overdue="false">期限 2026-02-20<');
   });
 
   it('prints the presented permissions and offers approval, not provisioning', async () => {
@@ -208,7 +279,7 @@ describe('the home screen', () => {
     const script = await harness.fetch('/app.js');
     expect(script.status).toBe(200);
     expect(script.headers.get('content-type')).toContain('javascript');
-    expect(await script.text()).toContain('/api/work-definitions/');
+    expect(await script.text()).toContain('/api/todos/');
     const style = await harness.fetch('/styles/app.css');
     expect(style.status).toBe(200);
     expect(style.headers.get('content-type')).toContain('text/css');
@@ -233,19 +304,19 @@ describe('the flow from a blank form to an agent', () => {
         : Response.json({ status: 'PROVISIONED', agent_id: AGENT_ID }, { status: 201 })),
     });
 
-    const created = await (await harness.fetch('/api/work-definitions', {
+    const created = await (await harness.fetch('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '毎朝の日報をまとめる', operations: ['作業記録を読む'], requested_lifetime_minutes: 120 }),
+      body: JSON.stringify({ title: '毎朝の日報をまとめる', steps: ['作業記録を読む'], requested_lifetime_minutes: 120 }),
     })).json() as { work_definition_id: string };
 
     const draftPage = await (await harness.fetch('/')).text();
-    expect(draftPage).toContain(`data-work-definition-id="${created.work_definition_id}"`);
+    expect(draftPage).toContain(`data-todo-id="${created.work_definition_id}"`);
     expect(draftPage).toContain('data-status="DRAFT"');
 
-    expect((await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' })).status).toBe(200);
+    expect((await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' })).status).toBe(200);
     expect(await (await harness.fetch('/')).text()).toContain('data-action="submit"');
 
-    const decision = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' })).json() as {
+    const decision = await (await harness.fetch(`/api/todos/${created.work_definition_id}/submit`, { method: 'POST' })).json() as {
       agent_definition_id: string;
     };
     const presentedPage = await (await harness.fetch('/')).text();
@@ -258,6 +329,17 @@ describe('the flow from a blank form to an agent', () => {
     const provisioned = await harness.fetch(`/api/agent-definitions/${decision.agent_definition_id}/provision`, { method: 'POST' });
     expect(provisioned.status).toBe(201);
     expect(await provisioned.json()).toMatchObject({ agent_id: AGENT_ID });
+
+    // The ToDo is now in progress and names its agent; the list shows both.
+    await seedAgent(harness, { state: { agent_status: 'ACTIVE' } });
+    const runningPage = await (await harness.fetch('/')).text();
+    expect(runningPage).toContain('data-status="IN_PROGRESS"');
+    expect(runningPage).toContain('data-section="todo-agent"');
+
+    // And once the agent has stopped, the person closes it.
+    await seedAgent(harness, { status: 'DESTROYED', state: { agent_status: 'DESTROYED' } });
+    expect((await harness.fetch(`/api/todos/${created.work_definition_id}/complete`, { method: 'POST' })).status).toBe(200);
+    expect(await (await harness.fetch('/')).text()).toContain('data-status="DONE"');
   });
 });
 
@@ -282,11 +364,13 @@ describe('the agent screen', () => {
 
 describe("the browser half's decisions", () => {
   it('sends each button to the route that step belongs to', () => {
-    expect(actionUrl('confirm', 'wd_1')).toBe('/api/work-definitions/wd_1/confirm');
-    expect(actionUrl('submit', 'wd_1')).toBe('/api/work-definitions/wd_1/submit');
+    expect(actionUrl('confirm', 'wd_1')).toBe('/api/todos/wd_1/confirm');
+    expect(actionUrl('submit', 'wd_1')).toBe('/api/todos/wd_1/submit');
     expect(actionUrl('approve', 'ad_1')).toBe('/api/agent-definitions/ad_1/approve');
     expect(actionUrl('provision', 'ad_1')).toBe('/api/agent-definitions/ad_1/provision');
-    expect(actionUrl('confirm', 'wd/1')).toBe('/api/work-definitions/wd%2F1/confirm');
+    expect(actionUrl('complete', 'wd_1')).toBe('/api/todos/wd_1/complete');
+    expect(actionUrl('cancel', 'wd_1')).toBe('/api/todos/wd_1/cancel');
+    expect(actionUrl('confirm', 'wd/1')).toBe('/api/todos/wd%2F1/confirm');
     expect(isHomeAction('use-suggestion')).toBe(false);
     expect(isHomeAction(null)).toBe(false);
   });
@@ -308,6 +392,9 @@ describe("the browser half's decisions", () => {
     expect(failureMessage(409, { error: 'approval_required' })).toContain('承認');
     expect(failureMessage(409, { error: 'capabilities_changed' })).toContain('権限が変わりました');
     expect(failureMessage(409, { error: 'agent_not_active' })).toContain('動いていない');
+    expect(failureMessage(409, { error: 'agent_still_running' })).toContain('先に Agent の画面で止めて');
+    expect(failureMessage(409, { error: 'todo_closed' })).toContain('完了か取り下げ');
+    expect(failureMessage(400, { error: 'title_required' })).toContain('タイトル');
     expect(failureMessage(500, { error: 'something_new' })).toContain('something_new');
     expect(failureMessage(502, {})).toContain('502');
   });
@@ -318,16 +405,18 @@ describe("the browser half's decisions", () => {
     expect('2026-01-07T15:00:00.000Z' <= dayRange('2026-01-01', '2026-01-07').to).toBe(true);
   });
 
-  it('reads one list item per line and drops the blank ones', () => {
+  it('reads one list item per line, drops the blank ones, and sends no due date as null', () => {
     const fields: Record<string, string> = {
-      purpose: '日報', description: '',
-      operations: '作業記録を読む\n\n  日報を作る  \n', user_confirmations: '', safety_notes: '',
-      requested_lifetime_minutes: '2',
+      title: '日報', description: '', context: '記録は業務記録にある',
+      steps: '作業記録を読む\n\n  日報を作る  \n', done_criteria: '', notes: '',
+      priority: '', due_on: '', requested_lifetime_minutes: '2',
     };
-    expect(toWorkDefinitionBody((name) => fields[name] ?? '')).toEqual({
-      purpose: '日報', description: '',
-      operations: ['作業記録を読む', '日報を作る'], user_confirmations: [], safety_notes: [],
-      requested_lifetime_minutes: 2,
+    expect(toTodoBody((name) => fields[name] ?? '')).toEqual({
+      title: '日報', description: '', context: '記録は業務記録にある',
+      done_criteria: [], steps: ['作業記録を読む', '日報を作る'], notes: [],
+      priority: 'normal', due_on: null, requested_lifetime_minutes: 2,
     });
+    expect(toTodoBody((name) => ({ title: 'x', priority: 'high', due_on: '2026-01-31', requested_lifetime_minutes: '5' } as Record<string, string>)[name] ?? ''))
+      .toMatchObject({ priority: 'high', due_on: '2026-01-31' });
   });
 });

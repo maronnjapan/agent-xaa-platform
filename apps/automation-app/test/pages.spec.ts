@@ -114,19 +114,22 @@ describe('the agent detail page', () => {
   });
 });
 
-describe('the new work definition page', () => {
+describe('the new ToDo page', () => {
   it('is the destination the blocked guidance points at', async () => {
     const harness = await startAutomationApp();
-    const response = await harness.fetch('/work-definitions/new');
+    const response = await harness.fetch('/todos/new');
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain('data-form="work-definition"');
+    expect(html).toContain('data-page="todo-new"');
+    expect(html).toContain('data-form="todo"');
     expect(html).toContain('src="/app.js"');
+    // The old address is gone rather than kept as a second door to the same form.
+    expect((await harness.fetch('/work-definitions/new')).status).toBe(404);
   });
 
   it('starts the lifetime at the configured default and caps it at a day of minutes', async () => {
     const harness = await startAutomationApp({ config: { defaultAgentLifetimeMinutes: 120 } });
-    const html = await (await harness.fetch('/work-definitions/new')).text();
+    const html = await (await harness.fetch('/todos/new')).text();
     expect(html).toMatch(/<input[^>]*name="requested_lifetime_minutes"[^>]*value="120"/);
     expect(html).toMatch(/<input[^>]*name="requested_lifetime_minutes"[^>]*\/>/);
     const field = /<input[^>]*name="requested_lifetime_minutes"[^>]*\/>/.exec(html)![0];

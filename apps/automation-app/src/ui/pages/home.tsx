@@ -5,14 +5,19 @@ import { agentPagePath } from '../../agents/page-link.js';
 import { dayRange } from '../actions/home-actions.js';
 import { failureMessage } from '../actions/messages.js';
 import { reloadPage } from '../actions/navigate.js';
-import { createWorkDefinition, type WorkDefinitionBody } from '../actions/work-definition-request.js';
-import { WorkDefinitionForm } from '../components/work-definition-form.js';
-import { WorkDefinitionCard } from '../components/work-definition-card.js';
+import { createTodo, type TodoBody } from '../actions/todo-request.js';
+import { TodoForm } from '../components/todo-form.js';
+import { TodoCard, type TodoAgentView } from '../components/todo-card.js';
+import { isClosedStatus } from '../components/todo-labels.js';
 import type { Element } from '../element.js';
 
-export interface HomeWorkItem {
+export type { TodoAgentView };
+
+export interface HomeTodoItem {
   definition: WorkDefinition;
   agentDefinition?: AgentDefinition | undefined;
+  /** The agent carrying this ToDo, once one exists. */
+  agent?: TodoAgentView | undefined;
 }
 
 export interface HomeAgent {
@@ -20,45 +25,52 @@ export interface HomeAgent {
   purpose: string;
 }
 
-export const HOME_LEAD = '自動化したい作業を書き、提示された権限を承認すると Agent が動き出します。';
-export const NO_SUGGESTIONS = '候補は見つかりませんでした。作業の内容を自分で書いてください。';
+export const HOME_LEAD = 'AI に任せたい ToDo を書き、提示された権限を承認すると、Agent がその ToDo を実行します。';
+export const NO_SUGGESTIONS = '候補は見つかりませんでした。ToDo を自分で書いてください。';
+export const NO_TODOS = 'まだ ToDo がありません。上の欄に書いて登録してください。';
 
 interface Suggestion {
-  purpose: string;
+  title: string;
   description: string;
-  operations: string[];
-  user_confirmations: string[];
-  safety_notes: string[];
+  context: string;
+  done_criteria: string[];
+  steps: string[];
+  notes: string[];
 }
 
 /**
  * The screen a person lands on after logging in, and the one place the whole flow
- * happens: describe the work, confirm it, look at the permissions it turned out to
- * need, approve them, and let the agent be created.
+ * happens: write a ToDo, confirm it, look at the permissions it turned out to need,
+ * approve them, let the agent be created, watch it carry the ToDo out, and close it.
  *
  * Every step is a request the person makes. Nothing here advances on a timer, and
- * nothing is decided by the model that helps write the draft — the two irreversible
- * steps, confirming the work and approving the permissions, are separate buttons with
- * the permission set printed between them (RULE-08).
+ * nothing is decided by the model that helps write the ToDo — the irreversible steps,
+ * confirming the wording, approving the permissions and closing the ToDo, are separate
+ * buttons with the permission set printed between them (RULE-08).
  *
- * The sections are ordered the way the work moves, and each carries its own
- * `data-section` so one can be found without knowing the others.
+ * The list is in two parts: the ToDos still open, in the order they need attention,
+ * and the ones already closed, folded under them. The sections are ordered the way the
+ * work moves, and each carries its own `data-section` so one can be found without
+ * knowing the others.
  */
 export function HomePage(props: {
   defaultMinutes: number;
-  items: readonly HomeWorkItem[];
+  items: readonly HomeTodoItem[];
   agents: readonly HomeAgent[];
   defaultFrom: string;
   defaultTo: string;
+  today: string;
 }): Element {
   const formRef = useRef<HTMLFormElement | null>(null);
   const [formStatus, setFormStatus] = useState('');
   const [suggestions, setSuggestions] = useState<readonly Suggestion[]>([]);
   const [suggestStatus, setSuggestStatus] = useState<{ text: string; state: string }>({ text: '', state: '' });
+  const openItems = props.items.filter((item) => !isClosedStatus(item.definition.status));
+  const closedItems = props.items.filter((item) => isClosedStatus(item.definition.status));
 
-  const saveDraft = (body: WorkDefinitionBody): void => {
+  const save = (body: TodoBody): void => {
     void (async () => {
-      const created = await createWorkDefinition(body);
+      const created = await createTodo(body);
       if (created.ok) return reloadPage();
       setFormStatus(failureMessage(created.status, created.body));
     })();
@@ -88,8 +100,8 @@ export function HomePage(props: {
 
   /**
    * A candidate fills the form and nothing more. It is a starting point for what the
-   * person writes, never a draft that got saved on their behalf — which is why it is
-   * written into the fields rather than posted.
+   * person writes, never a ToDo that got registered on their behalf — which is why it
+   * is written into the fields rather than posted.
    */
   const copyInto = (suggestion: Suggestion): void => {
     const form = formRef.current;
@@ -98,21 +110,33 @@ export function HomePage(props: {
       const field = form.elements.namedItem(name);
       if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.value = value;
     };
-    fill('purpose', suggestion.purpose);
+    fill('title', suggestion.title);
     fill('description', suggestion.description);
-    fill('operations', suggestion.operations.join('\n'));
-    fill('user_confirmations', suggestion.user_confirmations.join('\n'));
-    fill('safety_notes', suggestion.safety_notes.join('\n'));
+    fill('context', suggestion.context);
+    fill('done_criteria', suggestion.done_criteria.join('\n'));
+    fill('steps', suggestion.steps.join('\n'));
+    fill('notes', suggestion.notes.join('\n'));
   };
+
+  const card = (item: HomeTodoItem): Element => (
+    <TodoCard
+      key={item.definition.work_definition_id}
+      definition={item.definition}
+      agentDefinition={item.agentDefinition}
+      agent={item.agent}
+      defaultMinutes={props.defaultMinutes}
+      today={props.today}
+    />
+  );
 
   return (
     <main className="home" data-page="home">
-      <h1>自動化をつくる</h1>
+      <h1>ToDo</h1>
       <p className="lead">{HOME_LEAD}</p>
 
       <section className="card" data-section="suggest">
-        <h2>自動化できそうな作業を探す</h2>
-        <p>記録に残っている作業から候補を挙げます。書く内容が決まっているなら飛ばせます。</p>
+        <h2>ToDo の候補を探す</h2>
+        <p>記録に残っている作業から、AI に任せられそうな ToDo の候補を挙げます。書く内容が決まっているなら飛ばせます。</p>
         <form
           data-form="suggestions"
           onSubmit={(event) => {
@@ -133,8 +157,8 @@ export function HomePage(props: {
         </form>
         <ul data-field="suggestions">
           {suggestions.map((suggestion, index) => (
-            <li key={`${index}:${suggestion.purpose}`}>
-              <p>{`${suggestion.purpose}：${suggestion.description}`}</p>
+            <li key={`${index}:${suggestion.title}`}>
+              <p>{`${suggestion.title}：${suggestion.description}`}</p>
               <button type="button" data-action="use-suggestion" onClick={() => copyInto(suggestion)}>この候補を書き写す</button>
             </li>
           ))}
@@ -142,23 +166,27 @@ export function HomePage(props: {
         <p data-field="suggest-status" data-status={suggestStatus.state}>{suggestStatus.text}</p>
       </section>
 
-      <section className="card" data-section="new-work">
-        <h2>1. 自動化したい作業を書く</h2>
-        <WorkDefinitionForm defaultMinutes={props.defaultMinutes} formRef={formRef} onSubmit={saveDraft} />
+      <section className="card" data-section="new-todo">
+        <h2>1. ToDo を書く</h2>
+        <p>権限は書きません。書いた内容から決まり、あとで提示されます。</p>
+        <TodoForm defaultMinutes={props.defaultMinutes} formRef={formRef} onSubmit={save} />
         <p data-field="form-status" data-status={formStatus === '' ? '' : 'error'}>{formStatus}</p>
       </section>
 
-      <section className="card" data-section="work-definitions">
-        <h2>2. 内容を確定し、提示された権限を承認する</h2>
-        {props.items.length === 0
-          ? <p data-field="empty">まだ作業がありません。上の欄に書いて保存してください。</p>
-          : props.items.map((item) => (
-            <WorkDefinitionCard
-              key={item.definition.work_definition_id}
-              definition={item.definition}
-              agentDefinition={item.agentDefinition}
-            />
-          ))}
+      <section className="card" data-section="todos">
+        <h2>2. ToDo 一覧</h2>
+        <p>確定し、提示された権限を承認すると Agent が作られ、ToDo を実行します。終わったら「完了にする」で閉じます。</p>
+        {openItems.length === 0
+          ? <p data-field="empty">{NO_TODOS}</p>
+          : <div data-field="open-todos">{openItems.map(card)}</div>}
+        {closedItems.length > 0
+          ? (
+            <details className="todo-archive" data-section="closed-todos">
+              <summary>{`終わった ToDo（${String(closedItems.length)} 件）`}</summary>
+              {closedItems.map(card)}
+            </details>
+          )
+          : null}
       </section>
 
       <section className="card" data-section="running-agents">

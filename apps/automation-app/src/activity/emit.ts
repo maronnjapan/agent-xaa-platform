@@ -11,19 +11,25 @@ interface EmitContext {
 }
 
 /**
- * What this app writes about one piece of work, in the person's own words.
+ * What this app writes about one ToDo, in the person's own words.
  *
- * It is the work definition's content, copied out by name rather than spread, so a
- * field the store gains later cannot ride onto a timeline uninvited (RULE-38).
+ * It is the ToDo's content, copied out by name rather than spread, so a field the
+ * store gains later cannot ride onto a timeline uninvited (RULE-38).
  */
 export interface DraftContent {
-  purpose: string;
+  title: string;
   description: string;
-  operations: readonly string[];
-  userConfirmations: readonly string[];
-  safetyNotes: readonly string[];
+  context: string;
+  doneCriteria: readonly string[];
+  steps: readonly string[];
+  notes: readonly string[];
+  priority: string;
+  dueOn: string | null;
   requestedLifetimeMinutes: number;
 }
+
+/** Where a ToDo came from, said on the timeline so an API-registered one reads as one. */
+export type DraftSource = 'screen' | 'api';
 
 function base(context: EmitContext, agentId: string | null, taskId: string): Omit<ActivityEvent, 'phase' | 'outcome' | 'title' | 'message' | 'detail'> {
   return {
@@ -46,11 +52,14 @@ function joined(values: readonly string[]): string {
 
 function draftFields(draft: DraftContent): ActivityRecordField[] {
   return [
-    { label: '目的', value: redactRecordText(draft.purpose) },
+    { label: 'タイトル', value: redactRecordText(draft.title) },
     { label: '内容', value: redactRecordText(draft.description) },
-    { label: '手順', value: joined(draft.operations) },
-    { label: '確認したいこと', value: joined(draft.userConfirmations) },
-    { label: '注意点', value: joined(draft.safetyNotes) },
+    { label: '実行時のコンテキスト', value: draft.context === '' ? '—' : redactRecordText(draft.context) },
+    { label: '完了条件', value: joined(draft.doneCriteria) },
+    { label: '手順', value: joined(draft.steps) },
+    { label: '注意点', value: joined(draft.notes) },
+    { label: '優先度', value: draft.priority },
+    { label: '期限', value: draft.dueOn ?? '—' },
     { label: '希望する稼働時間', value: `${draft.requestedLifetimeMinutes} 分` },
   ];
 }
@@ -96,25 +105,31 @@ export async function emitLoggedIn(context: EmitContext): Promise<void> {
   });
 }
 
-export async function emitProposed(context: EmitContext, input: { purpose: string; workDefinitionId: string; draft?: DraftContent }): Promise<void> {
+export async function emitProposed(context: EmitContext, input: {
+  purpose: string; workDefinitionId: string; draft?: DraftContent; source?: DraftSource;
+}): Promise<void> {
+  const via = input.source === 'api' ? '外部 API から' : '画面で';
   await publishActivityEvent({
     ...base(context, null, 'provisioning'),
     phase: 'work_definition', outcome: 'info',
-    title: '自動化したい作業を書きました',
-    message: `「${input.purpose}」を自動化の候補として保存しました。`,
+    title: 'ToDo を登録しました',
+    message: `「${input.purpose}」を ToDo として登録しました。`,
     // `purpose` is what the timeline heads the whole group with. Without it the list
     // fell back to the first event's title, so every agent's group was headed
     // 「ログインしました」 rather than the work it was created for.
-    detail: { event_type: 'PROPOSED', work_definition_id: input.workDefinitionId, purpose: input.purpose },
+    detail: {
+      event_type: 'PROPOSED', work_definition_id: input.workDefinitionId, purpose: input.purpose,
+      source: input.source ?? 'screen',
+    },
     record: {
-      headline: `「${input.purpose}」の下書きを保存しました`,
+      headline: `「${input.purpose}」を ToDo として登録しました`,
       sections: [{
         id: 'draft',
-        label: '書いた作業',
-        message: '利用者が画面で書いた内容そのままです。この時点では下書きで、まだ何も決まっていません。',
-        ...(input.draft ? { fields: draftFields(input.draft) } : { fields: [{ label: '目的', value: input.purpose }] }),
+        label: '登録した ToDo',
+        message: `利用者が${via}書いた内容そのままです。この時点では下書きで、まだ何も決まっていません。`,
+        ...(input.draft ? { fields: draftFields(input.draft) } : { fields: [{ label: 'タイトル', value: input.purpose }] }),
       }],
-      hops: [personHop('作業を書く', `利用者が「${input.purpose}」の作業を書き、下書きとして保存しました。`)],
+      hops: [personHop('ToDo を登録', `利用者が${via}「${input.purpose}」の ToDo を登録しました。`)],
     },
   });
 }
@@ -130,11 +145,11 @@ export async function emitDraftRevised(context: EmitContext, input: {
   await publishActivityEvent({
     ...base(context, null, 'provisioning'),
     phase: 'work_definition', outcome: 'info',
-    title: 'Automation Design AI が下書きを書き直しました',
+    title: 'Automation Design AI が ToDo を書き直しました',
     message: `利用者の依頼を受けて、Automation Design AI が「${input.purpose}」の内容を書き直しました。確定はしていません。`,
     detail: { event_type: 'DRAFT_REVISED', work_definition_id: input.workDefinitionId, purpose: input.purpose },
     record: {
-      headline: `「${input.purpose}」の下書きを書き直しました`,
+      headline: `「${input.purpose}」の ToDo を書き直しました`,
       sections: [
         {
           id: 'request',
@@ -145,12 +160,12 @@ export async function emitDraftRevised(context: EmitContext, input: {
         },
         {
           id: 'revised',
-          label: '書き直した下書き',
+          label: '書き直した ToDo',
           message: 'Automation Design AI が返した新しい下書きです。変わったのは文面だけです。',
           fields: draftFields(input.revised),
         },
       ],
-      hops: [personHop('書き直しを依頼', `利用者が「${input.purpose}」の下書きの書き直しを頼み、Automation Design AI が新しい文面を返しました。`)],
+      hops: [personHop('書き直しを依頼', `利用者が「${input.purpose}」の ToDo の書き直しを頼み、Automation Design AI が新しい文面を返しました。`)],
     },
   });
 }
@@ -159,16 +174,16 @@ export async function emitConfirmed(context: EmitContext, input: { purpose: stri
   await publishActivityEvent({
     ...base(context, null, 'provisioning'),
     phase: 'work_definition', outcome: 'success',
-    title: '作業内容を確定しました',
-    message: `「${input.purpose}」を実行する内容で確定しました。`,
+    title: 'ToDo の内容を確定しました',
+    message: `「${input.purpose}」を AI に実行してもらう内容で確定しました。`,
     detail: { event_type: 'CONFIRMED', work_definition_id: input.workDefinitionId, purpose: input.purpose },
     record: {
       headline: `「${input.purpose}」を確定しました`,
       sections: [{
         id: 'confirmed',
-        label: '確定した作業',
+        label: '確定した ToDo',
         message: 'この内容が、次の段階で Authorization Platform へ送られます。確定した内容はあとから書き換えられません。',
-        ...(input.draft ? { fields: draftFields(input.draft) } : { fields: [{ label: '目的', value: input.purpose }] }),
+        ...(input.draft ? { fields: draftFields(input.draft) } : { fields: [{ label: 'タイトル', value: input.purpose }] }),
       }],
       hops: [personHop('確定', `利用者が「${input.purpose}」の内容を読み、この内容で確定しました。`, 'success')],
     },
@@ -204,7 +219,7 @@ export async function emitDecisionRequested(context: EmitContext, input: {
         label: '送った内容',
         message: 'Automation App が送ったのは業務の言葉だけです。どの権限やツールが要るかは、Authorization Platform が決めます。',
         fields: [
-          { label: '目的', value: redactRecordText(input.purpose) },
+          { label: 'タイトル', value: redactRecordText(input.purpose) },
           { label: '内容', value: redactRecordText(input.description) },
           { label: '自己申告した条件', value: joined(constraints) },
           { label: '希望する稼働時間', value: `${input.requestedLifetimeMinutes} 分` },
@@ -420,9 +435,9 @@ export async function emitInstructionAdded(context: EmitContext, input: {
   await publishActivityEvent({
     ...base(context, input.agentId, input.taskId),
     phase: 'work_definition', outcome: 'info',
-    title: input.initial ? 'Agent に作業内容を伝えました' : 'Agent に追加の指示を出しました',
+    title: input.initial ? 'Agent に ToDo を伝えました' : 'Agent に追加の指示を出しました',
     message: input.initial
-      ? '確定した作業内容を、最初の指示として Agent に渡しました。Agent は次の手の前にこれを読みます。'
+      ? '確定した ToDo の内容を、最初の指示として Agent に渡しました。Agent は次の手の前にこれを読みます。'
       : '利用者が追加の指示を書きました。Agent は次の手の前にこれを読みます。承認した権限の外の操作は、指示しても実行されません。',
     detail: {
       event_type: 'INSTRUCTION_ADDED', instruction_id: input.instructionId, initial: input.initial,

@@ -32,13 +32,19 @@ export function buildBusinessWorkRequest(definition: WorkDefinition): BusinessWo
   if (definition.status !== 'CONFIRMED') throw new WorkDefinitionNotConfirmed();
   return {
     human_subject: definition.human_subject,
-    purpose: definition.purpose,
+    // The ToDo's title is the work's purpose, in the person's words.
+    purpose: definition.title,
     description: definition.description,
     // Declared by the person, in their own terms. `external_message_send` is always
     // present so its absence never reads as "not considered".
-    constraints: { external_message_send: definition.operations.some((operation) => operation.includes('送信')) },
+    constraints: { external_message_send: mentionsSending(definition) },
     requested_lifetime_minutes: definition.requested_lifetime_minutes,
   };
+}
+
+/** Whether the person's own words say something is to be sent out. */
+function mentionsSending(definition: WorkDefinition): boolean {
+  return [definition.title, definition.description, ...definition.steps].some((line) => line.includes('送信'));
 }
 
 export async function submitBusinessWorkRequest(input: {

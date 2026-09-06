@@ -200,9 +200,10 @@ describe('what the Automation App says about its own steps', () => {
   async function seedConfirmedWork(harness: Harness): Promise<void> {
     await harness.documents.set('work_definitions', 'wd_1', {
       work_definition_id: 'wd_1', human_subject: SUBJECT, status: 'CONFIRMED',
-      purpose: '経費の申請書を読む', description: '毎朝9時に確認する',
-      operations: ['申請書の一覧を開く'], user_confirmations: [], safety_notes: ['承認はしない'],
-      requested_lifetime_minutes: 180, created_at: at(0), updated_at: at(0),
+      title: '経費の申請書を読む', description: '毎朝9時に確認する', context: '',
+      done_criteria: [], steps: ['申請書の一覧を開く'], notes: ['承認はしない'],
+      priority: 'normal', due_on: null, requested_lifetime_minutes: 180, source: 'screen', agent_id: null,
+      created_at: at(0), updated_at: at(0), completed_at: null,
     });
   }
 
@@ -217,7 +218,7 @@ describe('what the Automation App says about its own steps', () => {
     await seedConfirmedWork(harness);
     resetActivityPublisherForTesting();
 
-    expect((await harness.fetch('/api/work-definitions/wd_1/submit', { method: 'POST' })).status).toBe(200);
+    expect((await harness.fetch('/api/todos/wd_1/submit', { method: 'POST' })).status).toBe(200);
 
     const published = drainActivityQueueForTesting();
     expect(published.map((entry) => (entry.detail as { event_type: string }).event_type))
@@ -239,7 +240,7 @@ describe('what the Automation App says about its own steps', () => {
     const harness = await startAutomationApp({ upstreamHandler: () => Response.json({ error: 'invalid_request' }, { status: 400 }) });
     await seedConfirmedWork(harness);
     resetActivityPublisherForTesting();
-    await harness.fetch('/api/work-definitions/wd_1/submit', { method: 'POST' });
+    await harness.fetch('/api/todos/wd_1/submit', { method: 'POST' });
     const published = drainActivityQueueForTesting();
     expect(published.map((entry) => (entry.detail as { event_type: string }).event_type)).toEqual(['DECISION_REQUESTED', 'DECISION_REFUSED']);
     expect(published[1]).toMatchObject({ outcome: 'blocked' });

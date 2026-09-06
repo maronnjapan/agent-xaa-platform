@@ -39,15 +39,15 @@ macOS と Linux はターミナルで、Windows は [WSL2](https://learn.microso
 費用は放置で月額約 $0.5、1日動かして $1.1〜1.5 の見込みである（[tasks/README.md](./tasks/README.md) の DEC-COST-01）。
 
 終わると、ブラウザで開く URL とログイン情報（`testuser` / `password`）が表示される。
-その画面で自動化したい内容を書き、提示された Agent Definition を承認すると、エージェントが実行を始める。
+その画面で AI にやってもらう ToDo を書き、提示された Agent Definition を承認すると、エージェントが ToDo の実行を始める。
 
 ## 画面を操作する
 
-作業を書くところから Agent を止めるところまでの手順は [docs/user-guide.md](./docs/user-guide.md) にある。
+ToDo を書くところから Agent を止め、ToDo を完了にするところまでの手順は [docs/user-guide.md](./docs/user-guide.md) にある。
 同じ案内は、ログイン後の画面の「使い方」（`/guide`）にも置いてある。
 
 画面は2つある。
-Automation App は作業を書いて Agent を作り、動かし、止めるところである。
+Automation App は AI にやってもらう ToDo を書いて Agent を作り、動かし、止め、ToDo を閉じるところである。外部のツールからは `/external/todos` に Human IdP のアクセストークンを付けて ToDo を登録できる（[docs/02 §6](./docs/02-automation-design.md#6-todo登録api)）。
 Analysis Console は、Agent の挙動を見ているログ分析エージェントが何をどう判断したかを読むところで、別のサイトとして立ち上がる（[docs/09 §7](./docs/09-security-monitoring.md#7-判断を本人へ見せる)）。
 どちらも同じ Human IdP でログインするが、Session は別なので初回はそれぞれでログインする。
 

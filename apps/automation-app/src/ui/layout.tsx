@@ -37,7 +37,7 @@ export function Layout(props: {
       </head>
       <body>
         <nav className="app-nav">
-          <a href="/">自動化をつくる</a>
+          <a href="/">ToDo</a>
           <a href="/activity">タイムライン</a>
           <a href={props.analysisConsoleUrl}>分析エージェントの判断</a>
           <a href="/guide">使い方</a>

@@ -6,14 +6,15 @@ export const suggestionSchema = {
   $id: 'automation-suggestion',
   type: 'object',
   additionalProperties: false,
-  required: ['candidate_id', 'purpose', 'description', 'operations', 'user_confirmations', 'safety_notes'],
+  required: ['candidate_id', 'title', 'description', 'context', 'done_criteria', 'steps', 'notes'],
   properties: {
     candidate_id: { type: 'string', minLength: 1 },
-    purpose: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1 },
     description: { type: 'string' },
-    operations: { type: 'array', items: { type: 'string' } },
-    user_confirmations: { type: 'array', items: { type: 'string' } },
-    safety_notes: { type: 'array', items: { type: 'string' } },
+    context: { type: 'string' },
+    done_criteria: { type: 'array', items: { type: 'string' } },
+    steps: { type: 'array', items: { type: 'string' } },
+    notes: { type: 'array', items: { type: 'string' } },
   },
 } as const;
 
@@ -33,9 +34,44 @@ export const dailyReportSchema = {
   properties: { title: { type: 'string', minLength: 1 }, body: { type: 'string', minLength: 1 } },
 } as const;
 
+/**
+ * A ToDo, as this app stores it.
+ *
+ * The record is the platform's Work Definition (docs 01 §3.4): what a person wants
+ * done, in their own words, which the Authorization Platform later turns into
+ * permissions. The screen calls it a ToDo because that is what it is to the person —
+ * one item on a list, handed to an AI to carry out — and the fields are the ones an
+ * agent needs in order to carry it out unattended: a title, a description, the context
+ * it should hold while working, what "done" means, the steps if the person has them in
+ * mind, and the things it must not do.
+ */
+export const TODO_STATUS_VALUES = ['DRAFT', 'CONFIRMED', 'IN_PROGRESS', 'DONE', 'CANCELLED'] as const;
+export const TODO_PRIORITY_VALUES = ['high', 'normal', 'low'] as const;
+export const TODO_SOURCE_VALUES = ['screen', 'api'] as const;
+
+/** A calendar day, written the one way a date input and an API caller both write it. */
+export const DUE_ON_PATTERN = '^\\d{4}-\\d{2}-\\d{2}$';
+
+export const TODO_TITLE_MAX = 200;
+export const TODO_TEXT_MAX = 4000;
+export const TODO_CONTEXT_MAX = 8000;
+export const TODO_LIST_MAX_ITEMS = 50;
+export const TODO_LIST_ITEM_MAX = 500;
+
+const TODO_LINES = {
+  type: 'array',
+  maxItems: TODO_LIST_MAX_ITEMS,
+  items: { type: 'string', minLength: 1, maxLength: TODO_LIST_ITEM_MAX },
+} as const;
+
+/** What a person (or their API client) writes; everything else the app fills in. */
+export const TODO_INPUT_FIELDS = [
+  'title', 'description', 'context', 'done_criteria', 'steps', 'notes', 'priority', 'due_on', 'requested_lifetime_minutes',
+] as const;
+
 export const WORK_DEFINITION_FIELDS = [
-  'work_definition_id', 'human_subject', 'status', 'purpose', 'description', 'operations',
-  'user_confirmations', 'safety_notes', 'requested_lifetime_minutes', 'created_at', 'updated_at',
+  'work_definition_id', 'human_subject', 'status', ...TODO_INPUT_FIELDS, 'source', 'agent_id',
+  'created_at', 'updated_at', 'completed_at',
 ] as const;
 
 export const workDefinitionSchema = {
@@ -46,15 +82,23 @@ export const workDefinitionSchema = {
   properties: {
     work_definition_id: { type: 'string', minLength: 1 },
     human_subject: { type: 'string', minLength: 1 },
-    status: { enum: ['DRAFT', 'CONFIRMED'] },
-    purpose: { type: 'string' },
-    description: { type: 'string' },
-    operations: { type: 'array', items: { type: 'string' } },
-    user_confirmations: { type: 'array', items: { type: 'string' } },
-    safety_notes: { type: 'array', items: { type: 'string' } },
+    status: { enum: TODO_STATUS_VALUES },
+    title: { type: 'string', minLength: 1, maxLength: TODO_TITLE_MAX },
+    description: { type: 'string', maxLength: TODO_TEXT_MAX },
+    context: { type: 'string', maxLength: TODO_CONTEXT_MAX },
+    done_criteria: TODO_LINES,
+    steps: TODO_LINES,
+    notes: TODO_LINES,
+    priority: { enum: TODO_PRIORITY_VALUES },
+    due_on: { type: ['string', 'null'], pattern: DUE_ON_PATTERN },
     requested_lifetime_minutes: { type: 'integer', minimum: 1, maximum: 1440 },
+    source: { enum: TODO_SOURCE_VALUES },
+    /** The agent carrying this ToDo out, once one has been made for it. */
+    agent_id: { type: ['string', 'null'] },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
+    /** When it was marked done or withdrawn; null while it is still open. */
+    completed_at: { type: ['string', 'null'], format: 'date-time' },
   },
 } as const;
 
@@ -62,20 +106,23 @@ export const workDefinitionSchema = {
  * What one turn of the design conversation may rewrite.
  *
  * `status` is not a property here, and `additionalProperties: false` means the model
- * cannot smuggle it in. The five fields are the ones a person describes in words; the
- * state is not one of them (RULE-08).
+ * cannot smuggle it in. The six fields are the ones a person describes in words; the
+ * state, the priority and the due date are not among them (RULE-08).
  */
+export const DRAFT_FIELDS = ['title', 'description', 'context', 'done_criteria', 'steps', 'notes'] as const;
+
 export const workDefinitionDraftSchema = {
   $id: 'work-definition-draft',
   type: 'object',
   additionalProperties: false,
-  required: ['purpose', 'description', 'operations', 'user_confirmations', 'safety_notes'],
+  required: [...DRAFT_FIELDS],
   properties: {
-    purpose: { type: 'string' },
-    description: { type: 'string' },
-    operations: { type: 'array', items: { type: 'string' } },
-    user_confirmations: { type: 'array', items: { type: 'string' } },
-    safety_notes: { type: 'array', items: { type: 'string' } },
+    title: { type: 'string', minLength: 1, maxLength: TODO_TITLE_MAX },
+    description: { type: 'string', maxLength: TODO_TEXT_MAX },
+    context: { type: 'string', maxLength: TODO_CONTEXT_MAX },
+    done_criteria: TODO_LINES,
+    steps: TODO_LINES,
+    notes: TODO_LINES,
   },
 } as const;
 

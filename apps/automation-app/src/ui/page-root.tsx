@@ -2,7 +2,7 @@ import { AgentDetailPage } from './pages/agent-detail.js';
 import { GuidePage } from './pages/guide.js';
 import { HomePage } from './pages/home.js';
 import { TimelinePage } from './pages/timeline.js';
-import { WorkDefinitionNewPage } from './pages/work-definition-new.js';
+import { TodoNewPage } from './pages/todo-new.js';
 import type { PageData } from './page-data.js';
 import type { Element } from './element.js';
 
@@ -26,14 +26,15 @@ export function PageRoot(props: { data: PageData }): Element {
           agents={data.agents}
           defaultFrom={data.defaultFrom}
           defaultTo={data.defaultTo}
+          today={data.today}
         />
       );
     case 'timeline':
       return <TimelinePage tasks={data.tasks} />;
     case 'agent-detail':
       return <AgentDetailPage agentId={data.agentId} status={data.status} />;
-    case 'work-definition-new':
-      return <WorkDefinitionNewPage defaultMinutes={data.defaultMinutes} />;
+    case 'todo-new':
+      return <TodoNewPage defaultMinutes={data.defaultMinutes} />;
     case 'guide':
       return <GuidePage />;
   }

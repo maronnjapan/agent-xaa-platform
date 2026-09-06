@@ -2,8 +2,10 @@
  * REQ-05-004 / REQ-02-013. core only checks that `openid` is present, so the
  * registered-scope narrowing lives here.
  *
- * `agent:operate` means "check status of a running agent and add instructions".
- * Stopping an agent is `agent:revoke`; it is deliberately not folded into operate.
+ * `agent:operate` means "operate the agents this person delegates to": check the
+ * status of a running agent, add instructions, and register a ToDo for one to carry
+ * out (the Automation App's `/external/todos` checks for it). Stopping an agent is
+ * `agent:revoke`; it is deliberately not folded into operate.
  */
 export const SUPPORTED_SCOPES = [
   'openid',

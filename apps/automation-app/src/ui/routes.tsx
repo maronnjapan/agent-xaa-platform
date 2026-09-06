@@ -10,7 +10,7 @@ import { createWorkDefinitionStore } from '../work-definition/store.js';
 import { createAgentDefinitionStore } from '../agent-definition/approval.js';
 import { readAsset, STATIC_ASSETS } from './assets.js';
 import { renderPage } from './layout.js';
-import type { HomeAgent, HomeWorkItem } from './pages/home.js';
+import type { HomeAgent, HomeTodoItem, TodoAgentView } from './pages/home.js';
 
 type Env = UserVariables & AgentOwnerVariables;
 
@@ -75,9 +75,15 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
    * Where a person lands after logging in, and where the whole flow happens.
    *
    * The page is rendered from what the server holds rather than from anything the
-   * browser remembers: the drafts, their state, the permissions that were presented and
-   * whether they were approved. Each of the person's own records is fetched by their own
-   * subject, taken from the session and from nowhere else (RULE-56).
+   * browser remembers: the ToDos, their state, the permissions that were presented and
+   * whether they were approved, and what the agent carrying each one is doing. Each of
+   * the person's own records is fetched by their own subject, taken from the session
+   * and from nowhere else (RULE-56).
+   *
+   * An agent is read only for a ToDo that names it, and a ToDo names an agent only
+   * because this app wrote the id there when provisioning answered for this person. The
+   * checkpoint is read through the same reader the agent's own screen uses
+   * (T-APP-27), and the verdict comes off the person's own timeline.
    */
   app.get('/', asUser, async (context) => {
     const humanSubject = context.get('humanSubject');
@@ -88,13 +94,14 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     ]);
     // Newest first, so a second attempt at the same work shows the permissions that were
     // presented last rather than the ones that have been superseded.
-    const items: HomeWorkItem[] = definitions.map((definition) => ({
+    const items: HomeTodoItem[] = await Promise.all(definitions.map(async (definition) => ({
       definition,
       agentDefinition: presented.find((candidate) => candidate.work_definition_id === definition.work_definition_id),
-    }));
+      ...(definition.agent_id === null ? {} : { agent: await agentViewOf(definition.agent_id, tasks) }),
+    })));
     return context.html(renderPage({
       analysisConsoleUrl: deps.config.analysisConsoleUrl,
-      title: '自動化をつくる',
+      title: 'ToDo',
       styles: STYLES,
       script: SCRIPT,
       data: {
@@ -104,6 +111,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
         agents: agentsOf(tasks),
         defaultFrom: isoDate(now() - SUGGESTION_WINDOW_DAYS * 86_400_000),
         defaultTo: isoDate(now()),
+        today: isoDate(now()),
       },
     }));
   });
@@ -142,16 +150,42 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     }));
   });
 
-  app.get('/work-definitions/new', asUser, (context) =>
+  app.get('/todos/new', asUser, (context) =>
     context.html(renderPage({
       analysisConsoleUrl: deps.config.analysisConsoleUrl,
-      title: '新しい作業を定義する',
+      title: '新しい ToDo を書く',
       styles: STYLES,
       script: SCRIPT,
-      data: { page: 'work-definition-new', defaultMinutes: deps.config.defaultAgentLifetimeMinutes },
+      data: { page: 'todo-new', defaultMinutes: deps.config.defaultAgentLifetimeMinutes },
     })));
 
   return app;
+
+  /**
+   * The agent carrying a ToDo, as the card shows it.
+   *
+   * The snapshot is the checkpoint; the verdict is the Runtime's own terminal event on
+   * the agent's task — `TASK_COMPLETED`, `TASK_BLOCKED` or `TASK_FAILED`, read off the
+   * event as the Runtime named it. A task that has not ended has no verdict yet, and
+   * the card says so rather than guessing (RULE-59).
+   */
+  async function agentViewOf(agentId: string, tasks: readonly TimelineTask[]): Promise<TodoAgentView> {
+    const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
+    const finished = tasks.find((task) =>
+      task.agent_id === agentId && task.status === 'completed' && task.task_id.startsWith('task-'));
+    const verdict = finished?.status === 'completed'
+      ? finished.events
+        .map((event) => (event.detail as { event_type?: unknown } | undefined)?.event_type)
+        .find((type): type is string => typeof type === 'string' && type.startsWith('TASK_'))
+      : undefined;
+    return {
+      agentId,
+      status: status.agent_status,
+      remainingSeconds: status.remaining_seconds,
+      outcome: finished?.status === 'completed' ? verdict ?? finished.terminal_outcome : null,
+      completedAt: finished?.status === 'completed' ? finished.completed_at : null,
+    };
+  }
 }
 
 /**

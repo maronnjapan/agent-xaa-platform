@@ -69,6 +69,7 @@ form label {
 input[type="text"],
 input[type="date"],
 input[type="number"],
+select,
 textarea {
   display: block;
   width: 100%;
@@ -94,18 +95,105 @@ button {
 
 button[disabled] { opacity: 0.5; cursor: progress; }
 
-.work-definition {
+/*
+ * One ToDo. The head carries its state, priority and due date as short badges, so a
+ * person scanning the list reads the state of each item before its text. The colour on
+ * the left edge is priority, and the badge always says the same thing in words.
+ */
+.todo {
   margin: 1rem 0;
   padding: 0.75rem 1rem;
   border: 1px solid var(--edge);
+  border-left-width: 4px;
   border-radius: 6px;
 }
 
-.work-definition [data-field="status"] {
-  margin: 0;
+.todo[data-priority="high"] { border-left-color: #a3401f; }
+.todo[data-priority="normal"] { border-left-color: var(--accent); }
+.todo[data-priority="low"] { border-left-color: #97a6b2; }
+.todo[data-status="DONE"],
+.todo[data-status="CANCELLED"] { opacity: 0.8; }
+
+.todo-head h3 { margin: 0 0 0.2rem; }
+
+.todo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+.todo-meta > span {
+  padding: 0 0.45rem;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--ground);
+}
+
+.todo-meta .todo-status { font-weight: 700; color: var(--ink); }
+.todo-meta [data-overdue="true"] { color: #8a1f1f; border-color: #8a1f1f; }
+
+.todo-context summary { cursor: pointer; font-size: 0.9rem; }
+
+.todo-context pre {
+  margin: 0.3rem 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--ground);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.todo dl { margin: 0.5rem 0; }
+.todo dt { color: var(--muted); font-size: 0.85rem; }
+.todo dd { margin: 0 0 0.4rem; }
+.todo dd ul { margin: 0; padding-left: 1.2rem; }
+.todo-empty { color: var(--muted); }
+
+.todo-agent {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--ground);
+  border-left: 4px solid #7c6bb5;
+}
+
+.todo-agent p { margin: 0.2rem 0; }
+
+.todo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+}
+
+.todo-cancel { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+
+button.secondary {
+  color: var(--accent);
+  background: #fff;
+  border: 1px solid var(--accent);
+}
+
+.todo-note { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.todo-closed { color: var(--muted); font-size: 0.9rem; }
+
+.todo-edit { margin: 0.75rem 0; }
+.todo-edit > summary { cursor: pointer; }
+
+.todo-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.todo-form-row label { flex: 1 1 10rem; }
+
+.todo-archive { margin-top: 1rem; }
+.todo-archive > summary { cursor: pointer; color: var(--muted); }
 
 /* The permissions a person is about to agree to, set apart from the work they describe. */
 .agent-definition {

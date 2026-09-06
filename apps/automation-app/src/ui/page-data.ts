@@ -1,6 +1,6 @@
 import type { AgentStatusResponse } from '../agents/status.js';
 import type { TimelineTask } from '../activity/query.js';
-import type { HomeAgent, HomeWorkItem } from './pages/home.js';
+import type { HomeAgent, HomeTodoItem } from './pages/home.js';
 
 /**
  * Everything a screen was rendered from, in one serialisable value.
@@ -14,12 +14,19 @@ import type { HomeAgent, HomeWorkItem } from './pages/home.js';
  * It is the page's *input*, never its state. Nothing the person does in the browser is
  * written back here, and nothing here is read from the browser's own storage — the
  * screens are rendered from what the server holds and from nowhere else (RULE-56).
+ *
+ * `today` is the server's date, carried so the browser marks the same ToDos overdue
+ * as the server did: a clock read on each side would hydrate onto markup it disagrees
+ * with at midnight.
  */
 export type PageData =
-  | { page: 'home'; defaultMinutes: number; items: HomeWorkItem[]; agents: HomeAgent[]; defaultFrom: string; defaultTo: string }
+  | {
+    page: 'home'; defaultMinutes: number; items: HomeTodoItem[]; agents: HomeAgent[];
+    defaultFrom: string; defaultTo: string; today: string;
+  }
   | { page: 'timeline'; tasks: TimelineTask[] }
   | { page: 'agent-detail'; agentId: string; status: AgentStatusResponse }
-  | { page: 'work-definition-new'; defaultMinutes: number }
+  | { page: 'todo-new'; defaultMinutes: number }
   | { page: 'guide' };
 
 /** Where the browser half looks for it. One id, named once. */

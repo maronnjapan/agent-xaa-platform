@@ -22,7 +22,7 @@ describe('the guide page', () => {
     expect(html).toContain('data-page="guide"');
     expect(html).toContain(GUIDE_LEAD);
     const steps = [...html.matchAll(/data-step="([a-z]+)"/g)].map((match) => match[1]);
-    expect(steps).toEqual(['describe', 'confirm', 'decide', 'approve', 'operate', 'notes', 'trouble']);
+    expect(steps).toEqual(['describe', 'confirm', 'decide', 'approve', 'operate', 'close', 'api', 'notes', 'trouble']);
   });
 
   it('links to every screen the steps send a person to', async () => {
@@ -32,6 +32,8 @@ describe('the guide page', () => {
     const body = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
     expect(body).toContain('href="/"');
     expect(body).toContain('href="/activity"');
+    // And the door a program comes in by, named where a person will look for it.
+    expect(body).toContain('/external/todos');
   });
 
   it('is reachable from the navigation of every screen', async () => {

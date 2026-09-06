@@ -2,21 +2,23 @@
  * What each button on the home screen asks the server to do, and what to make of the
  * answer.
  *
- * The mapping is a table rather than a set of handlers so the four steps of the flow
- * read in one place, and so the browser half can be checked without a browser. Every
- * entry is a POST under `/api`, which is the same door the person's own session opens;
- * there is no second, form-encoded route into any of them.
+ * The mapping is a table rather than a set of handlers so the steps of the flow read
+ * in one place, and so the browser half can be checked without a browser. Every entry
+ * is a POST under `/api`, which is the same door the person's own session opens; there
+ * is no second, form-encoded route into any of them.
  */
 
 import { agentPagePath } from '../../agents/page-link.js';
 
-export type HomeAction = 'confirm' | 'submit' | 'approve' | 'provision';
+export type HomeAction = 'confirm' | 'submit' | 'approve' | 'provision' | 'complete' | 'cancel';
 
 const ACTION_PATHS: Record<HomeAction, (id: string) => string> = {
-  confirm: (id) => `/api/work-definitions/${encodeURIComponent(id)}/confirm`,
-  submit: (id) => `/api/work-definitions/${encodeURIComponent(id)}/submit`,
+  confirm: (id) => `/api/todos/${encodeURIComponent(id)}/confirm`,
+  submit: (id) => `/api/todos/${encodeURIComponent(id)}/submit`,
   approve: (id) => `/api/agent-definitions/${encodeURIComponent(id)}/approve`,
   provision: (id) => `/api/agent-definitions/${encodeURIComponent(id)}/provision`,
+  complete: (id) => `/api/todos/${encodeURIComponent(id)}/complete`,
+  cancel: (id) => `/api/todos/${encodeURIComponent(id)}/cancel`,
 };
 
 export function isHomeAction(value: string | null): value is HomeAction {

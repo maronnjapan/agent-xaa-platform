@@ -14,8 +14,9 @@ import { seedInitialInstruction } from './agents/initial-instruction.js';
 import { agentPagePath } from './agents/page-link.js';
 import { logAgentOperation } from './audit/logger.js';
 import { createWorkDefinitionStore } from './work-definition/store.js';
-import { confirm } from './work-definition/model.js';
-import { LifetimeOutOfRange, validateLifetimeMinutes } from './work-definition/lifetime.js';
+import { cancel, complete, confirm, startExecution, TodoClosed, TodoNotDraft } from './work-definition/model.js';
+import { InvalidTodoInput, readTodoInput } from './work-definition/input.js';
+import { LifetimeOutOfRange } from './work-definition/lifetime.js';
 import {
   buildBusinessWorkRequest, logUpstreamRefusal, submitBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed,
 } from './work-definition/submit.js';
@@ -35,21 +36,25 @@ import {
 } from './activity/emit.js';
 import { instructionRequestSchema, timelineResponseSchema } from './schemas/index.js';
 import { createLoginRoutes } from './auth/login-flow.js';
+import { requireBearerToken, TODO_API_SCOPE, type BearerVariables } from './auth/require-bearer-token.js';
 import { createPageRoutes } from './ui/routes.js';
 import { createSignalSource } from './signals/registry.js';
 import type { WorkSignalSource } from './signals/work-signal-source.js';
 import { loadSuggestionPrompt } from './prompts/load.js';
 import { reviseDraft } from './work-definition/dialogue.js';
-import type { WorkDefinition } from './work-definition/model.js';
+import type { TodoSource, WorkDefinition } from './work-definition/model.js';
 
 /** The person's own words, copied out by name for the timeline (RULE-38). */
 function draftOf(definition: WorkDefinition): DraftContent {
   return {
-    purpose: definition.purpose,
+    title: definition.title,
     description: definition.description,
-    operations: definition.operations,
-    userConfirmations: definition.user_confirmations,
-    safetyNotes: definition.safety_notes,
+    context: definition.context,
+    doneCriteria: definition.done_criteria,
+    steps: definition.steps,
+    notes: definition.notes,
+    priority: definition.priority,
+    dueOn: definition.due_on,
     requestedLifetimeMinutes: definition.requested_lifetime_minutes,
   };
 }
@@ -87,11 +92,13 @@ const assertTimeline: (value: unknown) => asserts value is unknown = compile(tim
 /**
  * The screen a person uses, and the only place they touch the platform.
  *
- * Two things shape this route table. Everything under `/api` runs behind
- * `requireUser`, so no handler ever decides for itself who is asking; and everything
+ * Three things shape this route table. Everything under `/api` runs behind
+ * `requireUser`, so no handler ever decides for itself who is asking; everything
  * under `/api/agents/:agent_id` additionally runs behind `requireAgentOwner`, so no
- * handler ever decides for itself whose agent it is. The push endpoint is the one
- * exception, authenticated by Pub/Sub's own OIDC token rather than a session.
+ * handler ever decides for itself whose agent it is; and everything under `/external`
+ * runs behind `requireBearerToken`, which answers the same question — who is asking —
+ * from a Human IdP Access Token the caller presents rather than from a session. The
+ * push endpoint is the one exception, authenticated by Pub/Sub's own OIDC token.
  */
 function createApp(deps: AutomationAppDeps): Hono<Env> {
   const app = new Hono<Env>();
@@ -282,47 +289,107 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     return context.json({ document_id: created.document_id ?? null }, 201);
   });
 
-  app.post('/api/work-definitions', async (context) => {
+  /**
+   * A ToDo is registered as a draft, from the screen here and from a client's own
+   * token under `/external`. Both go through `createTodo`, so there is one reading of
+   * the body and one record shape, whichever door it came in by.
+   */
+  app.post('/api/todos', async (context) => {
     const body = await context.req.json().catch(() => ({})) as Record<string, unknown>;
-    let minutes: number;
-    try {
-      minutes = validateLifetimeMinutes(body.requested_lifetime_minutes ?? deps.config.defaultAgentLifetimeMinutes);
-    } catch (error) {
-      if (error instanceof LifetimeOutOfRange) return context.json({ error: error.code }, 400);
-      throw error;
-    }
-    const definition = await workDefinitions.create({
-      human_subject: context.get('humanSubject'),
-      purpose: String(body.purpose ?? ''),
-      description: String(body.description ?? ''),
-      operations: Array.isArray(body.operations) ? body.operations.map(String) : [],
-      user_confirmations: Array.isArray(body.user_confirmations) ? body.user_confirmations.map(String) : [],
-      safety_notes: Array.isArray(body.safety_notes) ? body.safety_notes.map(String) : [],
-      requested_lifetime_minutes: minutes,
-    }, now());
-    await emitProposed({ humanSubject: definition.human_subject, occurredAt: new Date(now()).toISOString() },
-      { purpose: definition.purpose, workDefinitionId: definition.work_definition_id, draft: draftOf(definition) });
-    return context.json(definition, 201);
+    return createTodo(context, context.get('humanSubject'), body, 'screen');
   });
 
-  /** The only writer of `status`. A message endpoint deliberately has no such branch. */
-  app.post('/api/work-definitions/:id/confirm', async (context) => {
+  /**
+   * The person's own edit of a draft: the same fields the form takes, written over the
+   * record whole. A ToDo that is no longer a draft is refused — its wording was settled
+   * when it was confirmed, and the permissions derived from it are for that wording.
+   */
+  app.patch('/api/todos/:id', async (context) => {
     const definition = await workDefinitions.find(context.req.param('id'));
     if (!definition || definition.human_subject !== context.get('humanSubject')) {
       return context.json({ error: 'not_found' }, 404);
     }
-    const confirmed = confirm(definition, new Date(now()).toISOString());
+    if (definition.status !== 'DRAFT') return context.json({ error: new TodoNotDraft().code }, 409);
+    const body = await context.req.json().catch(() => ({})) as Record<string, unknown>;
+    let input;
+    try {
+      input = readTodoInput(body, { lifetimeMinutes: definition.requested_lifetime_minutes });
+    } catch (error) {
+      if (error instanceof InvalidTodoInput || error instanceof LifetimeOutOfRange) return context.json({ error: error.code }, 400);
+      throw error;
+    }
+    const edited: WorkDefinition = { ...definition, ...input, updated_at: new Date(now()).toISOString() };
+    await workDefinitions.save(edited);
+    return context.json(edited, 200);
+  });
+
+  /** The only writer of `CONFIRMED`. A message endpoint deliberately has no such branch. */
+  app.post('/api/todos/:id/confirm', async (context) => {
+    const definition = await workDefinitions.find(context.req.param('id'));
+    if (!definition || definition.human_subject !== context.get('humanSubject')) {
+      return context.json({ error: 'not_found' }, 404);
+    }
+    let confirmed: WorkDefinition;
+    try {
+      confirmed = confirm(definition, new Date(now()).toISOString());
+    } catch (error) {
+      if (error instanceof TodoNotDraft) return context.json({ error: error.code }, 409);
+      throw error;
+    }
     await workDefinitions.save(confirmed);
     await emitConfirmed({ humanSubject: confirmed.human_subject, occurredAt: new Date(now()).toISOString() },
-      { purpose: confirmed.purpose, workDefinitionId: confirmed.work_definition_id, draft: draftOf(confirmed) });
+      { purpose: confirmed.title, workDefinitionId: confirmed.work_definition_id, draft: draftOf(confirmed) });
     return context.json(confirmed, 200);
   });
 
-  app.post('/api/work-definitions/:id/messages', async (context) => {
+  /**
+   * The two ways a ToDo leaves the list, and both are the person's. An agent that
+   * reports its task finished is shown on the card; it does not close the ToDo, because
+   * whether the work is actually done is the person's judgement (RULE-08, from the
+   * other end). Withdrawing a ToDo whose agent is still running is refused: the agent
+   * is stopped from its own screen, and a ToDo that read as withdrawn while its agent
+   * kept working would be the screen saying something false.
+   */
+  app.post('/api/todos/:id/complete', async (context) => {
     const definition = await workDefinitions.find(context.req.param('id'));
     if (!definition || definition.human_subject !== context.get('humanSubject')) {
       return context.json({ error: 'not_found' }, 404);
     }
+    try {
+      const done = complete(definition, new Date(now()).toISOString());
+      await workDefinitions.save(done);
+      return context.json(done, 200);
+    } catch (error) {
+      if (error instanceof TodoClosed) return context.json({ error: error.code }, 409);
+      throw error;
+    }
+  });
+
+  app.post('/api/todos/:id/cancel', async (context) => {
+    const definition = await workDefinitions.find(context.req.param('id'));
+    if (!definition || definition.human_subject !== context.get('humanSubject')) {
+      return context.json({ error: 'not_found' }, 404);
+    }
+    if (definition.agent_id !== null && definition.status === 'IN_PROGRESS') {
+      const status = await readAgentStatus({ documents: deps.documents, agentId: definition.agent_id, now: now() });
+      if (status.agent_status === 'ACTIVE') return context.json({ error: 'agent_still_running' }, 409);
+    }
+    try {
+      const withdrawn = cancel(definition, new Date(now()).toISOString());
+      await workDefinitions.save(withdrawn);
+      return context.json(withdrawn, 200);
+    } catch (error) {
+      if (error instanceof TodoClosed) return context.json({ error: error.code }, 409);
+      throw error;
+    }
+  });
+
+  app.post('/api/todos/:id/messages', async (context) => {
+    const definition = await workDefinitions.find(context.req.param('id'));
+    if (!definition || definition.human_subject !== context.get('humanSubject')) {
+      return context.json({ error: 'not_found' }, 404);
+    }
+    if (definition.status !== 'DRAFT') return context.json({ error: new TodoNotDraft().code }, 409);
     const body = await context.req.json().catch(() => ({})) as { text?: unknown };
     if (typeof body.text !== 'string' || body.text.trim() === '') {
       return context.json({ error: 'invalid_request' }, 400);
@@ -330,7 +397,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     const draft = await reviseDraft({
       definition, message: body.text, ...(deps.generate ? { generate: deps.generate } : {}),
     });
-    // Whatever the model says, the state is untouched here: the revision covers five
+    // Whatever the model says, the state is untouched here: the revision covers six
     // fields and `status` is not one of them.
     const revised = draft
       ? { ...definition, ...draft, updated_at: new Date(now()).toISOString() }
@@ -340,13 +407,13 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       // The Automation Design AI's one visible act: the person asked, the model
       // rewrote, and both the request and the answer go on the timeline.
       await emitDraftRevised({ humanSubject: revised.human_subject, occurredAt: new Date(now()).toISOString() }, {
-        workDefinitionId: revised.work_definition_id, purpose: revised.purpose, request: body.text, revised: draftOf(revised),
+        workDefinitionId: revised.work_definition_id, purpose: revised.title, request: body.text, revised: draftOf(revised),
       });
     }
     return context.json(revised, 200);
   });
 
-  app.post('/api/work-definitions/:id/submit', async (context) => {
+  app.post('/api/todos/:id/submit', async (context) => {
     const definition = await workDefinitions.find(context.req.param('id'));
     if (!definition || definition.human_subject !== context.get('humanSubject')) {
       return context.json({ error: 'not_found' }, 404);
@@ -358,7 +425,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       // Platform's own events are stamped when it starts deciding, and the ask has to
       // read as having come first.
       await emitDecisionRequested({ ...activity, occurredAt: new Date(now()).toISOString() }, {
-        workDefinitionId: definition.work_definition_id, purpose: definition.purpose,
+        workDefinitionId: definition.work_definition_id, purpose: definition.title,
         description: request.description, constraints: request.constraints,
         requestedLifetimeMinutes: request.requested_lifetime_minutes,
       });
@@ -389,7 +456,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
             : 'no_error_code',
         }, deps.logWrite);
         await emitDecisionRefused({ ...activity, occurredAt: new Date(now()).toISOString() }, {
-          workDefinitionId: definition.work_definition_id, purpose: definition.purpose,
+          workDefinitionId: definition.work_definition_id, purpose: definition.title,
           error: refusal.body.error, refusedByPlatform: refusal.status === 400,
         });
         return context.json(refusal.body, refusal.status);
@@ -412,7 +479,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       // Authorization Platform's own account of it to this work on the timeline.
       await emitDecisionReceived({ ...activity, occurredAt: new Date(now()).toISOString() }, {
         workDefinitionId: definition.work_definition_id, agentDefinitionId: agentDefinition.agent_definition_id,
-        purpose: definition.purpose, decisionId: decision.decision_id,
+        purpose: definition.title, decisionId: decision.decision_id,
         status: typeof decision.status === 'string' ? decision.status : 'decided',
         effectiveCapabilities: agentDefinition.presented_capabilities,
         deniedCount: Array.isArray(decision.denied) ? decision.denied.length : 0,
@@ -433,7 +500,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       const work = await workDefinitions.find(approved.work_definition_id);
       await emitApproved({ humanSubject: approved.human_subject, occurredAt: new Date(now()).toISOString() }, {
         workDefinitionId: approved.work_definition_id, decisionId: approved.decision_id,
-        agentDefinitionId: approved.agent_definition_id, purpose: work?.purpose ?? '',
+        agentDefinitionId: approved.agent_definition_id, purpose: work?.title ?? '',
         capabilities: approved.presented_capabilities, isolationLevel: approved.isolation_level,
         approvedAt: approved.approved_at ?? '',
       });
@@ -469,7 +536,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     const activity = { humanSubject: definition.human_subject };
     const ids = {
       workDefinitionId: work.work_definition_id, decisionId: definition.decision_id,
-      agentDefinitionId: definition.agent_definition_id, purpose: work.purpose,
+      agentDefinitionId: definition.agent_definition_id, purpose: work.title,
     };
     await emitProvisionRequested({ ...activity, occurredAt: new Date(now()).toISOString() }, {
       ...ids, requestedLifetimeMinutes: work.requested_lifetime_minutes,
@@ -600,6 +667,44 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
 
   app.route('/api/demo', createDemoReplayRoute({ documents: deps.documents }));
 
+  /**
+   * The ToDo API for a client that is not this app's own screen.
+   *
+   * A Human IdP Access Token for this app (`aud=automation-app`, scope `agent:operate`)
+   * is the whole credential: the caller presents it, `requireBearerToken` says who they
+   * are, and every row the routes touch is that person's. It is a separate sub-router
+   * rather than a second guard on `/api`, so the session cookie and the bearer token
+   * never open the same door — a route is behind one or the other, never either.
+   *
+   * What it can do is register a ToDo and read the person's own list. Confirming,
+   * approving and creating the agent are not here: each is an irreversible step that
+   * RULE-08 puts behind a person's click on the screen, and a client that could take
+   * them with a token would take them without the person reading anything.
+   */
+  const external = new Hono<BearerVariables>();
+  external.use('*', requireBearerToken({
+    clientId: deps.config.clientId, verifyAccessToken: deps.verifyAccessToken, requiredScope: TODO_API_SCOPE,
+  }));
+  external.post('/todos', async (context) => {
+    const body = await context.req.json().catch(() => null) as unknown;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return context.json({ error: 'invalid_request' }, 400);
+    return createTodo(context, context.get('humanSubject'), body as Record<string, unknown>, 'api');
+  });
+  external.get('/todos', async (context) => {
+    // `status` narrows the person's own list; the subject still comes from the token.
+    const status = context.req.query('status');
+    const todos = await workDefinitions.listByHuman(context.get('humanSubject'));
+    return context.json({ todos: status ? todos.filter((todo) => todo.status === status) : todos }, 200);
+  });
+  external.get('/todos/:id', async (context) => {
+    const definition = await workDefinitions.find(context.req.param('id'));
+    if (!definition || definition.human_subject !== context.get('humanSubject')) {
+      return context.json({ error: 'not_found' }, 404);
+    }
+    return context.json(definition, 200);
+  });
+  app.route('/external', external);
+
   app.route('/', createPageRoutes({
     config: deps.config,
     documents: deps.documents,
@@ -610,6 +715,50 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
   }));
 
   return app;
+
+  /**
+   * One ToDo, registered as a draft for the person named — from whichever door.
+   *
+   * The body is read once, by `readTodoInput`, and the record it produces is the same
+   * shape whether the screen or an API client sent it; `source` is the only difference,
+   * and it is written by the route, never read from the body. A ToDo starts as a draft
+   * whoever registers it: confirming it is a click on the screen (RULE-08).
+   */
+  async function createTodo(
+    context: { json: (body: unknown, status: 201 | 400) => Response },
+    humanSubject: string, body: Record<string, unknown>, source: TodoSource,
+  ): Promise<Response> {
+    let input;
+    try {
+      input = readTodoInput(body, { lifetimeMinutes: deps.config.defaultAgentLifetimeMinutes });
+    } catch (error) {
+      if (error instanceof InvalidTodoInput || error instanceof LifetimeOutOfRange) return context.json({ error: error.code }, 400);
+      throw error;
+    }
+    const definition = await workDefinitions.create({ human_subject: humanSubject, ...input, source }, now());
+    await emitProposed({ humanSubject: definition.human_subject, occurredAt: new Date(now()).toISOString() }, {
+      purpose: definition.title, workDefinitionId: definition.work_definition_id, draft: draftOf(definition), source,
+    });
+    return context.json(definition, 201);
+  }
+
+  /**
+   * The ToDo learns which agent carries it, and the list shows it as in progress.
+   *
+   * A ToDo that was closed while a consent screen was open is left as it is: the agent
+   * exists either way and is still told its work, and a person who withdrew the ToDo in
+   * the meantime has the agent's own screen to stop it from.
+   */
+  async function rememberAgent(work: WorkDefinition, agentId: string): Promise<WorkDefinition> {
+    try {
+      const started = startExecution(work, agentId, new Date(now()).toISOString());
+      await workDefinitions.save(started);
+      return started;
+    } catch (error) {
+      if (error instanceof TodoClosed) return work;
+      throw error;
+    }
+  }
 
   /**
    * The work definition a just-provisioned agent was made for, and its first instruction.
@@ -642,7 +791,8 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
   async function seedAndRecordInstruction(
     agentId: string, work: WorkDefinition, links: { workDefinitionId: string; decisionId?: string },
   ): Promise<void> {
-    const seeded = await seedInitialInstruction({ documents: deps.documents, agentId, definition: work, now: now() });
+    const linked = await rememberAgent(work, agentId);
+    const seeded = await seedInitialInstruction({ documents: deps.documents, agentId, definition: linked, now: now() });
     if (seeded.outcome !== 'written') { logInitialInstructionFailure(agentId, seeded.outcome); return; }
     await emitInstructionAdded({ humanSubject: work.human_subject, occurredAt: seeded.instruction.created_at }, {
       agentId, taskId: INITIAL_TASK_ID, instructionId: seeded.instruction.instruction_id,
@@ -688,7 +838,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
 
 /** No detail: the browser is told the attempt failed, and the reason stays in the logs. */
 const CONSENT_FAILURE_PAGE = '<!doctype html><meta charset="utf-8"><title>Agent XAA</title>'
-  + '<p>同意の結果を受け取れませんでした。管理画面からやり直してください。</p>';
+  + '<p>同意の結果を受け取れませんでした。ToDo の画面からやり直してください。</p>';
 
 function consentFailurePage(status: 400 | 502): Response {
   return new Response(CONSENT_FAILURE_PAGE, {

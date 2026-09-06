@@ -289,10 +289,10 @@ describe('the agent detail page', () => {
     expect(html.split(/<details[\s\S]*?<\/details>/g).join('')).toContain(TIMELINE_NOTE);
   });
 
-  it('offers one link, to a new work definition, when something was blocked', () => {
+  it('offers one link, to a new ToDo, when something was blocked', () => {
     const html = render(AgentDetailPage({ agentId: 'agent-a', status }));
     expect(html).toContain(BLOCKED_GUIDANCE_TEXT);
-    expect(html.match(/\/work-definitions\/new/g)).toHaveLength(1);
+    expect(html.match(/\/todos\/new/g)).toHaveLength(1);
     expect(html).not.toContain('権限を追加');
     expect(html).not.toContain('Capability を編集');
     expect(html).not.toContain('agent_id=agent-a&');
