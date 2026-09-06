@@ -228,6 +228,13 @@ apply が返った時点の `roles/run.invoker` は、まだ Google Frontend に
 infra-destroy のあとの deploy は全サービスと全 binding を1回の apply で作るため、この待ちは省けない。
 
 `make seed PROJECT_ID=<id>` は JWKS 集約 Job の完了後に seed Job を実行する。
+JWKS 集約 Job は、集約の前に Human IdP の `/.well-known/jwks.json` を鍵が返るまで叩く。
+Human IdP は SSO 署名鍵を最初のリクエストで作り、そのときに `keys/<kid>.json` を書く（`apps/human-idp/src/keys/self-bootstrap.ts`、DEC-ID-17）。
+一度も呼ばれていない Cloud Run サービスは何も書いていないので、先に集約すると `idp-` の鍵が入らない `jwks.json` を公開してしまう。
+それでもログインは成功する。Automation App は人のトークンを集約ではなく Human IdP 自身の `/.well-known/jwks.json` で検証するからである。
+最初にサービスをまたぐ呼び出し（「必要な権限を調べる」）だけが `invalid_token` になり、画面には「権限を判定する仕組みに届きませんでした」と出る。
+`idp-` の鍵が1本も無い場合、Job は `jwks.json` を書き換えずに失敗する。
+既存の集約を鍵の欠けたものへ置き換えると、動いていた配備がその場で止まるためである。
 `make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
 View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。
 BigQuery は存在しないテーブルを参照する View を作成時に拒否するため、`shared-apply` はテーブルの有無を GCP に問い合わせ、無ければ View を作らずに進み、このターゲットが後から作る。

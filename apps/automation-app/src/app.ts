@@ -17,7 +17,7 @@ import { createWorkDefinitionStore } from './work-definition/store.js';
 import { confirm } from './work-definition/model.js';
 import { LifetimeOutOfRange, validateLifetimeMinutes } from './work-definition/lifetime.js';
 import {
-  buildBusinessWorkRequest, submitBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed,
+  buildBusinessWorkRequest, logUpstreamRefusal, submitBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed,
 } from './work-definition/submit.js';
 import {
   assertStillApproved, AlreadyApproved, ApprovalRequired, CapabilitiesChanged, createAgentDefinitionStore,
@@ -380,6 +380,14 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       };
       if (!response.ok || typeof decision.decision_id !== 'string') {
         const refusal = upstreamRefusal(response.status, decision as { error?: unknown });
+        logUpstreamRefusal({
+          work_definition_id: definition.work_definition_id,
+          human_subject: definition.human_subject,
+          status: response.status,
+          error: typeof (decision as { error?: unknown }).error === 'string'
+            ? String((decision as { error?: unknown }).error)
+            : 'no_error_code',
+        }, deps.logWrite);
         await emitDecisionRefused({ ...activity, occurredAt: new Date(now()).toISOString() }, {
           workDefinitionId: definition.work_definition_id, purpose: definition.purpose,
           error: refusal.body.error, refusedByPlatform: refusal.status === 400,

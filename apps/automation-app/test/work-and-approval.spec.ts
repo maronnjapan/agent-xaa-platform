@@ -279,6 +279,36 @@ describe('the business work request', () => {
   });
 
   /**
+   * One name reaches the screen, and the answer behind it reaches the log.
+   *
+   * The name is right for the person: `invalid_token` is not something they can act on.
+   * It is not enough for whoever has to fix the deployment, and every cause used to
+   * arrive as the same sentence with nothing behind it — a stale aggregate JWKS answers
+   * 401, a missing invoker binding answers 403 at the front end, and a decision that
+   * threw answers 500.
+   */
+  it('records the status and the code the Authorization Platform actually answered', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json({ error: 'invalid_token' }, { status: 401 }),
+    });
+    const created = await (await harness.fetch('/api/work-definitions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: '日報を作る' }),
+    })).json() as { work_definition_id: string };
+    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+
+    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+    expect(await response.json()).toEqual({ error: 'authorization_platform_unreachable' });
+
+    const line = harness.logLines
+      .map((entry) => JSON.parse(entry) as Record<string, unknown>)
+      .find((entry) => entry.logType === 'xaa.authorization_platform_refused');
+    expect(line).toMatchObject({
+      severity: 'ERROR', status: 401, error: 'invalid_token',
+      work_definition_id: created.work_definition_id, human_subject: 'testuser',
+    });
+  });
+
+  /**
    * A refusal the platform decided on still travels as itself: it is about what the
    * person wrote, and the code is what the screen turns into a sentence they can act on.
    */

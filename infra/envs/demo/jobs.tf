@@ -21,15 +21,22 @@ module "agent_runtime_standard" {
 }
 
 module "jwks_publish" {
-  source               = "../../modules/cloud-run-job"
-  project_id           = var.project_id
-  region               = var.region
-  name                 = "jwks-publish"
-  image                = "${data.terraform_remote_state.shared.outputs.repository_path}/jwks-publish:${var.image_tag}"
-  service_account      = module.service_accounts["jwks_publish"].email
-  task_timeout_seconds = 120
+  source          = "../../modules/cloud-run-job"
+  project_id      = var.project_id
+  region          = var.region
+  name            = "jwks-publish"
+  image           = "${data.terraform_remote_state.shared.outputs.repository_path}/jwks-publish:${var.image_tag}"
+  service_account = module.service_accounts["jwks_publish"].email
+  # The job now waits for the Human IdP to publish its SSO key before it reads the
+  # bucket, and a cold start plus RSA generation plus the KMS wrap does not fit in 120s.
+  task_timeout_seconds = 600
   env = {
     JWKS_BUCKET = google_storage_bucket.jwks.name
+    # The service's own URL rather than `platform_endpoints.issuer`: under the
+    # `loadbalancer` issuer profile the issuer is a domain that may not resolve yet,
+    # and what this job needs is the one Cloud Run service that writes `keys/idp-*`.
+    # Public ingress and `allUsers` invoker (iam-public.tf), so no token is needed.
+    HUMAN_IDP_JWKS_URL = "${local.run_url["human-idp"]}/.well-known/jwks.json"
   }
 }
 

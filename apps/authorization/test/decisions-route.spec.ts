@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore } from '@xaa/gcp';
 import type { ControlPlaneVariables } from '@xaa/control-plane-auth';
+import { createLogger } from '@xaa/logging';
 import { createDecisionRoute } from '../src/routes/decisions.js';
 import { createAuthorizationStore } from '../src/store/authorization-store.js';
 import { AUTHZ_COLLECTIONS } from '../src/store/collections.js';
@@ -36,6 +37,7 @@ async function route(options: {
     context.set('validatedBody', { ...REQUEST });
     await next();
   });
+  const logs: string[] = [];
   app.route('/decisions', createDecisionRoute({
     store: createAuthorizationStore(documents),
     vertex: createFakeVertex({ capabilities: ['document.read'] }),
@@ -43,13 +45,14 @@ async function route(options: {
     modelVersion: testConfig.vertexModel,
     taxonomyVersion: testConfig.taxonomyVersion,
     maxLifetimeMinutes: 24 * 60,
+    logger: createLogger('authorization', 'policy_engine', (line) => { logs.push(line); }),
     ...(options.corrupt ? { onDecided: options.corrupt } : {}),
   }));
 
   const response = await app.request('http://authorization.test/decisions', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(REQUEST),
   });
-  return { response, documents: real };
+  return { response, documents: real, logs };
 }
 
 describe('a decision that cannot be completed is not half-answered', () => {
@@ -65,13 +68,21 @@ describe('a decision that cannot be completed is not half-answered', () => {
    * nothing on the platform has a record of.
    */
   it('answers 500 and names no capability when the decision cannot be stored', async () => {
-    const { response, documents } = await route({ failWritesTo: AUTHZ_COLLECTIONS.authorizationDecisions });
+    const { response, documents, logs } = await route({ failWritesTo: AUTHZ_COLLECTIONS.authorizationDecisions });
 
     expect(response.status).toBe(500);
     const body = await response.text();
     expect(JSON.parse(body)).toEqual({ error: 'internal_error' });
     expect(body).not.toContain('effective_capabilities');
     expect(await documents.listAll(AUTHZ_COLLECTIONS.authorizationDecisions)).toEqual([]);
+
+    // And the reason is written down. Automation App reports every answer that is not a
+    // 400 as 「権限を判定する仕組みに届きませんでした」, so a throw that left no line here
+    // left the whole platform with nothing to say about why a decision was not made.
+    const line = logs.map((entry) => JSON.parse(entry) as { event: string; fields: Record<string, unknown> })
+      .find((entry) => entry.event === 'decision_failed');
+    expect(line?.fields).toMatchObject({ reason: 'unexpected_error' });
+    expect(String(line?.fields.error)).toContain('firestore unavailable');
   });
 
   /**

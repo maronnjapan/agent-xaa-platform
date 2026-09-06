@@ -81,3 +81,29 @@ export function upstreamRefusal(status: number, body: { error?: unknown }): Upst
   if (status === 400 && typeof body.error === 'string') return { status: 400, body: { error: body.error } };
   return { status: 502, body: { error: 'authorization_platform_unreachable' } };
 }
+
+/**
+ * What the Authorization Platform actually answered, kept where a person can read it.
+ *
+ * One name on the screen is right — the person cannot act on `invalid_token` any more
+ * than on `insufficient_scope`, and both mean the same thing to them: the decision they
+ * asked for was not made. But one name is not enough for whoever has to fix it, and
+ * until now nothing anywhere recorded the difference. A stale aggregate JWKS (401), a
+ * missing `roles/run.invoker` (403 at the Google front end), an ingress that drops the
+ * call (404) and a decision that threw (500) all reached the screen as the same
+ * sentence, with nothing behind it to tell them apart.
+ *
+ * The status and the upstream code are enough to tell them apart, and neither is a
+ * credential. The Access Token is not a field here and must not become one.
+ */
+export function logUpstreamRefusal(
+  failure: { work_definition_id: string; human_subject: string; status: number; error: string },
+  write: (line: string) => void = (line) => process.stdout.write(line),
+): void {
+  write(`${JSON.stringify({
+    severity: 'ERROR',
+    logType: 'xaa.authorization_platform_refused',
+    ...failure,
+    occurred_at: new Date().toISOString(),
+  })}\n`);
+}
