@@ -134,6 +134,12 @@ function stepRecord(eventType: ProvisioningEventType, detail: Record<string, unk
     ...(detail?.isolation_level !== undefined ? [{ label: '分離レベル', value: text(detail.isolation_level) }] : []),
     ...(detail?.replaces_agent_id !== undefined ? [{ label: '作り直す前の Agent', value: text(detail.replaces_agent_id) }] : []),
     ...(detail?.allowed_tools !== undefined ? [{ label: '使えるツール', value: list(detail.allowed_tools) }] : []),
+    // The two bridged steps. Without these, "外部サービスの接続の同意が必要です" named no
+    // service and no range, which is the one thing a person deciding whether to consent
+    // needs to read.
+    ...(detail?.connector_id !== undefined ? [{ label: '接続先', value: text(detail.connector_id) }] : []),
+    ...(detail?.missing_scopes !== undefined ? [{ label: '同意を求める範囲', value: list(detail.missing_scopes) }] : []),
+    ...(detail?.scopes !== undefined ? [{ label: '使える範囲', value: list(detail.scopes) }] : []),
     ...(detail?.expires_at !== undefined ? [{ label: '有効期限', value: text(detail.expires_at) }] : []),
     ...(detail?.task_id !== undefined ? [{ label: '最初の Task', value: text(detail.task_id) }] : []),
   ];

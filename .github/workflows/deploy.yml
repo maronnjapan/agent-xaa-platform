@@ -81,6 +81,13 @@ jobs:
         run: make demo-apply TF=terraform
       - name: Publish the aggregate JWKS and the definition data
         run: make seed
+      # The IAM verification above says who may call the Finance services. This asks
+      # whether they answer and whether the catalogue, taxonomy, policy and permission
+      # rows the seed just wrote are the ones a finance Agent needs — the difference
+      # between an Agent that is created and one that can do the work it was created
+      # for. It runs after the seed because that is what it reads.
+      - name: Check the Finance path answers
+        run: make verify-finance TF=terraform
       # A failed Cloud Run job answers `gcloud run jobs execute` with nothing but the name
       # of its execution, so a failure here used to be readable only from inside the
       # project. These are the lines the container wrote.

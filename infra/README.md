@@ -96,6 +96,7 @@ SSO 署名鍵は Human IdP が初回アクセス時に生成し、KMS で包ん�
 IAM 到達性検証では、実行者に不足している `roles/iam.serviceAccountTokenCreator` を対象 Service Account にだけ一時付与し、検証後に削除する。
 
 Bridge を有効にする場合、Bridge が読む `connector_definitions` の行は seed Job が書く。
+OAuth client の作り方から画面の操作までを通した手順は[docs/google-bridge-setup.md](../docs/google-bridge-setup.md)にある。
 `saas_connector_mode=stub` では `stub-saas-calendar` の1件を配備した stub SaaS へ向けて書き、client secret は stub が受け付ける固定値をスクリプトが `stub-bridge-client-secret` に登録する。
 
 ```bash
@@ -106,8 +107,12 @@ scripts/deploy-gcp-guide.sh all
 外部 Google OAuth を有効にする場合は、Google Auth Platform で Web application の OAuth client を作り、secret をファイルから渡す。
 secret は `GOOGLE_OAUTH_CLIENT_SECRET_FILE`、または値を直接渡す `GOOGLE_OAUTH_CLIENT_SECRET` で受け取る。どちらも無く、Secret Manager にも有効な version が無ければ、起動直後の検査がそれを指摘して終わる。
 承認済みリダイレクト URI は project number と region から決まるため、スクリプトが確定した値を表示する。
-client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡し、Terraform 変数 `google_oauth_client_id` を通して seed が `google-workspace` の行に書く。
-catalog には Google Calendar を呼ぶ Tool を定義していないため、`google` モードで動くのは Bridge の同意と接続の保持までである。
+client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡し、Terraform 変数 `google_oauth_client_id` を通して seed が接続先定義の行に書く。
+その行の id は catalog が名指す bridged connector と同じ `stub-saas-calendar` で、どちらのモードでもこの1件である。
+Bridge は connector id で定義を引くため、redirect URI に別の名前を入れると Google から戻った callback が `invalid_target` で止まる。
+catalog にある calendar の Tool は stub SaaS の URL の形で書かれており、Tool ID の全集合は 00b が8件に固定している。
+そのため `google` モードで確かめられるのは、OAuth client と同意画面と redirect URI が正しいこと、そして Connection と Agent Binding が作られるところまでである。
+Tool 呼び出しまで通すのは `stub` モードである。
 
 ```bash
 ENABLE_GOOGLE_BRIDGE=true \
@@ -235,6 +240,16 @@ Human IdP は SSO 署名鍵を最初のリクエストで作り、そのとき�
 最初にサービスをまたぐ呼び出し（「必要な権限を調べる」）だけが `invalid_token` になり、画面には「権限を判定する仕組みに届きませんでした」と出る。
 `idp-` の鍵が1本も無い場合、Job は `jwks.json` を書き換えずに失敗する。
 既存の集約を鍵の欠けたものへ置き換えると、動いていた配備がその場で止まるためである。
+`make verify-finance PROJECT_ID=<id>` は、seed のあとに Finance の経路そのものを訊く。
+`make verify` の三つが測るのは IAM の辺であり、「Agent が支払を読んで承認できるか」ではない。
+その間には Resource AS の署名鍵、Resource API のガード、`catalog_tools` と `capability_taxonomy` と `risk_policies` の行、ログインユーザーの Human Permission があり、どれが欠けても画面には「Agent は作られたが何もしない」としか出ない。
+`infra/tests/finance-api.sh` はそれぞれを名指しで確認する。
+Resource AS が ID-JAG の grant profile を広告し `fin-as-` の鍵を公開しているか、Resource API が Access Token 無しの呼び出しを 401 で断るか、seed 済みの行が揃っているか、承認待ちの支払のうち少なくとも1件が `risk-001` の `max_amount` 以下かである。
+最後の1件は、全額が上限超過の seed が「Tool Executor が全部断る Finance」に見えるためである。
+`make verify` と分けてあるのは、読む対象が seed Job の書いたデータであり、apply 直後にはまだ無いからである。
+`make all` は seed のあとにこれを実行する。
+同じ照合をリポジトリ側のファイルに対して行うのは `packages/xaa-contracts/test/finance-chain.spec.ts` で、こちらは CI が毎回走らせる。
+
 `make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
 View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。
 BigQuery は存在しないテーブルを参照する View を作成時に拒否するため、`shared-apply` はテーブルの有無を GCP に問い合わせ、無ければ View を作らずに進み、このターゲットが後から作る。

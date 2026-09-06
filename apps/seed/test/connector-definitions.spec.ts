@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { PLATFORM_ENDPOINT_KEYS, type PlatformEndpoints } from '@xaa/contracts';
 import {
-  BRIDGED_CONNECTOR_ID, GOOGLE_CONNECTOR_ID, STUB_BRIDGE_CLIENT_ID, bridgeConnectorDefinitions,
+  BRIDGED_CONNECTOR_ID, STUB_BRIDGE_CLIENT_ID, bridgeConnectorDefinitions,
 } from '../src/connector-definitions.js';
 import { resolveSeedPlaceholders } from '../src/resolve.js';
 
@@ -61,20 +61,74 @@ describe('connector definitions the seed writes for the Bridge', () => {
     expect(row!.default_scopes).toContain(tool.authorization.scope);
   });
 
+  const googleEnv = {
+    ...stubEnv, SAAS_CONNECTOR_MODE: 'google', GOOGLE_OAUTH_CLIENT_ID: '123.apps.googleusercontent.com',
+  };
+
   it('google mode: the Google client id goes into the row, never a secret value', () => {
-    const [row] = bridgeConnectorDefinitions(
-      { ...stubEnv, SAAS_CONNECTOR_MODE: 'google', GOOGLE_OAUTH_CLIENT_ID: '123.apps.googleusercontent.com' }, endpoints,
-    );
-    expect(row!.connector_id).toBe(GOOGLE_CONNECTOR_ID);
-    expect(Object.keys(row!).sort()).toEqual(BRIDGE_KEYS);
+    const [row] = bridgeConnectorDefinitions(googleEnv, endpoints);
+    expect(Object.keys(row!).sort()).toEqual([...BRIDGE_KEYS, 'scope_map'].sort());
     expect(row!.client_id).toBe('123.apps.googleusercontent.com');
     expect(row!.secret_name).toBe('projects/xaa-demo/secrets/google-oauth-client-secret');
     expect(JSON.stringify(row)).not.toMatch(/client_secret/);
   });
 
+  /**
+   * The Provisioner asks the Bridge for the connector the catalogue names, and the
+   * Bridge looks that id up whole. A definition written under a name of its own is a row
+   * nothing ever asks for: `google` mode wrote `google-workspace`, the Provisioner asked
+   * for `stub-saas-calendar`, and every Google consent stopped at `invalid_target`.
+   */
+  it('google mode: the row answers to the id the catalogue names, and to the same resource', () => {
+    const tool = parse(resolveSeedPlaceholders(
+      readFileSync(`${seedRoot}tools/stub.calendar.events.list.yaml`, 'utf8'), endpoints,
+    )) as { connector_id: string; authorization: { resource: string; scope: string } };
+    const [row] = bridgeConnectorDefinitions(googleEnv, endpoints);
+
+    expect(row!.connector_id).toBe(BRIDGED_CONNECTOR_ID);
+    expect(row!.connector_id).toBe(tool.connector_id);
+    // `/token` carries no connector id, so this claim is the only handle the Bridge has.
+    expect(row!.resource_uris).toEqual([tool.authorization.resource]);
+  });
+
+  /**
+   * Google has never heard of `calendar.read` and answers a consent request carrying it
+   * with `invalid_scope`. The map is what the Bridge translates at the boundary with,
+   * and it has to name the scope this platform's own Tool actually asks for.
+   */
+  it('google mode: maps the platform scope the tool asks for onto a Google scope', () => {
+    const tool = parse(resolveSeedPlaceholders(
+      readFileSync(`${seedRoot}tools/stub.calendar.events.list.yaml`, 'utf8'), endpoints,
+    )) as { authorization: { scope: string } };
+    const [row] = bridgeConnectorDefinitions(googleEnv, endpoints);
+
+    const mapped = row!.scope_map![tool.authorization.scope];
+    expect(mapped).toBe('https://www.googleapis.com/auth/calendar.readonly');
+    expect(row!.default_scopes).toEqual([mapped]);
+  });
+
+  /** The stub's OP is this platform's own and already speaks its scope names. */
+  it('stub mode: needs no scope map', () => {
+    expect(bridgeConnectorDefinitions(stubEnv, endpoints)[0]!.scope_map).toBeUndefined();
+  });
+
   it('google mode without a client id is refused before anything is written', () => {
     expect(() => bridgeConnectorDefinitions({ ...stubEnv, SAAS_CONNECTOR_MODE: 'google' }, endpoints))
       .toThrow(/GOOGLE_OAUTH_CLIENT_ID/);
+  });
+
+  /**
+   * The redirect URI a person registers at Google carries the connector id, and the
+   * Bridge's callback route reads it back out of the path to look the connector up. A
+   * default here that names something `connector_definitions` does not hold sends the
+   * person to Google, brings them back, and stops at `invalid_target` with the consent
+   * already given. The guide prints the URI before the apply, so the two are held
+   * together here rather than found out on the way back.
+   */
+  it('the deploy guide builds the redirect URI from the id the definitions are written under', () => {
+    const guide = readFileSync(new URL('../../../scripts/deploy-gcp-guide.sh', import.meta.url).pathname, 'utf8');
+    const fallback = guide.match(/GOOGLE_CONNECTOR_ID=\$\{GOOGLE_CONNECTOR_ID:-([a-z0-9-]+)\}/)?.[1];
+    expect(fallback).toBe(BRIDGED_CONNECTOR_ID);
   });
 
   it('an unknown connector mode is refused', () => {

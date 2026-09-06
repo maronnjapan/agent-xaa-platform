@@ -67,28 +67,58 @@ export function createResumeRoute(deps: FlowDeps): Hono<Env> {
       return context.json({ error: 'transaction_not_resumable' }, 409);
     }
 
-    const consumed = await codes.consume({
-      code: (body as { one_time_code: string }).one_time_code,
-      transaction_id: transactionId,
-      human_subject: transaction.human_subject,
-    });
-    if (!consumed.ok) return context.json({ error: consumed.error }, consumed.status);
+    const oneTimeCode = (body as { one_time_code: string }).one_time_code;
 
-    // The consent is only believed once the issuing service confirms it: a code says
-    // the browser came back, not that the connection is usable. Which service is asked
-    // follows the code's own `issuer_kind`, so a code minted for an external connector
-    // cannot be redeemed by asking the Agent OP about an IdP connection instead. The
-    // Bridge is disabled by default (DEC-SCOPE-04) and this service holds no client for
-    // it, so such a code is refused rather than verified against the wrong issuer.
-    if (consumed.record.issuer_kind !== 'idp') return context.json({ error: 'connection_not_ready' }, 409);
-    // Asked here as well as inside the flow, and for a different reason: a connection
-    // that is not ready is not a failed provisioning, so this one answers 409 with the
-    // transaction untouched, where the flow's own check would fail the transaction and
-    // take the person's consent down with it.
-    const verified = await deps.agentOp.verifyIdpConnection(`idpconn-${transaction.agent_id}`);
-    if (verified.status !== 'READY') return context.json({ error: 'connection_not_ready' }, 409);
+    /**
+     * Which consent this return trip is from, and therefore who owns the code.
+     *
+     * The transaction says it, not the code: a code minted by the Bridge lives in the
+     * Bridge's own store (`bridge_consent_codes`), which this service neither reads nor
+     * writes, so looking it up here would answer `code_not_found` for every external
+     * consent and the branch that was meant to follow `issuer_kind` could never be
+     * reached. The transaction is the one record both halves share.
+     *
+     * The subject was checked above either way, so a wrong caller cannot spend someone
+     * else's code at either service.
+     */
+    const external = transaction.status === 'WAITING_EXTERNAL_CONSENT';
 
-    await deps.transactions.advance(transactionId, 'RESUMABLE', { pending_step: 'verify_idp_connection' });
+    if (external) {
+      if (!deps.bridge) return context.json({ error: 'bridge_unavailable' }, 500);
+      let verified: { status: string };
+      try {
+        // The Bridge spends the code and answers whether the connection behind it
+        // covers what the transaction asked for. A refusal leaves the transaction
+        // alone: the code is gone, but the person's connection may still be fixable
+        // and failing the transaction here would take the rest of the consent with it.
+        verified = await deps.bridge.verifyConnection({ transactionId, oneTimeCode });
+      } catch {
+        return context.json({ error: 'connection_not_ready' }, 409);
+      }
+      if (verified.status !== 'READY') return context.json({ error: 'connection_not_ready' }, 409);
+      await deps.transactions.advance(transactionId, 'RESUMABLE', { pending_step: 'external_consent' });
+    } else {
+      const consumed = await codes.consume({
+        code: oneTimeCode,
+        transaction_id: transactionId,
+        human_subject: transaction.human_subject,
+      });
+      if (!consumed.ok) return context.json({ error: consumed.error }, consumed.status);
+
+      // The consent is only believed once the issuing service confirms it: a code says
+      // the browser came back, not that the connection is usable. A code minted for an
+      // external connector cannot be redeemed by asking the Agent OP about an IdP
+      // connection instead, so one that reached this branch is refused.
+      if (consumed.record.issuer_kind !== 'idp') return context.json({ error: 'connection_not_ready' }, 409);
+      // Asked here as well as inside the flow, and for a different reason: a connection
+      // that is not ready is not a failed provisioning, so this one answers 409 with the
+      // transaction untouched, where the flow's own check would fail the transaction and
+      // take the person's consent down with it.
+      const verified = await deps.agentOp.verifyIdpConnection(`idpconn-${transaction.agent_id}`);
+      if (verified.status !== 'READY') return context.json({ error: 'connection_not_ready' }, 409);
+
+      await deps.transactions.advance(transactionId, 'RESUMABLE', { pending_step: 'verify_idp_connection' });
+    }
 
     // The expiry is the one fixed before the consent, inherited rather than recomputed:
     // an agent must not gain the time its owner spent on the consent screen.

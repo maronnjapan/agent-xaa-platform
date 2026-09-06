@@ -113,7 +113,7 @@ Options:
   GOOGLE_OAUTH_CLIENT_SECRET Google OAuth secret を直接渡す。FILE の代わりに使う
   ROTATE_INTERNAL_SECRETS    1 のとき Human IdP client secret を追加する
   ROTATE_GOOGLE_OAUTH_SECRET 1 のとき Google OAuth secret を追加する
-  GOOGLE_CONNECTOR_ID        OAuth client の redirect URI に使う connector id。既定値は google-workspace
+  GOOGLE_CONNECTOR_ID        OAuth client の redirect URI に使う connector id。既定値は stub-saas-calendar
   ALLOW_DIRTY                1 のとき dirty worktree のイメージ作成を許可する
   CONFIRM_PROJECT_ID         指定した場合だけ PROJECT_ID との一致を検査する誤操作防止
   DEMO_LOGIN_USER            権限を付与するログインユーザー。testuser または otheruser
@@ -318,7 +318,11 @@ validate_settings() {
   CREATE_PROJECT=${CREATE_PROJECT:-auto}
   DEMO_LOGIN_USER=${DEMO_LOGIN_USER:-testuser}
   GRANT_DEMO_PERMISSIONS=${GRANT_DEMO_PERMISSIONS:-1}
-  GOOGLE_CONNECTOR_ID=${GOOGLE_CONNECTOR_ID:-google-workspace}
+  # redirect URI の途中に入る connector id は、Bridge が connector_definitions を
+  # 引く id と同じでなければならない。catalog が名指すのは1件だけなので、既定値は
+  # その id である（apps/seed/src/connector-definitions.ts の BRIDGED_CONNECTOR_ID）。
+  # 別の名前を入れると Google から戻った callback が invalid_target で止まる。
+  GOOGLE_CONNECTOR_ID=${GOOGLE_CONNECTOR_ID:-stub-saas-calendar}
 
   [[ "$GCP_AUTH_MODE" =~ ^(auto|existing|browser|workforce)$ ]] || die 'GCP_AUTH_MODE は auto、existing、browser、workforce のいずれかです。'
   [[ "$ENABLE_GOOGLE_BRIDGE" =~ ^(true|false)$ ]] || die 'ENABLE_GOOGLE_BRIDGE は true または false です。'
@@ -1037,6 +1041,13 @@ verify_deployment() {
   # 一致しない辺だけを測り直し、既定で最大 REACHABILITY_SETTLE_SECONDS 秒待つ。
   say 'IAM の反映待ちのため、一致しない辺は反映されるまで測り直します。残り時間は測り直すたびに表示されます。'
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash infra/tests/verify-all.sh
+  # 上は「誰が誰を呼べるか」を測る。ここから先は「Finance の処理が実際に動くか」を訊く。
+  # Resource AS が署名鍵を持って応答するか、Resource API が Access Token 無しの呼び出しを
+  # 401 で断るか、そして Catalog・Taxonomy・Risk Policy・Human Permission の行が
+  # 揃っているかである。どれが欠けても画面には「Agent は作られたが何もしない」としか出ない。
+  say 'Finance の Resource AS と API が応答するか、権限の行が揃っているかを確認します。'
+  run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" DEMO_LOGIN_USER="$DEMO_LOGIN_USER" \
+    bash infra/tests/finance-api.sh
   cleanup_verify_bindings
   if ((dry_run)); then
     print_command "${tf_command[@]}" -chdir=infra/envs/demo output -json platform_endpoints

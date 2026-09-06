@@ -10,6 +10,7 @@ import { createLogger } from '@xaa/logging';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
 import { createAgentOpClient } from './agent/idp-connection.js';
+import { createBridgeClient } from './bridge/connection.js';
 import { startedExecutionName } from './job/execution-name.js';
 import { qualifiedJobName } from './job/job-name.js';
 import { createTransactionStore } from './transaction/store.js';
@@ -62,6 +63,13 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   const logger = createLogger('provisioner', 'provisioner');
 
   const agentOp = createAgentOpClient({ baseUrl: config.sharedAgentOpUrl, identityToken });
+  // DEC-SCOPE-04. Terraform leaves this empty when the Bridge is not deployed, the
+  // same way it leaves `CALLER_SA_SLOTS` empty for a list with nobody on it. Empty is
+  // read as "no Bridge" rather than as an address: with the Bridge off the seed leaves
+  // the bridged catalogue rows out, so no provisioning reaches for this at all, and a
+  // client built over a placeholder would only turn that into a confusing timeout.
+  const bridgeUrl = (env.BRIDGE_INTERNAL_URL ?? '').trim();
+  const bridge = bridgeUrl === '' ? undefined : createBridgeClient({ baseUrl: bridgeUrl, identityToken });
 
   return {
     config,
@@ -98,6 +106,7 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
     // raw topic write here would put events on the stream the subscriber then drops.
     publishActivity: publishActivityEvent,
     agentOp,
+    ...(bridge ? { bridge } : {}),
     createDedicated: (input) => createDedicatedResources({
       admin,
       ledger: input.ledger,
