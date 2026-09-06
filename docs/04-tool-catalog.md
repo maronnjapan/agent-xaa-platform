@@ -167,6 +167,16 @@ Tool Executorの処理：
 4と5の中身は [05. §6](./05-identity.md#6-cross-app-access) にある。
 ```
 
+4と5は、この Execution が同じ audience と resource と scope のAccess Tokenを有効期限内で持っている場合には行わない。
+持っているものをそのまま提示し、Agent OPとResource ASへは何も送らない。
+呼び出しのたびに取り直しても、同じ委譲を同じ2つのサービスへ問い直して同じ答えを受け取るだけであり、増えるのはKMS署名とネットワーク往復である。
+Tokenはメモリにしか置かず、Job Executionの終了とともに消える（[05. §9](./05-identity.md#9-tokenの種類と保持ルール)）。
+
+2と3は、Tokenを持っているかどうかに関わらず毎回行う。
+Access Tokenを持っていることは権限ではない。
+Agentを止める経路も変わらない。
+Cleanupのstep1がJob Executionを取り消してプロセスごとTokenを消し、step5が各Resource ASへ `act` 単位のRevokeを送る（[07. §6](./07-lifecycle.md#6-expiration--緊急停止)）。
+
 ```mermaid
 flowchart LR
     INTENT["Agent Intent<br/>今日の予定を確認"] --> TOOL["Tool Selection<br/>stub.calendar.events.list"]
