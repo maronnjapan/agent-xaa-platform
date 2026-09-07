@@ -208,6 +208,11 @@ API で登録できるのは下書きまでである。
 確定、承認、Agent の作成はこの画面で行う。
 API から登録した ToDo は、一覧に「API から登録」と印が付く（[02. §6](./02-automation-design.md#6-todo登録api)）。
 
+[review-markdown-cli](https://github.com/maronnjapan/review-markdown-cli) は、この API を使って連携できる例の一つである。
+`automationApp` を有効にし、`automationAppUrl` / `automationAppToken`（アクセストークン）をユーザー全体の設定に書くと、
+レビュー中に「やると決めた」タスクを、そのタスクのカードから下書きの ToDo としてここへ登録できる。渡す項目は上と同じで、
+登録できるのは下書きまでという制約も同じである。
+
 ## 8. 分析エージェントの判断を見る
 
 Agent が動いている間、ログを分析するエージェントがその挙動を見ている。
