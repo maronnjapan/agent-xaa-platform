@@ -87,6 +87,9 @@
     },
     {
       "path": "apps/local-runner"
+    },
+    {
+      "path": "apps/review-markdown-import"
     }
   ]
 }
