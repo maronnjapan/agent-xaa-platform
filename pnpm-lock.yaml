@@ -757,6 +757,22 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@22.18.1)(esbuild@0.27.7)(yaml@2.9.0))
 
+  apps/review-markdown-import:
+    dependencies:
+      '@xaa/automation-app':
+        specifier: workspace:*
+        version: link:../automation-app
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.1
+        version: 22.18.1
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.18.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@22.18.1)(esbuild@0.27.7)(yaml@2.9.0))
+
   apps/security-detection:
     dependencies:
       '@google-cloud/bigquery':

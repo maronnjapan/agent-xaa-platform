@@ -6,6 +6,7 @@
 設計ではなく、デプロイしたサイトを画面から操作する手順は[サイトの使い方](./user-guide.md)にある。
 GCP へ配備せず手元のパソコン1台で基盤全体を動かす手順は[ローカルで動かす](./local-development.md)にある。
 既定では配備しない Google Bridge を有効にして通すまでの手順は[Google Bridge を試す](./google-bridge-setup.md)にある。
+review-markdown-cli で決めたタスクを ToDo として取り込む手順は[review-markdown-cli から ToDo を取り込む](./review-markdown-import.md)にある。
 
 ## 要約
 

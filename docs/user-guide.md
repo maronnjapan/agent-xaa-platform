@@ -208,10 +208,10 @@ API で登録できるのは下書きまでである。
 確定、承認、Agent の作成はこの画面で行う。
 API から登録した ToDo は、一覧に「API から登録」と印が付く（[02. §6](./02-automation-design.md#6-todo登録api)）。
 
-[review-markdown-cli](https://github.com/maronnjapan/review-markdown-cli) は、この API を使って連携できる例の一つである。
-`automationApp` を有効にし、`automationAppUrl` / `automationAppToken`（アクセストークン）をユーザー全体の設定に書くと、
-レビュー中に「やると決めた」タスクを、そのタスクのカードから下書きの ToDo としてここへ登録できる。渡す項目は上と同じで、
-登録できるのは下書きまでという制約も同じである。
+[review-markdown-cli](https://github.com/maronnjapan/review-markdown-cli) との連携は、この API を使う例の一つで、このリポジトリの `pnpm review:import` が担う。
+レビュー中に「やると決めた」タスクを読み取り、下書きの ToDo としてここへ登録する。
+連携のためのコードはこのリポジトリ側にあり、review-markdown-cli はこの基盤の URL もトークンも持たない。
+手順は[review-markdown-cli から ToDo を取り込む](./review-markdown-import.md)にある。
 
 ## 8. 分析エージェントの判断を見る
 

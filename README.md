@@ -77,6 +77,7 @@ ToDo を書くところから Agent を止め、ToDo を完了にするところ
 
 画面は2つある。
 Automation App は AI にやってもらう ToDo を書いて Agent を作り、動かし、止め、ToDo を閉じるところである。外部のツールからは `/external/todos` に Human IdP のアクセストークンを付けて ToDo を登録できる（[docs/02 §6](./docs/02-automation-design.md#6-todo登録api)）。
+レビュー中に決めたタスクを ToDo にする例として、[review-markdown-cli](https://github.com/maronnjapan/review-markdown-cli) の出力を読み込む `pnpm review:import` を同梱している（[docs/review-markdown-import.md](./docs/review-markdown-import.md)）。
 Analysis Console は、Agent の挙動を見ているログ分析エージェントが何をどう判断したかを読むところで、別のサイトとして立ち上がる（[docs/09 §7](./docs/09-security-monitoring.md#7-判断を本人へ見せる)）。
 どちらも同じ Human IdP でログインするが、Session は別なので初回はそれぞれでログインする。
 
