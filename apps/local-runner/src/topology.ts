@@ -95,6 +95,15 @@ export function createTopology(options: TopologyOptions = {}): LocalTopology {
   ) as Record<LocalServiceName, string>;
   const bridgeEnabled = options.bridgeEnabled ?? false;
   const agentMaxLifetimeSeconds = options.agentMaxLifetimeSeconds ?? 86_400;
+  // A deployment's model name comes from Terraform's `vertex_model` and is never written
+  // in code (DEC-APP-10). A local run has no Terraform, so the name comes from
+  // `VERTEX_MODEL` or `MODEL_NAME`, and with neither set the run calls no model at all —
+  // which is what this says, rather than naming a model nobody asked for. The four apps
+  // still require the variable to be present and `platform-endpoints.schema.ts` requires
+  // it to be non-empty, and none of them reach a model with it: the model client is the
+  // platform's, chosen once in `config.ts` and handed to each app.
+  const vertexModel = options.vertexModel ?? 'fake';
+  const vertexLocation = options.vertexLocation ?? 'us-central1';
 
   return {
     host,
@@ -105,8 +114,8 @@ export function createTopology(options: TopologyOptions = {}): LocalTopology {
     agentMaxLifetimeSeconds,
     maxFullIsolationAgents: options.maxFullIsolationAgents ?? 5,
     financeAbsoluteMaxAmount: options.financeAbsoluteMaxAmount ?? 1_000_000,
-    vertexModel: options.vertexModel ?? 'gemini-2.5-flash',
-    vertexLocation: options.vertexLocation ?? 'us-central1',
+    vertexModel,
+    vertexLocation,
     projectId: options.projectId ?? 'xaa-local',
     region: options.region ?? 'asia-northeast1',
     endpoints: {
@@ -127,8 +136,8 @@ export function createTopology(options: TopologyOptions = {}): LocalTopology {
       bridge_internal_url: bridgeEnabled ? url['google-bridge'] : 'https://disabled.invalid',
       stub_saas_op_issuer: bridgeEnabled ? url['stub-saas-op'] : 'https://disabled.invalid',
       agent_max_lifetime_seconds: agentMaxLifetimeSeconds,
-      vertex_model: options.vertexModel ?? 'gemini-2.5-flash',
-      vertex_location: options.vertexLocation ?? 'us-central1',
+      vertex_model: vertexModel,
+      vertex_location: vertexLocation,
       enable_google_bridge: bridgeEnabled,
     },
   };

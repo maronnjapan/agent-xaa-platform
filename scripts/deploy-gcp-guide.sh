@@ -882,9 +882,14 @@ require_google_oauth_client_id() {
 
 provision_secret_values() {
   phase 'アプリの Secret version を用意します。'
-  add_generated_secret_version human-idp-automation-client-secret
-  add_generated_secret_version human-idp-agent-platform-client-secret
-  add_generated_secret_version human-idp-analysis-console-client-secret
+  # 名前はここに書き写さず、Terraform が宣言した一覧を読む
+  # （scripts/human-idp-client-secrets.sh）。書き写せばクライアントが増えた日から
+  # ずれ始め、ずれたことは version の無い Secret を mount した revision が
+  # 起動しないところでしか分からない。
+  local secret_name
+  while read -r secret_name; do
+    add_generated_secret_version "$secret_name"
+  done < <(bash scripts/human-idp-client-secrets.sh)
   if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
     if [[ "$SAAS_CONNECTOR_MODE" == google ]]; then
       add_google_oauth_secret_version

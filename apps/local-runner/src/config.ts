@@ -56,7 +56,12 @@ export function loadLocalConfig(env: NodeJS.ProcessEnv = process.env): LocalRunn
     // `MODEL_PROVIDER` unset means the fake model, because that is the only provider
     // that needs nothing installed and no key: a first run works, and shows what the
     // platform does with a model that answers nothing.
-    model: readModelOptions({ ...env, VERTEX_MODEL: env.VERTEX_MODEL ?? topology.vertexModel }),
+    //
+    // The environment is read as it stands, without the topology's stand-in name behind
+    // it. Substituting that would make `MODEL_PROVIDER=vertex` with no `MODEL_NAME` call
+    // whichever model the stand-in happened to be, where `createModelClient` otherwise
+    // refuses to build the client and says which variable is missing.
+    model: readModelOptions(env),
     adminPrincipals: (env.ADMIN_PRINCIPALS ?? '').split(',').map((entry) => entry.trim()).filter(Boolean),
     lifecycleTickMs: positive(env.LOCAL_LIFECYCLE_TICK_MS, 300_000),
     // Zero is a value somebody may mean here — "start the Execution at once" — so it

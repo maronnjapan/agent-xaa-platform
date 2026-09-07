@@ -27,7 +27,7 @@ locals {
       # them (DEC-ID-13 leaves this app no refresh token to do it with), so a token
       # shorter than the session is a session that stops working while it is still
       # valid: the stop button, five minutes after logging in, answered `invalid_token`.
-      ACCESS_TOKEN_EXPIRES_IN     = "3600"
+      ACCESS_TOKEN_EXPIRES_IN       = "3600"
       AUTOMATION_APP_REDIRECT_URI   = "${local.run_url["automation-app"]}/callback"
       AGENT_OP_CALLBACK_URI         = "${local.run_url["agent-op-callback"]}/xaa/callback"
       ANALYSIS_CONSOLE_REDIRECT_URI = "${local.run_url["analysis-console"]}/callback"

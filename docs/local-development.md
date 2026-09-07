@@ -71,7 +71,7 @@ Gemini に限定していない。
 | `cli` | 手元にインストール済みのコーディングエージェント | `claude` か `codex` が PATH にあること |
 | `anthropic` | Anthropic の Messages API | `ANTHROPIC_API_KEY` |
 | `openai` | OpenAI 互換の Chat Completions | `OPENAI_API_KEY` |
-| `vertex` | Vertex AI（配備時と同じ経路） | GCP の Application Default Credentials |
+| `vertex` | Vertex AI（配備時と同じ経路） | GCP の Application Default Credentials と `MODEL_NAME` |
 
 Claude Code を使う場合はこうである。
 

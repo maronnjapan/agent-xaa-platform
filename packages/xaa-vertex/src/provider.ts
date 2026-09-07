@@ -98,7 +98,8 @@ export function readModelOptions(env: NodeJS.ProcessEnv): ModelClientOptions {
     ?? (env.VERTEX_MODE === 'live' ? 'vertex' : 'fake');
   // `VERTEX_MODEL` holds a Gemini model name, so it stands in for `MODEL_NAME` only
   // where a Gemini name is what the provider wants. Letting it through to the others
-  // would have `claude --model gemini-2.5-flash` on a deployment that named neither.
+  // would have `claude --model` pointed at a Gemini one on a deployment that named
+  // neither.
   const model = env.MODEL_NAME ?? (provider === 'vertex' || provider === 'fake' ? env.VERTEX_MODEL ?? '' : '');
   const apiKey = provider === 'anthropic' ? env.ANTHROPIC_API_KEY : provider === 'openai' ? env.OPENAI_API_KEY : undefined;
   const baseUrl = provider === 'anthropic' ? env.ANTHROPIC_BASE_URL : provider === 'openai' ? env.OPENAI_BASE_URL : undefined;
