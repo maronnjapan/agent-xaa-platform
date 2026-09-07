@@ -2,12 +2,19 @@ import { FirestoreJtiStore, createFirestoreDocumentStore } from '@xaa/gcp';
 import { createLogger } from '@xaa/logging';
 import createLifecycle, { createCleanupRunner, type LifecycleDeps } from '@xaa/lifecycle-manager/app';
 import { createInternalClients } from '@xaa/lifecycle-manager/src/clients/http';
-import { loadConfig } from '@xaa/lifecycle-manager/src/config';
+import type { CleanupOutcome } from '@xaa/lifecycle-manager/src/cleanup/result';
+import { loadConfig, type CleanupReason } from '@xaa/lifecycle-manager/src/config';
 import { resolveEndpoints } from '@xaa/lifecycle-manager/src/endpoints';
 import { createIdentityDisabledHandler, startIdentityDisabledSubscriber } from '@xaa/lifecycle-manager/src/subscribers/runner';
 import type { LocalRunPlatform } from '../local/cloud-run.js';
 import { listen, type Listener } from '../local/serve.js';
 import { TOPICS, type LocalPlatform } from '../platform.js';
+
+export interface RunningLifecycle {
+  listener: Listener;
+  /** The cleanup runner, so the runner can end the agents a previous run left. */
+  cleanup(agentId: string, reason: CleanupReason): Promise<CleanupOutcome>;
+}
 
 export function lifecycleEnvironment(platform: LocalPlatform): Record<string, string> {
   const { url, projectId, region, endpoints } = platform.config.topology;
@@ -41,8 +48,12 @@ export function lifecycleEnvironment(platform: LocalPlatform): Record<string, st
  * The identity feed is subscribed to here, beside the app rather than inside it: a
  * disabled identity revokes agents without anybody making a request, and giving that a
  * route would be a second way to destroy an agent (RULE-28, T-LIFE-15).
+ *
+ * The cleanup runner comes back with the listener because the runner needs it for the
+ * agents a previous run left behind. It is the same function the routes and the identity
+ * feed call, not a second path into an agent's death.
  */
-export function startLifecycle(platform: LocalPlatform, run: LocalRunPlatform): Listener {
+export function startLifecycle(platform: LocalPlatform, run: LocalRunPlatform): RunningLifecycle {
   const config = loadConfig(lifecycleEnvironment(platform));
   const documents = createFirestoreDocumentStore(platform.firestore, 'lifecycle-manager');
   const endpoints = resolveEndpoints(platform.config.topology.endpoints);
@@ -100,12 +111,15 @@ export function startLifecycle(platform: LocalPlatform, run: LocalRunPlatform): 
   );
 
   const app = createLifecycle(deps);
-  return listen({
-    name: 'lifecycle',
-    host: platform.config.topology.host,
-    port: platform.config.topology.port.lifecycle,
-    fetch: (request) => app.fetch(request),
-  });
+  return {
+    listener: listen({
+      name: 'lifecycle',
+      host: platform.config.topology.host,
+      port: platform.config.topology.port.lifecycle,
+      fetch: (request) => app.fetch(request),
+    }),
+    cleanup: runCleanup,
+  };
 }
 
 /**

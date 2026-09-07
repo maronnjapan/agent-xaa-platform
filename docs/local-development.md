@@ -4,7 +4,7 @@ GCP へ配備せず、手元のパソコン1台の上で基盤全体を動かす
 Docker も要らず、データベースのインストールも要らない。
 必要なのは Node.js 22 と pnpm だけである。
 
-配備した基盤との違いは[6章](#6-配備した基盤との違い)にまとめてある。
+配備した基盤との違いは[7章](#7-配備した基盤との違い)にまとめてある。
 画面の操作手順そのものは[サイトの使い方](./user-guide.md)と同じである。
 
 ## 1. 起動する
@@ -23,11 +23,15 @@ pnpm local
     Human IdP          http://127.0.0.1:8081
 
     Sign in as         testuser / password
+    Model              fake (no model is called; set MODEL_PROVIDER to change that)
+    Services           14 listening
+    State              /path/to/agent-xaa-platform/.local/state
 ```
 
 止めるときは Ctrl+C を押す。
-状態はメモリの中だけにあるので、止めると ToDo も Agent もドキュメントも消える。
-起動のたびに [infra/seed](../infra/seed) の内容が書き込まれるため、配備した基盤と同じ品揃えの状態から始まる。
+書いた ToDo も、決めた権限も、作ったドキュメントも `.local/state` に残り、次の起動でそのまま出てくる（[5章](#5-状態を手元に残す)）。
+[infra/seed](../infra/seed) の内容は、残っているものが何も無いときだけ書き込まれる。
+初回は配備した基盤と同じ品揃えの状態から始まり、2回目からは前回の続きから始まる。
 
 ポートは 8079 から 8096 までを使う。
 すでに使っているポートがある場合は `LOCAL_PORT_OFFSET` でまとめてずらす。
@@ -122,7 +126,9 @@ MODEL_PROVIDER=cli MODEL_CLI=custom \
 | `LOCAL_HOST` | `127.0.0.1` | 待ち受けるアドレス |
 | `LOCAL_PORT_OFFSET` | `0` | 全ポートをまとめてずらす |
 | `LOCAL_ENABLE_GOOGLE_BRIDGE` | `false` | OAuth Bridge と疑似 SaaS を起動する |
-| `LOCAL_SEED` | `true` | 起動時に seed を流す |
+| `LOCAL_PERSIST` | `true` | 状態をディスクに残す。`false` で何も残さない（5章） |
+| `LOCAL_STATE_DIR` | `.local/state` | 状態を置くディレクトリ。実行したディレクトリからの相対 |
+| `LOCAL_SEED` | `auto` | `auto` は残っているものが無いときだけ seed を流す。`true` は毎回流し、`false` は流さない |
 | `LOCAL_LIFECYCLE_TICK_MS` | `300000` | Lifecycle Manager の tick 間隔 |
 | `LOCAL_EXECUTION_START_DELAY_MS` | `3000` | Agent Runtime の Execution が最初の推論を始めるまでの待ち |
 | `LOCAL_QUIET` | `false` | バナーと構造化ログを出さない |
@@ -133,7 +139,63 @@ MODEL_PROVIDER=cli MODEL_CLI=custom \
 Google の OAuth client は要らない。
 配備時の既定と同じく、既定では無効である（DEC-SCOPE-04）。
 
-## 5. 何が本物のまま動いているか
+## 5. 状態を手元に残す
+
+止めても消えない。
+書いた ToDo、承認した Agent Definition、管理画面で足した権限、作ったドキュメント、ログインした Session は、既定で `.local/state` に残り、次の起動でそのまま読み直される。
+
+残るのは3つである。
+
+| ファイル | 中身 |
+|---|---|
+| `firestore.json` | Firestore の全行。ToDo も権限も Agent の台帳もここにある |
+| `kms-master.key` | ローカル KMS が鍵を導出する秘密。これが変わると、前回暗号化したものは開けない |
+| `platform-config/sso-signing/current.json` | Human IdP の SSO 署名鍵。配備時に非公開バケットへ置くものと同じ形で、同じ KMS 鍵で包んである |
+
+3つとも必要である。
+行だけ残しても、鍵が変われば Human IdP Connection は復号できず、署名鍵が変わればブラウザに残っている Access Token はどれも検証できない。
+配備した基盤が Firestore・Cloud KMS・非公開バケットに分けて持っているものが、ここでは1つのディレクトリに入っている。
+だからディレクトリは `0700`、ファイルは `0600` で作る。
+
+最初からやり直すときは消す。
+次の起動は初回と同じで、seed から始まる。
+
+```bash
+rm -rf .local/state                  # 前回までを捨てる
+LOCAL_PERSIST=false pnpm local       # 今回の分を何も残さない
+LOCAL_STATE_DIR=/tmp/xaa pnpm local  # 別の場所に置く
+```
+
+Agent の Client Credential の秘密鍵だけは、ここにも Firestore にも書かない（RULE-22）。
+
+### seed をもう一度流す
+
+[infra/seed](../infra/seed) は、残っているものが何も無いときだけ流れる。
+seed が書く表（カタログ、Capability の分類、`human_permissions`、`delegatable_permissions`）は、流すたびに一度空にしてから書き直すからである。
+毎回流すと、管理画面（`/admin`）で足した権限が起動のたびに消えることになる。
+
+YAML を書き換えて反映したいときは、明示的に頼む。
+
+```bash
+LOCAL_SEED=true pnpm local
+```
+
+デモ用のドキュメントは「何日前に起きたか」を流した時刻から決めるため、流し直すと日付も now に寄せ直される。
+何日も同じ状態を使い続けて、提案フォームが見る7日の窓から外れたときは、これで戻す。
+
+### Agent は残らない
+
+行は残るが、Agent は残らない。
+Agent 自身の Client Credential の秘密鍵は、その Agent を動かしている Execution の環境の中にしか無く、`full_isolation` の Agent 専用 OP は、その Provisioning をしたプロセスの listener である。
+どちらもプロセスと一緒に消えるので、台帳の行だけあっても、動く Agent にはならない。
+
+そこで起動時に、前回から残っている Agent を Lifecycle Manager の Cleanup で終わらせる。
+発行済みのトークンは revoke され、OP は発行を止め、台帳の行は監査ログを残して消える。
+理由は EXPIRED である（QUARANTINE ではない。異常時の理由は本人の上流の Refresh Token まで revoke してしまい、他の Agent の接続も切れる）。
+ToDo はそのまま残るので、画面から完了にすることも取り下げることもできる。
+配備した基盤で Agent が寿命を迎えたときと、ToDo から見える姿は同じである。
+
+## 6. 何が本物のまま動いているか
 
 ローカルでも、基盤の判断はすべて配備時と同じコードが行う。
 サービスはそれぞれ自分のポートで待ち受け、互いを URL で呼ぶ。
@@ -156,14 +218,14 @@ resource-docs-api  resource_api.access  operation=document.get   response_status
 agent-runtime      manifest_hash_stable
 ```
 
-## 6. 配備した基盤との違い
+## 7. 配備した基盤との違い
 
 | 項目 | 配備時 | ローカル |
 |---|---|---|
 | プロセス | サービスごとに Cloud Run のコンテナ | 1プロセスの中で16の listener |
-| Firestore | Firestore | プロセス内のインメモリ実装。停止で消える |
-| Cloud KMS | KMS の鍵 | プロセス起動時に作る AES-256-GCM の鍵。停止で消える |
-| Cloud Storage | JWKS と設定のバケット | 8079 番が返すインメモリの JWK Set と endpoints.json |
+| Firestore | Firestore | プロセス内の実装。全行を `.local/state/firestore.json` に書き出す（5章） |
+| Cloud KMS | KMS の鍵 | `.local/state/kms-master.key` から導出する AES-256-GCM の鍵 |
+| Cloud Storage | JWKS と設定のバケット | 8079 番が返す JWK Set と endpoints.json。アプリが書き戻す鍵だけは `.local/state/platform-config` に置く |
 | Pub/Sub | 4つの Topic | プロセス内のバス。push は本当に HTTP で配送する |
 | Secret Manager | client secret | 起動時に決め打つ固定値。外へ出ない |
 | Cloud Scheduler | 5分ごとの tick | `setInterval` |
@@ -179,9 +241,11 @@ RFC 8707 は Resource Indicator に絶対 https URI を求め、この基盤も�
 同じ理由で RFC 8252 §7.3 はネイティブアプリのリダイレクトに同じ例外を置いており、この基盤も Human IdP の redirect_uri で既に同じ例外を認めている。
 Cloud Run の URL はループバックのリテラルにはならないため、配備時に緩むものは無い。
 
-停止で消えることも、違いというより性質である。
-Refresh Token を守る鍵はプロセスと一緒に消えるので、前回の起動で作った Human IdP Connection は次の起動では復号できない。
-開発者のホームディレクトリに長生きする鍵を置くよりは、消える方を選んでいる。
+状態を1つのディレクトリに集めていることも、違いというより性質である。
+配備時は Firestore、Cloud KMS、非公開バケットに分かれ、それぞれ別の Service Account しか触れない。
+ローカルには境界そのものが無いので、鍵も行も同じディレクトリに並ぶ。
+だから `0700` / `0600` で作り、いつ消してもよいものとして扱う。
+境界を模した3つのディレクトリを作っても、守るものは1つも増えない。
 
 Execution の開始を 3 秒待つのも、速すぎることを避けるための調整である。
 Cloud Run は Job Execution のスケジュールとイメージの取得に数秒かかり、基盤はその数秒に頼っている。
@@ -189,10 +253,11 @@ Provisioner が Job を起動して応答を返し、そのあとで Automation 
 プロセス内の呼び出しは即座に始まるためこの順序が入れ替わり、Agent は空の会話について一度だけ推論して「終わった」と報告してしまう。
 `LOCAL_EXECUTION_START_DELAY_MS` でこの待ちを変えられる。
 
-## 7. 動いていることを検査する
+## 8. 動いていることを検査する
 
-ローカル実行そのものの検査は `apps/local-runner/test/integration/local-platform.spec.ts` にある。
-基盤全体を起動し、ブラウザと同じようにログインし、ToDo から権限決定・承認・Provisioning・同意までを歩いて、Agent が登録され Execution が始まるところまでを確認する。
+ローカル実行そのものの検査は `apps/local-runner/test/integration/` にある。
+`local-platform.spec.ts` は基盤全体を起動し、ブラウザと同じようにログインし、ToDo から権限決定・承認・Provisioning・同意までを歩いて、Agent が登録され Execution が始まるところまでを確認する。
+`local-persistence.spec.ts` は基盤を止めてもう一度起動し、ToDo と権限が残っていること、seed が流れ直していないこと、同じ Cookie がまだログインとして通ることを確認する。
 
 ```bash
 pnpm test:integration

@@ -1,6 +1,23 @@
 import { Timestamp, type Firestore } from '@google-cloud/firestore';
 import { documentIdByteLength, MAX_DOCUMENT_ID_BYTES } from '../document-id.js';
 
+/** Every row the double holds, as `collection -> document id -> fields`. */
+export type FirestoreSnapshot = Record<string, Record<string, Record<string, unknown>>>;
+
+export interface FirestoreDoubleOptions {
+  /** Rows to start from, in the shape `read` below hands back. */
+  snapshot?: FirestoreSnapshot;
+  /**
+   * Called after every write.
+   *
+   * `read` renders the whole state and is a function rather than a value so a caller
+   * that batches its saves renders once per save rather than once per write — which is
+   * what the local runner does, and the difference between a debounced snapshot and a
+   * full copy of the database on every field update.
+   */
+  onWrite?(read: () => FirestoreSnapshot): void;
+}
+
 /**
  * In-process stand-in for the Firestore surface `DocumentStore` and the two store
  * implementations use: document get/set/create/update/delete, equality and
@@ -8,9 +25,17 @@ import { documentIdByteLength, MAX_DOCUMENT_ID_BYTES } from '../document-id.js';
  *
  * It exists so the same specs run with or without `gcloud emulators firestore`.
  * Set FIRESTORE_EMULATOR_HOST to exercise the real client instead.
+ *
+ * The two options are what makes it a database that can outlive its process: rows in,
+ * and a notification out. Neither knows about files — where the rows are kept, and in
+ * what form, belongs to the caller that has somewhere to keep them.
  */
-export function createFirestoreDouble(): Firestore {
-  const collections = new Map<string, Map<string, Record<string, unknown>>>();
+export function createFirestoreDouble(options: FirestoreDoubleOptions = {}): Firestore {
+  const collections = new Map<string, Map<string, Record<string, unknown>>>(
+    Object.entries(options.snapshot ?? {}).map(([name, documents]) => [name, new Map(Object.entries(documents))]),
+  );
+  const readSnapshot = (): FirestoreSnapshot =>
+    Object.fromEntries([...collections].map(([name, documents]) => [name, Object.fromEntries(documents)]));
   const documentsOf = (name: string) => {
     const existing = collections.get(name);
     if (existing) return existing;
@@ -24,7 +49,12 @@ export function createFirestoreDouble(): Firestore {
   // Bumped on every write so a transaction can tell whether what it read still holds.
   const versions = new Map<string, number>();
   const versionOf = (name: string, id: string) => versions.get(`${name}/${id}`) ?? 0;
-  const bump = (name: string, id: string) => versions.set(`${name}/${id}`, versionOf(name, id) + 1);
+  // The one place every write passes through — document, batch and transaction alike —
+  // so a caller that wants to hear about writes hears about all of them or none.
+  const bump = (name: string, id: string) => {
+    versions.set(`${name}/${id}`, versionOf(name, id) + 1);
+    options.onWrite?.(readSnapshot);
+  };
 
   const rows = (name: string, filters: Filter[], limit?: number) => {
     const compare = (actual: unknown, operator: string, value: unknown): boolean => {

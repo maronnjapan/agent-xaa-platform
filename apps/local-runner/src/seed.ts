@@ -43,9 +43,11 @@ async function readYamlTree(root: string): Promise<Map<string, string>> {
  * payments the guide's first step needs — comes from `runSeed`, so a local platform
  * starts with the catalogue the deployed one starts with.
  *
- * It runs on every start because local state does not outlive the process: there is
- * nothing here for a second run to preserve, and an unseeded platform would answer
- * every provisioning with "no tool grants that capability".
+ * It runs on a platform that starts from nothing, because an unseeded one answers every
+ * provisioning with "no tool grants that capability". It does not run again over rows a
+ * previous run left: the collections it writes are the ones it first empties, and among
+ * them is `human_permissions` — so a second pass would take back the permissions granted
+ * since (`shouldSeed` in runner.ts decides, and `LOCAL_SEED=true` asks for it anyway).
  */
 export async function runLocalSeed(platform: LocalPlatform): Promise<void> {
   const root = await findSeedRoot();

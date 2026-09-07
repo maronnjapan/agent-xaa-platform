@@ -7,6 +7,7 @@ import { createLocalJwks, type LocalJwks } from './local/jwks.js';
 import { createLocalKms, type LocalKmsClient } from './local/kms.js';
 import { createLocalPubSub, type LocalPubSub } from './local/pubsub.js';
 import { createLocalServiceIdentity, serviceAccounts, type LocalServiceIdentity } from './local/service-identity.js';
+import { createEphemeralState, openLocalState, type LocalState } from './local/state.js';
 
 /** The three topics `infra/envs/demo` declares, named as it names them. */
 export const TOPICS = {
@@ -18,6 +19,8 @@ export const TOPICS = {
 
 export interface LocalPlatform {
   config: LocalRunnerConfig;
+  /** What this run carried over from the last one, and where it writes what it makes. */
+  state: LocalState;
   firestore: Firestore;
   jwks: LocalJwks;
   kms: LocalKmsClient;
@@ -60,12 +63,22 @@ export interface LocalPlatform {
 export async function createLocalPlatform(config: LocalRunnerConfig, overrides: { model?: VertexClient } = {}): Promise<LocalPlatform> {
   const { projectId, region } = config.topology;
   const ring = (name: string) => `projects/${projectId}/locations/${region}/keyRings/${name}`;
+  const state = config.stateDir === undefined ? createEphemeralState() : openLocalState(config.stateDir);
 
   const platform: LocalPlatform = {
     config,
-    firestore: createFirestoreDouble(),
+    state,
+    // Firestore is where nearly everything a person sets up ends up — the ToDos, the
+    // permission tables, the agents, the documents — so the whole of the persistence
+    // question is answered here: rows in at startup, and a save after every write.
+    firestore: createFirestoreDouble({
+      ...(state.rows ? { snapshot: state.rows } : {}),
+      onWrite: (read) => { state.save(read); },
+    }),
     jwks: createLocalJwks(),
-    kms: createLocalKms(),
+    // Derived from a secret that is the state directory's when there is one. A key
+    // regenerated on every start is a Human IdP Connection the next run cannot open.
+    kms: createLocalKms(state.kmsMasterSecret),
     pubsub: createLocalPubSub({
       onError: (topic, error) => {
         process.stderr.write(`[local] delivery on ${topic} failed: ${(error as Error).message}\n`);
@@ -95,6 +108,10 @@ export async function createLocalPlatform(config: LocalRunnerConfig, overrides: 
       stubBridge: 'local-stub-bridge-secret',
     },
     async shutdown() {
+      // Before the globals go: the last writes of the run are in the debounce window,
+      // and a platform that lost the row it had just written would be worse than one
+      // that never kept any.
+      state.flush();
       setLogSink(undefined);
       setActivityTransport(undefined);
       setDefaultModelClient(undefined);

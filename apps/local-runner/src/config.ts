@@ -1,5 +1,20 @@
+import { resolve } from 'node:path';
 import { readModelOptions, type ModelClientOptions } from '@xaa/vertex';
 import { createTopology, type LocalTopology } from './topology.js';
+
+/**
+ * When the seed runs.
+ *
+ * `auto` is the default and the only one that reads the state: the seed writes the
+ * catalogue, the taxonomy and who holds which permission, and re-running it replaces
+ * all three — so on a platform whose state was carried over it would undo the
+ * permissions an administrator granted since. It runs when there is nothing to undo.
+ */
+export const SEED_MODES = ['auto', 'always', 'never'] as const;
+export type SeedMode = (typeof SEED_MODES)[number];
+
+/** Where a run keeps its state when `LOCAL_STATE_DIR` says nothing, relative to the cwd. */
+export const DEFAULT_STATE_DIR = '.local/state';
 
 export interface LocalRunnerConfig {
   topology: LocalTopology;
@@ -10,8 +25,10 @@ export interface LocalRunnerConfig {
   lifecycleTickMs: number;
   /** What Cloud Run's scheduling latency stands as, before an Execution's first step. */
   executionStartDelayMs: number;
-  /** Runs the seed at startup. Off leaves whatever the previous run wrote. */
-  seed: boolean;
+  /** Where the run keeps its state, or undefined when it keeps none. */
+  stateDir: string | undefined;
+  /** When the seed runs. */
+  seed: SeedMode;
   /** Prints nothing but errors: no banner, and no structured log lines on stdout. */
   quiet: boolean;
 }
@@ -24,6 +41,19 @@ function flag(value: string | undefined, fallback: boolean): boolean {
 function positive(value: string | undefined, fallback: number): number {
   const parsed = Number(value ?? '');
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * `LOCAL_SEED` still takes the two words it always took, and means by them what it
+ * always meant: `true` seeds this run, `false` seeds no run. Unset now means `auto`
+ * rather than `true`, because a platform that keeps its state has something to lose.
+ */
+function seedMode(value: string | undefined): SeedMode {
+  const normalized = (value ?? '').trim();
+  if (normalized === '' || normalized === 'auto') return 'auto';
+  if (normalized === 'true' || normalized === '1') return 'always';
+  if (normalized === 'false' || normalized === '0') return 'never';
+  return (SEED_MODES as readonly string[]).includes(normalized) ? normalized as SeedMode : 'auto';
 }
 
 function nonNegative(value: string | undefined, fallback: number): number {
@@ -67,7 +97,8 @@ export function loadLocalConfig(env: NodeJS.ProcessEnv = process.env): LocalRunn
     // Zero is a value somebody may mean here — "start the Execution at once" — so it
     // cannot share the "unset or nonsense" branch every other number falls back through.
     executionStartDelayMs: nonNegative(env.LOCAL_EXECUTION_START_DELAY_MS, 3_000),
-    seed: flag(env.LOCAL_SEED, true),
+    stateDir: flag(env.LOCAL_PERSIST, true) ? resolve(env.LOCAL_STATE_DIR?.trim() || DEFAULT_STATE_DIR) : undefined,
+    seed: seedMode(env.LOCAL_SEED),
     quiet: flag(env.LOCAL_QUIET, false),
   };
 }

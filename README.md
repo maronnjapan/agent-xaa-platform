@@ -29,7 +29,8 @@ MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=... pnpm local     # Anthropic API
 MODEL_PROVIDER=openai OPENAI_API_KEY=... pnpm local           # OpenAI 互換 API
 ```
 
-止めると ToDo も Agent も消える。
+止めても、書いた ToDo も決まった権限もログインも `.local/state` に残り、次に起動したときそのまま続きから使える。
+最初からやり直したいときは、そのディレクトリを消す。
 ポートの一覧、設定できること、配備した基盤との違いは [docs/local-development.md](./docs/local-development.md) にある。
 
 ## GCP へ配備する
