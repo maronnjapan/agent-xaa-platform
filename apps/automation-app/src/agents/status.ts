@@ -1,4 +1,4 @@
-import { compile } from '@xaa/contracts';
+import { compile, isExecutionFailure, type ExecutionFailure } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 import { agentStatusResponseSchema, AGENT_STATUS_RESPONSE_KEYS } from '../schemas/index.js';
 
@@ -6,6 +6,7 @@ export interface AgentStatusResponse {
   agent_status: string;
   remaining_seconds: number;
   current_task: string | null;
+  execution_failure: ExecutionFailure | null;
   tool_invocations: Array<{ tool_id: string; outcome: string; summary: string }>;
 }
 
@@ -15,7 +16,7 @@ const assertResponse: (value: unknown) => asserts value is AgentStatusResponse =
 export { AGENT_STATUS_RESPONSE_KEYS };
 
 /**
- * Four values, copied out of the checkpoint by name.
+ * Five values, copied out of the checkpoint by name.
  *
  * The response is built field by field rather than by spreading the checkpoint. The
  * checkpoint is written by the Runtime and can grow; a spread would forward whatever
@@ -33,14 +34,21 @@ export async function readAgentStatus(input: {
   const state = await input.documents.get<{
     agent_status?: string;
     task_context?: { task_id?: string };
+    execution_state?: { failure?: unknown };
     pending_tool_calls?: Array<Record<string, unknown>>;
   }>('agents', `${input.agentId}__state`);
 
   const expiresAt = meta?.expires_at ? Date.parse(meta.expires_at) : now;
   const response: AgentStatusResponse = {
-    agent_status: state?.agent_status ?? meta?.status ?? 'CREATED',
+    agent_status: meta?.status && meta.status !== 'ACTIVE' ? meta.status : state?.agent_status ?? meta?.status ?? 'CREATED',
     remaining_seconds: Math.max(0, Math.floor((expiresAt - now) / 1000)),
     current_task: state?.task_context?.task_id ?? null,
+    // Matched against the closed list rather than echoed: `execution_state` is the
+    // Runtime's own scratch space, so a value it was never meant to publish must not
+    // reach the browser just because it was stored under a known key.
+    execution_failure: isExecutionFailure(state?.execution_state?.failure)
+      ? state.execution_state.failure
+      : null,
     tool_invocations: (state?.pending_tool_calls ?? []).map((call) => ({
       tool_id: String(call.tool_id ?? ''),
       outcome: String(call.outcome ?? ''),

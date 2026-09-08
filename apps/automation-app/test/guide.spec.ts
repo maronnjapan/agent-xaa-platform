@@ -22,7 +22,7 @@ describe('the guide page', () => {
     expect(html).toContain('data-page="guide"');
     expect(html).toContain(GUIDE_LEAD);
     const steps = [...html.matchAll(/data-step="([a-z]+)"/g)].map((match) => match[1]);
-    expect(steps).toEqual(['describe', 'confirm', 'decide', 'approve', 'operate', 'notes', 'trouble']);
+    expect(steps).toEqual(['describe', 'confirm', 'decide', 'approve', 'operate', 'monitor', 'notes', 'trouble']);
   });
 
   it('links to every screen the steps send a person to', async () => {

@@ -18,6 +18,7 @@ export function createFirestoreDouble(): Firestore {
     return created;
   };
 
+  interface Order { field: string; direction: 'asc' | 'desc' }
   interface Filter { field: string; operator: string; value: unknown }
 
   // Bumped on every write so a transaction can tell whether what it read still holds.
@@ -25,7 +26,7 @@ export function createFirestoreDouble(): Firestore {
   const versionOf = (name: string, id: string) => versions.get(`${name}/${id}`) ?? 0;
   const bump = (name: string, id: string) => versions.set(`${name}/${id}`, versionOf(name, id) + 1);
 
-  const rows = (name: string, filters: Filter[], limit?: number) => {
+  const rows = (name: string, filters: Filter[], limit?: number, order?: Order) => {
     const compare = (actual: unknown, operator: string, value: unknown): boolean => {
       if (operator === '==') return actual === value;
       if (operator === '>=') return String(actual) >= String(value);
@@ -35,6 +36,7 @@ export function createFirestoreDouble(): Firestore {
     const matched = [...documentsOf(name)]
       .filter(([, data]) => filters.every((filter) => compare(data[filter.field], filter.operator, filter.value)))
       .map(([id, data]) => ({ id, __collection: name, data: () => data, ref: docRef(name, id) }));
+    if (order) matched.sort((a, b) => String(a.data()[order.field]).localeCompare(String(b.data()[order.field])) * (order.direction === 'desc' ? -1 : 1));
     return limit === undefined ? matched : matched.slice(0, limit);
   };
 
@@ -60,13 +62,14 @@ export function createFirestoreDouble(): Firestore {
     async delete() { documentsOf(name).delete(id); bump(name, id); },
   });
 
-  const query = (name: string, filters: Filter[] = [], limit?: number): unknown => ({
+  const query = (name: string, filters: Filter[] = [], limit?: number, order?: Order): unknown => ({
     doc: (id: string) => docRef(name, id),
-    where: (field: string, operator: string, value: unknown) => query(name, [...filters, { field, operator, value }], limit),
-    limit: (count: number) => query(name, filters, count),
-    select: () => query(name, filters, limit),
+    where: (field: string, operator: string, value: unknown) => query(name, [...filters, { field, operator, value }], limit, order),
+    limit: (count: number) => query(name, filters, count, order),
+    orderBy: (field: string, direction: 'asc' | 'desc') => query(name, filters, limit, { field, direction }),
+    select: () => query(name, filters, limit, order),
     async get() {
-      const docs = rows(name, filters, limit);
+      const docs = rows(name, filters, limit, order);
       return { docs, size: docs.length, empty: docs.length === 0 };
     },
   });

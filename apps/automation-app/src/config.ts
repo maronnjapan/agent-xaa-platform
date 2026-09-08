@@ -1,4 +1,5 @@
 export interface AutomationAppConfig {
+  faultInjectionEnabled?: boolean;
   port: number;
   issuer: string;
   clientId: string;
@@ -21,21 +22,10 @@ function required(env: NodeJS.ProcessEnv, key: string): string {
   return value;
 }
 
-/**
- * Fourteen variables and no more.
- *
- * Twelve are the original list; `CLIENT_SECRET_AUTOMATION_APP` and `PUBLIC_BASE_URL`
- * joined them when the login flow became real, because the OIDC code exchange cannot be
- * made without a client secret and a redirect URI that matches the one the Human IdP was
- * given.
- *
- * The list stays short because of what is missing from it: there is no Capability
- * Taxonomy URL, no resource list and no isolation threshold. Automation App is the
- * screen a person uses; the decisions belong to the Authorization Platform (RULE-07),
- * and giving this app a way to read the vocabulary is how that boundary erodes.
- */
+/** Deployment opt-in exposes fault exercises only on environments configured for them. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AutomationAppConfig {
   return {
+    faultInjectionEnabled: env.ENABLE_FAULT_INJECTION === 'true',
     port: Number(env.PORT ?? 8080),
     issuer: required(env, 'ISSUER'),
     clientId: env.AUTOMATION_APP_CLIENT_ID ?? 'automation-app',

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { webcrypto } from 'node:crypto';
+import type { createFirestoreDouble } from '@xaa/gcp';
 import { jwkThumbprint } from '@xaa/crypto';
 import { executeTool } from '@xaa/agent-runtime/src/tool-executor/index';
 import { decodeJwtPayload } from '../../harness/oauth-flow.js';
@@ -14,12 +15,19 @@ import { humanIdToken } from './native-xaa-path.spec.js';
  * Executor: the ten steps happen because the code runs them, not because the spec
  * calls them in order.
  */
-export async function docsRuntime(options: { humanSubject?: string } = {}): Promise<{
+export async function docsRuntime(options: {
+  humanSubject?: string;
+  /** One Firestore across several apps, for a test that spans them. */
+  shared?: ReturnType<typeof createFirestoreDouble>;
+} = {}): Promise<{
   runtime: RuntimeHarness; agentOp: AgentOpHarness; docs: ResourceHarness; subjectToken: string;
 }> {
   const humanSubject = options.humanSubject ?? 'testuser';
   const subjectToken = await humanIdToken();
-  const agentOp = await startAgentOp({ idpPublicJwk: await idpPublicJwk(), humanSubject });
+  const agentOp = await startAgentOp({
+    idpPublicJwk: await idpPublicJwk(), humanSubject,
+    ...(options.shared ? { shared: options.shared } : {}),
+  });
   const docs = await startResource({
     kind: 'docs', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER,
   });
@@ -27,6 +35,7 @@ export async function docsRuntime(options: { humanSubject?: string } = {}): Prom
     agentOp, agentOpBaseUrl: AGENT_OP_BASE, resources: [docs], humanSubject,
     manifest: nativeManifest({ agentId: agentOp.agentId, resource: docs, kind: 'docs' }),
     agentClientPrivateJwk: JSON.stringify(await webcrypto.subtle.exportKey('jwk', agentOp.agentKeyPair.privateKey)),
+    ...(options.shared ? { shared: options.shared } : {}),
   });
   // The Agent OP mints subject tokens from its stored IdP connection; the harness
   // seeds the one the Runtime will ask for.

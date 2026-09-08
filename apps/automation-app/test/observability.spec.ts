@@ -1,0 +1,89 @@
+import { describe, expect, it } from 'vitest';
+import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
+import { AGENT_ID, SUBJECT, seedAgent, startAutomationApp } from './helpers.js';
+
+const postFault = (h: Awaited<ReturnType<typeof startAutomationApp>>, body: unknown = { kind: 'runtime_crash' }, agent = AGENT_ID) =>
+  h.fetch(`/api/agents/${agent}/faults`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+describe('fault injection authorization and lifecycle', () => {
+  it('is disabled by default and hidden on the page', async () => {
+    const h = await startAutomationApp();
+    await seedAgent(h);
+    expect((await postFault(h)).status).toBe(404);
+    expect(await (await h.fetch(`/agents/${AGENT_ID}`)).text()).not.toContain('data-action="inject-fault"');
+  });
+  it('binds a single request to the owned current task and audits it', async () => {
+    const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' } } });
+    expect((await postFault(h)).status).toBe(202);
+    expect((await postFault(h)).status).toBe(409);
+    const rows = await h.documents.queryEqual('agent_instructions', [['agent_id', AGENT_ID]]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.data).toMatchObject({ created_by: SUBJECT, applied_at: null, fault: { kind: 'runtime_crash', task_id: 'task-1' } });
+    expect(h.auditLines.some((line) => JSON.parse(line).operation === 'fault_injection')).toBe(true);
+    expect((await postFault(h, { kind: 'runtime_crash', task_id: 'another-task' })).status).toBe(400);
+    expect((await postFault(h, { kind: 'arbitrary_command' })).status).toBe(400);
+  });
+  it('rejects strangers, expired agents and stale ACTIVE checkpoints after revocation', async () => {
+    const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+    await seedAgent(h, { humanSubject: 'another-person' });
+    expect((await postFault(h)).status).toBe(404);
+    await seedAgent(h, { status: 'REVOKED', state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' } } });
+    expect((await postFault(h)).status).toBe(409);
+    expect(await (await h.fetch(`/api/agents/${AGENT_ID}/status`)).json()).toMatchObject({ agent_status: 'REVOKED' });
+    await seedAgent(h, { expiresAt: new Date(Date.now() - 1000).toISOString() });
+    expect((await postFault(h)).status).toBe(409);
+    expect((await h.fetch(`/api/agents/${AGENT_ID}/faults`, { method: 'POST', headers: { cookie: '' } })).status).toBe(401);
+  });
+});
+
+describe('how a failed execution is reported', () => {
+  it('names the failure without inventing a Lifecycle state, and echoes nothing else', async () => {
+    const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+    // The checkpoint a crashed execution leaves behind: the agent is still ACTIVE,
+    // because a Runtime does not move an agent through the Lifecycle (docs 07 §2).
+    await seedAgent(h, { state: {
+      agent_status: 'ACTIVE', task_context: { agent_id: AGENT_ID },
+      execution_state: { failure: 'injected_runtime_crash' },
+    } });
+    const status = await (await h.fetch(`/api/agents/${AGENT_ID}/status`)).json();
+    expect(status).toMatchObject({
+      agent_status: 'ACTIVE', current_task: null, execution_failure: 'injected_runtime_crash',
+    });
+    const page = await (await h.fetch(`/agents/${AGENT_ID}`)).text();
+    expect(page).toContain('data-failure="injected_runtime_crash"');
+    expect(page).toContain('直近の実行は失敗しました');
+
+    // `execution_state` is the Runtime's own scratch space. Only a value on the closed
+    // list reaches the browser, so a checkpoint field cannot become a message.
+    await seedAgent(h, { state: {
+      agent_status: 'ACTIVE', task_context: { task_id: 'task-1' },
+      execution_state: { failure: 'https://attacker.test/?leaked=secret' },
+    } });
+    const bogus = await (await h.fetch(`/api/agents/${AGENT_ID}/status`)).json();
+    expect(bogus).toMatchObject({ execution_failure: null, current_task: 'task-1' });
+    expect(await (await h.fetch(`/agents/${AGENT_ID}`)).text()).not.toContain('attacker.test');
+  });
+});
+
+describe('analysis monitoring privacy', () => {
+  it('serves only the session subject and projects known fields in API and HTML', async () => {
+    const shared = createFirestoreDouble();
+    const writer = createFirestoreDocumentStore(shared, 'security-detection');
+    const base = { started_at: '2026-09-09T00:00:00Z', updated_at: '2026-09-09T00:00:01Z',
+      status: 'completed', stage: 'respond', completed_stages: [], input_count: 1, normalized_count: 1,
+      unmapped_count: 0, violation_count: 0, rule_hit_count: 0, decisions: [], error_code: null };
+    await writer.set('security_analysis', 'own', { ...base, run_id: 'own', human_subject: SUBJECT, raw_log: 'private-credential' });
+    await writer.set('security_analysis', 'other', { ...base, run_id: 'other-private', human_subject: 'another-person' });
+    const h = await startAutomationApp({ shared });
+    for (const path of ['/api/security/analysis?human_subject=another-person', '/api/security/analysis-view', '/security']) {
+      const response = await h.fetch(path);
+      expect(response.status).toBe(200);
+      const text = await response.text();
+      expect(text).toContain('own');
+      expect(text).not.toMatch(/other-private|another-person|private-credential|raw_log/);
+    }
+    expect((await h.fetch('/api/security/analysis', { headers: { cookie: '' } })).status).toBe(401);
+    expect((await h.fetch('/security', { headers: { cookie: '' } })).status).toBe(302);
+  });
+});

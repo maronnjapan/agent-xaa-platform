@@ -55,7 +55,8 @@
       "agents/*/state",
       "agent_instructions/**",
       "user_activity/**",
-      "authorization_decisions/**"
+      "authorization_decisions/**",
+      "security_analysis/**"
     ],
     "write": [
       "sessions/**",
@@ -260,11 +261,13 @@
       "agents/*/baseline",
       "agents/*/meta",
       "security_findings/**",
-      "batch_state/**"
+      "batch_state/**",
+      "security_analysis/**"
     ],
     "write": [
       "security_findings/**",
-      "batch_state/**"
+      "batch_state/**",
+      "security_analysis/**"
     ]
   }
 }

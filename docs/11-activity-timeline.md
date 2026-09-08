@@ -16,7 +16,7 @@ Security Detection（[09](./09-security-monitoring.md)）は、ログから異�
 ## 2. 基本方針
 
 - **可視化と判断を分離する**：本画面はAgentやToolの実行を止めたり許可したりしない。表示する遮断は、Tool Executor（[04. §7](./04-tool-catalog.md#7-agentに任意httpを許さない)）、Policy Engine（[03. §6](./03-authorization.md#6-policy-engine)）、Security Detection（[09. §6](./09-security-monitoring.md#6-response)）がすでに下した決定である。
-- **自分の範囲だけを見せる**：表示対象はAccess Tokenの`sub`と一致する`human_subject`のイベントに閉じる。他ユーザーのログインやAgentは表示しない。Control Plane APIで`human_subject`を`sub`に固定する既存の考え方（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)）をここでも使う。全ユーザー横断のダッシュボードは今回の対象外とする（[§8](#8-今後の検討事項)）。
+- **自分の範囲だけを見せる**：表示対象はAccess Tokenの`sub`と一致する`human_subject`のイベントに閉じる。他ユーザーのログインやAgentは表示しない。Control Plane APIで`human_subject`を`sub`に固定する既存の考え方（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)）をここでも使う。全ユーザー横断のダッシュボードは今回の対象外とする（[§9](#9-今後の検討事項)）。
 - **常に記録する**：Activity Eventの記録は、通常利用かデモかを区別せず、Agentが動くたびに常時行う。デモのために記録を開始する操作は無い。操作者が明示的に行うのは、実演が難しいケースを補うための台本イベントの追加（[§6.2](#62-台本で補う)）だけである。
 - **完了してから、まとめて再生する**：実行中のイベントを逐次配信することはしない。常時接続の配信経路は接続維持や順序保証の負担が大きく、途中経過を文字で流すだけでは効果も薄い。ログイン〜Provisioning、Taskごとの処理、Agent終了のそれぞれが完了した時点で、その一連の流れをまとめて再生する（[§3.3](#33-task境界)、[§4](#4-配信経路)）。実行中かどうかだけを素早く知りたい場合は、既存の状況確認（[02. §5](./02-automation-design.md#5-実行中agentの操作)）を使う。
 - **一覧だけで終わらせない**：完了した処理は、文字の一覧に加えて、実際に発生した呼び出しの経路をアニメーションで再生する。遮断はその経路がどこで止まったかを動きで示す（[§5.2](#52-再生の中身)）。
@@ -40,7 +40,7 @@ activity_event:
   occurred_at: "2026-08-29T10:01:05+09:00"
   source: agent-runtime       # 発行元アプリ
   phase: tool_call            # login / work_definition / authorization / provisioning / tool_call / security / lifecycle
-  outcome: blocked            # info / success / blocked
+  outcome: blocked            # info / success / blocked / failed
   title: 実行を拒否
   message: mail.message.send は許可されたToolに含まれないため、Tool Executorが実行を拒否しました
   detail:                     # 折りたたみ表示。省略可
@@ -53,7 +53,7 @@ activity_event:
 
 `title`と`message`は発行元のアプリがイベントを出す時点で生成する。生データを画面側で人間向けの文章へ変換するロジックは持たせない。理由を最もよく知っているのは、その判断を下した本人（Policy Engine、Tool Executorなど）だからである。
 
-`outcome`は3値に絞る。`denied`と`blocked`のような細分化はしない。ユーザーから見れば「権限が足りず断られた」も「実行中に拒否された」も同じ「止められた」であり、区別する意味が薄いためである。ただし`phase`が`tool_call`か`security`かで、画面上の強調度を変える（[§5.3](#53-表示のルール)）。
+`outcome`は `info`、`success`、`blocked`、`failed` の4値とし、実行失敗を情報と区別する。`denied`と`blocked`のような細分化はしない。ユーザーから見れば「権限が足りず断られた」も「実行中に拒否された」も同じ「止められた」であり、区別する意味が薄いためである。ただし`phase`が`tool_call`か`security`かで、画面上の強調度を変える（[§5.3](#53-表示のルール)）。
 
 ### 3.2 発行するイベントの例
 
@@ -200,7 +200,24 @@ lifecycle      Agentの終了                                     成功   10:05
 - ブラウザはFirestoreへ直接アクセスしない。取得はAutomation Appの認証済みセッションを介してのみ行う（[§4](#4-配信経路)）。
 - [§6.2](#62-台本で補う)の台本再生も操作者自身のセッション範囲に閉じる。他ユーザーのタイムラインへ`is_simulated`イベントを注入することはできない。
 
-## 8. 今後の検討事項
+## 8. 実行状態とログ分析の監視
+
+Agentの状況確認とログ分析モニターは、認証済みAPIを5秒ごとに取得する。
+アクティビティの一覧と再生は、従来どおり完了したTaskを対象にし、画面の更新操作で読み直す。
+実行失敗は `outcome: failed` で記録する。
+過去の `TASK_FAILED` が `outcome: info` で保存されている場合も、一覧の終端結果は失敗として表示する。
+失敗したのは実行であり、Agentの Lifecycle 状態（[07. §2](./07-lifecycle.md#2-lifecycle状態)）ではない。
+状況確認は両者を分けて示し、状態欄は Lifecycle の値のままにする。
+
+ログ分析モニターは `security_analysis` の表示用投影を読み、Security Detection自身が記録した段階、検知コード、スコア、AIの起動条件、対応判定を表示する。
+記録はログ配信1回につき利用者ごとに分け、Automation Appはセッションの `sub` に一致する最新30件を取得する。
+Security Detectionだけにこのコレクションの書き込みを許可し、Automation Appには読み取りだけを許可する。
+生ログやモデルへの入力はこの経路で公開しない。
+取得の失敗、更新の停滞、記録がない状態を区別して表示する。
+
+異常系試験の設定と操作手順は[利用手順](./user-guide.md#72-実際の実行失敗を試す)に記載する。
+
+## 9. 今後の検討事項
 
 次は今回の対象外とし、必要になった時点で改めて設計する。
 

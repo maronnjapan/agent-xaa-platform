@@ -1,15 +1,16 @@
 import { Hono } from 'hono';
 import { createLogger, type Logger } from '@xaa/logging';
-import type { ActivityEvent } from '@xaa/contracts';
+import { createAnalysisMonitor } from './monitoring.js';
+import type { AnalysisDecision, ActivityEvent } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 import type { AgentBaseline } from './baseline/types.js';
-import { createPipelineDeps, dispatch, runPipeline, type DispatchCounters } from './pipeline/index.js';
+import { createPipelineDeps, dispatch, type DispatchCounters } from './pipeline/index.js';
 import type { NormalizedEvent } from './normalize/index.js';
 import type { SecurityFinding } from './correlate/finding.js';
 import type { AgentRegistrationView } from './rules/index.js';
 import { buildAiInput, type RelatedEventSummary } from './ai/input.js';
 import { fallbackResponse, parseAiOutput, type ResponseState } from './ai/output.js';
-import { needsHumanReview } from './response/review.js';
+import { needsHumanReview, REVIEW_CONFIDENCE_FLOOR } from './response/review.js';
 import { requestTransition, type LifecycleSender, type TransitionOutcome } from './response/dispatch.js';
 import { emitQuarantineEvent } from './activity/quarantine-event.js';
 import { createInternalBatchRoutes } from './routes/internal-batch.js';
@@ -139,47 +140,99 @@ export function createSecurityDetection(deps: SecurityDetectionDeps): { app: Hon
 
   async function runOnce(payloads: readonly unknown[]): Promise<void> {
     const entries = payloads.map(unwrapLogPayload);
-    const agents = await loadAgents(deps.documents, entries);
-    const scored = runPipeline(entries, createPipelineDeps({
-      baselines: agents.baselines, registrations: agents.registrations, counters, now,
-      maxLifetimeSeconds: deps.maxLifetimeSeconds ?? null,
-      ...(deps.financeResourceUrl ? { financeResourceUrl: deps.financeResourceUrl } : {}),
-    }));
-    await dispatch(scored, {
-      storeNormalized: async () => undefined,
-      storeFinding: async (finding) => {
-        await deps.documents.set('security_findings', finding.finding_id, finding as unknown as Record<string, unknown>);
-      },
-      analyze: async (finding, events) => {
-        const baseline = agents.baselines.get(finding.agent_id ?? '');
-        if (!baseline || !deps.analyze) return;
-        const input = buildAiInput({
-          finding, baseline,
-          registration: agents.registrations.get(finding.agent_id ?? '') as Record<string, unknown> ?? {},
-          relatedEvents: summarize(finding, events),
-          workDefinitionHash: '', operationKinds: [], agentAgeSeconds: agentAge(finding, events),
-        });
-        const raw = await deps.analyze(input);
-        const parsed = raw === null ? null : parseAiOutput(raw);
-        const response = parsed?.recommendation.response ?? fallbackResponse(finding.risk_level ?? 'MEDIUM');
-        const confidence = parsed?.recommendation.confidence ?? 0;
-        const hold = needsHumanReview({ response, confidence, fromFallback: parsed === null });
-        await deps.documents.update('security_findings', finding.finding_id, {
-          review_status: hold ? 'pending' : 'none',
-          recommended_response: response,
-          confidence,
-        });
-        if (hold) {
-          logger.warning('security_finding_pending_review', {
-            request_id: 'security', trace_id: finding.finding_id,
-            agent_id: finding.agent_id, human_subject: finding.human_subject,
-          }, { finding_id: finding.finding_id, recommended_response: response, confidence });
-          return;
-        }
+    const monitor = createAnalysisMonitor(deps.documents, entries, now);
+    try {
+      await monitor.stage('collect');
+      const agents = await loadAgents(deps.documents, entries);
+      const pipeline = createPipelineDeps({
+        baselines: agents.baselines, registrations: agents.registrations, counters, now,
+        maxLifetimeSeconds: deps.maxLifetimeSeconds ?? null,
+        ...(deps.financeResourceUrl ? { financeResourceUrl: deps.financeResourceUrl } : {}),
+      });
+      const raw = pipeline.collect(entries);
+      await monitor.stage('normalize');
+      const normalized = pipeline.normalize(raw);
+      await monitor.stage('validateProtocol', (run) => {
+        run.normalized_count = normalized.events.filter((event) => event.actor.human_subject === run.human_subject).length;
+        run.unmapped_count = normalized.unmapped.filter((event) => event.actor.human_subject === run.human_subject).length;
+      });
+      const validated = pipeline.validateProtocol(normalized);
+      await monitor.stage('detectRules', (run) => {
+        run.violation_count = validated.violations.filter((item) => item.human_subject === run.human_subject).length;
+      });
+      const ruled = pipeline.detectRules(validated);
+      await monitor.stage('correlate', (run) => {
+        run.rule_hit_count = ruled.hits.filter((item) => item.human_subject === run.human_subject).length;
+      });
+      const correlated = pipeline.correlate(ruled);
+      await monitor.stage('score');
+      const scored = pipeline.score(correlated);
+      const responses: Array<{ finding: SecurityFinding; decision: AnalysisDecision; response: ResponseState }> = [];
+      await monitor.stage('analyze');
+      for (const finding of scored.findings) {
+        await monitor.decision(finding.human_subject, decisionFor(finding, finding.risk_level === 'LOW' ? 'skipped' : 'queued',
+          finding.risk_level === 'LOW' ? 'below_ai_threshold' : 'awaiting_analysis'));
+      }
+      await dispatch(scored, {
+        storeNormalized: async () => undefined,
+        storeFinding: async (finding) => {
+          await deps.documents.set('security_findings', finding.finding_id, finding as unknown as Record<string, unknown>);
+        },
+        analyze: async (finding, events) => {
+          const baseline = agents.baselines.get(finding.agent_id ?? '');
+          if (!baseline || !deps.analyze) {
+            await monitor.decision(finding.human_subject, decisionFor(finding, 'skipped',
+              !baseline ? 'baseline_missing' : 'ai_not_configured'));
+            return;
+          }
+          const decision = decisionFor(finding, 'analyzing', 'score_requires_ai');
+          await monitor.decision(finding.human_subject, decision);
+          const input = buildAiInput({
+            finding, baseline,
+            registration: agents.registrations.get(finding.agent_id ?? '') as Record<string, unknown> ?? {},
+            relatedEvents: summarize(finding, events),
+            workDefinitionHash: '', operationKinds: [], agentAgeSeconds: agentAge(finding, events),
+          });
+          const raw = await deps.analyze(input);
+          const parsed = raw === null ? null : parseAiOutput(raw);
+          const response = parsed?.recommendation.response ?? fallbackResponse(finding.risk_level ?? 'MEDIUM');
+          const confidence = parsed?.recommendation.confidence ?? 0;
+          const hold = needsHumanReview({ response, confidence, fromFallback: parsed === null });
+          decision.response = response;
+          decision.confidence = confidence;
+          decision.state = hold ? 'review' : 'responding';
+          decision.reason = parsed === null ? 'ai_fallback' : confidence < REVIEW_CONFIDENCE_FLOOR ? 'low_confidence'
+            : hold ? 'disruptive_response' : response === 'ACTIVE' ? 'keep_active' : 'automatic_response';
+          await monitor.decision(finding.human_subject, decision);
+          await deps.documents.update('security_findings', finding.finding_id, {
+            review_status: hold ? 'pending' : 'none',
+            recommended_response: response,
+            confidence,
+          });
+          if (hold) {
+            logger.warning('security_finding_pending_review', {
+              request_id: 'security', trace_id: finding.finding_id,
+              agent_id: finding.agent_id, human_subject: finding.human_subject,
+            }, { finding_id: finding.finding_id, recommended_response: response, confidence });
+            return;
+          }
+          responses.push({ finding, decision, response });
+        },
+      }, counters);
+      await monitor.stage('respond');
+      for (const { finding, decision, response } of responses) {
         const outcome = await requestTransition({ finding, from: 'ACTIVE', to: response, send: deps.sendToLifecycle });
+        decision.transition = outcome;
+        decision.state = outcome === 'failed' ? 'failed' : 'responded';
+        if (outcome === 'failed') decision.reason = 'transition_failed';
+        await monitor.decision(finding.human_subject, decision);
         await announceQuarantine(finding, response, outcome);
-      },
-    }, counters);
+      }
+      await monitor.finish();
+    } catch (error) {
+      await monitor.finish(true);
+      throw error;
+    }
   }
 
   /**
@@ -310,3 +363,9 @@ function createApp(deps: SecurityDetectionDeps): Hono {
 }
 
 export default createApp;
+
+function decisionFor(finding: SecurityFinding, state: AnalysisDecision['state'], reason: string): AnalysisDecision {
+  return { finding_id: finding.finding_id, agent_id: finding.agent_id,
+    codes: [...finding.contributing_codes], score: finding.risk_score ?? 0, level: finding.risk_level ?? 'LOW',
+    state, reason, response: null, confidence: null, transition: null };
+}

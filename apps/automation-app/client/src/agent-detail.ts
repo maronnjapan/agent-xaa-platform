@@ -1,3 +1,4 @@
+import { startMonitor } from './monitor.js';
 import { failureMessage } from './messages.js';
 
 /**
@@ -9,14 +10,20 @@ import { failureMessage } from './messages.js';
  * could do.
  */
 export function start(root: Document = document, reload: () => void = () => root.location.reload()): void {
+  const agentId = root.querySelector('[data-agent-id]')?.getAttribute('data-agent-id');
+  if (agentId) startMonitor(root, `/api/agents/${encodeURIComponent(agentId)}/status-view`, '[data-section="status"]');
+  const fault = root.querySelector<HTMLButtonElement>('[data-action="inject-fault"]');
+  const consent = root.querySelector<HTMLInputElement>('[data-fault-consent]');
+  consent?.addEventListener('change', () => { if (fault) fault.disabled = !consent.checked; });
+  fault?.addEventListener('click', () => { void injectFault(root, fault); });
   const form = root.querySelector<HTMLFormElement>('[data-form="instruction"]');
   form?.addEventListener('submit', (event: Event) => {
     event.preventDefault();
-    void instruct(root, form);
+    void instruct(root, form).catch(() => report(root, '通信に失敗しました。指示の反映状況を確認してください。', 'error'));
   });
 
   const stop = root.querySelector<HTMLButtonElement>('button[data-action="stop"]');
-  stop?.addEventListener('click', () => { void halt(root, stop, reload); });
+  stop?.addEventListener('click', () => { void halt(root, stop, reload).catch(() => { stop.disabled = false; report(root, '通信に失敗しました。実行状況を更新して確認してください。', 'error'); }); });
 }
 
 async function instruct(root: Document, form: HTMLFormElement): Promise<void> {
@@ -59,3 +66,24 @@ function report(root: Document, message: string, state: 'error' | 'done'): void 
 }
 
 if (typeof document !== 'undefined') start();
+
+async function injectFault(root: Document, button: HTMLButtonElement): Promise<void> {
+  const agentId = button.getAttribute('data-agent-id');
+  const consent = root.querySelector<HTMLInputElement>('[data-fault-consent]');
+  const status = root.querySelector('[data-fault-status]');
+  if (!agentId || !consent?.checked) return;
+  button.disabled = true;
+  consent.disabled = true;
+  try {
+    const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}/faults`, {
+      method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'runtime_crash' }),
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    if (status) status.textContent = '試験要求を受け付けました。次の処理開始時に適用されます。実行状態が FAILED になることを確認してください。';
+  } catch {
+    if (status) status.textContent = '試験要求を確認できませんでした。実行終了、要求済み、または通信エラーの可能性があります。状態を更新してください。';
+    consent.disabled = false;
+    button.disabled = false;
+  }
+}

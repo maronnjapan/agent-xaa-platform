@@ -55,6 +55,7 @@ describe('the reasoning loop', () => {
     await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
     const state = await documents.get('agents', `${AGENT_ID}__state`);
     expect(state).toMatchObject({ agent_status: 'ACTIVE' });
+    expect((state?.task_context as Record<string, unknown>).task_id).toBeUndefined();
     expect(JSON.stringify(state)).not.toMatch(/eyJ[A-Za-z0-9_-]{4,}\./);
     // Only the projection reaches the conversation, never the raw body.
     expect(JSON.stringify(state)).not.toContain('"secret"');
@@ -195,5 +196,46 @@ describe('the drained activity queue', () => {
   it('starts empty for each spec', () => {
     resetActivityPublisherForTesting();
     expect(drainActivityQueueForTesting()).toEqual([]);
+  });
+});
+
+describe('runtime failure exercises', () => {
+  it('consumes a typed fault once, ends the execution, and throws before calling the model', async () => {
+    const h = await harness({ steps: [] });
+    await h.documents.set('agent_instructions', 'fault-1', {
+      agent_id: AGENT_ID, text: 'failure exercise', created_at: new Date().toISOString(), applied_at: null,
+      fault: { kind: 'runtime_crash', task_id: h.context.taskId },
+    });
+    let called = false;
+    const vertex = { generateJson: async <T>() => { called = true; return { done: true } as T; } };
+    await expect(runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex }))
+      .rejects.toThrow('injected_runtime_crash');
+    expect(called).toBe(false);
+    // The execution is over and says why. `agent_status` stays the Lifecycle state
+    // (docs 07 §2), which the Runtime does not own and a crash does not change; the
+    // status endpoint reads the failure out of `execution_state` instead.
+    expect(await h.documents.get('agents', `${AGENT_ID}__state`)).toMatchObject({
+      agent_status: 'ACTIVE',
+      task_context: { agent_id: AGENT_ID },
+      execution_state: { failure: 'injected_runtime_crash' },
+    });
+    const state = await h.documents.get<{ task_context: Record<string, unknown> }>('agents', `${AGENT_ID}__state`);
+    expect(state!.task_context).not.toHaveProperty('task_id');
+    expect(await h.store.readPendingInstructions(new Date().toISOString())).toEqual([]);
+  });
+  it('does not apply a stale fault to a different task or interpret instruction text as a fault', async () => {
+    const h = await harness({ steps: [] });
+    await h.documents.set('agent_instructions', 'stale', {
+      agent_id: AGENT_ID, body: 'test', created_at: '2026-01-01T00:00:00Z', applied_at: null,
+      fault: { kind: 'runtime_crash', task_id: 'different-task' },
+    });
+    await h.documents.set('agent_instructions', 'normal', {
+      agent_id: AGENT_ID, text: 'runtime_crash', created_at: '2026-01-01T00:00:01Z', applied_at: null,
+    });
+    let prompt = '';
+    const vertex = { generateJson: async <T>(input: { prompt: string }) => { prompt = input.prompt; return { done: true } as T; } };
+    expect((await runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex })).stoppedBy).toBe('done');
+    expect(prompt).toContain('runtime_crash');
+    expect(prompt).not.toContain('different-task');
   });
 });

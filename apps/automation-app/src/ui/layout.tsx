@@ -26,6 +26,7 @@ export function Layout(props: {
         <nav class="app-nav">
           <a href="/">自動化をつくる</a>
           <a href="/activity">タイムライン</a>
+          <a href="/security">ログ分析</a>
           <a href="/guide">使い方</a>
         </nav>
         {props.children}

@@ -19,7 +19,11 @@
 
 .replay-canvas {
   width: 100%;
+  /* The boxes are placed at written-down coordinates (see `nodes.ts`), so past the
+     diagram's own width the picture gains empty space rather than detail. */
+  max-width: 720px;
   height: auto;
+  display: block;
 }
 
 .replay-node rect {

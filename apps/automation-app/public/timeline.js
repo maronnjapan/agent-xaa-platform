@@ -37,6 +37,7 @@ var NODE_HALF_HEIGHT = 22;
 
 // src/ui/replay/emphasis.ts
 function emphasisClass(outcome, phase) {
+  if (outcome === "failed") return "ev-failed";
   if (outcome === "blocked") return phase === "security" ? "ev-blocked-security" : "ev-blocked-tool";
   if (outcome === "success") return "ev-success";
   return "ev-info";
@@ -170,21 +171,65 @@ function wireDetailToggles(root) {
 
 // client/src/timeline.ts
 function start(root = document) {
-  const load = async () => {
-    const response = await fetch("/api/activity/tasks", { credentials: "same-origin" });
-    if (!response.ok) return;
-    const body = await response.json();
-    for (const task of body.tasks) {
-      const canvas = root.querySelector(`.replay[data-task-id="${task.task_id}"]`);
-      if (canvas && Array.isArray(task.events)) {
-        canvas.addEventListener("click", () => playReplay(canvas, task.events));
+  let tasks = [];
+  let cancel;
+  const status = root.querySelector("[data-timeline-status]");
+  const inspectors = Array.from(root.querySelectorAll("[data-inspector-task]"));
+  const buttons = Array.from(root.querySelectorAll("[data-task-button]"));
+  const play = (panel) => {
+    const task = tasks.find((item) => item.task_id === panel.getAttribute("data-inspector-task") && (item.agent_id ?? "") === panel.getAttribute("data-agent-id"));
+    const canvas = panel.querySelector(".replay");
+    if (!task?.events || !canvas) {
+      if (status) status.textContent = "\u518D\u751F\u30C7\u30FC\u30BF\u3092\u53D6\u5F97\u3067\u304D\u3066\u3044\u307E\u305B\u3093\u3002\u66F4\u65B0\u3057\u3066\u518D\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002";
+      return;
+    }
+    cancel?.();
+    canvas.querySelector("[data-arrows]")?.replaceChildren();
+    canvas.querySelector("[data-messages]")?.replaceChildren();
+    const banner = canvas.querySelector("[data-banner]");
+    if (banner) banner.textContent = "";
+    cancel = playReplay(canvas, task.events);
+  };
+  for (const button of buttons) button.addEventListener("click", () => {
+    cancel?.();
+    for (const panel of inspectors) {
+      const selected = panel.getAttribute("data-inspector-task") === button.getAttribute("data-task-id") && panel.getAttribute("data-agent-id") === button.getAttribute("data-agent-id");
+      panel.hidden = !selected;
+      if (selected) {
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }
-    wireDetailToggles(root);
-  };
-  void load();
-  root.querySelector('[data-action="refresh"]')?.addEventListener("click", () => {
-    void load();
+    for (const item of buttons) item.setAttribute("aria-expanded", String(item === button));
+  });
+  for (const panel of inspectors) panel.querySelector('[data-action="play-replay"]')?.addEventListener("click", () => play(panel));
+  wireDetailToggles(root);
+  void (async () => {
+    try {
+      const response = await fetch("/api/activity/tasks", { credentials: "same-origin" });
+      if (!response.ok) throw new Error(String(response.status));
+      const body = await response.json();
+      tasks = body.tasks;
+    } catch {
+      if (status) status.textContent = "\u518D\u751F\u30C7\u30FC\u30BF\u306E\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u66F4\u65B0\u3057\u3066\u518D\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002";
+    }
+  })();
+  root.querySelector('[data-action="refresh"]')?.addEventListener("click", () => root.location.reload());
+  root.querySelector('[data-filter="outcome"]')?.addEventListener("change", (event) => {
+    const value = event.target.value;
+    let shown = 0;
+    for (const button of buttons) {
+      const match = value === "all" || button.getAttribute("data-status") === value || button.getAttribute("data-outcome") === value;
+      const row = button.closest(".task-row");
+      if (row) row.hidden = !match;
+      if (match) shown += 1;
+    }
+    for (const group of Array.from(root.querySelectorAll(".agent-group"))) {
+      group.hidden = !group.querySelector(".task-row:not([hidden])");
+    }
+    for (const panel of inspectors) panel.hidden = true;
+    for (const button of buttons) button.setAttribute("aria-expanded", "false");
+    cancel?.();
+    if (status) status.textContent = `${shown} \u4EF6\u3092\u8868\u793A`;
   });
 }
 if (typeof document !== "undefined") start();

@@ -5,6 +5,7 @@ export interface AppliedInstruction {
   source: 'instruction';
   instruction_id: string;
   body: string;
+  fault?: RuntimeInstruction['fault'];
 }
 
 /**
@@ -26,5 +27,6 @@ export async function readPendingInstructions(
     source: 'instruction',
     instruction_id: instruction.instruction_id,
     body: instruction.body,
+    ...(instruction.fault ? { fault: instruction.fault } : {}),
   }));
 }

@@ -47,7 +47,7 @@ describe('the timeline list', () => {
     const html = await render(TimelinePage({
       tasks: await readTimeline({ documents: harness.documents, humanSubject: 'testuser' }),
     }));
-    const groups = [...html.matchAll(/data-agent-id="([^"]*)"/g)].map((match) => match[1]);
+    const groups = [...html.matchAll(/class="agent-group" data-agent-id="([^"]*)"/g)].map((match) => match[1]);
     expect(groups).toEqual([agentOne, agentTwo]);
     // Within each agent's group: provisioning, then the numbered tasks in the order
     // they finished, then lifecycle.

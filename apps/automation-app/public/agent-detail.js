@@ -1,3 +1,39 @@
+// client/src/monitor.ts
+function startMonitor(root, url, selector) {
+  let busy = false;
+  const refresh = async () => {
+    if (busy) return;
+    busy = true;
+    const status = root.querySelector("[data-monitor-status]");
+    try {
+      const response = await fetch(url, { credentials: "same-origin", signal: AbortSignal.timeout(1e4) });
+      if (!response.ok) throw new Error(String(response.status));
+      const fragment = new DOMParser().parseFromString(await response.text(), "text/html").querySelector(selector);
+      const current = root.querySelector(selector);
+      let deferred = false;
+      if (fragment && current) {
+        deferred = Boolean(current.querySelector("details[open]")) || current.contains(root.activeElement);
+        if (!deferred) current.replaceWith(fragment);
+      }
+      if (status) status.textContent = `\u53D6\u5F97\u6642\u523B ${(/* @__PURE__ */ new Date()).toLocaleTimeString("ja-JP")} \xB7 ${deferred ? "\u8A73\u7D30\u3092\u95B2\u89A7\u4E2D\u306E\u305F\u3081\u8868\u793A\u66F4\u65B0\u3092\u4FDD\u7559\u3057\u3066\u3044\u307E\u3059" : "\u8868\u793A\u3092\u66F4\u65B0\u3057\u307E\u3057\u305F"}`;
+    } catch {
+      if (status) status.textContent = "\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u8868\u793A\u306F\u524D\u56DE\u306E\u53D6\u5F97\u7D50\u679C\u3067\u3059\u3002";
+    } finally {
+      busy = false;
+    }
+  };
+  root.querySelector('[data-action="monitor-refresh"]')?.addEventListener("click", () => {
+    void refresh();
+  });
+  const poll = () => {
+    setTimeout(() => {
+      if (root.visibilityState !== "hidden" && root.querySelector("[data-monitor-auto]")?.checked) void refresh();
+      poll();
+    }, 5e3);
+  };
+  poll();
+}
+
 // client/src/messages.ts
 var MESSAGES = {
   work_definition_not_confirmed: "\u5148\u306B\u4F5C\u696D\u5185\u5BB9\u3092\u78BA\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
@@ -19,14 +55,27 @@ function failureMessage(status, body) {
 
 // client/src/agent-detail.ts
 function start(root = document, reload = () => root.location.reload()) {
+  const agentId = root.querySelector("[data-agent-id]")?.getAttribute("data-agent-id");
+  if (agentId) startMonitor(root, `/api/agents/${encodeURIComponent(agentId)}/status-view`, '[data-section="status"]');
+  const fault = root.querySelector('[data-action="inject-fault"]');
+  const consent = root.querySelector("[data-fault-consent]");
+  consent?.addEventListener("change", () => {
+    if (fault) fault.disabled = !consent.checked;
+  });
+  fault?.addEventListener("click", () => {
+    void injectFault(root, fault);
+  });
   const form = root.querySelector('[data-form="instruction"]');
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    void instruct(root, form);
+    void instruct(root, form).catch(() => report(root, "\u901A\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u6307\u793A\u306E\u53CD\u6620\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", "error"));
   });
   const stop = root.querySelector('button[data-action="stop"]');
   stop?.addEventListener("click", () => {
-    void halt(root, stop, reload);
+    void halt(root, stop, reload).catch(() => {
+      stop.disabled = false;
+      report(root, "\u901A\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5B9F\u884C\u72B6\u6CC1\u3092\u66F4\u65B0\u3057\u3066\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", "error");
+    });
   });
 }
 async function instruct(root, form) {
@@ -67,6 +116,28 @@ function report(root, message, state) {
   field.textContent = message;
 }
 if (typeof document !== "undefined") start();
+async function injectFault(root, button) {
+  const agentId = button.getAttribute("data-agent-id");
+  const consent = root.querySelector("[data-fault-consent]");
+  const status = root.querySelector("[data-fault-status]");
+  if (!agentId || !consent?.checked) return;
+  button.disabled = true;
+  consent.disabled = true;
+  try {
+    const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}/faults`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "runtime_crash" })
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    if (status) status.textContent = "\u8A66\u9A13\u8981\u6C42\u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002\u6B21\u306E\u51E6\u7406\u958B\u59CB\u6642\u306B\u9069\u7528\u3055\u308C\u307E\u3059\u3002\u5B9F\u884C\u72B6\u614B\u304C FAILED \u306B\u306A\u308B\u3053\u3068\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+  } catch {
+    if (status) status.textContent = "\u8A66\u9A13\u8981\u6C42\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5B9F\u884C\u7D42\u4E86\u3001\u8981\u6C42\u6E08\u307F\u3001\u307E\u305F\u306F\u901A\u4FE1\u30A8\u30E9\u30FC\u306E\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\u3002\u72B6\u614B\u3092\u66F4\u65B0\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+    consent.disabled = false;
+    button.disabled = false;
+  }
+}
 export {
   start
 };

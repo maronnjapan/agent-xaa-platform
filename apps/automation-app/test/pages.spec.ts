@@ -100,7 +100,7 @@ describe('the agent detail page', () => {
 
     // The snapshot the panel shows comes from the checkpoint, not from the events.
     const statusSection = html.slice(html.indexOf('data-section="status"'), html.indexOf('data-section="timeline-link"'));
-    expect(statusSection).toContain('<dd data-field="agent_status">ACTIVE</dd>');
+    expect(statusSection).toContain('data-field="agent_status" data-state="ACTIVE">ACTIVE</span>');
     expect(statusSection).toContain('task-1');
     // And the timeline side carries no row at all, so it cannot carry a running one.
     expect(html).not.toContain('data-status="running"');

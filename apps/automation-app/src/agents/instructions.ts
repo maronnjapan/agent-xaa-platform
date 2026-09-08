@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { FaultKind, InstructionFault } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 
 export class AgentNotActive extends Error { readonly code = 'agent_not_active'; }
@@ -10,6 +11,7 @@ export interface StoredInstruction {
   created_at: string;
   created_by: string;
   applied_at: string | null;
+  fault?: InstructionFault;
 }
 
 /**
@@ -30,6 +32,7 @@ export async function addInstruction(input: {
   text: string;
   createdBy: string;
   now?: number;
+  fault?: FaultKind;
 }): Promise<StoredInstruction> {
   const now = new Date(input.now ?? Date.now()).toISOString();
   const instruction: StoredInstruction = {
@@ -43,11 +46,22 @@ export async function addInstruction(input: {
     applied_at: null,
   };
   return input.documents.transaction(async (transaction) => {
-    const state = await transaction.get<{ agent_status?: string }>('agents', `${input.agentId}__state`);
-    const meta = await transaction.get<{ status?: string }>('agents', `${input.agentId}__meta`);
-    const status = state?.agent_status ?? meta?.status;
-    if (status !== 'ACTIVE') throw new AgentNotActive();
+    const state = await transaction.get<{ agent_status?: string; task_context?: { task_id?: string } }>('agents', `${input.agentId}__state`);
+    const meta = await transaction.get<{ status?: string; expires_at?: string }>('agents', `${input.agentId}__meta`);
+    const status = meta?.status && meta.status !== 'ACTIVE' ? meta.status : state?.agent_status ?? meta?.status;
+    if (status !== 'ACTIVE' || (meta?.expires_at && Date.parse(meta.expires_at) <= Date.parse(now))) throw new AgentNotActive();
+    if (input.fault) {
+      const taskId = state?.task_context?.task_id;
+      if (!taskId) throw new AgentNotActive();
+      const pending = await transaction.queryEqual<StoredInstruction>('agent_instructions', [
+        ['agent_id', input.agentId], ['applied_at', null],
+      ]);
+      if (pending.some((row) => row.data.fault)) throw new FaultAlreadyPending();
+      instruction.fault = { kind: input.fault, task_id: taskId };
+    }
     transaction.set('agent_instructions', instruction.instruction_id, instruction as unknown as Record<string, unknown>);
     return instruction;
   });
 }
+
+export class FaultAlreadyPending extends Error { readonly code = 'fault_already_pending'; }

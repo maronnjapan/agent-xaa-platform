@@ -19,6 +19,7 @@ export * from './grant-types.js';
 export * from './http-client.js';
 export * from './document.js';
 export * from './payment.js';
+export * from './fault-injection.js';
 export * from './forbidden-fields.js';
 export * from './identifiers.js';
 export * from './isolation.js';
@@ -37,3 +38,5 @@ export * from './service-ids.js';
 export * from './task-boundary.js';
 export * from './token-catalog.js';
 export * from './work-definition.js';
+
+export * from './security-monitoring.js';

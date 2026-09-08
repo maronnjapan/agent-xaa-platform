@@ -65,6 +65,7 @@ locals {
       AUTOMATION_APP_URL         = local.run_url["automation-app"]
     }
     "automation-app" = {
+      ENABLE_FAULT_INJECTION     = "true"
       ISSUER                     = local.platform_endpoints.issuer
       PUBLIC_BASE_URL            = local.run_url["automation-app"]
       AUTHORIZATION_PLATFORM_URL = local.run_url["authorization"]

@@ -1,4 +1,5 @@
 import { assertAgentOwnership, type DocumentStore } from '@xaa/gcp';
+import type { InstructionFault } from '@xaa/contracts';
 
 export class FirestorePathDenied extends Error {
   readonly code = 'firestore_path_denied';
@@ -10,6 +11,9 @@ export class FirestorePathDenied extends Error {
 export interface RuntimeInstruction {
   instruction_id: string;
   body: string;
+  /** The Automation App's own name for `body`; `readInstructions` maps it across. */
+  text?: string;
+  fault?: InstructionFault;
   created_at: string;
   applied_at: string | null;
 }
@@ -74,7 +78,7 @@ export function createRuntimeStore(input: { documents: DocumentStore; agentId: s
         ]);
         const ordered = [...pending].sort((left, right) => left.data.created_at.localeCompare(right.data.created_at));
         for (const row of ordered) tx.update(INSTRUCTIONS, row.id, { applied_at: now });
-        return ordered.map((row) => ({ ...row.data, instruction_id: row.id }));
+        return ordered.map((row) => ({ ...row.data, body: row.data.text ?? row.data.body, instruction_id: row.id }));
       });
     },
     async writeState(state) {

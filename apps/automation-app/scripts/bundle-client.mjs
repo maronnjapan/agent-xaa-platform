@@ -18,6 +18,7 @@ await build({
   entryPoints: [
     from('client/src/agent-detail.ts'),
     from('client/src/home.ts'),
+    from('client/src/security.ts'),
     from('client/src/timeline.ts'),
     from('client/src/work-definition.ts'),
   ],

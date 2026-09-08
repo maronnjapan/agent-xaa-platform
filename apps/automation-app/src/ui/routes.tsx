@@ -13,6 +13,8 @@ import { Layout, renderDocument } from './layout.js';
 import { GuidePage } from './pages/guide.js';
 import { HomePage, type HomeAgent, type HomeWorkItem } from './pages/home.js';
 import { TimelinePage } from './pages/timeline.js';
+import { readAnalysisRuns } from '../security/query.js';
+import { SecurityPage } from './pages/security.js';
 import { AgentDetailPage } from './pages/agent-detail.js';
 import { WorkDefinitionNewPage } from './pages/work-definition-new.js';
 
@@ -58,7 +60,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   const agentDefinitions = createAgentDefinitionStore(deps.documents);
 
   for (const path of [
-    '/agent-detail.js', '/home.js', '/timeline.js', '/work-definition.js',
+    '/agent-detail.js', '/home.js', '/timeline.js', '/work-definition.js', '/security.js',
     '/styles/app.css', '/styles/emphasis.css', '/styles/replay.css',
   ]) {
     app.get(path, (context) => {
@@ -117,6 +119,12 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
       </Layout>,
     )));
 
+  app.get('/security', asUser, async (context) => context.html(await renderDocument(
+    <Layout title="ログ分析モニター" styles={STYLES} script="/security.js">
+      <SecurityPage runs={await readAnalysisRuns(deps.documents, context.get('humanSubject'))} now={now()} />
+    </Layout>,
+  )));
+
   app.get('/activity', asUser, async (context) => {
     const agentId = context.req.query('agent_id');
     const tasks = await readTimeline({ documents: deps.documents, humanSubject: context.get('humanSubject') });
@@ -137,7 +145,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
     return context.html(await renderDocument(
       <Layout title="Agent の状況" styles={STYLES} script="/agent-detail.js">
-        <AgentDetailPage agentId={agentId} status={status} />
+        <AgentDetailPage agentId={agentId} status={status} faultInjectionEnabled={deps.config.faultInjectionEnabled === true} />
       </Layout>,
     ));
   });

@@ -1,14 +1,17 @@
 import { Hono } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
-import { compile } from '@xaa/contracts';
+import { compile, isFaultKind } from '@xaa/contracts';
 import type { AutomationAppConfig } from './config.js';
 import { createSessionStore, type SessionStore } from './auth/session-store.js';
 import { requireUser, type UserVariables } from './auth/require-user.js';
 import { createControlPlaneClient } from './http/control-plane-client.js';
 import { requireAgentOwner, type AgentOwnerVariables } from './agents/require-owner.js';
+import { readAnalysisRuns } from './security/query.js';
+import { AnalysisResults } from './ui/pages/security.js';
+import { StatusPanel } from './ui/components/status-panel.js';
 import { readAgentStatus } from './agents/status.js';
 import { stopAgent } from './agents/stop.js';
-import { addInstruction, AgentNotActive } from './agents/instructions.js';
+import { addInstruction, AgentNotActive, FaultAlreadyPending } from './agents/instructions.js';
 import { logAgentOperation } from './audit/logger.js';
 import { createWorkDefinitionStore } from './work-definition/store.js';
 import { confirm } from './work-definition/model.js';
@@ -384,10 +387,39 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     documents: deps.documents, ...(deps.auditWrite ? { write: deps.auditWrite } : {}), now,
   }));
 
+  app.get('/api/agents/:agent_id/status-view', async (context) => {
+    const status = await readAgentStatus({ documents: deps.documents, agentId: context.get('agentId'), now: now() });
+    audit('status_read', context.get('agentId'), context.get('humanSubject'));
+    return context.html(String(await StatusPanel({ status })));
+  });
+
   app.get('/api/agents/:agent_id/status', async (context) => {
     const status = await readAgentStatus({ documents: deps.documents, agentId: context.get('agentId'), now: now() });
     audit('status_read', context.get('agentId'), context.get('humanSubject'));
     return context.json(status, 200);
+  });
+
+  app.post('/api/agents/:agent_id/faults', async (context) => {
+    if (!deps.config.faultInjectionEnabled) return context.json({ error: 'fault_injection_disabled' }, 404);
+    const body = await context.req.json().catch(() => null) as Record<string, unknown> | null;
+    // Exactly one key, from the one list. A `task_id` alongside it would be a caller
+    // choosing which execution to break; the task comes from the checkpoint instead.
+    if (!body || Object.keys(body).length !== 1 || !isFaultKind(body.kind)) {
+      return context.json({ error: 'invalid_request' }, 400);
+    }
+    try {
+      const instruction = await addInstruction({
+        documents: deps.documents, agentId: context.get('agentId'), createdBy: context.get('humanSubject'),
+        text: '異常系試験: Runtime の実行を失敗させる', fault: body.kind, now: now(),
+      });
+      logAgentOperation({ operation: 'fault_injection', agent_id: context.get('agentId'), actor_type: 'human',
+        actor_id: context.get('humanSubject'), on_behalf_of: context.get('humanSubject'),
+        occurred_at: new Date(now()).toISOString(), result: 'success' }, deps.auditWrite);
+      return context.json({ status: 'queued', instruction_id: instruction.instruction_id }, 202);
+    } catch (error) {
+      if (error instanceof AgentNotActive || error instanceof FaultAlreadyPending) return context.json({ error: error.code }, 409);
+      throw error;
+    }
   });
 
   app.post('/api/agents/:agent_id/stop', async (context) => {
@@ -433,6 +465,13 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       throw error;
     }
   });
+
+  app.get('/api/security/analysis', async (context) => context.json({
+    runs: await readAnalysisRuns(deps.documents, context.get('humanSubject')),
+  }));
+  app.get('/api/security/analysis-view', async (context) => context.html(String(await AnalysisResults({
+    runs: await readAnalysisRuns(deps.documents, context.get('humanSubject')), now: now(),
+  }))));
 
   app.get('/api/activity/tasks', async (context) => {
     // A `?human_subject=` in the query is read by nothing here. It is not an error

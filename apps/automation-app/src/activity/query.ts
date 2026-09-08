@@ -61,11 +61,13 @@ export async function readTimeline(input: {
   for (const event of all) {
     if (input.taskId !== undefined && event.task_id !== input.taskId) continue;
     if (classifyTaskId(event.task_id) === null) continue;
-    byTask.set(event.task_id, [...(byTask.get(event.task_id) ?? []), event]);
+    const key = JSON.stringify([event.agent_id, event.task_id]);
+    byTask.set(key, [...(byTask.get(key) ?? []), event]);
   }
 
   const tasks: TimelineTask[] = [];
-  for (const [taskId, events] of byTask) {
+  for (const events of byTask.values()) {
+    const taskId = events[0]!.task_id;
     const ordered = orderEvents(events);
     const terminal = ordered.find((event) => isTerminalEvent(taskId, eventType(event)));
     const agentId = ordered.find((event) => event.agent_id !== null)?.agent_id ?? null;
@@ -76,7 +78,7 @@ export async function readTimeline(input: {
     }
     tasks.push({
       task_id: taskId, agent_id: agentId, purpose, status: 'completed',
-      terminal_outcome: terminal.outcome, completed_at: terminal.occurred_at, events: ordered,
+      terminal_outcome: eventType(terminal) === 'TASK_FAILED' ? 'failed' : terminal.outcome, completed_at: terminal.occurred_at, events: ordered,
     });
   }
   return sortForDisplay(tasks);

@@ -1,5 +1,5 @@
 export const AUDIT_OPERATIONS = ['status_read', 'stop', 'add_instruction'] as const;
-export type AuditOperation = (typeof AUDIT_OPERATIONS)[number];
+export type AuditOperation = (typeof AUDIT_OPERATIONS)[number] | 'fault_injection';
 
 export type AuditResult = 'success' | 'denied';
 

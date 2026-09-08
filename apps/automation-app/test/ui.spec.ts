@@ -154,20 +154,21 @@ describe('emphasis', () => {
     expect(emphasisClass('blocked', 'security')).toBe('ev-blocked-security');
     expect(emphasisClass('blocked', 'tool_call')).toBe('ev-blocked-tool');
     expect(emphasisClass('blocked', 'security')).not.toBe(emphasisClass('blocked', 'tool_call'));
-    expect(new Set(EMPHASIS_CLASSES).size).toBe(4);
+    expect(new Set(EMPHASIS_CLASSES).size).toBe(5);
   });
 
-  it('gives all four a text label, not only a colour', async () => {
+  it('gives every kind a text label, not only a colour', async () => {
     const rendered = await Promise.all([
       render(OutcomeBadge({ outcome: 'info', phase: 'login' })),
       render(OutcomeBadge({ outcome: 'success', phase: 'tool_call' })),
       render(OutcomeBadge({ outcome: 'blocked', phase: 'tool_call' })),
       render(OutcomeBadge({ outcome: 'blocked', phase: 'security' })),
+      render(OutcomeBadge({ outcome: 'failed', phase: 'tool_call' })),
     ]);
     for (const [index, html] of rendered.entries()) {
       expect(html).toContain(EMPHASIS_LABELS[EMPHASIS_CLASSES[index]!]);
     }
-    expect(new Set(rendered.map((html) => /data-emphasis="([^"]+)"/.exec(html)![1]))).toHaveLength(4);
+    expect(new Set(rendered.map((html) => /data-emphasis="([^"]+)"/.exec(html)![1]))).toHaveLength(5);
   });
 
   it('puts the warning icon on the security badge only', async () => {
@@ -230,7 +231,7 @@ describe('the task list', () => {
     }));
     // Row, canvas and detail summary: three places, none of them behind a disclosure
     // that starts closed.
-    expect(simulated.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(3);
+    expect(simulated.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(4);
     expect(simulated).toContain('simulated-row');
     expect(simulated).toContain('simulated-canvas');
     // With every disclosure shut, the label is still on the page twice: once on the row

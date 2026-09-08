@@ -1,5 +1,6 @@
 locals {
   firestore_indexes = {
+    security_analysis = { query_scope = "COLLECTION", fields = [["human_subject", "ASCENDING"], ["started_at", "DESCENDING"]] }
     human_permissions = { query_scope = "COLLECTION", fields = [["human_subject", "ASCENDING"], ["capability_id", "ASCENDING"]] }
     catalog_tools     = { query_scope = "COLLECTION", fields = [["connector_id", "ASCENDING"], ["required_capability", "ASCENDING"]] }
     documents         = { query_scope = "COLLECTION", fields = [["owner_subject", "ASCENDING"], ["type", "ASCENDING"], ["occurred_at", "DESCENDING"]] }

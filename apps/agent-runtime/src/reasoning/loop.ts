@@ -1,3 +1,4 @@
+import { FAULT_FAILURE } from '@xaa/contracts';
 import { generateJson, type VertexClient } from '@xaa/vertex';
 import type { LogContext, Logger } from '@xaa/logging';
 import type { ExecutionContext } from '../context/execution-context.js';
@@ -63,8 +64,28 @@ export async function runReasoningLoop(input: {
   let executionState: Record<string, unknown> = {};
   let stoppedBy: LoopResult['stoppedBy'] = 'reasoning_step_limit';
 
+  await checkpoint();
   for (let step = 0; step < maxSteps; step += 1) {
     for (const instruction of await readPendingInstructions(input.context.store, new Date(now()).toISOString())) {
+      // A fault request is an exercise, not a message to the model: it never joins the
+      // conversation, and one addressed to another execution is left for that one to
+      // find rather than applied here.
+      if (instruction.fault) {
+        if (instruction.fault.task_id === input.context.taskId) {
+          const failure = FAULT_FAILURE[instruction.fault.kind];
+          executionState = { ...executionState, failure };
+          // The closing checkpoint an ordinary end writes, and for the same reason:
+          // this execution is over. `agent_status` stays the Lifecycle state (docs 07
+          // §2), which the Runtime does not own — what failed is the execution, and
+          // `execution_state.failure` is where the status endpoint reads that from.
+          await checkpoint(true);
+          input.logger.error('fault_injected', input.logContext, {
+            fault: instruction.fault.kind, instruction_id: instruction.instruction_id,
+          });
+          throw new Error(failure);
+        }
+        continue;
+      }
       conversation.push(instruction);
     }
 
@@ -103,11 +124,12 @@ export async function runReasoningLoop(input: {
     if (result.outcome === 'failed' && result.error_code === 'agent_expired') { stoppedBy = 'agent_expired'; break; }
   }
 
+  await checkpoint(true);
   return { results, stoppedBy };
 
-  async function checkpoint(): Promise<void> {
+  async function checkpoint(finished = false): Promise<void> {
     const state: Checkpoint = {
-      task_context: { task_id: input.context.taskId, agent_id: input.context.agentId },
+      task_context: { ...(finished ? {} : { task_id: input.context.taskId }), agent_id: input.context.agentId },
       conversation_context: conversation,
       execution_state: executionState,
       pending_tool_calls: results,

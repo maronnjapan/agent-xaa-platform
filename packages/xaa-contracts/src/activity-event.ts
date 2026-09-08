@@ -6,16 +6,14 @@ import { compile } from './schema/validator.js';
  * about their agent. It is deliberately separate from the security audit stream
  * (RULE-55) and from the structured logs — three channels, three audiences.
  *
- * `outcome` stays at three values on purpose. A timeline needs to say only whether
- * something happened, worked, or was stopped; the precise event name lives in
- * `detail.event_type`, where the replay reads it. Adding `error` or `denied` here
- * would push classification logic into every renderer.
+ * Failures have their own outcome so an execution error is distinguishable from
+ * an informational event without every renderer interpreting event names.
  */
 export const ACTIVITY_EVENT_PHASES = [
   'login', 'work_definition', 'authorization', 'provisioning', 'tool_call', 'security', 'lifecycle',
 ] as const;
 
-export const ACTIVITY_EVENT_OUTCOMES = ['info', 'success', 'blocked'] as const;
+export const ACTIVITY_EVENT_OUTCOMES = ['info', 'success', 'blocked', 'failed'] as const;
 
 export const activityEventSchema = {
   $id: 'activity-event',

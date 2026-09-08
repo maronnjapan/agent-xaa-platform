@@ -15,7 +15,7 @@ export const STOP_NOTE = '止めた Agent は元に戻せません。同じ作�
  */
 export function AgentControls(props: { agentId: string }): Element {
   return (
-    <section class="agent-controls" data-section="controls" data-agent-id={props.agentId}>
+    <section class="card agent-controls" data-section="controls" data-agent-id={props.agentId}>
       <h2>操作</h2>
       <form data-form="instruction" data-agent-id={props.agentId}>
         <label>

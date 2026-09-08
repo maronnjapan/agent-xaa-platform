@@ -16,7 +16,7 @@ export interface DocumentStore {
   delete(collection: string, id: string): Promise<void>;
   /** Half-open range on one field: `gte <= field < lt`. */
   queryRange<T = Record<string, unknown>>(collection: string, field: string, gte: string, lt: string): Promise<Array<{ id: string; data: T }>>;
-  queryEqual<T = Record<string, unknown>>(collection: string, filters: Array<[string, unknown]>, limit?: number): Promise<Array<{ id: string; data: T }>>;
+  queryEqual<T = Record<string, unknown>>(collection: string, filters: Array<[string, unknown]>, limit?: number, order?: { field: string; direction: 'asc' | 'desc' }): Promise<Array<{ id: string; data: T }>>;
   listAll<T = Record<string, unknown>>(collection: string): Promise<Array<{ id: string; data: T }>>;
   updateMany(collection: string, ids: readonly string[], patch: Record<string, unknown>): Promise<number>;
   /** Runs `body` inside a Firestore transaction; reads inside it see a consistent snapshot. */
@@ -69,9 +69,10 @@ export function createFirestoreDocumentStore(firestore: Firestore, app: string):
       const snapshot = await guardCollection('read', collection).where(field, '>=', gte).where(field, '<', lt).get();
       return snapshot.docs.map((document) => ({ id: document.id, data: document.data() as never }));
     },
-    async queryEqual(collection, filters, limit) {
+    async queryEqual(collection, filters, limit, order) {
       let query = guardCollection('read', collection) as FirebaseFirestore.Query;
       for (const [field, value] of filters) query = query.where(field, '==', value);
+      if (order) query = query.orderBy(order.field, order.direction);
       if (limit !== undefined) query = query.limit(limit);
       const snapshot = await query.get();
       return snapshot.docs.map((document) => ({ id: document.id, data: document.data() as never }));

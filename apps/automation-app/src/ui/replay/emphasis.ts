@@ -1,7 +1,8 @@
-export const EMPHASIS_CLASSES = ['ev-info', 'ev-success', 'ev-blocked-tool', 'ev-blocked-security'] as const;
+export const EMPHASIS_CLASSES = ['ev-info', 'ev-success', 'ev-blocked-tool', 'ev-blocked-security', 'ev-failed'] as const;
 export type EmphasisClass = (typeof EMPHASIS_CLASSES)[number];
 
 export const EMPHASIS_LABELS: Readonly<Record<EmphasisClass, string>> = {
+  'ev-failed': '失敗',
   'ev-info': '情報',
   'ev-success': '成功',
   'ev-blocked-tool': '遮断',
@@ -20,6 +21,7 @@ export const EMPHASIS_LABELS: Readonly<Record<EmphasisClass, string>> = {
  * the two fields the schema pins.
  */
 export function emphasisClass(outcome: string, phase: string): EmphasisClass {
+  if (outcome === 'failed') return 'ev-failed';
   if (outcome === 'blocked') return phase === 'security' ? 'ev-blocked-security' : 'ev-blocked-tool';
   if (outcome === 'success') return 'ev-success';
   return 'ev-info';

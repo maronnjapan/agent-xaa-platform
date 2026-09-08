@@ -25,6 +25,7 @@ const STYLE_TYPE = 'text/css; charset=utf-8';
  */
 export const STATIC_ASSETS: Readonly<Record<string, StaticAsset>> = {
   '/agent-detail.js': { contentType: SCRIPT_TYPE, files: ['public/agent-detail.js'] },
+  '/security.js': { contentType: SCRIPT_TYPE, files: ['public/security.js'] },
   '/home.js': { contentType: SCRIPT_TYPE, files: ['public/home.js'] },
   '/timeline.js': { contentType: SCRIPT_TYPE, files: ['public/timeline.js'] },
   '/work-definition.js': { contentType: SCRIPT_TYPE, files: ['public/work-definition.js'] },

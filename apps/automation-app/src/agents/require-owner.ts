@@ -12,6 +12,7 @@ const OPERATION_BY_METHOD: Record<string, AuditOperation> = {
 };
 
 function operationFor(method: string, path: string): AuditOperation {
+  if (path.endsWith('/faults')) return 'fault_injection';
   if (path.endsWith('/instructions')) return 'add_instruction';
   if (path.endsWith('/stop')) return 'stop';
   return OPERATION_BY_METHOD[method] ?? 'status_read';

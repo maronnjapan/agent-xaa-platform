@@ -1,6 +1,7 @@
 import type { RiskLevel } from '../correlate/finding.js';
 
-export const LEVEL_BOUNDARIES = { medium: 30, high: 60, critical: 80 } as const;
+import { LEVEL_BOUNDARIES } from '@xaa/contracts';
+export { LEVEL_BOUNDARIES };
 
 export class ScoreOutOfRange extends Error {
   constructor(readonly score: number) { super(`score out of range: ${score}`); }
