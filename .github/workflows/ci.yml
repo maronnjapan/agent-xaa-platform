@@ -120,7 +120,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The PNG is left out: it is rendered by cairosvg, which is optional, so its bytes
       # depend on whether the runner happens to have it.
-      - run: pnpm gen:diagrams && git diff --exit-code docs/diagrams/architecture.svg docs/diagrams/architecture.drawio
+      - run: pnpm gen:diagrams && git diff --exit-code docs/diagrams/architecture.drawio docs/diagrams/architecture.svg docs/diagrams/architecture-standard.svg docs/diagrams/architecture-full-isolation.svg
   # The strict variants open every path and grep every test name, so they need the
   # implementation to be complete. Required now that it is.
   docs-strict:

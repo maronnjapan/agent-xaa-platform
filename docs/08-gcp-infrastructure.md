@@ -4,7 +4,10 @@
 ![GCP実行基盤の全体構成図](./diagrams/architecture.png)
 
 図中の破線の枠はGCP ProjectとProject内の論理的なまとまりを、実線の箱はデプロイ単位のアプリを表す。
-編集用の元データは [diagrams/architecture.drawio](./diagrams/architecture.drawio) にある。
+矢印は呼び出す側から呼び出される側へ向き、応答は描かない。
+呼び出しの向きの正本は [§3](#3-アプリ間の呼び出し関係) であり、全体構成図は配置を優先するため §3 が挙げる呼び出しの一部を省いている。
+
+Isolation Levelごとの構成図、Mermaid版、凡例、編集用の元データは [diagrams/](./diagrams/README.md) にある。
 
 ## 1. GCP Projectと監査領域の構成
 

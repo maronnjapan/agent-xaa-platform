@@ -336,6 +336,13 @@ Security Profileに応じて、Agent OPとRuntimeをどこまで物理分離す�
 | Bridge Agent Binding | Agentごと | Agentごと（専用Connection） |
 | Network Policy | 共通 | 必要に応じて専用 |
 
+この表を図にしたものが [diagrams/](./diagrams/README.md) にある。
+
+| Level | 図 |
+|---|---|
+| `STANDARD` | [architecture-standard.png](./diagrams/architecture-standard.png) |
+| `FULL_ISOLATION` | [architecture-full-isolation.png](./diagrams/architecture-full-isolation.png) |
+
 いずれのLevelでも 1 Agent = 1 Cloud Run Job Execution であり、複数のAgentが1つのプロセスで動くことはない。
 共有されるのは「OPのプロセス」と「RuntimeのJob定義とGCP Service Account」であって、Agentの実行そのものや身元ではない。
 

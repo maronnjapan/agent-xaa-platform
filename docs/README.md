@@ -8,6 +8,9 @@ GCP へ配備せず手元のパソコン1台で基盤全体を動かす手順は
 既定では配備しない Google Bridge を有効にして通すまでの手順は[Google Bridge を試す](./google-bridge-setup.md)にある。
 review-markdown-cli で決めたタスクを ToDo として取り込む手順は[review-markdown-cli から ToDo を取り込む](./review-markdown-import.md)にある。
 
+構成図は [diagrams/](./diagrams/README.md) にまとめてある。
+全体構成に加えて、Isolation Level が `STANDARD` のときと `FULL_ISOLATION` のときの構成を1枚ずつ置き、同じ内容を Mermaid でも書いてある。
+
 ## 要約
 
 ユーザーがWeb画面上でAutomation Design AIと対話し、「何を自動化するか」をWork Definitionとして定義する。
