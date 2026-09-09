@@ -1,4 +1,4 @@
-import { RESOURCE_SCOPES, type CatalogTool } from '@xaa/contracts';
+import { isSecureOrLoopback, RESOURCE_SCOPES, type CatalogTool } from '@xaa/contracts';
 
 export interface XaaStaticConfig {
   allowed_audiences: string[];
@@ -18,7 +18,9 @@ export class InvalidXaaConfig extends Error {
  * agent's reach equal to its tool list rather than to its capability list.
  *
  * `resource` is an RFC 8707 absolute URI: https and no fragment. A fragment would
- * make byte-for-byte comparison at the Resource AS unreliable (DEC-ID-05).
+ * make byte-for-byte comparison at the Resource AS unreliable (DEC-ID-05). The one
+ * exception to `https` is a loopback literal, which is the whole of the platform
+ * running on one machine and is reachable from no other one (`isSecureOrLoopback`).
  */
 export function buildXaaConfig(tools: CatalogTool[]): XaaStaticConfig {
   const config: XaaStaticConfig = {
@@ -30,7 +32,7 @@ export function buildXaaConfig(tools: CatalogTool[]): XaaStaticConfig {
   for (const value of [...config.allowed_audiences, ...config.resources]) {
     let url: URL;
     try { url = new URL(value); } catch { throw new InvalidXaaConfig(`not a URI: ${value}`); }
-    if (url.protocol !== 'https:') throw new InvalidXaaConfig(`not https: ${value}`);
+    if (!isSecureOrLoopback(url)) throw new InvalidXaaConfig(`not https: ${value}`);
     if (url.hash !== '') throw new InvalidXaaConfig(`carries a fragment: ${value}`);
   }
   for (const scope of config.scopes) {

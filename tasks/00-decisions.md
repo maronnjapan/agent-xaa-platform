@@ -77,8 +77,16 @@ docs のルールから外れる判断には、外れたルール番号を「逸
 - DEC-APP-04 生成物は apps/<app>/src/oidc/ にコミットし、手編集は `// XAA-PATCH:<REQ-ID> begin` / `end` で囲む。無改変版を generated-baseline/<app>/ に置き、CI が固定バージョンの CLI で再生成してマーカー外の差分を検出する。
 - DEC-APP-05 スキーマは JSON Schema を単一の正とし、検証は Ajv(strict、additionalProperties:false)、TypeScript 型は json-schema-to-ts で導出する。
 - DEC-APP-06 Automation App の UI は React SPA にせず、Hono JSX の SSR と esbuild で束ねた vanilla TypeScript にする。タイムラインの再生は固定8ノードの静的 SVG に CSS アニメーションを重ね、1ステップ 800ms 固定にする。
+  - 改訂(2026-09-06)。**React にする。ただし SPA にはしない。** 画面は React コンポーネント1組で書き、サーバは `react-dom/server` で HTML を描き、ブラウザは同じ値から `hydrateRoot` で同じ木を描き直す。スクリプトが動かなくても記事は全部読める点は変わらず、押せるものだけが hydration で増える。束ねるのは esbuild のまま、出力は画面ごとではなく1本 `/app.js` にする（画面ごとに束ねると React が4回入る）。ページの入力値は `<script type="application/json" id="page-data">` に入れ、サーバとブラウザが同じ1つの値から描く。
+  - 動機は「アクティビティの表示で、それぞれのアプリが何をしているか分からない」「AI が何を考えてどう決めたのかが見えない」という指摘である。どちらも表示の状態を増やす話で、素の DOM 操作では「いま何手目か」がサーバ・図・一覧の3か所に分かれて持たれ、手で同期させるしかなかった。1手の状態を1か所に持てば、図と考えたことの枠と一覧が同じ値から描かれる。
+  - 依存に `react` / `react-dom` / `motion`(framer-motion) を加える。**グラフ描画ライブラリは引き続き入れない。** 8つの箱の座標は手で書いたままで、レイアウトエンジンに置かせるとイベントの集合が変わるたびに絵が動き、DEC-APP-06 の元の理由（同じ絵が同じ場所にあること）が崩れるからである。図の幾何（経路・迂回・止まる位置・文字の置き場）は DOM を読まない純関数に切り出し、テストはそれを直接呼ぶ。
+  - 再生の長さは 1ステップ 1800ms・動き 1200ms のまま（`src/ui/replay/config.ts`）。丸の移動は CSS の `offset-path` のままで、`motion` は考えたことの枠の出入りと進捗にだけ使う。
+  - 再改訂(2026-09-06)。**1ステップを 4500ms にする。動きは 1200ms のまま。** 1800ms では丸が着いた時点で添えた文をまだ読み終えておらず、次の手が上書きしていた。動きを長くするのではなく、動き終わった絵を止めておく時間を約3秒足す。上限は5秒とし、それを超えると4往復ある Tool 呼び出しが待ち時間になる（docs 11 §5.2）。
+  - 再改訂(2026-09-06)。**タイムラインの中を「動きを見る」と「やったこと」の2段にする。** Agent ごとの区切りは変えず、その中で再生をまとめて先に並べ、文章をそのあとに同じ順で並べる。Task ごとに交互に置くと、文章が数十行あるため同じ Agent の2つの再生が同時に画面へ入らなかった。1手の状態は再生側が持ち、対応する行の強調だけを文章側へ渡す（`components/run-replay.tsx`）。
+  - ブラウザ束ねの出力（`apps/automation-app/public/`）はコミットしない。React を含むと1回の UI 変更ごとに1MB の生成物が履歴に入るためで、代わりに束ねを読む検査（Firestore SDK 不在・常時接続不在）が「ファイルが無ければ失敗」に変わった。
 - DEC-APP-07 テストは3層。unit(vitest、GCP 依存なし)、integration(**全アプリを同一プロセス内の Hono として起動し `app.fetch(request)` を直接呼ぶ**。各アプリは `createApp(): Hono` を default export し、アプリ間呼び出しは packages/xaa-contracts の httpClient 経由で対向の app.fetch へ配線する)、e2e(Playwright。ブラウザが要るログイン / Consent / 承認 / タイムライン / デモのみ)。複数プロセスを起動するハーネスは作らない。
 - DEC-APP-08 外部依存は許可リストで固定する。hono / @hono/node-server / ajv / ajv-formats / json-schema-to-ts / yaml / @google-cloud/{firestore,kms,pubsub,secret-manager,storage,bigquery,run,vertexai} と maronn の core / experimental / cli。JWT 検証、JWS 署名、DPoP、JWK Thumbprint、base64url は自前実装する。
+  - 追補(2026-09-06、DEC-APP-06 の改訂に伴う)。Automation App の画面のために react / react-dom / motion を、そのテストのために happy-dom を加える。追加はこの3つ+1つだけで、グラフ描画・UI コンポーネント集・状態管理・データ取得のライブラリは入れない。許可リストの実体は `scripts/allowed-deps.json` であり、`pnpm check:deps` が全 package.json を照合する。
 - DEC-APP-09 差し替えはモード切替の環境変数で行う。SIGNER_MODE=local|kms、VERTEX_MODE=fake|live、PUBSUB_MODE=inproc|gcp、STORE_MODE=emulator|gcp。
 - DEC-APP-10 Vertex AI のモデル名をアプリにハードコードせず、変数 vertex_model(既定 gemini-2.5-flash)で渡す。
 

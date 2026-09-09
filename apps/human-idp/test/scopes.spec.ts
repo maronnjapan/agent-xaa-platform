@@ -35,4 +35,12 @@ describe('registered scopes', () => {
     expect(findUnregisteredScope('agent-platform', ['openid', 'offline_access'])).toBeUndefined();
     expect(findUnregisteredScope('automation-app', ['openid', 'offline_access'])).toBe('offline_access');
   });
+
+  it('gives the console a name and nothing to act with', () => {
+    expect(findUnregisteredScope('analysis-console', ['openid', 'profile'])).toBeUndefined();
+    // No operation scope and no refresh token: logging in there opens nothing.
+    for (const scope of ['offline_access', 'workdef:submit', 'agent:provision', 'agent:revoke', 'agent:operate']) {
+      expect(findUnregisteredScope('analysis-console', ['openid', scope])).toBe(scope);
+    }
+  });
 });

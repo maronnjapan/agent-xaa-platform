@@ -1,5 +1,6 @@
+import { useMonitor } from '../hooks/use-monitor.js';
 import { agentPagePath } from '../../agents/page-link.js';
-import { ANALYSIS_STAGES, LEVEL_BOUNDARIES, REVIEW_CONFIDENCE_FLOOR, type AnalysisRun } from '@xaa/contracts';
+import { ANALYSIS_STAGES, LEVEL_BOUNDARIES, REVIEW_CONFIDENCE_FLOOR, type AnalysisRun } from '@xaa/contracts/security-monitoring';
 import { Metric, formatTime, formatDuration } from '../components/visual.js';
 import type { Element } from '../element.js';
 
@@ -51,7 +52,7 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
   const decisions = props.runs.flatMap((run) => run.decisions);
   return (
     <div data-analysis-results="true">
-      <div class="metric-grid">
+      <div className="metric-grid">
         <Metric label="表示中の分析" value={props.runs.length} />
         <Metric
           label="処理中"
@@ -74,7 +75,7 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
         />
       </div>
       {props.runs.length === 0 ? (
-        <div class="empty-state">
+        <div className="empty-state">
           <h2>分析記録はまだありません</h2>
           <p>
             自分に関連するログを分析サービスが受信すると表示されます。記録がない状態から、サービスの正常稼働は判断できません。
@@ -82,10 +83,10 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
         </div>
       ) : null}
       {props.runs.map((run) => (
-        <article class="card analysis-run" data-status={run.status}>
-          <header class="section-heading">
+        <article key={run.run_id} className="card analysis-run" data-status={run.status}>
+          <header className="section-heading">
             <div>
-              <span class="eyebrow">LOG ANALYSIS</span>
+              <span className="eyebrow">LOG ANALYSIS</span>
               <h2>
                 {run.status === 'completed'
                   ? '分析完了'
@@ -94,19 +95,19 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
                     : `${STAGE_LABELS[run.stage]}中`}
               </h2>
             </div>
-            <time datetime={run.updated_at}>最終記録 {formatTime(run.updated_at)} JST</time>
+            <time dateTime={run.updated_at}>最終記録 {formatTime(run.updated_at)} JST</time>
           </header>
           {run.status === 'running' && props.now - Date.parse(run.updated_at) > 60_000 ? (
-            <p class="notice">60秒以上進捗が更新されていません。処理の遅延または中断の可能性があります。</p>
+            <p className="notice">60秒以上進捗が更新されていません。処理の遅延または中断の可能性があります。</p>
           ) : null}
-          <div class="analysis-progress">
+          <div className="analysis-progress">
             <span>{run.completed_stages.length} / {ANALYSIS_STAGES.length} 段階完了</span>
             <span>経過 {formatDuration((run.status === 'running' ? props.now : Date.parse(run.updated_at)) - Date.parse(run.started_at))}</span>
           </div>
-          <progress class="stage-progress" value={run.completed_stages.length} max={ANALYSIS_STAGES.length} aria-label="分析の進捗" />
-          <ol class="pipeline">
+          <progress className="stage-progress" value={run.completed_stages.length} max={ANALYSIS_STAGES.length} aria-label="分析の進捗" />
+          <ol className="pipeline">
             {ANALYSIS_STAGES.map((stage, index) => (
-              <li
+              <li key={stage}
                 data-state={
                   run.completed_stages.includes(stage) ? 'done' : run.stage === stage ? run.status : 'waiting'
                 }
@@ -121,7 +122,7 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
               </li>
             ))}
           </ol>
-          <div class="run-counts">
+          <div className="run-counts">
             <span>
               受信 <b>{run.input_count}</b>
             </span>
@@ -139,17 +140,17 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
             </span>
           </div>
           {run.decisions.length === 0 ? (
-            <p class="muted">
+            <p className="muted">
               {run.status === 'completed'
                 ? 'この分析では検知結果が生成されず、AI分析は起動していません。'
                 : '判定結果を待っています。'}
             </p>
           ) : null}
           {run.decisions.map((item) => (
-            <section class="decision" data-level={item.level}>
-              <div class="section-heading">
+            <section key={item.finding_id} className="decision" data-level={item.level}>
+              <div className="section-heading">
                 <strong>{STATES[item.state] ?? item.state}</strong>
-                <span class="risk-label">
+                <span className="risk-label">
                   {item.level} · {item.score}/100
                 </span>
               </div>
@@ -157,15 +158,15 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
                   high score red: on a risk scale the good end is zero. Without it the
                   meter reads green at 82/100 and contradicts the label beside it. */}
               <meter
-                min="0"
-                max="100"
+                min={0}
+                max={100}
                 low={LEVEL_BOUNDARIES.medium}
                 high={LEVEL_BOUNDARIES.high}
                 optimum={0}
                 value={item.score}
                 aria-label="リスクスコア"
               />
-              <div class="decision-route" aria-label="この検知の判断経路">
+              <div className="decision-route" aria-label="この検知の判断経路">
                 <span><small>検知スコア</small><b>{item.score} / 100</b></span>
                 <span aria-hidden="true">→</span>
                 <span><small>AI分析</small><b>{item.state === 'skipped' ? '省略' : item.state === 'queued' ? '待機' : item.state === 'analyzing' ? '実行中' : item.reason === 'analysis_run_failed' ? '中断' : '実施'}</b></span>
@@ -174,27 +175,27 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
               </div>
               <p>{REASONS[item.reason] ?? item.reason}</p>
               {item.score_breakdown ? (
-                <details class="score-details">
+                <details className="score-details">
                   <summary>スコアの算出根拠</summary>
-                  {item.score_breakdown.critical_override ? <p class="notice">委任の不一致または署名鍵の不正使用を検知したため、加算結果によらず100点です。</p>
-                    : <p class="muted">要因ごとに「該当数 × 重み」を上限まで加算し、合計を100点で制限します。</p>}
-                  <p class="muted">該当数は検知コードの数です。リソースへの加点は対象へのアクセス有無で決まります。</p>
-                  <div class="table-scroll"><table>
+                  {item.score_breakdown.critical_override ? <p className="notice">委任の不一致または署名鍵の不正使用を検知したため、加算結果によらず100点です。</p>
+                    : <p className="muted">要因ごとに「該当数 × 重み」を上限まで加算し、合計を100点で制限します。</p>}
+                  <p className="muted">該当数は検知コードの数です。リソースへの加点は対象へのアクセス有無で決まります。</p>
+                  <div className="table-scroll"><table>
                     <thead><tr><th>要因</th><th>該当数 × 重み</th><th>上限</th><th>{item.score_breakdown.critical_override ? '通常計算' : '加点'}</th></tr></thead>
-                    <tbody>{item.score_breakdown.contributions.map((part) => <tr>
+                    <tbody>{item.score_breakdown.contributions.map((part) => <tr key={part.factor}>
                       <th>{FACTOR_LABELS[part.factor] ?? part.factor}</th><td>{part.count} × {part.per_event}</td><td>{part.cap}</td>
-                      <td><b>{part.points}</b><span class="contribution-bar" style={`width:${part.points}%`} /></td>
+                      <td><b>{part.points}</b><span className="contribution-bar" style={{ width: `${part.points}%` }} /></td>
                     </tr>)}</tbody>
                   </table></div>
-                  {item.score_breakdown.unmapped_count > 0 ? <p class="notice">スコアへの対応がないコード: {item.score_breakdown.unmapped_count}件</p> : null}
+                  {item.score_breakdown.unmapped_count > 0 ? <p className="notice">スコアへの対応がないコード: {item.score_breakdown.unmapped_count}件</p> : null}
                 </details>
-              ) : <p class="muted">この記録にはスコア内訳がありません。</p>}
-              <div class="code-list">
+              ) : <p className="muted">この記録にはスコア内訳がありません。</p>}
+              <div className="code-list">
                 {item.codes.map((code) => (
-                  <code>{code}</code>
+                  <code key={code}>{code}</code>
                 ))}
               </div>
-              <dl class="decision-facts">
+              <dl className="decision-facts">
                 <dt>推奨する状態</dt>
                 <dd>{item.response ?? '—'}</dd>
                 <dt>AIの確信度</dt>
@@ -227,35 +228,36 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
             </section>
           ))}
           {run.error_code ? (
-            <p class="notice">処理に失敗しました。再配信された場合は別の分析として記録されます。</p>
+            <p className="notice">処理に失敗しました。再配信された場合は別の分析として記録されます。</p>
           ) : null}
-          <small class="muted">実行 ID: {run.run_id}</small>
+          <small className="muted">実行 ID: {run.run_id}</small>
         </article>
       ))}
     </div>
   );
 }
 export function SecurityPage(props: { runs: readonly AnalysisRun[]; now: number }): Element {
+  const monitor = useMonitor('/api/security/analysis', { runs: props.runs, now: props.now });
   return (
-    <main class="security-page" data-page="security">
-      <header class="page-heading">
+    <main className="security-page" data-page="security">
+      <header className="page-heading">
         <div>
-          <span class="eyebrow">OBSERVABILITY</span>
+          <span className="eyebrow">OBSERVABILITY</span>
           <h1>ログ分析モニター</h1>
-          <p class="lead">ログの受信から、AI分析を起動した理由、対応の判断まで。</p>
+          <p className="lead">ログの受信から、AI分析を起動した理由、対応の判断まで。</p>
         </div>
-        <button type="button" data-action="monitor-refresh">
+        <button type="button" data-action="monitor-refresh" disabled={monitor.busy} onClick={() => void monitor.refresh()}>
           更新
         </button>
       </header>
-      <section class="card policy-guide">
-        <div class="section-heading"><h2>プラットフォームの判断条件</h2><span class="eyebrow">DECISION FLOW</span></div>
-        <ol class="policy-flow">
-          <li><span class="flow-number">01</span><h3>ログから検知</h3><p>受信 → 違反・ルール確認 → 相関分析</p><small>通常ログも記録。検知なしならAIは起動しません。</small></li>
-          <li><span class="flow-number">02</span><h3>AIの起動を判断</h3><p>スコア {LEVEL_BOUNDARIES.medium} 以上</p><small>比較基準とAI接続がそろった場合に分析します。</small></li>
-          <li><span class="flow-number">03</span><h3>対応を選ぶ</h3><p>確信度・推奨状態を確認</p><small>継続、自動で状態変更、人の確認待ちに分岐します。</small></li>
+      <section className="card policy-guide">
+        <div className="section-heading"><h2>プラットフォームの判断条件</h2><span className="eyebrow">DECISION FLOW</span></div>
+        <ol className="policy-flow">
+          <li><span className="flow-number">01</span><h3>ログから検知</h3><p>受信 → 違反・ルール確認 → 相関分析</p><small>通常ログも記録。検知なしならAIは起動しません。</small></li>
+          <li><span className="flow-number">02</span><h3>AIの起動を判断</h3><p>スコア {LEVEL_BOUNDARIES.medium} 以上</p><small>比較基準とAI接続がそろった場合に分析します。</small></li>
+          <li><span className="flow-number">03</span><h3>対応を選ぶ</h3><p>確信度・推奨状態を確認</p><small>継続、自動で状態変更、人の確認待ちに分岐します。</small></li>
         </ol>
-        <div class="risk-bands">
+        <div className="risk-bands">
           <span>LOW 0–{LEVEL_BOUNDARIES.medium - 1}</span>
           <span>
             MEDIUM {LEVEL_BOUNDARIES.medium}–{LEVEL_BOUNDARIES.high - 1}
@@ -271,16 +273,16 @@ export function SecurityPage(props: { runs: readonly AnalysisRun[]; now: number 
           Managerへ依頼します。
         </p>
       </section>
-      <div class="monitor-toolbar">
+      <div className="monitor-toolbar">
         <label>
-          <input type="checkbox" data-monitor-auto="true" checked /> 5秒ごとに更新
+          <input type="checkbox" data-monitor-auto="true" checked={monitor.auto} onChange={(event) => monitor.setAuto(event.target.checked)} /> 5秒ごとに更新
         </label>
         <span role="status" data-monitor-status="true">
-          自動更新を待っています。
+          {monitor.message}
         </span>
       </div>
-      <p class="muted">最新30件・自分に関連する分析のみ。判定は各実行時点の記録です。</p>
-      <AnalysisResults {...props} />
+      <p className="muted">最新30件・自分に関連する分析のみ。判定は各実行時点の記録です。</p>
+      <AnalysisResults {...monitor.data} />
     </main>
   );
 }

@@ -39,7 +39,7 @@ async function provision(target: ProvisionerHarness, isolationLevel: 'standard' 
     catalogue: createCatalogRepository(target.documents),
   }, {
     humanSubject: 'testuser', taskId: 'task-1', effectiveCapabilities: capabilities,
-    isolationLevel, constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+    isolationLevel, constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
   });
 }
 

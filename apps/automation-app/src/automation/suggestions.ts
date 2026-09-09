@@ -4,15 +4,16 @@ import type { WorkSignal } from '../signals/work-signal-source.js';
 
 export interface Suggestion {
   candidate_id: string;
-  purpose: string;
+  title: string;
   description: string;
-  operations: string[];
-  user_confirmations: string[];
-  safety_notes: string[];
+  context: string;
+  done_criteria: string[];
+  steps: string[];
+  notes: string[];
 }
 
 export const SUGGESTION_FIELDS = [
-  'candidate_id', 'purpose', 'description', 'operations', 'user_confirmations', 'safety_notes',
+  'candidate_id', 'title', 'description', 'context', 'done_criteria', 'steps', 'notes',
 ] as const;
 
 export type Generate = <T>(params: {
@@ -20,8 +21,8 @@ export type Generate = <T>(params: {
 }) => Promise<T | null>;
 
 /**
- * Asks the model for automation candidates, and treats anything it cannot understand
- * as no candidate rather than as an error.
+ * Asks the model for ToDo candidates, and treats anything it cannot understand as no
+ * candidate rather than as an error.
  *
  * A model that returns malformed JSON, or a candidate missing a field, is not an
  * outage — it is a suggestion engine having an off moment, and the person should see
@@ -29,8 +30,8 @@ export type Generate = <T>(params: {
  * not discard the good ones.
  *
  * The prompt names no capability, resource or isolation level. This app has no business
- * shaping what permissions get inferred (RULE-07), and a prompt that mentioned
- * `document.read` would be doing exactly that.
+ * shaping what permissions get inferred (RULE-07), and a prompt that mentioned a
+ * capability id would be doing exactly that.
  */
 export async function suggestAutomations(input: {
   signals: readonly WorkSignal[];
@@ -57,9 +58,9 @@ function isSuggestion(value: unknown): value is Suggestion {
   const record = value as Record<string, unknown>;
   if (Object.keys(record).length !== SUGGESTION_FIELDS.length) return false;
   if (typeof record.candidate_id !== 'string' || record.candidate_id === '') return false;
-  if (typeof record.purpose !== 'string' || record.purpose === '') return false;
-  if (typeof record.description !== 'string') return false;
-  for (const key of ['operations', 'user_confirmations', 'safety_notes'] as const) {
+  if (typeof record.title !== 'string' || record.title === '') return false;
+  if (typeof record.description !== 'string' || typeof record.context !== 'string') return false;
+  for (const key of ['done_criteria', 'steps', 'notes'] as const) {
     if (!Array.isArray(record[key]) || (record[key] as unknown[]).some((item) => typeof item !== 'string')) return false;
   }
   return true;

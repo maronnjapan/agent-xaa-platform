@@ -1,0 +1,43 @@
+{
+  "name": "@xaa/analysis-console",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/src/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@xaa/contracts": "workspace:*",
+    "@xaa/crypto": "workspace:*",
+    "@xaa/gcp": "workspace:*",
+    "@xaa/logging": "workspace:*",
+    "hono": "4.13.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/server.d.ts",
+      "import": "./dist/src/server.js"
+    },
+    "./app": {
+      "types": "./dist/src/app.d.ts",
+      "import": "./dist/src/app.js"
+    },
+    "./src/*": {
+      "types": "./dist/src/*.d.ts",
+      "import": "./dist/src/*.js"
+    }
+  }
+}

@@ -625,7 +625,7 @@
     {
       "id": "RULE-37",
       "category": "gcp",
-      "text": "Internetへ公開するのは、Automation App、Google BridgeとAgent OPのOAuth Callback、issuerのメタデータとJWKSだけとする",
+      "text": "Internetへ公開するのは、人がログインして開く画面（Automation App、Analysis Console）、Google BridgeとAgent OPのOAuth Callback、issuerのメタデータとJWKSだけとする",
       "sources": [
         {
           "label": "08. §8",

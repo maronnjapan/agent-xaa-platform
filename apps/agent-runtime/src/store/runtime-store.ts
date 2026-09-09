@@ -8,11 +8,17 @@ export class FirestorePathDenied extends Error {
   }
 }
 
+/**
+ * One row of `agent_instructions`, named the way its writer names it.
+ *
+ * The Automation App owns this collection (00b §3) and writes the words as `text`. This
+ * reader called the field `body`, which is not an error anywhere: the read succeeds, the
+ * row is stamped applied, and the instruction reaches the model with no words in it. So
+ * every 「指示を追加する」 arrived as an empty turn, and the agent had nothing to act on.
+ */
 export interface RuntimeInstruction {
   instruction_id: string;
-  body: string;
-  /** The Automation App's own name for `body`; `readInstructions` maps it across. */
-  text?: string;
+  text: string;
   fault?: InstructionFault;
   created_at: string;
   applied_at: string | null;
@@ -78,7 +84,7 @@ export function createRuntimeStore(input: { documents: DocumentStore; agentId: s
         ]);
         const ordered = [...pending].sort((left, right) => left.data.created_at.localeCompare(right.data.created_at));
         for (const row of ordered) tx.update(INSTRUCTIONS, row.id, { applied_at: now });
-        return ordered.map((row) => ({ ...row.data, body: row.data.text ?? row.data.body, instruction_id: row.id }));
+        return ordered.map((row) => ({ ...row.data, instruction_id: row.id }));
       });
     },
     async writeState(state) {

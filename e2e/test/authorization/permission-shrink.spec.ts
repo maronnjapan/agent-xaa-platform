@@ -54,7 +54,7 @@ async function runningAgent(permissions: string[]): Promise<{
       Authorization: `DPoP ${grant.token}`,
       DPoP: await createDpopProof({ method: 'POST', url: `${AUTHZ_BASE}${path}`, keyPair: grant.keyPair, accessToken: grant.token }),
     },
-    body: JSON.stringify({ purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_hours: 8 }),
+    body: JSON.stringify({ purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_minutes: 480 }),
   });
   expect(decided.status).toBe(200);
   const { decision_id: decisionId } = await decided.json() as { decision_id: string };

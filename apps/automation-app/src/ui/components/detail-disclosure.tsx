@@ -15,15 +15,15 @@ import type { Element } from '../element.js';
 export function DetailDisclosure(props: { detail?: Record<string, unknown>; simulated?: boolean }): Element | null {
   if (!props.detail || Object.keys(props.detail).length === 0) return null;
   return (
-    <details class="detail-disclosure" data-detail="true">
+    <details className="detail-disclosure" data-detail="true">
       <summary>
         詳細
-        {props.simulated ? <span class="simulated-badge" data-simulated="true">デモ実行（模擬）</span> : null}
+        {props.simulated ? <span className="simulated-badge" data-simulated="true">デモ実行（模擬）</span> : null}
       </summary>
       <table>
         <tbody>
           {Object.entries(props.detail).map(([key, value]) => (
-            <tr data-detail-key={key}>
+            <tr key={key} data-detail-key={key}>
               <th scope="row">{key}</th>
               <td>{formatValue(value)}</td>
             </tr>

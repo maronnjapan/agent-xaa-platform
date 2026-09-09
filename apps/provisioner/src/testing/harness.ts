@@ -9,7 +9,7 @@ import { createFirestoreDocumentStore, createFirestoreDouble, type DocumentStore
 import { createLogger } from '@xaa/logging';
 import { readFileSync, readdirSync } from 'node:fs';
 import { parse } from 'yaml';
-import { PLATFORM_CLIENT_ID } from '@xaa/contracts';
+import { PLATFORM_CLIENT_ID, RESOURCE_SCOPES } from '@xaa/contracts';
 import type { ActivityEvent, CatalogConnector, CatalogTool, IsolationLevel } from '@xaa/contracts';
 import createApp, { type ProvisionerAppDeps } from '../app.js';
 import { createTransactionStore } from '../transaction/store.js';
@@ -68,11 +68,67 @@ export const testConfig: ProvisionerConfig = {
   activityTopic: 'agent-activity-stream',
   dpopIatSkewSeconds: 60,
   internalCallers: ['sa-lifecycle@xaa-test.iam.gserviceaccount.com'],
+  adminPrincipals: ['admin@example.test'],
 };
 
 export const LIFECYCLE_CALLER = 'sa-lifecycle@xaa-test.iam.gserviceaccount.com';
 
+/** The one account `ADMIN_PRINCIPALS` names in these specs. */
+export const ADMIN_PRINCIPAL = 'admin@example.test';
+
 export interface AdminCall { method: string; name: string }
+
+export interface BridgeCall { method: string; connectorId: string; scopes: string[] }
+
+export const BRIDGE_CONSENT_URL = 'https://google-bridge-callback.test/stub-saas-calendar/oauth/start';
+
+/** The scope the one bridged tool asks for, from the shared table rather than spelled out. */
+const BRIDGED_SCOPE = RESOURCE_SCOPES.find((scope) => scope.startsWith('calendar.'))!;
+
+/**
+ * The Bridge as the Provisioner sees it: three calls and a recorder.
+ *
+ * `connectionStatus` is what `/connections/check` answers, which is the one branch the
+ * bridged steps turn on — a person who has never connected this SaaS gets a consent
+ * screen, and a second agent for the same person gets `READY` and no browser at all.
+ */
+export function recordingBridge(options: {
+  connectionStatus?: 'READY' | 'CONSENT_REQUIRED';
+  verifyStatus?: string;
+  failAt?: 'checkConnection' | 'verifyConnection' | 'createBinding';
+} = {}): NonNullable<ProvisionerAppDeps['bridge']> & { calls: BridgeCall[] } {
+  const calls: BridgeCall[] = [];
+  const record = (method: BridgeCall['method'], connectorId: string, scopes: string[]): void => {
+    calls.push({ method, connectorId, scopes });
+    if (options.failAt === method) throw new Error(`${method} failed`);
+  };
+  return {
+    calls,
+    async checkConnection(input) {
+      record('checkConnection', input.connectorId, input.requiredScopes);
+      if ((options.connectionStatus ?? 'READY') === 'READY') {
+        return { status: 'READY', connection_id: `conn-${input.connectorId}-${input.humanSubject}` };
+      }
+      return {
+        status: 'CONSENT_REQUIRED',
+        consent_url: `${BRIDGE_CONSENT_URL}?transaction_id=${encodeURIComponent(input.transactionId)}`,
+        missing_scopes: [...input.requiredScopes],
+      };
+    },
+    async verifyConnection(input) {
+      record('verifyConnection', '', []);
+      return {
+        status: options.verifyStatus ?? 'READY',
+        connection_id: `conn-verified-${input.transactionId}`,
+        granted_scopes: [BRIDGED_SCOPE],
+      };
+    },
+    async createBinding(input) {
+      record('createBinding', input.connectorId, input.scopes);
+      return { binding_id: `bind-${input.agentId}`, expires_at: input.expiresAt };
+    },
+  };
+}
 
 /** Records every GCP admin call so a STANDARD run can be shown to make none. */
 export function recordingAdmin(options: { failAt?: string } = {}): GcpAdmin & { calls: AdminCall[] } {
@@ -112,12 +168,15 @@ export interface ProvisionerHarness {
   documents: DocumentStore;
   seedStore: DocumentStore;
   admin: GcpAdmin & { calls: AdminCall[] };
+  bridge?: NonNullable<ProvisionerAppDeps['bridge']> & { calls: BridgeCall[] };
   jobRuns: Array<{ jobName: string; env: Array<{ name: string; value: string }> }>;
   activity: ActivityEvent[];
   logs: string[];
   revokedConnections: string[];
   deps: ProvisionerAppDeps;
   fetch(path: string, init?: RequestInit): Promise<Response>;
+  /** The same request, carrying a token for whoever is named (the admin by default). */
+  asAdmin(path: string, init?: RequestInit & { principal?: string }): Promise<Response>;
 }
 
 export async function createProvisionerHarness(options: {
@@ -127,6 +186,12 @@ export async function createProvisionerHarness(options: {
   idpConnectionStatus?: 'READY' | 'CONSENT_REQUIRED';
   verifyStatus?: string;
   admin?: GcpAdmin & { calls: AdminCall[] };
+  /**
+   * The Bridge client, absent by default. A deployment without the Bridge has none
+   * (DEC-SCOPE-04), and that is the default here so a test has to say when it means
+   * the bridged path.
+   */
+  bridge?: NonNullable<ProvisionerAppDeps['bridge']> & { calls: BridgeCall[] };
   now?: () => number;
   idpPublicJwk?: JsonWebKey;
   /** Resolves an `/internal/*` bearer token to a caller email; defaults to sa-lifecycle. */
@@ -182,10 +247,17 @@ export async function createProvisionerHarness(options: {
     // not on the allow-list is refused, and that is the email, not the signature.
     verifyInternalCaller: options.verifyInternalCaller
       ?? (async (token) => (token === 'lifecycle-token' ? LIFECYCLE_CALLER : null)),
+    /**
+     * Stands in for Google's OIDC verification on the console: the token is the account
+     * it was minted for, and a token minted for another service's URL resolves to
+     * nobody, so the audience check the real verifier makes is still exercised.
+     */
+    verifyAdmin: async (token, audience) => (audience === PROVISIONER_BASE ? token : null),
     fetchImpl: (async () => Response.json({
       keys: [{ ...(options.idpPublicJwk ?? {}), kid: 'idp-testkey', alg: 'RS256', use: 'sig' }],
     })) as unknown as typeof fetch,
     agentOp,
+    ...(options.bridge ? { bridge: options.bridge } : {}),
     createDedicated: (input): Promise<DedicatedResult> => createDedicatedResources({
       admin, ledger: input.ledger, agentId: input.agentId,
       projectId: 'xaa-test', region: 'asia-northeast1',
@@ -209,7 +281,15 @@ export async function createProvisionerHarness(options: {
   const app = createApp(deps);
   return {
     documents, seedStore, admin, jobRuns, activity, logs, revokedConnections, deps,
+    bridge: options.bridge,
     fetch: async (path, init) => app.fetch(new Request(new URL(path, PROVISIONER_BASE), init)),
+    asAdmin: async (path, init = {}) => {
+      const { principal = ADMIN_PRINCIPAL, ...request } = init;
+      return app.fetch(new Request(new URL(path, PROVISIONER_BASE), {
+        ...request,
+        headers: { ...(request.headers as Record<string, string> | undefined), Authorization: `Bearer ${principal}` },
+      }));
+    },
   };
 }
 

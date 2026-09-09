@@ -12,7 +12,7 @@ export const SIMULATED_LABEL = 'デモ実行（模擬）';
  */
 export function SimulatedBadge(props: { position: 'row' | 'canvas' | 'summary' }): Element {
   return (
-    <span class={`simulated-badge simulated-${props.position}`} data-simulated="true">
+    <span className={`simulated-badge simulated-${props.position}`} data-simulated="true">
       {SIMULATED_LABEL}
     </span>
   );

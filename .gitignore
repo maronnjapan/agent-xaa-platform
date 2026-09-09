@@ -11,3 +11,12 @@ dist/
 *.tsbuildinfo
 .local/
 e2e/artifacts/
+# The browser bundle. It is one file now and it carries React, so a commit of it is a
+# megabyte of generated code per UI change. Every path that needs it builds it:
+# `pnpm build` runs before the tests in CI and inside the image, and the checks that
+# read it refuse to pass when it is missing.
+apps/automation-app/public/*.js
+# The stylesheets are copied here by the same build. A committed copy is worse than no
+# copy: `readAsset` prefers it over the source, so a stale one is served in a checkout
+# nobody has built, which is a page styled by whatever the last person happened to commit.
+apps/automation-app/public/styles/

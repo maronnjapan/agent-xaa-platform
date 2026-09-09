@@ -21,7 +21,7 @@ beforeAll(async () => { issuer = await createTokenIssuer(); });
 
 async function provision(target: ProvisionerHarness, capabilities: string[], task = 't'): Promise<Response> {
   const decisionId = await seedDecision(target, { capabilities });
-  return issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_hours: 8 });
+  return issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_minutes: 480 });
 }
 
 describe('the STANDARD branch', () => {
@@ -67,12 +67,18 @@ describe('the STANDARD branch', () => {
     expect(target.admin.calls).toEqual([]);
   });
 
-  it('runs every STANDARD agent on the one shared job', async () => {
+  it('runs every STANDARD agent on the one shared job, named the way Cloud Run names one', async () => {
     const target = await createProvisionerHarness({ idpPublicJwk: issuer.publicJwk });
     await provision(target, ['document.read'], 'a');
     await provision(target, ['document.read'], 'b');
     expect(new Set(target.jobRuns.map((run) => run.jobName)))
       .toEqual(new Set([target.deps.config.standardJobName]));
+    // `Jobs.runJob` takes the job's full resource name and refuses a bare id. The
+    // FULL_ISOLATION branch gets one from the API for free; this branch gets whatever
+    // the deployment set, and the call is only reached after a consent has been given.
+    for (const run of target.jobRuns) {
+      expect(run.jobName).toMatch(/^projects\/[^/]+\/locations\/[^/]+\/jobs\/[^/]+$/);
+    }
   });
 
   /**

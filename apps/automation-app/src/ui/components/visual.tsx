@@ -2,7 +2,7 @@ import type { Element } from '../element.js';
 
 export function Metric(props: { label: string; value: string | number; tone?: string }): Element {
   return (
-    <div class={`metric ${props.tone ?? ''}`}>
+    <div className={`metric ${props.tone ?? ''}`}>
       <span>{props.label}</span>
       <strong>{props.value}</strong>
     </div>
@@ -24,7 +24,7 @@ export function formatTime(value: string): string {
 export function ResultMark(props: { outcome: string }): Element {
   const marks: Record<string, string> = { success: '✓', blocked: '!', failed: '×', running: '◷' };
   return (
-    <span class="result-mark" data-outcome={props.outcome} aria-hidden="true">
+    <span className="result-mark" data-outcome={props.outcome} aria-hidden="true">
       {marks[props.outcome] ?? '•'}
     </span>
   );

@@ -3,6 +3,17 @@ import { DISABLED_ENDPOINT, type PlatformEndpoints } from '@xaa/contracts';
 export interface ResolvedEndpoints {
   agentOpUrl: string;
   provisionerUrl: string;
+  /**
+   * Where the keys that verify a Human Access Token are read from.
+   *
+   * The platform's aggregate set, which is what the Authorization Platform and the
+   * Provisioner verify the same token against. It is not `${issuer}/jwks.json`: the
+   * Human IdP serves its set at the discovery-registered `/.well-known/jwks.json` and
+   * answers 404 anywhere else, and a 404 here fails a perfectly good token exactly the
+   * way a forged signature does — which is what made every press of the stop button
+   * answer `invalid_token`.
+   */
+  jwksUrl: string;
   docsAsUrl: string;
   financeAsUrl: string;
   bridgeUrl: string | null;
@@ -28,6 +39,7 @@ export function resolveEndpoints(endpoints: PlatformEndpoints): ResolvedEndpoint
   return {
     agentOpUrl: read('xaa_token_url').replace(/\/xaa\/token$/, ''),
     provisionerUrl: read('provisioner_url'),
+    jwksUrl: read('jwks_url'),
     docsAsUrl: read('resource_docs_as_issuer'),
     financeAsUrl: read('resource_finance_as_issuer'),
     // `https://disabled.invalid` is how Terraform spells "no Bridge here": the schema

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { PLATFORM_CLIENT_ID } from '@xaa/contracts';
+import { PLATFORM_CLIENT_ID, buildSubjectTokenResponse } from '@xaa/contracts';
 import type { AgentOpDeps } from '../deps.js';
 import { createAgentOpStore } from '../store/index.js';
 import { verifyAgentState } from '../idjag/verify-agent-state.js';
@@ -16,6 +16,10 @@ const ROTATION_HISTORY_TTL_SECONDS = 86_400;
  * decrypted and spent against Human IdP's /token, and only the `id_token` from that
  * response is handed back; `access_token` and `refresh_token` never appear in the
  * reply body.
+ *
+ * The reply is assembled by `buildSubjectTokenResponse`, the same module the Agent
+ * Runtime reads it with, so the field names cannot drift out from under the one
+ * caller this endpoint has.
  */
 export function createSubjectTokenRoute(deps: AgentOpDeps): Hono {
   const store = createAgentOpStore(deps.documents, deps.config, () => deps.signer.kid);
@@ -88,11 +92,10 @@ export function createSubjectTokenRoute(deps: AgentOpDeps): Hono {
         rotationResult = 'rotated';
       }
 
-      return context.json({
-        subject_token: body.id_token,
-        subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-        expires_in: body.expires_in ?? 3600,
-      });
+      return context.json(buildSubjectTokenResponse({
+        idToken: body.id_token,
+        ...(typeof body.expires_in === 'number' ? { expiresIn: body.expires_in } : {}),
+      }));
     } catch {
       reissue = reissue === 'n/a' ? 'failed' : reissue;
       return context.json({ error: 'invalid_grant', error_description: 'The IdP connection is not usable' }, 400);

@@ -14,6 +14,7 @@ import { needsHumanReview, REVIEW_CONFIDENCE_FLOOR } from './response/review.js'
 import { requestTransition, type LifecycleSender, type TransitionOutcome } from './response/dispatch.js';
 import { emitQuarantineEvent } from './activity/quarantine-event.js';
 import { createInternalBatchRoutes } from './routes/internal-batch.js';
+import type { StoredFinding } from './findings/stored.js';
 import type { RuleHitRow } from './batch/signing-key-misuse.js';
 
 export interface SecurityDetectionDeps {
@@ -36,10 +37,7 @@ export interface SecurityDetectionDeps {
   publishActivity?(event: ActivityEvent): Promise<void>;
 }
 
-export interface StoredFinding extends SecurityFinding {
-  recommended_response?: ResponseState;
-  confidence?: number;
-}
+export type { StoredFinding } from './findings/stored.js';
 
 /** One batch of raw log payloads, taken through the six stages and dispatched. */
 export type DetectionRun = (payloads: readonly unknown[]) => Promise<void>;
@@ -208,6 +206,9 @@ export function createSecurityDetection(deps: SecurityDetectionDeps): { app: Hon
             review_status: hold ? 'pending' : 'none',
             recommended_response: response,
             confidence,
+            analysis_source: parsed === null ? 'fallback' : 'model',
+            analyzed_at: new Date(now()).toISOString(),
+            ...(parsed ? { analysis: parsed } : {}),
           });
           if (hold) {
             logger.warning('security_finding_pending_review', {

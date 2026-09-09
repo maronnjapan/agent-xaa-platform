@@ -1,27 +1,32 @@
+import { readAnalysisRuns } from '../security/query.js';
+import { readFaultTrials } from '../agents/faults.js';
 import { Hono, type MiddlewareHandler } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
 import type { AutomationAppConfig } from '../config.js';
 import type { SessionStore } from '../auth/session-store.js';
 import { requireUser, type UserVariables } from '../auth/require-user.js';
 import { requireAgentOwner, type AgentOwnerVariables } from '../agents/require-owner.js';
-import { readFaultTrials } from '../agents/faults.js';
 import { readAgentStatus } from '../agents/status.js';
 import { readTimeline, type TimelineTask } from '../activity/query.js';
 import { createWorkDefinitionStore } from '../work-definition/store.js';
 import { createAgentDefinitionStore } from '../agent-definition/approval.js';
-import { readAsset } from './assets.js';
-import { Layout, renderDocument } from './layout.js';
-import { GuidePage } from './pages/guide.js';
-import { HomePage, type HomeAgent, type HomeWorkItem } from './pages/home.js';
-import { TimelinePage } from './pages/timeline.js';
-import { readAnalysisRuns } from '../security/query.js';
-import { SecurityPage } from './pages/security.js';
-import { AgentDetailPage } from './pages/agent-detail.js';
-import { WorkDefinitionNewPage } from './pages/work-definition-new.js';
+import { readAsset, STATIC_ASSETS } from './assets.js';
+import { renderPage } from './layout.js';
+import type { HomeAgent, HomeTodoItem, TodoAgentView } from './pages/home.js';
 
 type Env = UserVariables & AgentOwnerVariables;
 
 const STYLES = ['/styles/app.css', '/styles/emphasis.css', '/styles/replay.css'] as const;
+
+/**
+ * One bundle for every screen (DEC-APP-06, revised).
+ *
+ * The four screens are one React application, and four bundles would each carry their
+ * own copy of the framework. Which screen it renders comes from the value the server
+ * wrote into the document, not from the script's name — so a page still runs only its
+ * own code.
+ */
+const SCRIPT = '/app.js';
 
 /** How far back the suggestion form looks by default. */
 const SUGGESTION_WINDOW_DAYS = 7;
@@ -36,7 +41,7 @@ export interface PageRouteDeps {
 }
 
 /**
- * The pages a person actually looks at, and the two files they load.
+ * The pages a person actually looks at, and the files they load.
  *
  * They are here rather than in `app.ts` so the screens and the API keep separate route
  * tables, but they run behind the same two guards as the API: `requireUser` decides
@@ -60,10 +65,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   const workDefinitions = createWorkDefinitionStore(deps.documents);
   const agentDefinitions = createAgentDefinitionStore(deps.documents);
 
-  for (const path of [
-    '/agent-detail.js', '/home.js', '/timeline.js', '/work-definition.js', '/security.js',
-    '/styles/app.css', '/styles/emphasis.css', '/styles/replay.css',
-  ]) {
+  for (const path of Object.keys(STATIC_ASSETS)) {
     app.get(path, (context) => {
       const asset = readAsset(path);
       if (!asset) return context.json({ error: 'not_found' }, 404);
@@ -75,9 +77,15 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
    * Where a person lands after logging in, and where the whole flow happens.
    *
    * The page is rendered from what the server holds rather than from anything the
-   * browser remembers: the drafts, their state, the permissions that were presented and
-   * whether they were approved. Each of the person's own records is fetched by their own
-   * subject, taken from the session and from nowhere else (RULE-56).
+   * browser remembers: the ToDos, their state, the permissions that were presented and
+   * whether they were approved, and what the agent carrying each one is doing. Each of
+   * the person's own records is fetched by their own subject, taken from the session
+   * and from nowhere else (RULE-56).
+   *
+   * An agent is read only for a ToDo that names it, and a ToDo names an agent only
+   * because this app wrote the id there when provisioning answered for this person. The
+   * checkpoint is read through the same reader the agent's own screen uses
+   * (T-APP-27), and the verdict comes off the person's own timeline.
    */
   app.get('/', asUser, async (context) => {
     const humanSubject = context.get('humanSubject');
@@ -88,21 +96,26 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     ]);
     // Newest first, so a second attempt at the same work shows the permissions that were
     // presented last rather than the ones that have been superseded.
-    const items: HomeWorkItem[] = definitions.map((definition) => ({
+    const items: HomeTodoItem[] = await Promise.all(definitions.map(async (definition) => ({
       definition,
       agentDefinition: presented.find((candidate) => candidate.work_definition_id === definition.work_definition_id),
+      ...(definition.agent_id === null ? {} : { agent: await agentViewOf(definition.agent_id, tasks) }),
+    })));
+    return context.html(renderPage({
+      analysisConsoleUrl: deps.config.analysisConsoleUrl,
+      title: 'ToDo',
+      styles: STYLES,
+      script: SCRIPT,
+      data: {
+        page: 'home',
+        defaultMinutes: deps.config.defaultAgentLifetimeMinutes,
+        items,
+        agents: agentsOf(tasks),
+        defaultFrom: isoDate(now() - SUGGESTION_WINDOW_DAYS * 86_400_000),
+        defaultTo: isoDate(now()),
+        today: isoDate(now()),
+      },
     }));
-    return context.html(await renderDocument(
-      <Layout title="自動化をつくる" styles={STYLES} script="/home.js">
-        <HomePage
-          defaultHours={deps.config.defaultAgentLifetimeHours}
-          items={items}
-          agents={agentsOf(tasks)}
-          defaultFrom={isoDate(now() - SUGGESTION_WINDOW_DAYS * 86_400_000)}
-          defaultTo={isoDate(now())}
-        />
-      </Layout>,
-    ));
   });
 
   /**
@@ -113,18 +126,13 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
    * every step it describes is a button on a screen that requires a session, and a
    * guide readable by someone who cannot reach any of them would only mislead.
    */
-  app.get('/guide', asUser, async (context) =>
-    context.html(await renderDocument(
-      <Layout title="使い方" styles={STYLES}>
-        <GuidePage />
-      </Layout>,
-    )));
+  app.get('/guide', asUser, (context) =>
+    context.html(renderPage({ analysisConsoleUrl: deps.config.analysisConsoleUrl, title: '使い方', styles: STYLES, script: SCRIPT, data: { page: 'guide' } })));
 
-  app.get('/security', asUser, async (context) => context.html(await renderDocument(
-    <Layout title="ログ分析モニター" styles={STYLES} script="/security.js">
-      <SecurityPage runs={await readAnalysisRuns(deps.documents, context.get('humanSubject'))} now={now()} />
-    </Layout>,
-  )));
+  app.get('/security', asUser, async (context) => context.html(renderPage({
+    title: 'ログ分析モニター', analysisConsoleUrl: deps.config.analysisConsoleUrl, styles: STYLES, script: SCRIPT,
+    data: { page: 'security', runs: await readAnalysisRuns(deps.documents, context.get('humanSubject')), now: now() },
+  })));
 
   app.get('/activity', asUser, async (context) => {
     const agentId = context.req.query('agent_id');
@@ -132,11 +140,10 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     // Narrowing by agent is a filter over the person's own timeline, never a widening
     // of it: the subject still comes from the session and nowhere else.
     const shown = agentId ? tasks.filter((task) => task.agent_id === agentId) : tasks;
-    return context.html(await renderDocument(
-      <Layout title="アクティビティ" styles={STYLES} script="/timeline.js">
-        <TimelinePage tasks={shown} />
-      </Layout>,
-    ));
+    return context.html(renderPage({
+      analysisConsoleUrl: deps.config.analysisConsoleUrl,
+      title: 'アクティビティ', styles: STYLES, script: SCRIPT, data: { page: 'timeline', tasks: shown },
+    }));
   });
 
   app.get('/agents/:agent_id', asUser, requireAgentOwner({
@@ -144,22 +151,49 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   }), async (context) => {
     const agentId = context.get('agentId');
     const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
-    return context.html(await renderDocument(
-      <Layout title="Agent の状況" styles={STYLES} script="/agent-detail.js">
-        <AgentDetailPage agentId={agentId} status={status}
-          faultTrials={deps.config.faultInjectionEnabled ? await readFaultTrials(deps.documents, agentId, now()) : []} faultInjectionEnabled={deps.config.faultInjectionEnabled === true} />
-      </Layout>,
-    ));
+    return context.html(renderPage({
+      analysisConsoleUrl: deps.config.analysisConsoleUrl,
+      title: 'Agent の状況', styles: STYLES, script: SCRIPT, data: { page: 'agent-detail', agentId, status, faultInjectionEnabled: deps.config.faultInjectionEnabled === true,
+        faultTrials: deps.config.faultInjectionEnabled ? await readFaultTrials(deps.documents, agentId, now()) : [] },
+    }));
   });
 
-  app.get('/work-definitions/new', asUser, async (context) =>
-    context.html(await renderDocument(
-      <Layout title="新しい作業を定義する" styles={STYLES} script="/work-definition.js">
-        <WorkDefinitionNewPage defaultHours={deps.config.defaultAgentLifetimeHours} />
-      </Layout>,
-    )));
+  app.get('/todos/new', asUser, (context) =>
+    context.html(renderPage({
+      analysisConsoleUrl: deps.config.analysisConsoleUrl,
+      title: '新しい ToDo を書く',
+      styles: STYLES,
+      script: SCRIPT,
+      data: { page: 'todo-new', defaultMinutes: deps.config.defaultAgentLifetimeMinutes },
+    })));
 
   return app;
+
+  /**
+   * The agent carrying a ToDo, as the card shows it.
+   *
+   * The snapshot is the checkpoint; the verdict is the Runtime's own terminal event on
+   * the agent's task — `TASK_COMPLETED`, `TASK_BLOCKED` or `TASK_FAILED`, read off the
+   * event as the Runtime named it. A task that has not ended has no verdict yet, and
+   * the card says so rather than guessing (RULE-59).
+   */
+  async function agentViewOf(agentId: string, tasks: readonly TimelineTask[]): Promise<TodoAgentView> {
+    const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
+    const finished = tasks.find((task) =>
+      task.agent_id === agentId && task.status === 'completed' && task.task_id.startsWith('task-'));
+    const verdict = finished?.status === 'completed'
+      ? finished.events
+        .map((event) => (event.detail as { event_type?: unknown } | undefined)?.event_type)
+        .find((type): type is string => typeof type === 'string' && type.startsWith('TASK_'))
+      : undefined;
+    return {
+      agentId,
+      status: status.agent_status,
+      remainingSeconds: status.remaining_seconds,
+      outcome: finished?.status === 'completed' ? verdict ?? finished.terminal_outcome : null,
+      completedAt: finished?.status === 'completed' ? finished.completed_at : null,
+    };
+  }
 }
 
 /**

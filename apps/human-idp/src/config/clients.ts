@@ -6,15 +6,25 @@ import { DPOP_REQUIRED_AUDIENCES } from './dpop-required-audiences.js';
 
 export const AUTOMATION_APP_CLIENT_ID = 'automation-app';
 export const AGENT_PLATFORM_CLIENT_ID = 'agent-platform';
+export const ANALYSIS_CONSOLE_CLIENT_ID = 'analysis-console';
 
 /**
- * Two confidential clients, no more. RULE-50 / DEC-ID-22: an agent is never a
- * registered client; one agent is told from another by cnf.jkt, act and the audit
- * log. `example-client` from the generator's defaults is deliberately absent.
+ * One client per deployed application that a person logs in to, and never one per
+ * agent. RULE-50 / DEC-ID-22 is about the second: an agent is never a registered
+ * client, and one agent is told from another by cnf.jkt, act and the audit log. The
+ * guard below is what enforces that, and it is a name test rather than a count —
+ * a third screen is a third client, and a thousand agents are still none.
+ *
+ * `analysis-console` is that third screen. It holds `openid profile` and no operation
+ * scope, so `blanketDpopApplies` answers false for it and `decideAudience` maps it to
+ * no Control Plane audience: logging in there yields a name and opens nothing.
+ *
+ * `example-client` from the generator's defaults is deliberately absent.
  */
 export function createClientRegistry(env: HumanIdpEnv): ReadonlyMap<string, RegisteredClient> {
   assertRedirectUri(env, env.automationAppRedirectUri);
   assertRedirectUri(env, env.agentOpCallbackUri);
+  assertRedirectUri(env, env.analysisConsoleRedirectUri);
 
   const registry = new Map<string, RegisteredClient>([
     [AUTOMATION_APP_CLIENT_ID, {
@@ -31,6 +41,18 @@ export function createClientRegistry(env: HumanIdpEnv): ReadonlyMap<string, Regi
       clientSecret: env.clientSecretAgentPlatform,
       redirectUris: [env.agentOpCallbackUri],
       clientType: 'confidential',
+      grantTypes: ['authorization_code', 'refresh_token'],
+      tokenEndpointAuthMethod: 'client_secret_basic',
+      defaultMaxAge: 3600,
+    }],
+    [ANALYSIS_CONSOLE_CLIENT_ID, {
+      clientId: ANALYSIS_CONSOLE_CLIENT_ID,
+      clientSecret: env.clientSecretAnalysisConsole,
+      redirectUris: [env.analysisConsoleRedirectUri],
+      clientType: 'confidential',
+      // `refresh_token` is registered for the same reason it is for the others — the
+      // grant list is per client and this one never asks for `offline_access`, so no
+      // refresh token is ever issued to it.
       grantTypes: ['authorization_code', 'refresh_token'],
       tokenEndpointAuthMethod: 'client_secret_basic',
       defaultMaxAge: 3600,

@@ -7,7 +7,7 @@ import {
 import { buildActivityPath, decodePushMessage, storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline } from '../src/activity/query.js';
 import { emitAgentStopped, emitConfirmed, emitLoggedIn, emitProposed } from '../src/activity/emit.js';
-import { AGENT_ID, ISSUER, SUBJECT, mintAccessToken, seedAgent, startAutomationApp } from './helpers.js';
+import { AGENT_ID, ISSUER, SUBJECT, config, mintAccessToken, seedAgent, startAutomationApp } from './helpers.js';
 
 function event(overrides: Partial<ActivityEvent> = {}): ActivityEvent {
   return validateActivityEvent({
@@ -86,7 +86,7 @@ describe('the four Automation App emitters', () => {
   it('writes Japanese titles and messages, never blank', async () => {
     await emitProposed({ humanSubject: SUBJECT }, { purpose: '経費精算', workDefinitionId: 'wd_1' });
     const [entry] = drainActivityQueueForTesting();
-    expect(entry!.message).toBe('Automation Design AI が「経費精算」を提案しました');
+    expect(entry!.message).toBe('「経費精算」を ToDo として登録しました。');
     for (const text of [entry!.title, entry!.message]) {
       expect(text.trim()).not.toBe('');
       // eslint-disable-next-line no-control-regex
@@ -136,11 +136,11 @@ describe('the four Automation App emitters', () => {
     const asUser = (path: string, init: RequestInit = {}): Promise<Response> =>
       harness.fetch(path, { ...init, headers: { ...(init.headers as Record<string, string>), cookie } });
 
-    const created = await (await asUser('/api/work-definitions', {
+    const created = await (await asUser('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '毎朝の日報をまとめる' }),
+      body: JSON.stringify({ title: '毎朝の日報をまとめる' }),
     })).json() as { work_definition_id: string };
-    await asUser(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+    await asUser(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
     await seedAgent(harness, { state: { agent_status: 'ACTIVE' } });
     expect((await asUser(`/api/agents/${AGENT_ID}/stop`, { method: 'POST' })).status).toBe(200);
 
@@ -185,6 +185,32 @@ describe('the push subscriber', () => {
       body: JSON.stringify({ message: { data: Buffer.from(JSON.stringify(event())).toString('base64') } }),
     });
     expect(response.status).toBe(401);
+  });
+
+  /**
+   * The audience the delivery's token is checked against is `PUBLIC_BASE_URL`, not the
+   * URL the request arrived at.
+   *
+   * Cloud Run terminates TLS at its front end and forwards plain HTTP/1.1 to the
+   * container, so `context.req.url` is `http://…` while T-IAC-28 mints the subscription's
+   * OIDC token for the `https://…` audience. Deriving the audience from the request
+   * answered every real delivery 401.
+   */
+  it('checks the token against PUBLIC_BASE_URL, not the URL Cloud Run forwarded', async () => {
+    const audiences: string[] = [];
+    const harness = await startAutomationApp({
+      verifyPush: async ({ audience }) => {
+        audiences.push(audience);
+        return { email: 'sa-pubsub-push@x' };
+      },
+    });
+    const response = await harness.fetch('http://automation-app.test/internal/activity/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', authorization: 'Bearer pubsub-oidc', cookie: '' },
+      body: JSON.stringify({ message: { data: Buffer.from(JSON.stringify(event())).toString('base64') } }),
+    });
+    expect(response.status).toBe(200);
+    expect(audiences).toEqual([config.publicBaseUrl]);
   });
 
   /**

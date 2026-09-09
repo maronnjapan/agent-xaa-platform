@@ -3,6 +3,7 @@ import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { basicClientAuthHeader } from '@xaa/contracts';
+import { CONSENT_SCOPE } from '../src/auth/login-flow.js';
 import { LOGIN_SCOPE, buildAuthorizationRequest, humanIdpJwksUrl } from '../src/auth/oidc-login.js';
 import {
   SESSION_COOKIE, SESSION_FIELDS, SESSION_TOKEN_AUDIENCES, createSessionStore, readSessionCookie,
@@ -77,6 +78,22 @@ describe('logging in', () => {
     expect(new URL(request.url).searchParams.get('scope')).toBe('openid profile');
     expect(request.url).not.toContain('offline_access');
     expect(new URL(request.url).searchParams.get('code_challenge_method')).toBe('S256');
+  });
+
+  /**
+   * One question, not four. The scopes the four Access Tokens need are named in the
+   * request the person actually sees, so the consent screen states the whole
+   * delegation instead of coming back once per scope.
+   */
+  it('names every scope the login will need in the one request the person sees', async () => {
+    expect(CONSENT_SCOPE.split(' ')).toEqual([
+      'openid', 'profile', 'agent:operate', 'workdef:submit', 'agent:provision', 'agent:revoke',
+    ]);
+    expect(CONSENT_SCOPE).not.toContain('offline_access');
+
+    const harness = await startAutomationApp();
+    const login = await harness.fetch('/login', { headers: { cookie: '' } });
+    expect(new URL(login.headers.get('Location')!).searchParams.get('scope')).toBe(CONSENT_SCOPE);
   });
 
   it('uses the Human IdP JWKS endpoint that the provider exposes', () => {
@@ -208,7 +225,7 @@ describe('the app shell', () => {
     expect(await response.json()).toEqual({ status: 'ok', app: 'automation-app' });
   });
 
-  it('loads documented variables with fault injection disabled by default', () => {
+  it('loads exactly the sixteen documented variables, with the failure exercise off', () => {
     const loaded = loadConfig({
       ISSUER: config.issuer,
       CLIENT_SECRET_AUTOMATION_APP: config.clientSecret,
@@ -217,13 +234,14 @@ describe('the app shell', () => {
       AGENT_PROVISIONER_URL: config.agentProvisionerUrl,
       LIFECYCLE_MANAGER_URL: config.lifecycleManagerUrl,
       DOCS_API_URL: config.docsApiUrl,
+      ANALYSIS_CONSOLE_URL: config.analysisConsoleUrl,
       ACTIVITY_TOPIC: config.activityTopic,
       VERTEX_MODEL: config.vertexModel,
     });
-    expect(Object.keys(loaded)).toHaveLength(15);
+    expect(Object.keys(loaded)).toHaveLength(16);
     expect(loaded.faultInjectionEnabled).toBe(false);
     expect(loaded.clientId).toBe('automation-app');
-    expect(loaded.defaultAgentLifetimeHours).toBe(1);
+    expect(loaded.defaultAgentLifetimeMinutes).toBe(60);
     expect(() => loadConfig({})).toThrow(/ISSUER is required/);
   });
 });

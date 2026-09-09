@@ -17,7 +17,7 @@ async function run(options: { humanPermissions: string[]; model: FakeModel; desc
   await seedAuthorizationData(documents, options.humanPermissions, createFirestoreDocumentStore(firestore, 'seed'));
   return decide({
     humanSubject: 'testuser', purpose: 'テスト', description: options.description,
-    constraints: {}, requestedLifetimeHours: 8,
+    constraints: {}, requestedLifetimeMinutes: 480,
   }, {
     store: createAuthorizationStore(documents),
     vertex: createFakeVertex(options.model),

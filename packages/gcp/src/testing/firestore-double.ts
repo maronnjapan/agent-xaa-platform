@@ -1,4 +1,22 @@
 import { Timestamp, type Firestore } from '@google-cloud/firestore';
+import { documentIdByteLength, MAX_DOCUMENT_ID_BYTES } from '../document-id.js';
+
+/** Every row the double holds, as `collection -> document id -> fields`. */
+export type FirestoreSnapshot = Record<string, Record<string, Record<string, unknown>>>;
+
+export interface FirestoreDoubleOptions {
+  /** Rows to start from, in the shape `read` below hands back. */
+  snapshot?: FirestoreSnapshot;
+  /**
+   * Called after every write.
+   *
+   * `read` renders the whole state and is a function rather than a value so a caller
+   * that batches its saves renders once per save rather than once per write — which is
+   * what the local runner does, and the difference between a debounced snapshot and a
+   * full copy of the database on every field update.
+   */
+  onWrite?(read: () => FirestoreSnapshot): void;
+}
 
 /**
  * In-process stand-in for the Firestore surface `DocumentStore` and the two store
@@ -7,9 +25,17 @@ import { Timestamp, type Firestore } from '@google-cloud/firestore';
  *
  * It exists so the same specs run with or without `gcloud emulators firestore`.
  * Set FIRESTORE_EMULATOR_HOST to exercise the real client instead.
+ *
+ * The two options are what makes it a database that can outlive its process: rows in,
+ * and a notification out. Neither knows about files — where the rows are kept, and in
+ * what form, belongs to the caller that has somewhere to keep them.
  */
-export function createFirestoreDouble(): Firestore {
-  const collections = new Map<string, Map<string, Record<string, unknown>>>();
+export function createFirestoreDouble(options: FirestoreDoubleOptions = {}): Firestore {
+  const collections = new Map<string, Map<string, Record<string, unknown>>>(
+    Object.entries(options.snapshot ?? {}).map(([name, documents]) => [name, new Map(Object.entries(documents))]),
+  );
+  const readSnapshot = (): FirestoreSnapshot =>
+    Object.fromEntries([...collections].map(([name, documents]) => [name, Object.fromEntries(documents)]));
   const documentsOf = (name: string) => {
     const existing = collections.get(name);
     if (existing) return existing;
@@ -24,7 +50,12 @@ export function createFirestoreDouble(): Firestore {
   // Bumped on every write so a transaction can tell whether what it read still holds.
   const versions = new Map<string, number>();
   const versionOf = (name: string, id: string) => versions.get(`${name}/${id}`) ?? 0;
-  const bump = (name: string, id: string) => versions.set(`${name}/${id}`, versionOf(name, id) + 1);
+  // The one place every write passes through — document, batch and transaction alike —
+  // so a caller that wants to hear about writes hears about all of them or none.
+  const bump = (name: string, id: string) => {
+    versions.set(`${name}/${id}`, versionOf(name, id) + 1);
+    options.onWrite?.(readSnapshot);
+  };
 
   const rows = (name: string, filters: Filter[], limit?: number, order?: Order) => {
     const compare = (actual: unknown, operator: string, value: unknown): boolean => {
@@ -40,27 +71,38 @@ export function createFirestoreDouble(): Firestore {
     return limit === undefined ? matched : matched.slice(0, limit);
   };
 
-  const docRef = (name: string, id: string) => ({
-    id,
-    __collection: name,
-    async get() {
-      const data = documentsOf(name).get(id);
-      return { exists: data !== undefined, id, __collection: name, data: () => data };
-    },
-    async set(value: Record<string, unknown>) { documentsOf(name).set(id, value); bump(name, id); },
-    async create(value: Record<string, unknown>) {
-      if (documentsOf(name).has(id)) throw Object.assign(new Error('ALREADY_EXISTS'), { code: 6 });
-      documentsOf(name).set(id, value);
-      bump(name, id);
-    },
-    async update(patch: Record<string, unknown>) {
-      const current = documentsOf(name).get(id);
-      if (!current) throw Object.assign(new Error('NOT_FOUND'), { code: 5 });
-      documentsOf(name).set(id, { ...current, ...patch });
-      bump(name, id);
-    },
-    async delete() { documentsOf(name).delete(id); bump(name, id); },
-  });
+  const docRef = (name: string, id: string) => {
+    // Firestore refuses an over-long document id; until the double did too, a key
+    // that could never be written in production wrote happily in every test.
+    const bytes = documentIdByteLength(id);
+    if (bytes > MAX_DOCUMENT_ID_BYTES) {
+      throw Object.assign(
+        new Error(`INVALID_ARGUMENT: a document id is limited to ${MAX_DOCUMENT_ID_BYTES} bytes, this one is ${bytes}`),
+        { code: 3 },
+      );
+    }
+    return {
+      id,
+      __collection: name,
+      async get() {
+        const data = documentsOf(name).get(id);
+        return { exists: data !== undefined, id, __collection: name, data: () => data };
+      },
+      async set(value: Record<string, unknown>) { documentsOf(name).set(id, value); bump(name, id); },
+      async create(value: Record<string, unknown>) {
+        if (documentsOf(name).has(id)) throw Object.assign(new Error('ALREADY_EXISTS'), { code: 6 });
+        documentsOf(name).set(id, value);
+        bump(name, id);
+      },
+      async update(patch: Record<string, unknown>) {
+        const current = documentsOf(name).get(id);
+        if (!current) throw Object.assign(new Error('NOT_FOUND'), { code: 5 });
+        documentsOf(name).set(id, { ...current, ...patch });
+        bump(name, id);
+      },
+      async delete() { documentsOf(name).delete(id); bump(name, id); },
+    };
+  };
 
   const query = (name: string, filters: Filter[] = [], limit?: number, order?: Order): unknown => ({
     doc: (id: string) => docRef(name, id),
@@ -71,6 +113,15 @@ export function createFirestoreDouble(): Firestore {
     async get() {
       const docs = rows(name, filters, limit, order);
       return { docs, size: docs.length, empty: docs.length === 0 };
+    },
+    /**
+     * Every document reference in the collection, without reading any of them. The
+     * seed uses it to empty the collections it is about to replace, so a double
+     * without it cannot run the seed — and the seed is what puts the catalogue, the
+     * taxonomy and the permission rows in front of every other component.
+     */
+    async listDocuments() {
+      return [...documentsOf(name).keys()].map((id) => docRef(name, id));
     },
   });
 

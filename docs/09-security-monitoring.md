@@ -3,7 +3,7 @@
 Security Detectionは、Identity、Authorization、Token、Tool、APIの各ログからAgentの異常を検知し、Lifecycle Managerへ隔離や失効を依頼するアプリである。
 アプリの配置と権限は [08. §2](./08-gcp-infrastructure.md#2-デプロイ単位と内部機能) と [08. §5](./08-gcp-infrastructure.md#5-service-account一覧) を参照。
 
-本書が扱うのは検知と自動対応であり、判断の主体は機械である。操作している人間向けに、判断済みの結果を時系列で見せる画面は[11. アクティビティタイムライン](./11-activity-timeline.md)を参照。
+本書が扱うのは検知と自動対応であり、判断の主体は機械である。操作している人間向けに、判断済みの結果を時系列で見せる画面は[11. アクティビティタイムライン](./11-activity-timeline.md)を参照。その機械が何をどう判断したかを本人へ見せる画面は[§7](#7-判断を本人へ見せる)にある。
 
 ## 1. 基本方針
 
@@ -199,3 +199,54 @@ ACTIVE → SUSPICIOUS → QUARANTINED → REVOKED → DESTROYED
 QUARANTINEDではAgent OPの新規ID-JAG発行と `subject_token` の払い出しを止め、REVOKED以降は [07. §6](./07-lifecycle.md#6-expiration--緊急停止) のCleanupを実行する。
 判断が曖昧な場合はHuman Reviewへ回す。
 侵害時の影響範囲がIsolation Levelでどう変わるかは [05. §5](./05-identity.md#5-isolation-model) を参照。
+
+## 7. 判断を本人へ見せる
+
+判断の主体は機械であるが、判断された側の人間は結果だけを渡される。
+「隔離しました」という1行はAgentが止まった事実を伝えるだけで、なぜそう判断されたかは伝えない。
+Human Reviewで承認を求められた人も、Agentを隔離された人も、根拠を読めないまま可否を答えることになる。
+
+そこでSecurity Findingに、[§5.6](#56-security-ai-analysis) でAIが出した4観点の回答そのものを残す。
+
+| 残すもの | 内容 |
+|---|---|
+| `analysis` | 逸脱・判断・影響の3区画。AIが答えた文章のまま保存する。推奨と確信度は `recommended_response` と `confidence` が持つ |
+| `analysis_source` | `model`（AIの回答を読めた）か `fallback`（読めず、Risk Scoreだけで既定の対応を決めた）か |
+| `analyzed_at` | 分析した時刻 |
+
+`analysis_source` を分けるのは、`fallback` を判断として見せないためである。
+AIから読める回答が返らなかったときの対応は [§5.5](#55-risk-score) のScoreだけで決まる既定値であり、何かが推論した結論ではない。
+2つを同じ見た目で並べれば、人は既定値を結論として読む。
+
+### 7.1 Analysis Console
+
+判断を見せる画面は、**Analysis Console**という独立したデプロイ単位に置く。
+Automation Appの中の1画面にはしない。理由は2つある。
+
+| 理由 | 内容 |
+|---|---|
+| 権限が要らない | 判断を読む画面は、Agentを作る・止めるという操作の権限を1つも必要としない。別アプリなら、そのSessionはControl PlaneのAccess Tokenを1つも持たない |
+| 将来の宛先が違う | 全ユーザーのFindingを横断で見る運用者向けの画面は、自分の分だけを見る画面とは別の権限モデルになる（[11. §8](./11-activity-timeline.md#9-今後の検討事項)）。境界をアプリの外に置いておくほうが後から足しやすい |
+
+Human IdPのclientもAutomation Appとは別に持つ。
+登録scopeは `openid` と `profile` だけで、Operation Scopeを1つも持たない。
+その結果、`decideAudience` はControl PlaneのAudienceを1つも返さず、`blanketDpopApplies` も false になる。
+つまり、このconsoleにログインして得られるのは名前だけで、何も開かない。
+利用者はAutomation Appとは別にもう一度ログインする。
+
+参照範囲はログインした本人の `human_subject` に限る（RULE-56）。
+画面が表示するのは、Risk ScoreとLevel、反応したルールのコード、AIの4観点、推奨する対応と確信度、Human Reviewの状態、そしてAgentの現在の状態である。
+Findingが持つ `related_events` と `deviations` は渡さない。
+前者は監査ログを引くための相関idであり、後者は `trace_id` を含む。どちらも画面の説明には要らない（RULE-38）。
+
+Analysis ConsoleはSecurity Detectionを呼ばない。
+[T-SEC-08](../tasks/done/11-security.md) が、いずれのアプリからもSecurity Detectionへ向かうinvokerエッジを作らないと決めているためである。
+`security_findings` と `agents/{agent_id}/meta` を `packages/gcp/src/access-matrix.json` で読み取り専用として許し、Firestoreから直接読む（DEV-05）。
+これにより、Security Detectionが再デプロイ中でもconsoleは開く。
+
+Sessionの保管先もAutomation Appとは分ける（`console_sessions`）。
+1つのcollectionを2つのアプリで共有すると、片方が発行したSession IDをもう片方も受け入れることになり、一度のログインがもう一方の画面へのアクセスに変わる。
+
+画面は判断を行わない。
+承認も却下もここでは押せず、表示する文章はすべてSecurity Detectionか、それが問い合わせたAIが判断した時点で書いたものである（RULE-54）。
+Agentを止めるのはAutomation Appの画面であり、consoleはそこへリンクするだけである。

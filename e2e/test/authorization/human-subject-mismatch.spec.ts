@@ -60,7 +60,7 @@ describe('a body naming another human is refused by all three Control Plane apps
       claimAnotherSubject({
         fetch: authorization.fetch, base: AUTHZ_BASE, path: '/v1/authorization/decisions',
         grant: await controlPlaneGrant('openid workdef:submit'),
-        body: { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_hours: 8 },
+        body: { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_minutes: 480 },
       }),
       claimAnotherSubject({
         fetch: provisioner.fetch, base: PROVISIONER_BASE, path: '/provisioning',
@@ -99,7 +99,7 @@ describe('a body naming another human is refused by all three Control Plane apps
     await claimAnotherSubject({
       fetch: authorization.fetch, base: AUTHZ_BASE, path: '/v1/authorization/decisions',
       grant: await controlPlaneGrant('openid workdef:submit'),
-      body: { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_hours: 8 },
+      body: { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_minutes: 480 },
     });
 
     expect(await authorization.documents.listAll('authorization_decisions')).toEqual([]);

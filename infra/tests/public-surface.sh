@@ -16,9 +16,22 @@ services=infra/envs/demo/services.tf
 locals_file=infra/envs/demo/locals-services.tf
 public_iam=infra/envs/demo/iam-public.tf
 
-expected=(automation-app human-idp agent-op-callback google-bridge-callback stub-saas-op)
+# A comment is documentation, not policy. `variables-admin.tf` says that no `allUsers`
+# grant reaches the admin consoles, and a file may equally name an ingress value in order
+# to say it is not used; reading either as the thing it describes makes the check answer
+# for the prose rather than for the configuration. infra/tests/no-firestore-sdk-in-frontend.sh
+# strips comments for the same reason.
+#
+# Whole-line comments only, and blanked rather than deleted so line numbers still point at
+# the file. Cutting at a `#` anywhere on the line would also cut inside a string that
+# happens to contain one, and losing the rest of that line is how a real grant goes unseen.
+without_comments() {
+  sed -E 's:^[[:space:]]*(#|//).*$::' "$1"
+}
 
-# 1. `public_services` names exactly the five services that may face the internet.
+expected=(automation-app analysis-console human-idp agent-op-callback google-bridge-callback stub-saas-op)
+
+# 1. `public_services` names exactly the six services that may face the internet.
 block=$(sed -n '/public_services = setunion(/,/^  )/p' "$locals_file")
 [[ -n "$block" ]] || { echo 'public-surface: locals.public_services is missing' >&2; exit 1; }
 # Only the service names inside `toset([...])` are members of the set; the bare strings
@@ -42,19 +55,19 @@ done < <(comm -23 <(printf '%s\n' "${wanted[@]}") <(printf '%s\n' "${declared[@]
 # here instead of slipping through on the strength of the derivation it wraps.
 canonical='ingress = contains(local.ingress_all_services, name) ? "INGRESS_TRAFFIC_ALL" : "INGRESS_TRAFFIC_INTERNAL_ONLY"'
 seen=0
-while IFS= read -r line; do
-  [[ -n "$line" ]] || continue
-  body=${line#*:}  # drop the path
-  body=${body#*:}  # drop the line number
-  body=$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+/ /g; s/[[:space:]]+$//' <<<"$body")
-  if [[ "${line%%:*}" == "$services" && "$body" == "$canonical" ]]; then
-    seen=$((seen + 1))
-    continue
-  fi
-  printf 'public-surface / ingress-outside-derivation / %s\n' "$line" >&2
-  status=1
-done < <(find infra/envs infra/modules -name '*.tf' -not -path '*/.terraform/*' -print0 \
-  | xargs -0 -r grep -n 'INGRESS_TRAFFIC_ALL' || true)
+while IFS= read -r -d '' file; do
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    number=${line%%:*}
+    body=$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+/ /g; s/[[:space:]]+$//' <<<"${line#*:}")
+    if [[ "$file" == "$services" && "$body" == "$canonical" ]]; then
+      seen=$((seen + 1))
+      continue
+    fi
+    printf 'public-surface / ingress-outside-derivation / %s:%s:%s\n' "$file" "$number" "$body" >&2
+    status=1
+  done < <(without_comments "$file" | grep -n 'INGRESS_TRAFFIC_ALL' || true)
+done < <(find infra/envs infra/modules -name '*.tf' -not -path '*/.terraform/*' -print0)
 ((seen == 1)) || {
   echo 'public-surface: ingress must be derived from locals.public_services exactly once' >&2
   status=1
@@ -78,10 +91,13 @@ grep -qF 'for_each = local.public_services' "$public_iam" || {
   echo 'public-surface: the allUsers invoker must be generated from locals.public_services' >&2
   exit 1
 }
-foreign=$(find infra/envs -name '*.tf' -not -path '*/.terraform/*' -print0 \
-  | xargs -0 -r grep -l 'allUsers' | grep -v "^$public_iam$" || true)
-[[ -z "$foreign" ]] || {
-  echo "public-surface: allUsers belongs in $public_iam, found in: $foreign" >&2
+foreign=()
+while IFS= read -r -d '' file; do
+  [[ "$file" == "$public_iam" ]] && continue
+  if without_comments "$file" | grep -q 'allUsers'; then foreign+=("$file"); fi
+done < <(find infra/envs -name '*.tf' -not -path '*/.terraform/*' -print0)
+((${#foreign[@]} == 0)) || {
+  echo "public-surface: allUsers belongs in $public_iam, found in: ${foreign[*]}" >&2
   exit 1
 }
 

@@ -24,7 +24,8 @@ required=(
   JWKS_BUCKET JWKS_OBJECT KMS_IDJAG_KEY KMS_IDP_CONNECTION_KEY
   HUMAN_IDP_AUTHORIZE_URL HUMAN_IDP_TOKEN_URL HUMAN_IDP_REVOKE_URL
   ID_JAG_LIFETIME_SECONDS PUBLIC_BASE_URL AUTHORIZATION_PLATFORM_URL
-  AGENT_PROVISIONER_URL LIFECYCLE_MANAGER_URL DOCS_API_URL ACTIVITY_TOPIC JWKS_URL
+  AGENT_PROVISIONER_URL LIFECYCLE_MANAGER_URL DOCS_API_URL ANALYSIS_CONSOLE_URL
+  ANALYSIS_CONSOLE_REDIRECT_URI AUTOMATION_APP_URL ACTIVITY_TOPIC JWKS_URL
   AUTHZ_AUDIENCE TAXONOMY_VERSION AGENT_MAX_LIFETIME_SECONDS PROVISIONER_AUDIENCE
   SHARED_AGENT_OP_URL STANDARD_JOB_NAME MAX_FULL_ISOLATION_AGENTS IDJAG_KEY_RING
   IDP_CONNECTION_KEY_RING AGENT_OP_IMAGE AGENT_RUNTIME_IMAGE DEDICATED_OP_ENV
@@ -32,10 +33,18 @@ required=(
   REGISTERED_SCOPES SIGNING_KEY_BUCKET SIGNING_KEY_OBJECT SIGNING_KEY_KMS_KEY JWKS_KEY_PREFIX
   AS_ISSUER LIFECYCLE_SA_EMAIL FINANCE_ABSOLUTE_MAX_AMOUNT REQUIRE_ISOLATION_LEVEL
   SECURITY_EVENTS_SUBSCRIPTION
-  IDENTITY_DISABLED_SUBSCRIPTION AUTOMATION_APP_URL
+  IDENTITY_DISABLED_SUBSCRIPTION
 )
 
 for key in "${required[@]}"; do require_key "$key"; done
+
+# Cloud Run's runJob takes the job's full resource name. `module.*.name` is the short
+# one, and the Provisioner only reaches that call after a person has answered a consent
+# screen, so a short name here is a failure nobody sees until the demo is being given.
+grep -qE '^[[:space:]]+STANDARD_JOB_NAME[[:space:]]*=[[:space:]]*module\.[a-z_]+\.full_name' "$services" || {
+  echo 'service-env-contract: STANDARD_JOB_NAME must be the full job resource name' >&2
+  exit 1
+}
 
 grep -q 'shared_agent_op_idjag.*cryptoKeyVersions/1' "$shared" || {
   echo 'service-env-contract: Agent OP needs a KMS CryptoKeyVersion, not a CryptoKey' >&2

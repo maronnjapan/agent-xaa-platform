@@ -30,10 +30,14 @@
     "@xaa/stub-saas-api": "workspace:*",
     "@xaa/stub-saas-op": "workspace:*",
     "hono": "4.13.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "seed": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.18.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
     "typescript": "5.9.2",
     "vitest": "4.1.11"
   }

@@ -1,4 +1,5 @@
 import { GoogleAuth } from 'google-auth-library';
+import { isSecureOrLoopback } from '@xaa/contracts';
 
 export interface IdTokenAuth {
   getIdTokenClient(audience: string): Promise<{
@@ -14,7 +15,7 @@ export interface IdTokenAuth {
 export function createIdentityTokenProvider(auth: IdTokenAuth = new GoogleAuth()): (audience: string) => Promise<string> {
   const clients = new Map<string, Awaited<ReturnType<IdTokenAuth['getIdTokenClient']>>>();
   return async (audience) => {
-    if (!audience.startsWith('https://') && !audience.startsWith('http://localhost')) {
+    if (!isSecureOrLoopback(audience)) {
       throw new Error('identity token audience must be an absolute HTTPS origin');
     }
     let client = clients.get(audience);

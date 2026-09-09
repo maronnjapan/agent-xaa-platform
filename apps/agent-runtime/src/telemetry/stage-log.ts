@@ -7,6 +7,12 @@ import { randomBytes } from 'node:crypto';
  * says where it stopped. Nothing back-fills the remaining stages with a failure marker,
  * because a line saying "we reached the resource API and failed" is not the same claim
  * as "we never got there", and the detection queries read the difference.
+ *
+ * The one other way a line is missing is a call that reused an Access Token this
+ * Execution already held: `agent_op`, `id_jag` and `token_endpoint` are absent because
+ * nothing was asked of those services, and `access_token` says `reused` where a fresh
+ * one says `bound`. The two readings do not collide — a run that stopped has no line
+ * after the gap, and a reuse carries on to `resource_api`.
  */
 export const STAGES = [
   'agent_intent', 'tool_selection', 'required_capability', 'auth_mapping',
@@ -31,6 +37,15 @@ const JWT_SHAPE = /^eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 export interface StageLogger {
   spanId: string;
   emit(stage: Stage, fields: StageFields): void;
+  /**
+   * The stage the last line was written for.
+   *
+   * A throw has no stage of its own, and guessing one would break the rule above: the
+   * failure has to be reported where the call actually got to, not back-filled onto a
+   * stage it never entered. The writer already knows, so it is asked rather than
+   * tracked a second time alongside it.
+   */
+  lastStage(): Stage;
 }
 
 export function newSpanId(): string {
@@ -61,9 +76,12 @@ export function createStageLogger(input: {
   const write = input.write ?? ((line: string) => process.stdout.write(line));
   const now = input.now ?? (() => Date.now());
   const spanId = input.spanId ?? newSpanId();
+  let lastStage: Stage = STAGES[0];
   return {
     spanId,
+    lastStage: () => lastStage,
     emit(stage, fields) {
+      lastStage = stage;
       const line: Record<string, unknown> = {
         execution_id: input.executionId,
         agent_id: input.agentId,

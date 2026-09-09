@@ -12,6 +12,14 @@ export const checkpointSchema = {
     conversation_context: { type: 'array' },
     execution_state: { type: 'object' },
     pending_tool_calls: { type: 'array' },
+    /**
+     * The human-readable account of each step so far (docs 11 §3.4).
+     *
+     * Optional, because a checkpoint written before the first step has nothing to
+     * account for, and because a Runtime that stopped writing it must fail visibly
+     * rather than quietly hand the screen an empty list.
+     */
+    execution_log: { type: 'array' },
     agent_status: { type: 'string', minLength: 1 },
     updated_at: { type: 'string', format: 'date-time' },
   },
@@ -22,6 +30,7 @@ export interface Checkpoint {
   conversation_context: unknown[];
   execution_state: Record<string, unknown>;
   pending_tool_calls: unknown[];
+  execution_log?: unknown[];
   agent_status: string;
   updated_at: string;
 }

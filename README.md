@@ -3,7 +3,37 @@
 自律型 AI エージェントに、人間から委譲された権限の範囲内だけで社内 API と外部 SaaS を使わせるための認証認可基盤である。
 設計は [docs/](./docs/README.md)、GCP の構成と運用は [infra/README.md](./infra/README.md) にある。
 
-## 初めて動かす
+## 手元で動かす
+
+GCP も課金も要らない。
+Node.js 22 と pnpm があれば、基盤全体が手元のパソコン1台の上で動く。
+Docker は要らず、データベースのインストールも要らない。
+
+```bash
+git clone https://github.com/maronnjapan/agent-xaa-platform.git
+cd agent-xaa-platform
+pnpm install --frozen-lockfile
+pnpm local
+```
+
+`http://127.0.0.1:8080` を開き、`testuser` / `password` でログインする。
+
+既定ではモデルを呼ばないので、ToDo から Agent Definition を作る段階で止まる。
+最後まで通すには実行モデルを1つ指定する。
+Gemini に限らず、手元の Claude Code や Codex も使える。
+
+```bash
+MODEL_PROVIDER=cli MODEL_CLI=claude-code pnpm local           # Claude Code
+MODEL_PROVIDER=cli MODEL_CLI=codex pnpm local                 # Codex
+MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=... pnpm local     # Anthropic API
+MODEL_PROVIDER=openai OPENAI_API_KEY=... pnpm local           # OpenAI 互換 API
+```
+
+止めても、書いた ToDo も決まった権限もログインも `.local/state` に残り、次に起動したときそのまま続きから使える。
+最初からやり直したいときは、そのディレクトリを消す。
+ポートの一覧、設定できること、配備した基盤との違いは [docs/local-development.md](./docs/local-development.md) にある。
+
+## GCP へ配備する
 
 GCP、Terraform、プログラミングの知識は要らない。
 必要なのは、Google アカウント、クレジットカード（請求先アカウントの作成に使う。初回は無料トライアルのクレジットが付く）、パソコン1台である。
@@ -39,12 +69,18 @@ macOS と Linux はターミナルで、Windows は [WSL2](https://learn.microso
 費用は放置で月額約 $0.5、1日動かして $1.1〜1.5 の見込みである（[tasks/README.md](./tasks/README.md) の DEC-COST-01）。
 
 終わると、ブラウザで開く URL とログイン情報（`testuser` / `password`）が表示される。
-その画面で自動化したい内容を書き、提示された Agent Definition を承認すると、エージェントが実行を始める。
+その画面で AI にやってもらう ToDo を書き、提示された Agent Definition を承認すると、エージェントが ToDo の実行を始める。
 
 ## 画面を操作する
 
-作業を書くところから Agent を止めるところまでの手順は [docs/user-guide.md](./docs/user-guide.md) にある。
+ToDo を書くところから Agent を止め、ToDo を完了にするところまでの手順は [docs/user-guide.md](./docs/user-guide.md) にある。
 同じ案内は、ログイン後の画面の「使い方」（`/guide`）にも置いてある。
+
+画面は2つある。
+Automation App は AI にやってもらう ToDo を書いて Agent を作り、動かし、止め、ToDo を閉じるところである。外部のツールからは `/external/todos` に Human IdP のアクセストークンを付けて ToDo を登録できる（[docs/02 §6](./docs/02-automation-design.md#6-todo登録api)）。
+レビュー中に決めたタスクを ToDo にする例として、[review-markdown-cli](https://github.com/maronnjapan/review-markdown-cli) の出力を読み込む `pnpm review:import` を同梱している（[docs/review-markdown-import.md](./docs/review-markdown-import.md)）。
+Analysis Console は、Agent の挙動を見ているログ分析エージェントが何をどう判断したかを読むところで、別のサイトとして立ち上がる（[docs/09 §7](./docs/09-security-monitoring.md#7-判断を本人へ見せる)）。
+どちらも同じ Human IdP でログインするが、Session は別なので初回はそれぞれでログインする。
 
 ## 実行内容だけを確認する
 
@@ -56,7 +92,7 @@ PROJECT_ID=<project-id> BILLING_ACCOUNT_ID=<XXXXXX-XXXXXX-XXXXXX> scripts/deploy
 
 ## 片付ける
 
-Automation App と Human IdP はインターネットへ公開され、ログイン情報は固定である。
+Automation App、Analysis Console と Human IdP はインターネットへ公開され、ログイン情報は固定である。
 検証が終わったら破棄する。
 
 ```bash

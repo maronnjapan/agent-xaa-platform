@@ -1,10 +1,10 @@
+import type { createFirestoreDouble } from '@xaa/gcp';
 import { describe, expect, it } from 'vitest';
 import { webcrypto } from 'node:crypto';
-import type { createFirestoreDouble } from '@xaa/gcp';
 import { jwkThumbprint } from '@xaa/crypto';
 import { executeTool } from '@xaa/agent-runtime/src/tool-executor/index';
 import { decodeJwtPayload } from '../../harness/oauth-flow.js';
-import { AGENT_OP_BASE, startAgentOp, type AgentOpHarness } from '../../harness/agent-op.js';
+import { AGENT_OP_BASE, seedIdpConnection, startAgentOp, type AgentOpHarness } from '../../harness/agent-op.js';
 import { HUMAN_IDP_ISSUER, idpPublicJwk } from '../../harness/human-idp.js';
 import { seedDocument, startResource, type ResourceHarness } from '../../harness/resource.js';
 import { nativeManifest, startAgentRuntime, type RuntimeHarness } from '../../harness/agent-runtime.js';
@@ -15,11 +15,7 @@ import { humanIdToken } from './native-xaa-path.spec.js';
  * Executor: the ten steps happen because the code runs them, not because the spec
  * calls them in order.
  */
-export async function docsRuntime(options: {
-  humanSubject?: string;
-  /** One Firestore across several apps, for a test that spans them. */
-  shared?: ReturnType<typeof createFirestoreDouble>;
-} = {}): Promise<{
+export async function docsRuntime(options: { humanSubject?: string; shared?: ReturnType<typeof createFirestoreDouble> } = {}): Promise<{
   runtime: RuntimeHarness; agentOp: AgentOpHarness; docs: ResourceHarness; subjectToken: string;
 }> {
   const humanSubject = options.humanSubject ?? 'testuser';
@@ -27,23 +23,24 @@ export async function docsRuntime(options: {
   const agentOp = await startAgentOp({
     idpPublicJwk: await idpPublicJwk(), humanSubject,
     ...(options.shared ? { shared: options.shared } : {}),
+    // Human IdP's answer to the refresh grant Agent OP sends on /xaa/subject-token,
+    // so a Runtime that fetches its own subject token gets a real ID Token back.
+    humanIdpFetch: (async () => Response.json({
+      id_token: subjectToken, refresh_token: 'rt-2', access_token: 'at-1', expires_in: 3600,
+    })) as unknown as typeof fetch,
   });
   const docs = await startResource({
     kind: 'docs', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER,
   });
   const runtime = await startAgentRuntime({
+    ...(options.shared ? { shared: options.shared } : {}),
     agentOp, agentOpBaseUrl: AGENT_OP_BASE, resources: [docs], humanSubject,
     manifest: nativeManifest({ agentId: agentOp.agentId, resource: docs, kind: 'docs' }),
     agentClientPrivateJwk: JSON.stringify(await webcrypto.subtle.exportKey('jwk', agentOp.agentKeyPair.privateKey)),
-    ...(options.shared ? { shared: options.shared } : {}),
   });
   // The Agent OP mints subject tokens from its stored IdP connection; the harness
-  // seeds the one the Runtime will ask for.
-  await agentOp.documents.set('idp_connections', `idpconn-${agentOp.agentId}`, {
-    idp_connection_id: `idpconn-${agentOp.agentId}`, agent_id: agentOp.agentId, human_subject: humanSubject,
-    id_token: subjectToken, refresh_token_ciphertext: 'x', status: 'ACTIVE',
-    created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-  });
+  // seeds the one the Runtime will ask for, in the shape the route reads.
+  await seedIdpConnection(agentOp, { human_subject: humanSubject });
   return { runtime, agentOp, docs, subjectToken };
 }
 
@@ -60,10 +57,10 @@ describe('the Runtime Flow, Document side', () => {
 
     expect(result).toMatchObject({ outcome: 'success' });
 
-    const accessToken = runtime.context.tokens.get(
+    const held = runtime.context.tokens.get(
       `at:${docs.asIssuer}|${docs.resourceUri}|docs.read`, Date.now(),
     )!;
-    const claims = decodeJwtPayload(accessToken);
+    const claims = decodeJwtPayload(held.accessToken);
     const jkt = await jwkThumbprint(runtime.context.dpop.publicJwk);
 
     // (1) the ID-JAG's subject is the delegating human, (2) its actor is this agent,

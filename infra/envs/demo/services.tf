@@ -14,17 +14,23 @@ locals {
   }
   service_specific_env = {
     "human-idp" = {
-      ISSUER                      = local.platform_endpoints.issuer
-      PUBLIC_BASE_URL             = local.run_url["human-idp"]
-      ISSUER_PROFILE              = var.issuer_profile
-      JWKS_PUBLIC_BASE_URL        = "https://storage.googleapis.com/${local.jwks_bucket}"
-      JWKS_BUCKET                 = local.jwks_bucket
-      KEY_BUCKET                  = google_storage_bucket.platform_config.name
-      KMS_SSO_KEY_NAME            = data.terraform_remote_state.shared.outputs.kms_keys.human_idp_sso
-      DPOP_REQUIRED               = "true"
-      ACCESS_TOKEN_EXPIRES_IN     = "300"
-      AUTOMATION_APP_REDIRECT_URI = "${local.run_url["automation-app"]}/callback"
-      AGENT_OP_CALLBACK_URI       = "${local.run_url["agent-op-callback"]}/xaa/callback"
+      ISSUER               = local.platform_endpoints.issuer
+      PUBLIC_BASE_URL      = local.run_url["human-idp"]
+      ISSUER_PROFILE       = var.issuer_profile
+      JWKS_PUBLIC_BASE_URL = "https://storage.googleapis.com/${local.jwks_bucket}"
+      JWKS_BUCKET          = local.jwks_bucket
+      KEY_BUCKET           = google_storage_bucket.platform_config.name
+      KMS_SSO_KEY_NAME     = data.terraform_remote_state.shared.outputs.kms_keys.human_idp_sso
+      DPOP_REQUIRED        = "true"
+      # Matches SESSION_TTL_SECONDS in apps/automation-app/src/auth/session-store.ts.
+      # A session holds the four Access Tokens it was minted with and never refreshes
+      # them (DEC-ID-13 leaves this app no refresh token to do it with), so a token
+      # shorter than the session is a session that stops working while it is still
+      # valid: the stop button, five minutes after logging in, answered `invalid_token`.
+      ACCESS_TOKEN_EXPIRES_IN       = "3600"
+      AUTOMATION_APP_REDIRECT_URI   = "${local.run_url["automation-app"]}/callback"
+      AGENT_OP_CALLBACK_URI         = "${local.run_url["agent-op-callback"]}/xaa/callback"
+      ANALYSIS_CONSOLE_REDIRECT_URI = "${local.run_url["analysis-console"]}/callback"
     }
     "shared-agent-op" = {
       MODE                       = "token"
@@ -72,8 +78,18 @@ locals {
       AGENT_PROVISIONER_URL      = local.run_url["provisioner"]
       LIFECYCLE_MANAGER_URL      = local.run_url["lifecycle"]
       DOCS_API_URL               = local.resource_servers.docs.resource
+      ANALYSIS_CONSOLE_URL       = local.run_url["analysis-console"]
       ACTIVITY_TOPIC             = "agent-activity-stream"
       AGENT_MAX_LIFETIME_SECONDS = tostring(var.agent_max_lifetime_seconds)
+    }
+    # The screen that shows what Security Detection decided. Four variables and no
+    # more: it calls no other service, so there is no URL here to call one with. What
+    # it reads, it reads from Firestore under the access matrix, because T-SEC-08
+    # forbids any application from invoking the detector.
+    "analysis-console" = {
+      ISSUER             = local.platform_endpoints.issuer
+      PUBLIC_BASE_URL    = local.run_url["analysis-console"]
+      AUTOMATION_APP_URL = local.run_url["automation-app"]
     }
     "authorization" = {
       ISSUER                     = local.platform_endpoints.issuer
@@ -85,6 +101,8 @@ locals {
       ACTIVITY_TOPIC             = "agent-activity-stream"
       TAXONOMY_VERSION           = "v1"
       AGENT_MAX_LIFETIME_SECONDS = tostring(var.agent_max_lifetime_seconds)
+      # The permission console. Empty leaves it reachable by nobody.
+      ADMIN_PRINCIPALS = join(",", var.admin_principals)
     }
     "provisioner" = {
       ISSUER                          = local.platform_endpoints.issuer
@@ -92,7 +110,7 @@ locals {
       PROVISIONER_AUDIENCE            = "agent-provisioner"
       PUBLIC_BASE_URL                 = local.run_url["provisioner"]
       SHARED_AGENT_OP_URL             = local.run_url["shared-agent-op"]
-      STANDARD_JOB_NAME               = module.agent_runtime_standard.name
+      STANDARD_JOB_NAME               = module.agent_runtime_standard.full_name
       MAX_FULL_ISOLATION_AGENTS       = tostring(var.max_full_isolation_agents)
       AGENT_MAX_LIFETIME_SECONDS      = tostring(var.agent_max_lifetime_seconds)
       ACTIVITY_TOPIC                  = "agent-activity-stream"
@@ -101,9 +119,26 @@ locals {
       JWKS_BUCKET                     = local.jwks_bucket
       PROVISIONER_SA_EMAIL            = module.service_accounts["provisioner"].email
       AGENT_PLATFORM_CLIENT_SECRET_ID = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.agent_platform
+      # Where the Provisioner asks for a SaaS connection and narrows one into a binding
+      # (T-PROV-16). Empty when the Bridge is not deployed, which the service reads as
+      # "no Bridge client" — the `provisioner -> google-bridge` invoker edge exists on
+      # the same condition, so there is nothing to call either way, and the placeholder
+      # `platform_endpoints` carries is not an address anything should dial.
+      BRIDGE_INTERNAL_URL = var.enable_google_bridge ? local.platform_endpoints.bridge_internal_url : ""
+      # The capability-to-resource mapping console. Empty leaves it reachable by nobody.
+      ADMIN_PRINCIPALS = join(",", var.admin_principals)
+      # What a Dedicated Agent's own Service Account must be able to invoke: the same
+      # doors locals-invoker.tf opens for sa-agent-runtime, less the Shared OP it does
+      # not use. The Resource APIs belong here as much as the AS in front of them: an
+      # agent that redeems an Access Token and is then refused at the API door has come
+      # no further than one refused at the token endpoint. The two lists are held
+      # together by infra/tests/runtime-invoker-parity.sh, because invoker-matrix.sh
+      # reads a deployed project and a Dedicated service exists only while its Agent does.
       DEDICATED_RUNTIME_INVOKER_SERVICES = jsonencode(compact([
         "projects/${var.project_id}/locations/${var.region}/services/resource-docs-as",
         "projects/${var.project_id}/locations/${var.region}/services/resource-finance-as",
+        "projects/${var.project_id}/locations/${var.region}/services/resource-docs-api",
+        "projects/${var.project_id}/locations/${var.region}/services/resource-finance-api",
         var.enable_google_bridge ? "projects/${var.project_id}/locations/${var.region}/services/google-bridge" : null,
       ]))
       AGENT_OP_IMAGE        = "${data.terraform_remote_state.shared.outputs.repository_path}/agent-op:${var.image_tag}"
@@ -187,6 +222,8 @@ locals {
       # T-APP-05: the one other caller `serviceIdentity` ever accepts, and only for
       # `POST /documents` with `type: 'daily_report'` (see internal-write.ts).
       AUTOMATION_APP_SA_EMAIL = module.service_accounts["automation_app"].email
+      # The document console. Empty leaves it reachable by nobody.
+      ADMIN_PRINCIPALS = join(",", var.admin_principals)
     }
     "resource-finance-as" = {
       PUBLIC_BASE_URL      = local.run_url["resource-finance-as"]
@@ -271,10 +308,20 @@ locals {
             secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.agent_platform
             version = "latest"
           }
+          CLIENT_SECRET_ANALYSIS_CONSOLE = {
+            secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.analysis_console
+            version = "latest"
+          }
         } : {},
         name == "automation-app" ? {
           CLIENT_SECRET_AUTOMATION_APP = {
             secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.automation_app
+            version = "latest"
+          }
+        } : {},
+        name == "analysis-console" ? {
+          CLIENT_SECRET_ANALYSIS_CONSOLE = {
+            secret  = data.terraform_remote_state.shared.outputs.human_idp_client_secret_ids.analysis_console
             version = "latest"
           }
         } : {},

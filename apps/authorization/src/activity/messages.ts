@@ -1,9 +1,22 @@
-import type { ViolationCode } from '@xaa/contracts';
+import type { ReasonCode, ViolationCode } from '@xaa/contracts';
 
 export interface DeniedCapability {
   capability_id: string;
   violation_code: ViolationCode | null;
 }
+
+/**
+ * Why a proposed capability ended the way it did, in the words of the filter that
+ * ended it. One sentence per reason code, so the record's checks (docs 11 §3.4) say
+ * what happened rather than naming a code a person has to look up.
+ */
+export const REASON_MESSAGES: Readonly<Record<ReasonCode, string>> = {
+  not_in_human_permission: '本人がこの権限を持っていないため却下しました。',
+  not_delegatable: 'この権限は Agent へ委譲できないと定められているため却下しました。',
+  org_policy_denied: '組織ポリシーが禁じているため却下しました。',
+  risk_policy_denied: 'リスクポリシーが禁じているため却下しました。',
+  allowed: '本人が持ち、委譲でき、組織ポリシーとリスクポリシーのどちらにも当たらなかったため許可しました。',
+};
 
 export const ACTIVITY_TITLES = {
   CAPABILITY_DECIDED: '権限を決定しました',
@@ -39,5 +52,5 @@ export function isolationDecidedMessage(isolationLevel: string, riskScore: numbe
  */
 export function permissionChangeIgnoredMessage(agentId: string, added: readonly string[]): string {
   const addedText = added.length > 0 ? added.join('、') : '追加された権限';
-  return `${addedText}は実行中のAgent（${agentId}）へ反映しません。次に作成するAgentから有効になります`;
+  return `${addedText}は、次に作成するAgentから有効になります。実行中のAgent（${agentId}）の権限は、作成した時のままです`;
 }

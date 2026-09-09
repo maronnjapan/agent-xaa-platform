@@ -41,7 +41,7 @@ describe('the timeline page', () => {
     const html = await response.text();
     expect(html.startsWith('<!doctype html>')).toBe(true);
     expect(html).toContain('data-page="timeline"');
-    expect(html).toContain('<script type="module" src="/timeline.js">');
+    expect(html).toContain('src="/app.js"');
     expect(html).toContain('href="/styles/emphasis.css"');
     expect(html).toContain('href="/styles/replay.css"');
   });
@@ -114,31 +114,41 @@ describe('the agent detail page', () => {
   });
 });
 
-describe('the new work definition page', () => {
+describe('the new ToDo page', () => {
   it('is the destination the blocked guidance points at', async () => {
     const harness = await startAutomationApp();
-    const response = await harness.fetch('/work-definitions/new');
+    const response = await harness.fetch('/todos/new');
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain('data-form="work-definition"');
-    expect(html).toContain('<script type="module" src="/work-definition.js">');
+    expect(html).toContain('data-page="todo-new"');
+    expect(html).toContain('data-form="todo"');
+    expect(html).toContain('src="/app.js"');
+    // The old address is gone rather than kept as a second door to the same form.
+    expect((await harness.fetch('/work-definitions/new')).status).toBe(404);
   });
 
-  it('starts the lifetime at the configured default and caps it at 24', async () => {
-    const harness = await startAutomationApp({ config: { defaultAgentLifetimeHours: 2 } });
-    const html = await (await harness.fetch('/work-definitions/new')).text();
-    expect(html).toMatch(/name="requested_lifetime_hours"[^>]*value="2"/);
-    expect(html).toMatch(/name="requested_lifetime_hours"[^>]*max="24"/);
+  it('starts the lifetime at the configured default and caps it at a day of minutes', async () => {
+    const harness = await startAutomationApp({ config: { defaultAgentLifetimeMinutes: 120 } });
+    const html = await (await harness.fetch('/todos/new')).text();
+    expect(html).toMatch(/<input[^>]*name="requested_lifetime_minutes"[^>]*value="120"/);
+    expect(html).toMatch(/<input[^>]*name="requested_lifetime_minutes"[^>]*\/>/);
+    const field = /<input[^>]*name="requested_lifetime_minutes"[^>]*\/>/.exec(html)![0];
+    expect(field).toContain('min="1"');
+    expect(field).toContain('max="1440"');
   });
 });
 
 describe('the static assets the pages name', () => {
-  it('serves the bundled script the timeline page asks for', async () => {
+  it('serves the one bundle every page asks for', async () => {
     const harness = await startAutomationApp();
-    const response = await harness.fetch('/timeline.js');
+    const response = await harness.fetch('/app.js');
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('javascript');
-    expect(await response.text()).toContain('playReplay');
+    // The screens are one React application, so the bundle carries the framework and
+    // the app's own routes rather than a script per page (DEC-APP-06, revised).
+    const body = await response.text();
+    expect(body).toContain('/api/activity/tasks');
+    expect(body).toContain('hydrateRoot');
   });
 
   it('serves both stylesheets with the rules the screens depend on', async () => {
@@ -154,7 +164,7 @@ describe('the static assets the pages name', () => {
 
     const replay = await (await harness.fetch('/styles/replay.css')).text();
     expect(replay).toContain('offset-distance');
-    expect(replay).toContain('var(--step-ms');
+    expect(replay).toContain('var(--motion-ms');
     expect(replay).toContain('var(--stop-ratio');
     expect(replay).toContain('animation-fill-mode: forwards');
   });

@@ -14,6 +14,7 @@ Firestore IAM はコレクション単位に制限できないため、アプリ
 
 | 名前 | 型 | 既定値 | 効果 |
 |---|---|---|---|
+| `admin_principals` | list(string) | `[]` | 管理コンソール（権限とマッピング）を操作できる Google アカウントを指定する。空はだれも操作できない |
 | `agent_max_lifetime_seconds` | number | `86400` | Agent の Job timeout と全期限の上限を決める |
 | `audit_views_enabled` | bool | `true` | 保存済み検知 View を作る。Log Sink の宛先テーブルがまだ無い初回 apply でだけ false にする |
 | `enable_deny_policy` | bool | `false` | 監査データ削除を拒否する IAM Deny Policy を有効にする |
@@ -95,6 +96,7 @@ SSO 署名鍵は Human IdP が初回アクセス時に生成し、KMS で包ん�
 IAM 到達性検証では、実行者に不足している `roles/iam.serviceAccountTokenCreator` を対象 Service Account にだけ一時付与し、検証後に削除する。
 
 Bridge を有効にする場合、Bridge が読む `connector_definitions` の行は seed Job が書く。
+OAuth client の作り方から画面の操作までを通した手順は[docs/google-bridge-setup.md](../docs/google-bridge-setup.md)にある。
 `saas_connector_mode=stub` では `stub-saas-calendar` の1件を配備した stub SaaS へ向けて書き、client secret は stub が受け付ける固定値をスクリプトが `stub-bridge-client-secret` に登録する。
 
 ```bash
@@ -105,8 +107,12 @@ scripts/deploy-gcp-guide.sh all
 外部 Google OAuth を有効にする場合は、Google Auth Platform で Web application の OAuth client を作り、secret をファイルから渡す。
 secret は `GOOGLE_OAUTH_CLIENT_SECRET_FILE`、または値を直接渡す `GOOGLE_OAUTH_CLIENT_SECRET` で受け取る。どちらも無く、Secret Manager にも有効な version が無ければ、起動直後の検査がそれを指摘して終わる。
 承認済みリダイレクト URI は project number と region から決まるため、スクリプトが確定した値を表示する。
-client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡し、Terraform 変数 `google_oauth_client_id` を通して seed が `google-workspace` の行に書く。
-catalog には Google Calendar を呼ぶ Tool を定義していないため、`google` モードで動くのは Bridge の同意と接続の保持までである。
+client ID は `GOOGLE_OAUTH_CLIENT_ID` で渡し、Terraform 変数 `google_oauth_client_id` を通して seed が接続先定義の行に書く。
+その行の id は catalog が名指す bridged connector と同じ `stub-saas-calendar` で、どちらのモードでもこの1件である。
+Bridge は connector id で定義を引くため、redirect URI に別の名前を入れると Google から戻った callback が `invalid_target` で止まる。
+catalog にある calendar の Tool は stub SaaS の URL の形で書かれており、Tool ID の全集合は 00b が8件に固定している。
+そのため `google` モードで確かめられるのは、OAuth client と同意画面と redirect URI が正しいこと、そして Connection と Agent Binding が作られるところまでである。
+Tool 呼び出しまで通すのは `stub` モードである。
 
 ```bash
 ENABLE_GOOGLE_BRIDGE=true \
@@ -135,6 +141,42 @@ GOOGLE_CLOUD_PROJECT=<id> STORE_MODE=gcp PUBSUB_MODE=gcp \
 
 Automation App と Human IdP は `allUsers` へ公開され、ログイン情報は固定である。
 検証が終わったら `make demo-destroy` で破棄する。
+
+### 権限とドキュメントを画面から直す
+
+権限（Capability）を作る画面、権限を人へ渡す画面、権限をリソースへ対応付ける画面、ドキュメントを直す画面は、それぞれのデータを持つアプリにある。
+どれも Internet へ公開しないため（RULE-37）、ローカルへ proxy して開く。
+
+```bash
+gcloud run services proxy authorization --project=<id> --region=<region> --port=8081
+# http://localhost:8081/admin/permissions で権限を作る、直す、消す
+# http://localhost:8081/admin/holders    で権限を人へ渡す、取り上げる
+
+gcloud run services proxy provisioner --project=<id> --region=<region> --port=8082
+# http://localhost:8082/admin/mappings で権限をリソースの操作へ対応付ける
+
+gcloud run services proxy resource-docs-api --project=<id> --region=<region> --port=8083
+# http://localhost:8083/admin/documents でドキュメントを作る、直す、消す
+```
+
+`/admin/holders` は `pnpm perm:set` と同じことを画面から行う。
+どちらの経路でも、権限が狭まった人の実行中 Agent はその場で再評価される（RULE-14）。
+
+proxy が付ける ID Token の `email` を、アプリは `ADMIN_PRINCIPALS` と突き合わせる。
+`admin_principals` を空のまま apply した場合、`run.invoker` を持っていても画面は 403 を返す。
+
+```hcl
+# infra/tfvars/<env>.tfvars
+admin_principals = ["you@example.com"]
+```
+
+`make seed`（と `deploy-gcp-guide.sh` の seed 手順）は `capability_taxonomy`、`delegatable_permissions`、`human_permissions`、`catalog_tools` を一度空にしてから YAML を書き直す。
+画面で作った権限、渡した権限、変えた対応付けを残したいなら、`infra/seed/` の YAML にも同じ内容を入れる。
+`documents` は空にしないので、画面で作ったドキュメントは seed をもう一度流しても残る。
+
+作った権限は、リソースへ対応付けるまで誰にも付与されない。
+Organization Policy が、どの Connector にも対応しない Capability を拒否するためである。
+対応付けたあと、その権限を人へ渡すのは上の `pnpm perm:set` である。
 
 実行内容だけを確認する場合は `--dry-run` を付ける。
 
@@ -193,7 +235,29 @@ import する件数と1件ごとの進行は標準出力に出る。
 拒否ケースのうち FULL_ISOLATION の Agent 自身の Service Account と Dedicated OP を名指すものは、Provisioner が実行時に作る対象であり、まだ存在しないプロジェクトでは skipped と表示して測定しない。
 ingress が internal のサービスも同じく skipped になる。VPC を持たないこの構成では Google Frontend が IAM を読む前に 404 を返すため、プロジェクトの外にいる実行者からは測りようがない（`infra/spike/RESULT.md` (a)）。
 現在それに当たるのは `sa-pubsub-push` → `security-detection` の1本で、この経路が到達することは spike の (a) が Pub/Sub push で実測している。
+apply が返った時点の `roles/run.invoker` は、まだ Google Frontend に届いていない。
+届くまでの間、許可したはずの呼び出しは 403 を返し、配備が壊れているのと見分けがつかない。
+`reachability.sh` は一致しなかった辺だけを測り直し、既定で最大 420 秒（`REACHABILITY_SETTLE_SECONDS`）待ってから失敗として報告する。
+infra-destroy のあとの deploy は全サービスと全 binding を1回の apply で作るため、この待ちは省けない。
+
 `make seed PROJECT_ID=<id>` は JWKS 集約 Job の完了後に seed Job を実行する。
+JWKS 集約 Job は、集約の前に Human IdP の `/.well-known/jwks.json` を鍵が返るまで叩く。
+Human IdP は SSO 署名鍵を最初のリクエストで作り、そのときに `keys/<kid>.json` を書く（`apps/human-idp/src/keys/self-bootstrap.ts`、DEC-ID-17）。
+一度も呼ばれていない Cloud Run サービスは何も書いていないので、先に集約すると `idp-` の鍵が入らない `jwks.json` を公開してしまう。
+それでもログインは成功する。Automation App は人のトークンを集約ではなく Human IdP 自身の `/.well-known/jwks.json` で検証するからである。
+最初にサービスをまたぐ呼び出し（「必要な権限を調べる」）だけが `invalid_token` になり、画面には「権限を判定する仕組みに届きませんでした」と出る。
+`idp-` の鍵が1本も無い場合、Job は `jwks.json` を書き換えずに失敗する。
+既存の集約を鍵の欠けたものへ置き換えると、動いていた配備がその場で止まるためである。
+`make verify-finance PROJECT_ID=<id>` は、seed のあとに Finance の経路そのものを訊く。
+`make verify` の三つが測るのは IAM の辺であり、「Agent が支払を読んで承認できるか」ではない。
+その間には Resource AS の署名鍵、Resource API のガード、`catalog_tools` と `capability_taxonomy` と `risk_policies` の行、ログインユーザーの Human Permission があり、どれが欠けても画面には「Agent は作られたが何もしない」としか出ない。
+`infra/tests/finance-api.sh` はそれぞれを名指しで確認する。
+Resource AS が ID-JAG の grant profile を広告し `fin-as-` の鍵を公開しているか、Resource API が Access Token 無しの呼び出しを 401 で断るか、seed 済みの行が揃っているか、承認待ちの支払のうち少なくとも1件が `risk-001` の `max_amount` 以下かである。
+最後の1件は、全額が上限超過の seed が「Tool Executor が全部断る Finance」に見えるためである。
+`make verify` と分けてあるのは、読む対象が seed Job の書いたデータであり、apply 直後にはまだ無いからである。
+`make all` は seed のあとにこれを実行する。
+同じ照合をリポジトリ側のファイルに対して行うのは `packages/xaa-contracts/test/finance-chain.spec.ts` で、こちらは CI が毎回走らせる。
+
 `make audit-views PROJECT_ID=<id>` は保存済み検知 View を作る。
 View が読む `security_audit.run_googleapis_com_stdout` は、Cloud Run が stdout へ最初の1行を書いた時点で Cloud Logging が作るテーブルであり、一度もサービスを動かしていないプロジェクトには存在しない。
 BigQuery は存在しないテーブルを参照する View を作成時に拒否するため、`shared-apply` はテーブルの有無を GCP に問い合わせ、無ければ View を作らずに進み、このターゲットが後から作る。

@@ -4,10 +4,15 @@ import { PubSub } from '@google-cloud/pubsub';
 import { Storage } from '@google-cloud/storage';
 import { GoogleAuth } from 'google-auth-library';
 import { assertRuntimeName, publishActivityEvent } from '@xaa/contracts';
+import { parseAdminPrincipals } from '@xaa/control-plane-auth';
 import { createFirestoreDocumentStore, createIdentityTokenProvider, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
+import { createLogger } from '@xaa/logging';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
 import type { ProvisionerAppDeps } from './app.js';
 import { createAgentOpClient } from './agent/idp-connection.js';
+import { createBridgeClient } from './bridge/connection.js';
+import { startedExecutionName } from './job/execution-name.js';
+import { qualifiedJobName } from './job/job-name.js';
 import { createTransactionStore } from './transaction/store.js';
 import { createDedicatedResources, type GcpAdmin } from './dedicated.js';
 import type { ProvisionerConfig } from './deps.js';
@@ -26,7 +31,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ProvisionerCon
     audience: required(env, 'PROVISIONER_AUDIENCE'),
     publicBaseUrl: required(env, 'PUBLIC_BASE_URL'),
     sharedAgentOpUrl: required(env, 'SHARED_AGENT_OP_URL'),
-    standardJobName: required(env, 'STANDARD_JOB_NAME'),
+    // Cloud Run wants the job named in full; Terraform's `name` is the short one.
+    // See `qualifiedJobName`: unqualified, it fails at `start_job_execution`, which on
+    // the consent path runs only after the person has already given their consent.
+    standardJobName: qualifiedJobName({
+      jobName: required(env, 'STANDARD_JOB_NAME'), projectId: env.PROJECT_ID, region: env.REGION,
+    }),
     agentMaxLifetimeSeconds: Number(required(env, 'AGENT_MAX_LIFETIME_SECONDS')),
     // No application default: the cap protects a hard GCP quota, so a missing value
     // must stop the process rather than pick a number.
@@ -36,6 +46,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ProvisionerCon
     // Re-provisioning is asked for by Lifecycle and by nothing else. An unset variable
     // leaves the list empty, which refuses every caller rather than opening the route.
     internalCallers: (env.LIFECYCLE_SA_EMAIL ?? '').split(',').map((email) => email.trim()).filter(Boolean),
+    // Same shape and the same default as the Authorization Platform's console: a
+    // deployment that names nobody has a console nobody can reach.
+    adminPrincipals: parseAdminPrincipals(env.ADMIN_PRINCIPALS),
   };
 }
 
@@ -45,8 +58,18 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
   const documents = createFirestoreDocumentStore(firestore, 'provisioner');
   const admin = createGcpAdmin(env);
   const identityToken = createIdentityTokenProvider();
+  // One logger for the process: `createApp` takes this one rather than making a second,
+  // so a line written from the job adapter reads the same as one written from a route.
+  const logger = createLogger('provisioner', 'provisioner');
 
   const agentOp = createAgentOpClient({ baseUrl: config.sharedAgentOpUrl, identityToken });
+  // DEC-SCOPE-04. Terraform leaves this empty when the Bridge is not deployed, the
+  // same way it leaves `CALLER_SA_SLOTS` empty for a list with nobody on it. Empty is
+  // read as "no Bridge" rather than as an address: with the Bridge off the seed leaves
+  // the bridged catalogue rows out, so no provisioning reaches for this at all, and a
+  // client built over a placeholder would only turn that into a confusing timeout.
+  const bridgeUrl = (env.BRIDGE_INTERNAL_URL ?? '').trim();
+  const bridge = bridgeUrl === '' ? undefined : createBridgeClient({ baseUrl: bridgeUrl, identityToken });
 
   return {
     config,
@@ -62,15 +85,28 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
           name: input.jobName,
           overrides: { containerOverrides: [{ env: input.env }] },
         });
-        return { executionName: operation.name ?? '' };
+        const executionName = startedExecutionName(operation);
+        if (!executionName) {
+          // Written down, not raised. The execution is already running by now, and
+          // failing here would compensate the registration out from under a job that
+          // keeps going — an agent nothing knows about is worse than one Lifecycle has
+          // to let time out. The operation's name is kept so that `job_execution_name`
+          // stays non-empty and a second execution is still refused (00b).
+          logger.warning('provisioner.execution_name_unreadable', {
+            request_id: '', trace_id: '', agent_id: agentIdOf(input.env), human_subject: null,
+          }, { job_name: input.jobName, operation_name: operation.name ?? null });
+        }
+        return { executionName: executionName ?? operation.name ?? '' };
       },
     },
     clock: { now: () => Date.now() },
     jtiStore: new FirestoreJtiStore(firestore),
+    logger,
     // The shared publisher validates against the canonical schema before it sends. A
     // raw topic write here would put events on the stream the subscriber then drops.
     publishActivity: publishActivityEvent,
     agentOp,
+    ...(bridge ? { bridge } : {}),
     createDedicated: (input) => createDedicatedResources({
       admin,
       ledger: input.ledger,
@@ -89,6 +125,11 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
       taskTimeoutSeconds: input.taskTimeoutSeconds,
     }),
   };
+}
+
+/** The one override worth naming in a log line; the rest carry the agent's secrets. */
+function agentIdOf(env: ReadonlyArray<{ name: string; value: string }>): string | null {
+  return env.find((entry) => entry.name === 'AGENT_ID')?.value ?? null;
 }
 
 /**

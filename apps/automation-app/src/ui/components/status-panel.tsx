@@ -21,63 +21,63 @@ export function StatusPanel(props: { status: AgentStatusResponse; faultTrials?: 
   const calls = props.status.tool_invocations;
   const failure = props.status.execution_failure;
   return (
-    <section data-section="status" class="status-panel card">
-      <div class="section-heading">
+    <section data-section="status" className="status-panel card">
+      <div className="section-heading">
         <h2>状況確認</h2>
-        <span class="state-pill" data-field="agent_status" data-state={props.status.agent_status}>
+        <span className="state-pill" data-field="agent_status" data-state={props.status.agent_status}>
           {props.status.agent_status}
         </span>
       </div>
-      <div class="metric-grid">
+      <div className="metric-grid">
         <Metric label="ツール実行" value={calls.length} />
         <Metric label="成功" value={calls.filter((call) => call.outcome === 'success').length} tone="green" />
         <Metric label="遮断" value={calls.filter((call) => call.outcome === 'blocked').length} tone="amber" />
         <Metric label="失敗" value={calls.filter((call) => call.outcome === 'failed').length} tone="red" />
       </div>
-      <dl class="decision-facts">
+      <dl className="decision-facts">
         <dt>実行中のタスク</dt>
         <dd data-field="current_task">{props.status.current_task ?? '—'}</dd>
         <dt>残り時間（秒）</dt>
         <dd data-field="remaining_seconds">{String(props.status.remaining_seconds)}</dd>
       </dl>
       {failure ? (
-        <p class="notice" data-field="execution_failure" data-failure={failure}>
+        <p className="notice" data-field="execution_failure" data-failure={failure}>
           <ResultMark outcome="failed" />
           直近の実行は失敗しました。{FAILURE_TEXT[failure]}
         </p>
       ) : null}
       {props.faultTrials?.length ? (
-        <section class="fault-history" aria-label="異常系試験の状態">
+        <section className="fault-history" aria-label="異常系試験の状態">
           <h3>異常系試験の状態</h3>
           {props.faultTrials.map((trial) => (
-            <div class="trial-row" data-trial-state={trial.state}>
+            <div key={trial.instruction_id} className="trial-row" data-trial-state={trial.state}>
               <ResultMark outcome={trial.state === 'failed' ? 'failed' : trial.state === 'queued' ? 'running' : 'info'} />
               <div><strong>{ { queued: '適用待ち', received: 'Runtimeが受信済み', failed: '実行の失敗を確認', not_applied: '対象Taskが実行中ではないため未適用' }[trial.state] }</strong>
-                <p><time datetime={trial.created_at}>{formatTime(trial.created_at)}</time> · {trial.task_id}</p>
+                <p><time dateTime={trial.created_at}>{formatTime(trial.created_at)}</time> · {trial.task_id}</p>
                 <small>要求 ID: {trial.instruction_id}</small>
-                {trial.state === 'received' ? <p class="muted">受信後の結果はアクティビティで確認してください。</p> : null}
+                {trial.state === 'received' ? <p className="muted">受信後の結果はアクティビティで確認してください。</p> : null}
               </div>
             </div>
           ))}
         </section>
       ) : null}
-      <div class="section-heading"><h3>実行ログ</h3><span class="muted">{calls.length} STEPS</span></div>
-      {calls.length > 0 ? <ol class="execution-strip" aria-label="ツール実行の結果一覧">
-        {calls.map((call, index) => <li data-outcome={call.outcome}><ResultMark outcome={call.outcome} /><span>{String(index + 1).padStart(2, '0')}</span><span class="sr-only">{call.tool_id} {call.outcome}</span></li>)}
+      <div className="section-heading"><h3>ツール実行の概要</h3><span className="muted">{calls.length} STEPS</span></div>
+      {calls.length > 0 ? <ol className="execution-strip" aria-label="ツール実行の結果一覧">
+        {calls.map((call, index) => <li key={index} data-outcome={call.outcome}><ResultMark outcome={call.outcome} /><span>{String(index + 1).padStart(2, '0')}</span><span className="sr-only">{call.tool_id} {call.outcome}</span></li>)}
       </ol> : null}
-      <p class="muted">最新の実行スナップショット。完了した処理の履歴はアクティビティで確認できます。</p>
-      {calls.length === 0 ? <p class="empty-state">まだツール実行の記録がありません。</p> : null}
-      <ol class="tool-invocations event-stream">
+      <p className="muted">最新の実行スナップショット。完了した処理の履歴はアクティビティで確認できます。</p>
+      {calls.length === 0 ? <p className="empty-state">まだツール実行の記録がありません。</p> : null}
+      <ol className="tool-invocations event-stream">
         {calls.map((invocation, index) => (
-          <li data-tool-id={invocation.tool_id} data-outcome={invocation.outcome}>
+          <li key={`${invocation.tool_id}:${index}`} data-tool-id={invocation.tool_id} data-outcome={invocation.outcome}>
             <ResultMark outcome={invocation.outcome} />
-            <div class="event-content">
-              <div class="section-heading">
+            <div className="event-content">
+              <div className="section-heading">
                 <strong>{invocation.tool_id}</strong>
                 <OutcomeBadge outcome={invocation.outcome} phase="tool_call" />
               </div>
               <p>{invocation.summary || '詳細メッセージなし'}</p>
-              <small class="muted">STEP {String(index + 1).padStart(2, '0')}</small>
+              <small className="muted">STEP {String(index + 1).padStart(2, '0')}</small>
             </div>
           </li>
         ))}

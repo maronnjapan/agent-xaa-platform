@@ -21,10 +21,12 @@ export function createRuntimeHttpClient(input: {
   allowedHosts: ReadonlySet<string>;
   fetch?: Fetch;
   /**
-   * The platform services that sit behind Cloud Run's own IAM check: the Agent OP and
-   * the Bridge. A request to one of them carries the Execution's `run.invoker` token
-   * beside its own Authorization header, because without it Cloud Run refuses the call
-   * before the app ever sees the agent's credentials.
+   * The platform services that sit behind Cloud Run's own IAM check, as
+   * `buildInternalOrigins` derives them from the manifest: the Agent OP, the Bridge,
+   * and the Resource AS and API of a native tool. A request to one of them carries the
+   * Execution's `run.invoker` token beside its own Authorization header, because
+   * without it Cloud Run refuses the call before the app ever sees the agent's
+   * credentials.
    */
   internalOrigins?: ReadonlySet<string>;
   invokerToken?: (audience: string) => Promise<InvokerIdToken | undefined>;

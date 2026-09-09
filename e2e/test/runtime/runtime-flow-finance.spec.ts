@@ -55,7 +55,7 @@ describe('the Runtime Flow, Finance side', () => {
     const jkt = await jwkThumbprint(runtime.context.dpop.publicJwk);
     const idJag = decodeJwtPayload(runtime.context.tokens.get('idjag:internal.finance.payment.list', Date.now())!);
     const accessToken = decodeJwtPayload(
-      runtime.context.tokens.get(`at:${finance.asIssuer}|${finance.resourceUri}|finance.tx.read`, Date.now())!,
+      runtime.context.tokens.get(`at:${finance.asIssuer}|${finance.resourceUri}|finance.tx.read`, Date.now())!.accessToken,
     );
 
     expect(idJag.sub).toBe('testuser');
@@ -97,6 +97,31 @@ describe('the Runtime Flow, Finance side', () => {
     }, { tool_id: 'internal.finance.payment.approve', parameters: { id: paymentId, amount: 900000 } });
     expect(result).toMatchObject({ outcome: 'blocked', reason: 'constraint_violation', constraint: 'max_amount' });
     expect(runtime.hostCalls.length).toBe(before);
+  });
+
+  /**
+   * The Executor's `max_amount` check reads `parameters.amount`, which is a number the
+   * model wrote — so it can be understated. That is why specs §5.2 asks for the check
+   * twice: the resource re-runs it against the amount it has stored, which no tool call
+   * contributes to, and refuses the approval there.
+   *
+   * The payment left `pending_approval` is the part that matters. A ceiling that a
+   * misdeclared argument can walk past is not a ceiling.
+   */
+  it('refuses at the resource an approval whose declared amount understates the payment', async () => {
+    const { runtime, finance } = await financeRuntime({ isolationLevel: 'full_isolation' });
+    // Over the resource's own ceiling, under the manifest's: only the second check can
+    // stop it, and only if it ignores the number the call carried.
+    const paymentId = await seedPayment(finance, 'testuser', { amount: 2_400_000 });
+    const result = await executeTool({
+      context: runtime.context, http: runtime.http, logger: runtime.logger,
+      logContext: runtime.logContext, stageWrite: () => {},
+    }, { tool_id: 'internal.finance.payment.approve', parameters: { id: paymentId, amount: 1000 } });
+
+    expect(result).toMatchObject({ outcome: 'failed', error_code: 'resource_api_error', status: 403 });
+    const stored = await finance.seedStore.get<{ status: string; approved_by: string | null }>('payments', paymentId);
+    expect(stored!.status).toBe('pending_approval');
+    expect(stored!.approved_by).toBeNull();
   });
 
   it('approves within the limit and records the agent as the approver', async () => {

@@ -6,6 +6,8 @@
  * allow list rather than forgotten: this wrapper governs HTTP the Bridge originates,
  * and the SDKs are a different transport with their own IAM.
  */
+import { isSecureOrLoopback } from '@xaa/contracts';
+
 export class OutboundNotAllowedError extends Error {
   readonly code = 'outbound_not_allowed';
   constructor(readonly host: string) { super(`outbound_not_allowed: ${host}`); }
@@ -30,7 +32,9 @@ export function createBridgeFetch(send: Send = (url, init) => globalThis.fetch(u
   return async function bridgeFetch(url: string, init: RequestInit, allowed: AllowedHosts): Promise<Response> {
     let target: URL;
     try { target = new URL(url); } catch { throw new OutboundNotAllowedError(url); }
-    if (target.protocol !== 'https:') throw new OutboundNotAllowedError(target.protocol);
+    // https, or a loopback literal: the reason the scheme is checked at all is the
+    // network between here and there, and a loopback address has none.
+    if (!isSecureOrLoopback(target)) throw new OutboundNotAllowedError(target.protocol);
     if (!allowed.has(target.host)) throw new OutboundNotAllowedError(target.host);
     return send(url, { ...init, redirect: 'manual' });
   };

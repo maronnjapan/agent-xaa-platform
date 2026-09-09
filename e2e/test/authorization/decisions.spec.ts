@@ -58,7 +58,7 @@ async function submit(options: {
   return { authz, response: await authz.fetch(path, { method: 'POST', headers, body: JSON.stringify(options.body) }) };
 }
 
-const request = { purpose: '予定整理', description: '当日の予定を取得し日報にまとめる', requested_lifetime_hours: 8 };
+const request = { purpose: '予定整理', description: '当日の予定を取得し日報にまとめる', requested_lifetime_minutes: 480 };
 
 describe('POST /v1/authorization/decisions', () => {
   it('answers a decision with exactly the five contract keys', async () => {

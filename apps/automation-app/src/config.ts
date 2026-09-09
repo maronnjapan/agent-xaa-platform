@@ -1,5 +1,4 @@
 export interface AutomationAppConfig {
-  faultInjectionEnabled?: boolean;
   port: number;
   issuer: string;
   clientId: string;
@@ -9,11 +8,14 @@ export interface AutomationAppConfig {
   agentProvisionerUrl: string;
   lifecycleManagerUrl: string;
   docsApiUrl: string;
+  analysisConsoleUrl: string;
   activityTopic: string;
-  defaultAgentLifetimeHours: number;
+  defaultAgentLifetimeMinutes: number;
   vertexModel: string;
   vertexMode: string;
   storeMode: string;
+  /** Whether the agent screen offers the failure exercise. Off unless a deployment opts in. */
+  faultInjectionEnabled?: boolean;
 }
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -22,10 +24,30 @@ function required(env: NodeJS.ProcessEnv, key: string): string {
   return value;
 }
 
-/** Deployment opt-in exposes fault exercises only on environments configured for them. */
+/**
+ * Sixteen variables and no more.
+ *
+ * Twelve are the original list; `CLIENT_SECRET_AUTOMATION_APP` and `PUBLIC_BASE_URL`
+ * joined them when the login flow became real, because the OIDC code exchange cannot be
+ * made without a client secret and a redirect URI that matches the one the Human IdP was
+ * given. `ANALYSIS_CONSOLE_URL` is the fifteenth, and it is a href in the navigation:
+ * no request from this app ever goes to it, and nothing here reads anything it holds.
+ * `ENABLE_FAULT_INJECTION` is the sixteenth, and it is an opt-in rather than a URL: a
+ * deployment that does not set it to `true` has no failure exercise on its agent screen
+ * and no API that accepts one, so the button cannot exist by accident.
+ *
+ * The list stays short because of what is missing from it: there is no Capability
+ * Taxonomy URL, no resource list and no isolation threshold. Automation App is the
+ * screen a person uses; the decisions belong to the Authorization Platform (RULE-07),
+ * and giving this app a way to read the vocabulary is how that boundary erodes.
+ *
+ * There is no Security Detection URL either, and that absence is load-bearing rather
+ * than an oversight: T-SEC-08 makes the detector a one-way feed. What it decided is
+ * shown by the Analysis Console, which reads those rows itself, and how far each
+ * analysis got is read off the projection the detector writes for that purpose.
+ */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AutomationAppConfig {
   return {
-    faultInjectionEnabled: env.ENABLE_FAULT_INJECTION === 'true',
     port: Number(env.PORT ?? 8080),
     issuer: required(env, 'ISSUER'),
     clientId: env.AUTOMATION_APP_CLIENT_ID ?? 'automation-app',
@@ -35,10 +57,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AutomationAppC
     agentProvisionerUrl: required(env, 'AGENT_PROVISIONER_URL'),
     lifecycleManagerUrl: required(env, 'LIFECYCLE_MANAGER_URL'),
     docsApiUrl: required(env, 'DOCS_API_URL'),
+    analysisConsoleUrl: required(env, 'ANALYSIS_CONSOLE_URL'),
     activityTopic: required(env, 'ACTIVITY_TOPIC'),
-    defaultAgentLifetimeHours: Number(env.DEFAULT_AGENT_LIFETIME_HOURS ?? 1),
+    defaultAgentLifetimeMinutes: Number(env.DEFAULT_AGENT_LIFETIME_MINUTES ?? 60),
     vertexModel: required(env, 'VERTEX_MODEL'),
     vertexMode: env.VERTEX_MODE ?? 'fake',
     storeMode: env.STORE_MODE ?? 'emulator',
+    faultInjectionEnabled: env.ENABLE_FAULT_INJECTION === 'true',
   };
 }

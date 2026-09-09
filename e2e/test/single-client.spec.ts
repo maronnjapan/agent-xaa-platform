@@ -55,7 +55,7 @@ async function provisionThree(provisioner: ProvisionerHarness, caller: Caller): 
           method: 'POST', url: `${PROVISIONER_BASE}/provisioning`, keyPair: caller.keyPair, accessToken: caller.token,
         }),
       },
-      body: JSON.stringify({ decision_id: decisionId, task_id: task, requested_lifetime_hours: 1 }),
+      body: JSON.stringify({ decision_id: decisionId, task_id: task, requested_lifetime_minutes: 60 }),
     });
     expect(response.status).toBe(201);
     agentIds.push((await response.json() as { agent_id: string }).agent_id);
@@ -103,7 +103,8 @@ describe('three agents, one registered client', () => {
       docsAs: await createAsClientResolver().findClient(PLATFORM_CLIENT_ID),
     };
     expect(after.humanIdp).toEqual(before.humanIdp);
-    expect(after.humanIdp).toEqual(['agent-platform', 'automation-app']);
+    // One client per screen a person logs in to, and none per agent.
+    expect(after.humanIdp).toEqual(['agent-platform', 'analysis-console', 'automation-app']);
     expect(after.docsAs).toEqual(before.docsAs);
 
     // And none of the three agents became a client of any of them.

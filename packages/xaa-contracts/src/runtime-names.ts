@@ -57,6 +57,26 @@ export const RUNTIME_LABEL_KEY = 'xaa-managed';
 export const RUNTIME_LABEL_VALUE = 'runtime';
 export const RUNTIME_AGENT_LABEL_KEY = 'xaa-agent-id';
 
+/**
+ * What a registration's `job_execution_name` holds:
+ * `projects/{project}/locations/{location}/jobs/{job}/executions/{execution}`.
+ *
+ * The shape lives here because two apps have to agree on it and neither of them owns
+ * it. The Provisioner writes the field from what `Jobs.runJob` hands back, and
+ * Lifecycle cancels an agent by reading it.
+ *
+ * `runJob` answers with a long-running operation, and the operation is not the
+ * execution: its own name is `projects/{p}/locations/{l}/operations/{uuid}`, which
+ * names the request rather than the thing the request started. It is resource-shaped
+ * enough to look right in a record and names no Execution at all, so the one step that
+ * stops a running agent was being handed a name the Executions API has never issued.
+ */
+export const JOB_EXECUTION_NAME = /^projects\/[^/]+\/locations\/[^/]+\/jobs\/[^/]+\/executions\/[^/]+$/;
+
+export function isJobExecutionName(value: unknown): value is string {
+  return typeof value === 'string' && JOB_EXECUTION_NAME.test(value);
+}
+
 /** DEC-IAC-25. Both labels, on everything, so the sweep can find it later. */
 export function runtimeLabels(agentId: string): Record<string, string> {
   return { [RUNTIME_LABEL_KEY]: RUNTIME_LABEL_VALUE, [RUNTIME_AGENT_LABEL_KEY]: agentId };

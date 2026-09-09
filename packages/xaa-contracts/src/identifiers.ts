@@ -74,10 +74,24 @@ export const JWT_TYP = {
 } as const;
 
 const FORBIDDEN_SEGMENTS = new Set(['google', 'microsoft', 'github', 'slack', 'get', 'post', 'put', 'patch', 'delete']);
-const CAPABILITY_PATTERN = /^[a-z]+(\.[a-z_]+){1,2}$/;
+
+/**
+ * The shape of a capability id, as a string so a JSON Schema can carry the same rule
+ * (00b §1).
+ *
+ * `CAPABILITIES` is the set the platform ships with, not the set that can exist: an
+ * administrator adds capabilities to the taxonomy from the Authorization Platform's
+ * console, and everything downstream of the taxonomy has to recognise those too. What
+ * never varies is the shape, so that is what the schemas and the guards check.
+ */
+export const CAPABILITY_ID_PATTERN = '^[a-z]+(\\.[a-z_]+){1,2}$';
+const CAPABILITY_PATTERN = new RegExp(CAPABILITY_ID_PATTERN);
+
+/** True for an id the taxonomy could hold, whether or not it currently does. */
+export function isValidCapabilityId(value: string): boolean {
+  return CAPABILITY_PATTERN.test(value) && !value.split('.').some((segment) => FORBIDDEN_SEGMENTS.has(segment));
+}
 
 export function assertValidCapabilityId(value: string): asserts value is Capability {
-  if (!CAPABILITY_PATTERN.test(value) || value.split('.').some((segment) => FORBIDDEN_SEGMENTS.has(segment))) {
-    throw new Error(`invalid capability_id: ${value}`);
-  }
+  if (!isValidCapabilityId(value)) throw new Error(`invalid capability_id: ${value}`);
 }

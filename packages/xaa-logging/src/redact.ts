@@ -23,6 +23,12 @@ export const IDENTIFIER_FIELD_NAMES = [
   // happened. It names a route, never a value.
   'path', 'validation_name', 'resource', 'requested_resource', 'target_resource', 'audience', 'requested_audience',
   'issued_jti', 'task_id', 'execution_id', 'work_definition_hash', 'fingerprint',
+  // What the confirmation binding compared. A thumbprint is 43 base64url characters
+  // and a token endpoint URL is about as long, so both cross the entropy threshold
+  // and were blanked — which left `dpop_key_binding_mismatch` unable to say whether
+  // the key was wrong or the two sides disagreed about the endpoint. Neither is a
+  // secret: the first is derived from a public key, the second is a URL.
+  'dpop_binding_step', 'expected_jkt', 'presented_jkt', 'expected_htu', 'presented_htu',
 ] as const;
 
 const IDENTIFIERS = new Set<string>(IDENTIFIER_FIELD_NAMES);

@@ -4,7 +4,10 @@
 ![GCP実行基盤の全体構成図](./diagrams/architecture.png)
 
 図中の破線の枠はGCP ProjectとProject内の論理的なまとまりを、実線の箱はデプロイ単位のアプリを表す。
-編集用の元データは [diagrams/architecture.drawio](./diagrams/architecture.drawio) にある。
+矢印は呼び出す側から呼び出される側へ向き、応答は描かない。
+呼び出しの向きの正本は [§3](#3-アプリ間の呼び出し関係) であり、全体構成図は配置を優先するため §3 が挙げる呼び出しの一部を省いている。
+
+Isolation Levelごとの構成図、Mermaid版、凡例、編集用の元データは [diagrams/](./diagrams/README.md) にある。
 
 ## 1. GCP Projectと監査領域の構成
 
@@ -248,8 +251,8 @@ Blast Radiusの比較は [05. §5](./05-identity.md#5-isolation-model) を参照
 | `sa-lifecycle` | Job Executionの取り消し。OP / Bridge / Native AS / Provisionerの `run.invoker`。KMS Keyの無効化。Dedicated Cloud Run ServiceとService Accountの削除。Firestore（`agents/*` 削除） | Refresh Token。Client Secret。署名 |
 | `sa-shared-agent-op` | Shared OPのID-JAG署名鍵での署名（`cloudkms.signerVerifier`）。Firestore（`agents/*` 読み取り）。Firestore（`idp_connections`）。IdP Connection Encryption Keyでの暗号化と復号。JWKS Bucketへの自鍵の書き込み | Dedicated OP用Key。Human IdPのSSO署名鍵。Google Refresh Token。Authorization DB。Provisionerの権限 |
 | `sa-op-<short>` | そのAgentのID-JAG署名鍵の利用。そのAgentのRegistrationと `idp_connection` 行の読み取り。JWKS Bucketへの自鍵の書き込み | 他AgentのKeyとIdP Connection。Human IdPのSSO署名鍵。Google Refresh Token。Authorization DBの書き込み。Provisionerの権限 |
-| `sa-agent-runtime` | Shared OP / Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Secret Manager。Credential DB。`idp_connection`。KMS鍵の利用。Authorization DBの書き込み。Provisionerの権限 |
-| `sa-agent-<short>` | `dedicated-op-<short>` の `run.invoker`。Google Bridge / Native ASの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Shared OPの `run.invoker`。上記 `sa-agent-runtime` と同じ |
+| `sa-agent-runtime` | Shared OP / Google Bridge / Native AS / Resource APIの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Secret Manager。Credential DB。`idp_connection`。KMS鍵の利用。Authorization DBの書き込み。Provisionerの権限 |
+| `sa-agent-<short>` | `dedicated-op-<short>` の `run.invoker`。Google Bridge / Native AS / Resource APIの `run.invoker`。Vertex AI推論。Firestore（自Agentの `state` と `instructions`） | Shared OPの `run.invoker`。上記 `sa-agent-runtime` と同じ |
 | `sa-google-bridge` | Google OAuth Client Secretの読み取り。Credential DBの読み書き。Connector Encryption Keyでの暗号化と復号 | Agent OP Signing Key。Authorization DBの書き込み。Agent Runtimeの操作 |
 | `sa-native-resource-as` | Resource AS Signing Keyでの署名。Resource側の認可DB | Agent OP Signing Key。Platform側DB |
 | `sa-security` | Pub/Sub Subscribe。BigQuery（`security_audit` dataset）の読み書き。Vertex AI推論。Lifecycle Managerの `run.invoker` | Platform側DBの書き込み。Signing Key。Secret |
@@ -310,8 +313,8 @@ Firestoreにドキュメント単位のIAMが無いための代替であり、[d
 | コレクション | 内容 | 読み書きするService Account |
 |---|---|---|
 | `authorization` | Human Permission、Delegatable Permission、Organization Policy、Risk Policy、Policy Decisionの記録 | `sa-authorization` |
-| `capability_taxonomy` | 定義済みCapabilityの一覧 | `sa-authorization`（読み取り）。seed（投入） |
-| `catalog/tools` と `catalog/connectors` | Tool / Connector Definition | `sa-provisioner`（読み取り）。seed（投入） |
+| `capability_taxonomy` と `delegatable_permissions` | 定義済みCapabilityの一覧と委譲可否 | `sa-authorization`（権限の管理画面から読み書き。[03. §2.1](./03-authorization.md#21-権限の管理画面)）。seed（投入） |
+| `catalog/tools` と `catalog/connectors` | Tool / Connector Definition | `sa-provisioner`（読み取りと、マッピング画面からの `required_capability` の書き換え。[04. §5.1](./04-tool-catalog.md#51-権限とリソースのマッピング画面)）。seed（投入） |
 | `agents` | Agent Registration、Work Definition、Agent Definition、Provisioning Transaction | `sa-automation-app`、`sa-provisioner`、`sa-lifecycle` |
 | `dedicated_resources` | FULL_ISOLATIONで実行時に作った資源の台帳 | `sa-provisioner`、`sa-lifecycle` |
 | `idp_connections` | Human IdP Connection。Agentごとの暗号化Refresh Token（[05. §4.1](./05-identity.md#41-human-idp-connection)） | `sa-shared-agent-op`、`sa-op-<short>` |
@@ -332,9 +335,21 @@ Agent単位、またはユーザー単位で高速に読み書きするものは
 
 ## 8. ネットワークと公開範囲
 
-Internetへ公開するのは、Automation App、Google BridgeのOAuth Callback、Agent OPのOAuth Callback（`/xaa/callback`）、およびissuerのメタデータとJWKSだけである。
+Internetへ公開するのは、人がログインして開く2つの画面（Automation App、Analysis Console）、Google BridgeのOAuth Callback、Agent OPのOAuth Callback（`/xaa/callback`）、およびissuerのメタデータとJWKSだけである。
+
+Analysis Consoleは、Security Detectionが下した判断を本人へ見せる画面である（[09. §7](./09-security-monitoring.md#7-判断を本人へ見せる)）。
+Automation Appの中の1画面ではなく別のデプロイ単位とし、Human IdPのclientも別に持つ。
+理由は2つある。
+1つは、判断を見る画面が、Agentを作る・止めるという操作の権限を一切必要としないことである。別アプリにすれば、そのSession は Control Plane の Access Token を1つも持たない。
+もう1つは、この画面が将来、運用者が全ユーザーのFindingを横断で見る画面になりうることである（[11. §8](./11-activity-timeline.md#9-今後の検討事項)）。その権限モデルは自分の分だけを見る画面のものと別であり、境界をアプリの外に置いておくほうが後から足しやすい。
+
+Analysis Consoleはどのサービスも呼ばない。
+Firestoreの `security_findings` と `agents/{agent_id}/meta` を[アクセス行列](../packages/gcp/src/access-matrix.json)の読み取り専用として読む。
+Security Detectionへ向かうinvokerエッジを作らないのは、T-SEC-08が検知を一方向の経路と決めているためである（[09. §4](./09-security-monitoring.md#4-正規化と保存)）。
 Consent後のリダイレクト先はいずれもAutomation Appとし、Automation AppがProvisionerのTransaction再開をServer-to-Serverで呼ぶ（[06. §5](./06-oauth-bridge.md#5-google-consent)、[07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow)）。
 それ以外のCloud Run ServiceはIngressを内部に限定し、Cloud Run IAMで呼び出し元のService Accountを絞る。
+Authorization PlatformとAgent Provisionerが持つ管理画面もこの内側にあり、管理者は `gcloud run services proxy` で開く。
+`run.invoker` を持っているだけでは足りず、画面はGoogleが署名したID Tokenの `email` を `ADMIN_PRINCIPALS` と突き合わせる。
 Agent RuntimeはCloud Run Jobであり、受信するHTTPエンドポイントを持たない。
 
 FirestoreへPrivate IPで接続するなど、VPC内へ出る必要がある場合はDirect VPC Egressを使う。

@@ -14,7 +14,7 @@ async function provision(target: ProvisionerHarness, capabilities = ['document.r
     catalogue: createCatalogRepository(target.documents),
   }, {
     humanSubject: 'testuser', taskId: 'task-1', effectiveCapabilities: capabilities,
-    isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+    isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
   });
 }
 
@@ -100,6 +100,7 @@ describe('the Activity Events a provisioning produces', () => {
     const transaction = await target.deps.transactions.create({
       human_subject: 'testuser', agent_id: null, required_capabilities: [], required_connectors: [],
       isolation_level: 'standard', pending_step: null, dedicated_short_id: null,
+      task_id: 'wd-1', constraints: {}, agent_expires_at: '2026-03-01T01:00:00.000Z',
     });
     const published: unknown[] = [];
     await createActivityEmitter({
@@ -116,5 +117,49 @@ describe('the Activity Events a provisioning produces', () => {
       detail: { leaked: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhIn0.c2ln' },
     });
     expect(JSON.stringify(published)).toContain('[REDACTED]');
+  });
+});
+
+/**
+ * What the replay draws and the log lists for a provisioning: the two boxes the
+ * Provisioner talks to, and the decision the agent came from — which is how the
+ * timeline joins the agent to the proposal and the decision that preceded it.
+ */
+describe('what each provisioning event says about itself', () => {
+  it('names the decision on the first event when it was given one', async () => {
+    const target = await createProvisionerHarness();
+    const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
+    await provisionAgent({
+      ...target.deps,
+      logger: createLogger('provisioner', 'provisioner', (line) => { target.logs.push(line); }),
+      catalogue: createCatalogRepository(target.documents),
+    }, {
+      humanSubject: 'testuser', taskId: 'task-1', decisionId, effectiveCapabilities: ['document.read'],
+      isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
+    });
+    const started = target.activity[0]!;
+    expect(started.detail).toMatchObject({ event_type: 'provisioning.started', decision_id: decisionId });
+    expect(started.agent_id).not.toBeNull();
+  });
+
+  it('draws the Agent OP and the Agent Runtime exchanges, and lights the box for the rest', async () => {
+    const target = await createProvisionerHarness();
+    await provision(target);
+    const byType = new Map(target.activity.map((event) => [detail(event).event_type, event]));
+    expect(byType.get('provisioning.idp_connection_created')!.record!.hops!.map((hop) => [hop.from, hop.to])).toEqual([
+      ['agent-provisioner', 'agent-op'], ['agent-op', 'agent-provisioner'],
+    ]);
+    expect(byType.get('provisioning.job_started')!.record!.hops!.map((hop) => [hop.from, hop.to])).toEqual([
+      ['agent-provisioner', 'agent-runtime'],
+    ]);
+    expect(byType.get('provisioning.started')!.record!.hops).toBeUndefined();
+    expect(byType.get('agent.active')!.record!.hops).toBeUndefined();
+    // Every step says what it did and shows the values a person would ask about.
+    for (const event of target.activity) {
+      expect(event.record!.sections[0]!.message.trim()).not.toBe('');
+      expect(() => validateActivityEvent(event)).not.toThrow();
+    }
+    expect(byType.get('provisioning.started')!.record!.sections[0]!.fields).toContainEqual({ label: '許可された権限', value: 'document.read' });
+    expect(byType.get('agent.active')!.record!.sections[0]!.fields?.map((field) => field.label)).toContain('有効期限');
   });
 });

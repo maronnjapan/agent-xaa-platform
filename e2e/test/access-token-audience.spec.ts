@@ -41,8 +41,19 @@ describe('operation scope decides the access token audience', () => {
     expect(audienceIncludes((await accessTokenFor('openid agent:operate')).payload!.aud, 'automation-app')).toBe(true);
   });
 
-  it('two operation scopes in one request are invalid_scope', async () => {
-    expect((await accessTokenFor('openid workdef:submit agent:provision')).error).toBe('invalid_scope');
+  it('every operation scope in one request produces a token for none of them', async () => {
+    const { payload } = await accessTokenFor('openid agent:operate workdef:submit agent:provision agent:revoke');
+    // The request the Automation App's login makes so the person is asked once. The
+    // token it yields is addressed to the UserInfo endpoint and nothing else: naming
+    // four scopes buys the consent, never a token that reaches four apps.
+    expect(payload!.aud).toEqual([`${HUMAN_IDP_ISSUER}/userinfo`]);
+    for (const audience of ['automation-app', 'authorization-platform', 'agent-provisioner', 'lifecycle-manager']) {
+      expect(audienceIncludes(payload!.aud as string[], audience)).toBe(false);
+    }
+  });
+
+  it('two operation scopes addressed to one audience are invalid_scope', async () => {
+    expect((await accessTokenFor('openid workdef:submit agent:provision', 'agent-provisioner')).error).toBe('invalid_scope');
   });
 
   it('an unregistered operation scope is invalid_scope', async () => {

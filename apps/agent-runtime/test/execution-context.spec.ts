@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { jwkThumbprint } from '@xaa/crypto';
 import { importAgentClientKey } from '../src/context/agent-client-key.js';
 import { TokenStore, accessTokenKey, idJagKey } from '../src/tokens/token-store.js';
+import { asResourceAccessToken } from '../src/http/resource-authorization.js';
 import { AGENT_ID, agentClientJwk, memoryStore, runtimeEnv, testContext } from './helpers.js';
 import { createExecutionContext } from '../src/context/execution-context.js';
 
@@ -91,6 +92,11 @@ describe('the agent client key', () => {
   });
 });
 
+/** A redemption's two halves, as only the two redeemers can really produce them. */
+function held(binding: 'dpop' | 'bearer') {
+  return { accessToken: asResourceAccessToken('v', binding === 'dpop' ? 'resource-as' : 'bridge'), binding };
+}
+
 describe('the token store', () => {
   it('exposes only get/set/clear', () => {
     const store = new TokenStore();
@@ -112,8 +118,32 @@ describe('the token store', () => {
     const store = new TokenStore();
     expect(() => store.set('subject', 'v', 1)).not.toThrow();
     expect(() => store.set(idJagKey('internal.document.get'), 'v', 1)).not.toThrow();
-    expect(() => store.set(accessTokenKey({ audience: 'a', resource: 'r', scope: 's' }), 'v', 1)).not.toThrow();
+    expect(() => store.set(accessTokenKey({ audience: 'a', resource: 'r', scope: 's' }), held('dpop'), 1)).not.toThrow();
     expect(() => store.set('session' as never, 'v', 1)).toThrow();
+  });
+
+  /**
+   * The two halves of a redemption come back together, or not at all. A call that
+   * reuses the token has to present it the way its issuer said, and the store is where
+   * that answer survives from one tool call to the next.
+   */
+  it('hands an access token back with the binding its issuer chose', () => {
+    const store = new TokenStore();
+    const key = accessTokenKey({ audience: 'a', resource: 'r', scope: 's' });
+    store.set(key, held('bearer'), 100_000);
+    expect(store.get(key, 50_000)).toEqual({ accessToken: 'v', binding: 'bearer', expiresAt: 100_000 });
+    // Inside the skew window it reads as absent, so a tool call never starts with a
+    // token that expires while the request is in flight.
+    expect(store.get(key, 80_000)).toBeUndefined();
+  });
+
+  it('takes nothing but a redeemed token under an at: key', () => {
+    const store = new TokenStore();
+    const key = accessTokenKey({ audience: 'a', resource: 'r', scope: 's' });
+    // @ts-expect-error only `redeem-id-jag` and `redeem-via-bridge` can make the
+    // branded value this key takes, so a Service Account ID Token has no way in.
+    void (() => store.set(key, 'metadata-server-id-token', 100_000));
+    expect(store.get(key, 0)).toBeUndefined();
   });
 
   it('is cleared at the end of an execution', async () => {

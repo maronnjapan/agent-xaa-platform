@@ -57,7 +57,7 @@ describe('POST /provisioning, STANDARD', () => {
   it('provisions an agent and starts exactly one job', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read', 'document.write'] });
-    const response = await provision(target, { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(201);
     const body = await response.json() as { agent_id: string; allowed_tools: string[]; isolation_level: string };
     expect(body.agent_id).toMatch(/^agent-[0-9a-z]{26}$/);
@@ -71,14 +71,14 @@ describe('POST /provisioning, STANDARD', () => {
   it('creates no GCP resource at all', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    await provision(target, { decision_id: decisionId, task_id: 'task-1', requested_lifetime_hours: 8 });
+    await provision(target, { decision_id: decisionId, task_id: 'task-1', requested_lifetime_minutes: 480 });
     expect(target.admin.calls).toEqual([]);
   });
 
   it('overrides exactly the ten runtime keys, with the manifest digest added', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    await provision(target, { decision_id: decisionId, task_id: 'task-7', requested_lifetime_hours: 8 });
+    await provision(target, { decision_id: decisionId, task_id: 'task-7', requested_lifetime_minutes: 480 });
     const names = target.jobRuns[0]!.env.map((entry) => entry.name).sort();
     expect(names).toEqual([...RUNTIME_ENV_KEYS].sort());
     const values = Object.fromEntries(target.jobRuns[0]!.env.map((entry) => [entry.name, entry.value]));
@@ -91,7 +91,7 @@ describe('POST /provisioning, STANDARD', () => {
   it('writes a registration carrying no API detail', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const body = await (await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 })).json() as { agent_id: string };
+    const body = await (await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 })).json() as { agent_id: string };
     const registration = await target.documents.get<Record<string, unknown>>('agents', `${body.agent_id}__meta`);
     expect(Object.keys(registration!).sort()).toEqual([
       'agent_id', 'allowed_audiences', 'client_auth', 'created_at', 'dedicated_op', 'expires_at',
@@ -107,7 +107,7 @@ describe('POST /provisioning, STANDARD', () => {
   it('never records the private key', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const body = await (await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 })).json() as { agent_id: string };
+    const body = await (await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 })).json() as { agent_id: string };
     const registration = await target.documents.get<Record<string, unknown>>('agents', `${body.agent_id}__meta`);
     expect(JSON.stringify(registration)).not.toContain('"d"');
   });
@@ -116,8 +116,8 @@ describe('POST /provisioning, STANDARD', () => {
     const target = await harness();
     const first = await seedDecision(target, { capabilities: ['document.read'] });
     const second = await seedDecision(target, { capabilities: ['document.read'] });
-    const one = await (await provision(target, { decision_id: first, task_id: 'a', requested_lifetime_hours: 8 })).json() as { agent_id: string };
-    const two = await (await provision(target, { decision_id: second, task_id: 'b', requested_lifetime_hours: 8 })).json() as { agent_id: string };
+    const one = await (await provision(target, { decision_id: first, task_id: 'a', requested_lifetime_minutes: 480 })).json() as { agent_id: string };
+    const two = await (await provision(target, { decision_id: second, task_id: 'b', requested_lifetime_minutes: 480 })).json() as { agent_id: string };
     expect(one.agent_id).not.toBe(two.agent_id);
     const thumbprints = await Promise.all([one, two].map(async (agent) => {
       const registration = await target.documents.get<{ client_auth: { jwk_thumbprint: string } }>('agents', `${agent.agent_id}__meta`);
@@ -129,7 +129,7 @@ describe('POST /provisioning, STANDARD', () => {
   it('caps the lifetime at the platform maximum', async () => {
     const target = await harness({ config: { agentMaxLifetimeSeconds: 3600 } });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 1 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 60 });
     const body = await response.json() as { expires_at: string };
     expect(Date.parse(body.expires_at) - Date.now()).toBeLessThanOrEqual(3_600_000);
   });
@@ -143,7 +143,7 @@ describe('POST /provisioning refuses before it writes', () => {
   it('refuses a request with no proof and writes nothing', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 }, { omitProof: true });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 }, { omitProof: true });
     expect(response.status).toBe(401);
     expect(await writeCount(target)).toBe(0);
   });
@@ -152,7 +152,7 @@ describe('POST /provisioning refuses before it writes', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
     const response = await provision(target, {
-      decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8, effective_capabilities: ['finance.payment.approve'],
+      decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480, effective_capabilities: ['finance.payment.approve'],
     });
     expect(response.status).toBe(400);
     expect((await response.json() as { error: string }).error).toBe('authorization_field_not_allowed');
@@ -162,14 +162,14 @@ describe('POST /provisioning refuses before it writes', () => {
   it('refuses another human\'s decision', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'], humanSubject: 'someone-else' });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(403);
     expect(await writeCount(target)).toBe(0);
   });
 
   it('refuses an unknown decision', async () => {
     const target = await harness();
-    const response = await provision(target, { decision_id: `dec_${crypto.randomUUID()}`, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: `dec_${crypto.randomUUID()}`, task_id: 't', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(400);
     expect((await response.json() as { error: string }).error).toBe('decision_mismatch');
     expect(await writeCount(target)).toBe(0);
@@ -178,7 +178,7 @@ describe('POST /provisioning refuses before it writes', () => {
   it('refuses a capability the human no longer holds', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'], grantHumanPermissions: false });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(400);
     expect((await response.json() as { error: string }).error).toBe('capability_not_subset_of_human_permission');
     expect(await writeCount(target)).toBe(0);
@@ -187,7 +187,7 @@ describe('POST /provisioning refuses before it writes', () => {
   it('refuses a capability with no tool', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['mail.message.send'] });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'no_tool_for_capability', capability_id: 'mail.message.send' });
     expect(await writeCount(target)).toBe(0);
@@ -196,7 +196,7 @@ describe('POST /provisioning refuses before it writes', () => {
   it('pauses with a consent url that is not its own host', async () => {
     const target = await harness({ idpConnectionStatus: 'CONSENT_REQUIRED' });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(200);
     const body = await response.json() as { status: string; consent_url: string; connector_id?: string };
     expect(body.status).toBe('IDP_CONSENT_REQUIRED');
@@ -216,7 +216,7 @@ describe('the agent baseline', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
 
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     const { agent_id: agentId } = await response.json() as { agent_id: string };
 
     const baseline = await target.documents.get<{
@@ -238,7 +238,7 @@ describe('the agent baseline', () => {
     const target = await harness({ idpConnectionStatus: 'CONSENT_REQUIRED' });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
 
-    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
 
     const rows = await target.documents.listAll('agents');
     expect(rows.filter((row) => row.id.endsWith('__baseline'))).toHaveLength(0);
@@ -251,7 +251,7 @@ describe('POST /provisioning, FULL_ISOLATION', () => {
     const decisionId = await seedDecision(target, {
       capabilities: ['finance.payment.read', 'finance.payment.approve'], isolationLevel: 'full_isolation',
     });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(201);
     const body = await response.json() as { agent_id: string };
 
@@ -277,7 +277,7 @@ describe('POST /provisioning, FULL_ISOLATION', () => {
   it('points the agent at its own OP, not the shared one', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['finance.payment.approve'], isolationLevel: 'full_isolation' });
-    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     const values = Object.fromEntries(target.jobRuns[0]!.env.map((entry) => [entry.name, entry.value]));
     expect(values.AGENT_OP_BASE_URL).toMatch(/^https:\/\/dedicated-op-/);
     expect(values.ISOLATION_LEVEL).toBe('full_isolation');
@@ -286,11 +286,11 @@ describe('POST /provisioning, FULL_ISOLATION', () => {
   it('answers 503 once the capacity is used up, writing nothing', async () => {
     const target = await harness({ config: { maxFullIsolationAgents: 1 } });
     const first = await seedDecision(target, { capabilities: ['finance.payment.approve'], isolationLevel: 'full_isolation' });
-    expect((await provision(target, { decision_id: first, task_id: 'a', requested_lifetime_hours: 8 })).status).toBe(201);
+    expect((await provision(target, { decision_id: first, task_id: 'a', requested_lifetime_minutes: 480 })).status).toBe(201);
 
     const before = (await target.documents.listAll('provisioning_transactions')).length;
     const second = await seedDecision(target, { capabilities: ['finance.payment.approve'], isolationLevel: 'full_isolation' });
-    const response = await provision(target, { decision_id: second, task_id: 'b', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: second, task_id: 'b', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(503);
     expect(response.headers.get('Retry-After')).toBe('60');
     expect(await response.json()).toEqual({ error: 'full_isolation_capacity_reached', active: 1, capacity: 1 });
@@ -300,16 +300,16 @@ describe('POST /provisioning, FULL_ISOLATION', () => {
   it('never downgrades to standard when the capacity is full', async () => {
     const target = await harness({ config: { maxFullIsolationAgents: 1 } });
     const first = await seedDecision(target, { capabilities: ['finance.payment.approve'], isolationLevel: 'full_isolation' });
-    await provision(target, { decision_id: first, task_id: 'a', requested_lifetime_hours: 8 });
+    await provision(target, { decision_id: first, task_id: 'a', requested_lifetime_minutes: 480 });
     const second = await seedDecision(target, { capabilities: ['finance.payment.approve'], isolationLevel: 'full_isolation' });
-    await provision(target, { decision_id: second, task_id: 'b', requested_lifetime_hours: 8 });
+    await provision(target, { decision_id: second, task_id: 'b', requested_lifetime_minutes: 480 });
     expect(target.jobRuns).toHaveLength(1);
   });
 
   it('keeps the ledger accurate when creation fails partway', async () => {
     const target = await harness({ admin: recordingAdmin({ failAt: 'createCryptoKey' }) });
     const decisionId = await seedDecision(target, { capabilities: ['finance.payment.approve'], isolationLevel: 'full_isolation' });
-    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 }).catch(() => undefined);
+    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 }).catch(() => undefined);
     const ledgers = (await target.documents.listAll<{ created: unknown[]; status: string; last_error: string | null }>('dedicated_resources'))
       .filter((row) => row.id.startsWith('agent-'));
     expect(ledgers).toHaveLength(1);
@@ -330,7 +330,7 @@ describe('POST /provisioning, FULL_ISOLATION', () => {
 describe('the 24-hour ceiling', () => {
   it('clamps a lifetime the environment allowed but the platform does not', () => {
     const now = Date.parse('2026-01-01T00:00:00.000Z');
-    const capped = computeExpiresAt({ requestedLifetimeHours: 48, agentMaxLifetimeSeconds: 172_800, now });
+    const capped = computeExpiresAt({ requestedLifetimeMinutes: 2880, agentMaxLifetimeSeconds: 172_800, now });
     expect(capped.lifetimeSeconds).toBe(HARD_CAP_SECONDS);
     expect(Date.parse(capped.expiresAt) - now).toBe(HARD_CAP_SECONDS * 1000);
   });
@@ -338,7 +338,7 @@ describe('the 24-hour ceiling', () => {
   it('refuses a request for more than a day even when the variable says otherwise', async () => {
     const target = await harness({ config: { agentMaxLifetimeSeconds: 172_800 } });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 48 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 2880 });
     expect(response.status).toBe(400);
     expect((await response.json() as { error: string }).error).toBe('invalid_request');
   });
@@ -346,7 +346,7 @@ describe('the 24-hour ceiling', () => {
   it('accepts a full day and expires exactly then', async () => {
     const target = await harness({ config: { agentMaxLifetimeSeconds: 172_800 } });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 24 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 1440 });
     const body = await response.json() as { expires_at: string };
     expect(Date.parse(body.expires_at) - Date.now()).toBeLessThanOrEqual(HARD_CAP_SECONDS * 1000);
     expect(Date.parse(body.expires_at) - Date.now()).toBeGreaterThan(HARD_CAP_SECONDS * 1000 - 60_000);
@@ -359,7 +359,7 @@ describe('what a refusal tells the caller', () => {
     const decisionId = await seedDecision(target, { capabilities: ['document.read', 'document.write'] });
     // The decision was made when both were held; only one still is.
     await target.seedStore.delete('human_permissions', 'testuser__document.write');
-    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       error: 'capability_not_subset_of_human_permission', capabilities: ['document.write'],
@@ -376,7 +376,7 @@ describe('the manifest copy', () => {
   it('is written beside the registration and matches what the job was handed', async () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const body = await (await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 })).json() as { agent_id: string };
+    const body = await (await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 })).json() as { agent_id: string };
 
     const stored = await target.documents.get<Record<string, unknown>>('agents', `${body.agent_id}__manifest`);
     expect(stored).toBeDefined();
@@ -387,7 +387,7 @@ describe('the manifest copy', () => {
   it('is not left behind when the provisioning fails', async () => {
     const target = await harness({ verifyStatus: 'PENDING' });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    await provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     const rows = await target.documents.listAll('agents');
     expect(rows.filter((row) => row.id.endsWith('__manifest'))).toEqual([]);
   });

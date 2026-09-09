@@ -68,6 +68,65 @@ describe('the documents Authorization Server logs every redemption', () => {
     expect(entry.fields.token_issue_result).toBe(false);
     expect(entry.fields.authz_decision).toBe('deny:invalid_grant');
     expect(entry.fields.validation_name).toBe('dpop_key_binding_mismatch');
+    // The proof was well formed and bound to the right endpoint; only the key differs.
+    expect(entry.fields.dpop_binding_step).toBe('thumbprint');
+    expect(entry.fields.presented_htu).toBe(entry.fields.expected_htu);
+    expect(entry.fields.presented_jkt).not.toBe(entry.fields.expected_jkt);
+  });
+
+  /**
+   * The failure `dpop_key_binding_mismatch` cannot express on its own.
+   *
+   * A proof bound to a different token endpoint is refused by exactly the same code
+   * and the same wire answer as a stolen key, so a deployment whose `ISSUER` and whose
+   * catalogue `authorization.audience` have drifted apart looks, in the log, like an
+   * attack. These fields are what separate them.
+   */
+  it('separates a proof bound to another endpoint from a mismatched key', async () => {
+    const agentOp = await startAgentOp({ idpPublicJwk: idpJwk });
+    const docs = await startResource({ kind: 'docs', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER });
+    const idJag = (await (await requestIdJag(agentOp, { subjectToken })).json() as { access_token: string }).access_token;
+    const elsewhere = 'https://resource-docs-as.elsewhere.test/token';
+    const refused = await redeemForAccessToken(docs, { idJag, keyPair: agentOp.dpopKeyPair, proofUrl: elsewhere });
+    expect(refused.status).toBe(400);
+
+    const entry = redemptions(docs).at(-1)!;
+    // The caller is told the same thing either way — that part does not change.
+    expect(entry.fields.authz_decision).toBe('deny:invalid_grant');
+    expect(entry.fields.validation_name).toBe('dpop_key_binding_mismatch');
+    // The log is where the two come apart.
+    expect(entry.fields.dpop_binding_step).toBe('proof');
+    expect(entry.fields.presented_htu).toBe(elsewhere);
+    expect(entry.fields.expected_htu).toBe(`${docs.asIssuer}/token`);
+    // The key itself was right, which is what rules out a stolen one.
+    expect(entry.fields.presented_jkt).toBe(entry.fields.expected_jkt);
+  });
+
+  it('names the missing proof and the missing cnf apart', async () => {
+    const agentOp = await startAgentOp({ idpPublicJwk: idpJwk });
+    const docs = await startResource({ kind: 'docs', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER });
+    const idJag = (await (await requestIdJag(agentOp, { subjectToken })).json() as { access_token: string }).access_token;
+
+    expect((await redeemForAccessToken(docs, { idJag, keyPair: agentOp.dpopKeyPair, omitProof: true })).status).toBe(400);
+    expect(redemptions(docs).at(-1)!.fields.dpop_binding_step).toBe('dpop_header');
+  });
+
+  it('names an assertion that carries no cnf at all', async () => {
+    // An AS that trusts a key this test holds, so the assertion below verifies and
+    // the refusal is about `cnf` rather than about the signature.
+    const opKeyPair = await generateEs256KeyPair();
+    const docs = await startResource({
+      kind: 'docs', agentOpPublicJwk: await toPublicJwk(opKeyPair.publicKey), trustedIdpIssuer: HUMAN_IDP_ISSUER,
+    });
+    const noCnf = await mintIdJag({
+      keyPair: opKeyPair, audience: DOCS_AS_ISSUER, resource: DOCS_API_RESOURCE, jkt: null,
+      issuer: HUMAN_IDP_ISSUER,
+    });
+    expect((await redeemForAccessToken(docs, { idJag: noCnf, keyPair: await generateEs256KeyPair() })).status).toBe(400);
+
+    const entry = redemptions(docs).at(-1)!;
+    expect(entry.fields.dpop_binding_step).toBe('assertion_cnf');
+    expect(entry.fields.expected_jkt).toBeNull();
   });
 
   it('still names jti, kid and typ when the signature never verified', async () => {

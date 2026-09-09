@@ -1,0 +1,57 @@
+{
+  "name": "@xaa/local-runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js",
+    "test": "vitest --config ../../vitest.package.config.ts run"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@maronn-openid-connect/core": "0.2.0",
+    "@xaa/agent-op": "workspace:*",
+    "@xaa/agent-runtime": "workspace:*",
+    "@xaa/analysis-console": "workspace:*",
+    "@xaa/authorization": "workspace:*",
+    "@xaa/automation-app": "workspace:*",
+    "@xaa/contracts": "workspace:*",
+    "@xaa/control-plane-auth": "workspace:*",
+    "@xaa/crypto": "workspace:*",
+    "@xaa/gcp": "workspace:*",
+    "@xaa/google-bridge": "workspace:*",
+    "@xaa/human-idp": "workspace:*",
+    "@xaa/lifecycle-manager": "workspace:*",
+    "@xaa/logging": "workspace:*",
+    "@xaa/provisioner": "workspace:*",
+    "@xaa/resource-docs-api": "workspace:*",
+    "@xaa/resource-docs-as": "workspace:*",
+    "@xaa/resource-finance-api": "workspace:*",
+    "@xaa/resource-finance-as": "workspace:*",
+    "@xaa/resource-guard": "workspace:*",
+    "@xaa/security-detection": "workspace:*",
+    "@xaa/stub-saas-api": "workspace:*",
+    "@xaa/stub-saas-op": "workspace:*",
+    "@xaa/vertex": "workspace:*",
+    "hono": "4.13.5",
+    "seed": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.11"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/main.d.ts",
+      "import": "./dist/main.js"
+    },
+    "./src/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  }
+}

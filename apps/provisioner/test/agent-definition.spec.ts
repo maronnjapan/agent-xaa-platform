@@ -24,7 +24,7 @@ async function harness(): Promise<ProvisionerHarness> {
 
 async function send(target: ProvisionerHarness, body: Record<string, unknown>): Promise<Response> {
   const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-  return issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8, ...body });
+  return issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480, ...body });
 }
 
 describe('the agent definition a provisioning request carries', () => {
@@ -32,13 +32,13 @@ describe('the agent definition a provisioning request carries', () => {
     const target = await harness();
     expect((await send(target, {})).status).toBe(201);
     expect(Object.keys(agentDefinitionSchema.properties).sort())
-      .toEqual(['decision_id', 'human_subject', 'requested_lifetime_hours', 'task_id']);
+      .toEqual(['decision_id', 'human_subject', 'requested_lifetime_minutes', 'task_id']);
     expect(agentDefinitionSchema.additionalProperties).toBe(false);
   });
 
   it('refuses a lifetime beyond the platform ceiling', async () => {
     const target = await harness();
-    const response = await send(target, { requested_lifetime_hours: 25 });
+    const response = await send(target, { requested_lifetime_minutes: 1500 });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'invalid_request' });
     expect(target.jobRuns).toHaveLength(0);
@@ -66,9 +66,9 @@ describe('the agent definition a provisioning request carries', () => {
   });
 
   it('refuses a missing decision id and a malformed one', () => {
-    expect(() => validateAgentDefinition({ task_id: 't', requested_lifetime_hours: 8 }, 24))
+    expect(() => validateAgentDefinition({ task_id: 't', requested_lifetime_minutes: 480 }, 24))
       .toThrow(DefinitionRejected);
-    expect(() => validateAgentDefinition({ decision_id: 'nope', task_id: 't', requested_lifetime_hours: 8 }, 24))
+    expect(() => validateAgentDefinition({ decision_id: 'nope', task_id: 't', requested_lifetime_minutes: 480 }, 24))
       .toThrow(DefinitionRejected);
     expect(() => validateAgentDefinition('not an object', 24)).toThrow(DefinitionRejected);
   });

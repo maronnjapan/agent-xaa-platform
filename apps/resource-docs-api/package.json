@@ -11,15 +11,21 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
+    "@xaa/admin-ui": "workspace:*",
     "@xaa/contracts": "workspace:*",
+    "@xaa/control-plane-auth": "workspace:*",
     "@xaa/crypto": "workspace:*",
     "@xaa/gcp": "workspace:*",
     "@xaa/logging": "workspace:*",
     "@xaa/resource-guard": "workspace:*",
-    "hono": "4.13.5"
+    "hono": "4.13.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@types/node": "22.18.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
     "typescript": "5.9.2",
     "vitest": "4.1.11"
   },

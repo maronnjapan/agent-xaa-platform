@@ -29,7 +29,8 @@ DEC-ID-13 の経路(3)と DEC-ID-18 の typ 検査、DEC-APP-07 の `createApp()
 - `src/config.ts` が読む環境変数は `PORT` / `ISSUER` / `AUTOMATION_APP_CLIENT_ID`（既定 `automation-app`）/ `AUTHORIZATION_PLATFORM_URL` / `AGENT_PROVISIONER_URL` / `LIFECYCLE_MANAGER_URL` / `DOCS_API_URL` / `ACTIVITY_TOPIC` / `DEFAULT_AGENT_LIFETIME_HOURS` / `VERTEX_MODEL_ID` / `VERTEX_MODE` / `STORE_MODE` の12個に限る。
 - セッションは Firestore の `sessions/{session_id}` に置き、フィールドは `session_id`, `human_subject`, `id_token`, `access_tokens`（`authorization-platform` / `agent-provisioner` / `lifecycle-manager` の3キー）, `dpop_private_jwk`, `created_at`, `expires_at` の7つだけにする。
 - `refresh_token` と `aud=agent-platform` の `id_token` を格納するフィールドを型定義に作らない。
-- `src/auth/oidc-login.ts` の認可要求の `scope` は `openid profile` 固定とし、`offline_access` を組み立てる分岐を書かない。
+- `src/auth/oidc-login.ts` の `LOGIN_SCOPE` は `openid profile` 固定とし、`offline_access` を組み立てる分岐を書かない。
+- 改訂(2026-09-06)。**人に見せる認可要求では、必要な scope を全部並べる。** `src/auth/login-flow.ts` の `CONSENT_SCOPE` を `LOGIN_SCOPE` と `TOKEN_PLAN` の scope 全件から組み立て、`GET /login` の認可要求に渡す。同意画面が1枚で委譲の全体を示し、続く4回は同意済みとして画面を出さない。以前は1回ごとに scope 1件の同意画面が出て、計5枚になっていた。並べるのは同意の対象であって1枚のトークンの中身ではない。各 Access Token は従来どおり操作 scope 1件で取り、宛先も権限も1つのままである。`TOKEN_PLAN` から組み立てるので、宛先を足して同意から漏らすことはできない。
 - `require-user.ts` はセッション Cookie `xaa_session` から Access Token を取り出し、署名検証の直後に `typ === 'at+jwt'` を検査し、違えば 401 を返す（DEC-ID-18）。
 - `aud` の判定は `packages/xaa-contracts/src/audience.ts` の `audienceIncludes(aud, expected)` を使い、部分一致と接頭辞一致を使わない（DEV-12）。
 - `require-user.ts` は `c.set('humanSubject', payload.sub)` を置き、以後のハンドラは `sub` を直接読まない。
@@ -40,6 +41,7 @@ DEC-ID-13 の経路(3)と DEC-ID-18 の typ 検査、DEC-APP-07 の `createApp()
 - [x] `pnpm vitest run apps/automation-app/test/session-store.spec.ts` が緑で、セッションスキーマに `refresh_token` キーを追加した fixture が型検査で落ちることをテストが示す。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 - [x] `pnpm vitest run apps/automation-app/test/require-user.spec.ts -t "rejects typ other than at+jwt"` が緑になる。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 - [x] `bash scripts/checks/no-offline-access-in-automation-app.sh` が終了コード 0 を返す。
+- [x] `GET /login` の Location の `scope` が `CONSENT_SCOPE` と一致し、`TOKEN_PLAN` の4件を全部含む（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 - [x] `apps/automation-app/src/app.ts` が `createApp` を default export し、`app.fetch(new Request('http://x/livez'))` が 200 を返す単体テストが通る。（実体は `apps/automation-app/test/session-and-auth.spec.ts`）
 
 ### T-APP-02 Vertex AI 共通クライアントパッケージを実装する

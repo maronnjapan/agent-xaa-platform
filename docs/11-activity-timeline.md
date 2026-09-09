@@ -6,6 +6,8 @@ Security Detection（[09](./09-security-monitoring.md)）は、ログから異�
 
 本書が定義する**アクティビティタイムライン**は、判断そのものを行わない。Policy Engine、Tool Executor、Security Detectionがすでに下した決定を、操作している本人が時系列で追えるように見せるだけの画面である。用途は2つある。
 
+Security Detectionの判断そのもの（Risk Score、AIの4観点、推奨する対応）を読む画面は本書の範囲外であり、[09. §7](./09-security-monitoring.md#7-判断を本人へ見せる)にある。タイムラインが答えるのは「自分の作業に何が起きたか」であり、あちらが答えるのは「見張っている側が自分のAgentをどう見ているか」で、問いが違う。
+
 | 用途 | 内容 |
 |---|---|
 | 通常利用時の可視化 | 自分のログインから、自動化の提案、権限の決定、Agentの実行、外部Resourceへのアクセスまでを一連の流れとして見せる |
@@ -20,6 +22,7 @@ Security Detection（[09](./09-security-monitoring.md)）は、ログから異�
 - **常に記録する**：Activity Eventの記録は、通常利用かデモかを区別せず、Agentが動くたびに常時行う。デモのために記録を開始する操作は無い。操作者が明示的に行うのは、実演が難しいケースを補うための台本イベントの追加（[§6.2](#62-台本で補う)）だけである。
 - **完了してから、まとめて再生する**：実行中のイベントを逐次配信することはしない。常時接続の配信経路は接続維持や順序保証の負担が大きく、途中経過を文字で流すだけでは効果も薄い。ログイン〜Provisioning、Taskごとの処理、Agent終了のそれぞれが完了した時点で、その一連の流れをまとめて再生する（[§3.3](#33-task境界)、[§4](#4-配信経路)）。実行中かどうかだけを素早く知りたい場合は、既存の状況確認（[02. §5](./02-automation-design.md#5-実行中agentの操作)）を使う。
 - **一覧だけで終わらせない**：完了した処理は、文字の一覧に加えて、実際に発生した呼び出しの経路をアニメーションで再生する。遮断はその経路がどこで止まったかを動きで示す（[§5.2](#52-再生の中身)）。
+- **一文で終わらせない**：`title` と `message` は「何が起きたか」を一文で言う。だが人が実際に知りたいのは「どこへ何を送り、何が返り、送る前に何を確かめ、Agent 自身は何と書いたか」であり、これは一文でも key/value の平坦な表でも表せない。そこで発行元が、順序を持った内訳（**Activity Record**、[§3.4](#34-activity-record)）を書く。画面はそれを並べるだけで、文章は作らない。
 - **人間の操作とAgentの操作を1本の時系列にする**：ログインや追加指示のような人間自身の操作と、Agentの実行結果を別々の画面に分けない。ユーザーから見れば「自分が指示し、Agentが動いた」という1つの流れだからである。
 - **表示専用のイベントを別系統で持つ**：Security Detectionが収集する詳細ログ（[09. §2](./09-security-monitoring.md#2-収集するログ)）はDPoP検証結果やID-JAGの`jti`など技術的な内容であり、そのままでは人間向けの説明にならない。本書はこれとは別に、意味のある区切りごとに人間向けの説明文を持つ**Activity Event**を新たに定義する（[§3](#3-activity-event)）。既存の詳細ログを置き換えるものではなく、その横に並ぶ軽量な系統である。
 - **遮断のデモは実際の拒否経路を使う**：Tool Executorの拒否やPolicy EngineのDENYは、デモのための特別な演出ではなく実際に動いている仕組みである。安全に再現できるものは実際に操作して見せ、実演が危険または非現実的なものだけ台本化した表示で補う（[§6](#6-侵害を見せるデモ)）。
@@ -47,6 +50,12 @@ activity_event:
     tool_id: mail.message.send
     effective_capabilities: [calendar.event.read]
     reason: not_in_allowed_tools
+    target: resource-api      # 再生でどの箱へ向かう動きかを示す。省略可
+  record:                     # この1件の内訳（3.4）。省略可
+    headline: mail.message.send の実行を拒否しました
+    checks: [...]
+    sections: [...]
+    hops: [...]
   related_finding_id: null    # Security DetectionのFindingと対応する場合のみ
   is_simulated: false         # デモ用の台本イベントだけtrue（6.2）
 ```
@@ -62,12 +71,18 @@ activity_event:
 | phase | event_type | 発生元 | 出典 | 表示例 |
 |---|---|---|---|---|
 | login | LOGGED_IN | Automation App | [05. §1](./05-identity.md#1-human-identity-provider) | ログインしました |
-| work_definition | PROPOSED | Automation App | [02. §1](./02-automation-design.md#1-基本方針) | Automation Design AIが「{purpose}」を提案しました |
-| work_definition | CONFIRMED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | 作業内容を確定しました |
+| work_definition | PROPOSED | Automation App | [02. §1](./02-automation-design.md#1-基本方針) | 「{purpose}」を ToDo として登録しました |
+| work_definition | DRAFT_REVISED | Automation App | [02. §2](./02-automation-design.md#2-automation-design-aiが決めること決めないこと) | Automation Design AIが「{purpose}」の内容を書き直しました |
+| work_definition | CONFIRMED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | ToDo の内容を確定しました |
+| authorization | DECISION_REQUESTED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | 「{purpose}」の作業内容をAuthorization Platformへ送り、必要な権限の決定を求めました |
 | authorization | CAPABILITY_DECIDED | Authorization Platform | [03. §6](./03-authorization.md#6-policy-engine) | 許可：{allowed}／却下：{denied}（理由：{reason}） |
 | authorization | ISOLATION_DECIDED | Authorization Platform | [03. §7](./03-authorization.md#7-security-profile) | isolation_level={level}に決定（risk_score {n}） |
+| authorization | DECISION_RECEIVED／DECISION_REFUSED | Automation App | [02. §3](./02-automation-design.md#3-business-work-request) | Authorization Platformから決定{decision_id}が返りました／決定が返りませんでした |
+| authorization | AGENT_DEFINITION_APPROVED | Automation App | [02. §4](./02-automation-design.md#4-agent-definition) | 提示された権限を承認しました |
+| provisioning | PROVISION_REQUESTED／PROVISION_REFUSED | Automation App | [07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow) | Agentの作成を依頼しました／Agentを作れませんでした |
 | provisioning | CONSENT_REQUIRED | Agent Provisioner | [07. §3.2](./07-lifecycle.md#32-provisioning-transaction) | {connector}への追加の同意が必要です |
 | provisioning | AGENT_PROVISIONED | Agent Provisioner | [07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow) | Agentを作成しました（有効期限{expires_at}） |
+| work_definition | INSTRUCTION_ADDED | Automation App | [02. §5](./02-automation-design.md#5-実行中agentの操作) | Agentに ToDo を伝えました／Agentに追加の指示を出しました |
 | tool_call | TOOL_SUCCEEDED | Agent Runtime | [04. §6](./04-tool-catalog.md#6-tool-executor) | {tool_id}を実行しました |
 | tool_call | TOOL_BLOCKED | Agent Runtime | [04. §7](./04-tool-catalog.md#7-agentに任意httpを許さない) | {tool_id}は許可されたToolに含まれないため拒否しました |
 | security | PROTOCOL_VIOLATION | 要求を受けたアプリ（Agent OP、Tool Executor等） | [09. §5.1](./09-security-monitoring.md#51-protocol-validation) | {検証名}に違反したため要求を拒否しました |
@@ -77,7 +92,9 @@ activity_event:
 | lifecycle | RE_PROVISIONED | Lifecycle Manager | [07. §7.2](./07-lifecycle.md#72-human-userの権限が変更された場合re-provisioning) | 権限変更によりAgentを作り直しました |
 | authorization | PERMISSION_CHANGE_IGNORED | Authorization Platform | [07. §7.2](./07-lifecycle.md#72-human-userの権限が変更された場合re-provisioning) | 権限が広がりましたが、実行中のAgentには反映しません |
 
-CAPABILITY_DECIDEDは`denied`側も表示する。却下されたCapabilityとその理由（Delegatable Permission外、Organization Policy違反など）は、実際には何も実行されていなくても「何が許されなかったか」を示す情報であり、遮断の理解に欠かせない。
+CAPABILITY_DECIDEDは`denied`側も表示する。却下されたCapabilityとその理由（Delegatable Permission外、Organization Policy違反など）は、実際には何も実行されていなくても「何が許されなかったか」を示す情報であり、遮断の理解に欠かせない。何も許可できなかった決定も同じ理由で発行する。許可が空の決定は、人がいちばん説明を求める決定である。
+
+Automation Appは、人が画面で行った操作と、他のアプリへ何を頼み何が返ったかを、自分が知る範囲で発行する。DECISION_REQUESTEDは送った業務の言葉を、DECISION_RECEIVEDは返った値を届いたまま並べる。なぜ許可され、なぜ却下されたかはAuthorization Platformが自分のイベントに書き、Automation Appはその`decision_id`を名指すだけで理由を言い直さない（RULE-07）。INSTRUCTION_ADDEDは、確定した作業内容を最初の指示としてAgentへ渡した瞬間と、人が追加の指示を書いた瞬間を、そのAgentのTaskの側に置く。
 
 ### 3.3 Task境界
 
@@ -91,7 +108,40 @@ CAPABILITY_DECIDEDは`denied`側も表示する。却下されたCapabilityと�
 
 終端イベントが記録された`task_id`だけが再生の対象になる。終端イベントがまだ無い`task_id`は「実行中」として名前だけ示し、途中経過を先出しで再生しない（[§4](#4-配信経路)）。
 
+`task_id`はAgentごとに振り直される。どのAgentにも`provisioning`と`task-1`と`lifecycle`があるので、読む側は`task_id`だけでまとめてはならない。まとめる単位はAgentである。Agentができる前のイベント（ログイン、提案、決定）には`agent_id`が無いので、イベントが名指すidの連鎖でAgentへつなぐ。提案は`work_definition_id`を、Automation Appが受け取った決定は`work_definition_id`と`decision_id`を、Provisionerの最初のイベントは`decision_id`と、自分が採番した`agent_id`を持つ。この連鎖をたどると、ログインからAgentの終了までが1本の物語になる。連鎖がまだAgentに届いていない作業（決定は返ったがAgentは未作成）は、届いているidを名前にした独立の物語として「実行中」に並べる。ログインはidを持たないので、その次に始まった物語の先頭に置く。どの作業にもつながらなかったログインは、どのAgentの物語でもないので並べない。
+
 TASK_COMPLETED、TASK_BLOCKED、TASK_FAILEDはAgent Runtimeが発行する。1回の指示に対する処理は複数のTool呼び出しを含みうるため、それらがすべて終わった時点でAgent Runtimeが結果を判定する。
+
+### 3.4 Activity Record
+
+`title` と `message` は一文、`detail` は平坦な key/value である。どちらも「Agentがどこへ何を送り、何が返り、送る前に何を確かめ、自分では何と書いたか」には答えられない。答えは順序を持つからである。
+
+そこで**Activity Record**を置く。1件のActivity Eventの内訳であり、次の4つを持つ。
+
+| 要素 | 内容 |
+|---|---|
+| `headline` | その1手を一言で言うと何だったか |
+| `checks` | 実行の前に確かめたことと、その結果（`passed` / `blocked` / `failed` / `skipped`） |
+| `sections` | 見出しつきの区画。`label`、一文の`message`、名前つきの値（`fields`）、本文（`text`）を持つ |
+| `hops` | その処理で実際に発生した、箱から箱への移動（[§5.2](#52-再生の中身)） |
+
+**人が読む文字列は、すべて発行元がその場で書く。** `label`も`message`も`text`も、判断を下した本人が、判断した時点の言葉で埋める。画面はそれらを並べ、字下げし、どこを畳むかを決めるだけで、一文も作らない（RULE-54）。`status: 403`を画面が「拒否されました」と言い換えれば、それは自分が立ち会っていない出来事を画面が解釈したことになり、文言を変えた日に過去の記録まで書き換わる。
+
+`checks`の`skipped`は埋め草ではない。許可されていないToolとして最初の段階で断られた呼び出しは、そもそも制約の確認まで到達していない。「制約を満たした」と「制約を見ていない」は別のことである。
+
+Tool呼び出しでAgent Runtimeが記録する内容を挙げる。
+
+| 区画 | 内容 |
+|---|---|
+| `intent` | 選んだTool、渡そうとした引数、そしてAgent自身がその手で書いた文章 |
+| `capability` | そのToolが要求するCapability |
+| `authorization` | Catalogが決めている宛先（`audience`）、対象（`resource`）、範囲（`scope`） |
+| `access_token` | 受け取ったAccess Tokenの有効期限と提示方法。Tokenそのものは記録しない |
+| `request` | Method、宛先、送った本文、宣言に無いため落とした引数 |
+| `response` | HTTPステータス、所要時間、許可された項目だけに絞った後の値 |
+| `failure` | 止まった段階と種別。止まった場合だけ |
+
+Recordは人に見せるものであり、タイムラインが残る限り残る。Raw Token、Secret、Private Keyを入れてはならない（RULE-38）。発行元が入れないだけでなく、応答本文に紛れ込んだ場合に備えて、書き出す直前にJWT形状の文字列を落とし、長すぎる本文を切り詰める。
 
 ## 4. 配信経路
 
@@ -125,10 +175,15 @@ Automation Appはこのトピックをpush subscriptionで受け、`human_subjec
 
 ### 5.1 画面の構成
 
-タイムライン画面は2段になる。
+タイムライン画面はAgentごとに3段になる。
 
-1. **一覧**：ユーザーの全Agentについて、完了した`task_id`を新しい順に並べる。各行はAgentの目的、区分（`provisioning` / `task-{n}` / `lifecycle`）、終端の`outcome`、完了時刻を示す。実行中の`task_id`は「実行中」の行として名前だけ出し、選べない。
-2. **再生**：一覧から1件選ぶと、そのTaskに含まれるActivity Eventをアニメーションで再生する（[§5.2](#52-再生の中身)）。
+1. **一覧**：ユーザーの全Agentについて、Agentごとにまとめ、新しく始めたAgentを上に置く。1つのAgentの中は起きた順（`provisioning`、完了順の`task-{n}`、`lifecycle`）に並べる。各行はAgentの目的、区分、終端の`outcome`、完了時刻を示す。実行中の`task_id`は「実行中」の行として名前だけ出し、選べない。Agentがまだ無い物語は、目的の下に「Agentはまだ作られていません」と添える。
+2. **動きを見る**：そのAgentの終わったTaskを、Taskごとの再生としてまとめて並べる（[§5.2](#52-再生の中身)）。
+3. **やったこと**：同じイベントを、サーバー側で描画した文章として、2と同じTaskの順に並べる（[§5.4](#54-やったこと)）。
+
+**再生どうしを離さない。** 2と3をTaskごとに交互に置くと、1つの文章が数十行あるため、同じAgentの2つの再生が同時に画面へ入らない。再生を続けて見たい人は、その間の文章を毎回スクロールで越えることになる。そこで2をまとめて先に置き、3をそのあとに置く。Agentごとの区切りは変えない。
+
+2と3は代替ではない。再生は「何と何が話し、どこで止まったか」に答え、文章は「何を送り、何が返り、先に何を確かめたか」に答える。片方だけでは、もう片方の問いが残る。アニメーションを見られない人にとっても、失われるのは動きだけである。再生中の1手は、3の対応する行を強調する。再生していない間はどの行も強調しない。
 
 Google Calendarの予定を整理するAgent（[02. §1](./02-automation-design.md#1-基本方針)の例）で、追加指示によって権限外の送信を試みた場合の一覧を示す。
 
@@ -145,14 +200,37 @@ lifecycle      Agentの終了                                     成功   10:05
 
 再生は、そのTaskで実際に呼び出しが発生したアプリを結ぶ図に、呼び出しの動きを重ねたものである。図に含める登場人物はTaskごとに異なり、実際に登場したアプリだけを表示する（`task-1`ならAgent Runtime、Agent OP、Resource AS、Resource APIだけで足り、Authorization Platformは登場しない）。
 
+箱の座標は固定して書き下す。同じ系のTaskを2回見る人にとって、絵が毎回同じ場所にあることが「矢印がResource APIの手前で止まった」を認識できる条件だからである（DEC-APP-06）。各箱には名前に加えて、その箱が何をするところかを一行で添える。図の読み方（上段と下段の別、丸が1回のやり取りであること、止められた動きは届かないこと、出ていない箱はこの処理に関わっていないこと）も図の隣に置く。これらは図の凡例であり、個々のイベントの解釈ではない。
+
+**箱の名前だけでは何をするところか分からない。** `agent-op`や`resource-as`という名前は、docs 05を読んだ人にしか読めない。そこで登場するもの1つずつについて、名前・一行の役割・**すること**・**しないこと**の4つを固定文として持ち、その記録に出てきたものだけを一覧として図と一覧の手前に置く。図の箱を押しても同じ説明が出る。「しないこと」を必ず書くのは、この基盤の要点が「決める側と動く側が別である」ことであり、それを知らない読み手には矢印が手前で止まる意味が分からないからである。この辞書は図・一覧・説明の3か所が同じ名前を使うための単一の出所でもある。これらも凡例であって、個々のイベントの解釈ではない（RULE-54）。
+
+**1回のTool呼び出しは1本の矢印ではない。** Agent OPがID-JAGを発行し、Resource ASがそれをAccess Tokenに換え、Resource APIが答える——実際には4往復である。1本の矢印で描くと「Agentが何かに触った」しか言えず、遮断がどこで起きたのかも示せない。そこで発行元が経路を`hops`（[§3.4](#34-activity-record)）として記録し、再生はその1本ずつを順に動かす。経路を知っているのは呼び出した本人であり、画面ではない。
+
+**動きには言葉を添える。** 丸が動くだけでは「何かがどこかへ行った」としか分からない。矢印のそばにはその往復の`label`を描き、関わった2つの箱を光らせ、図の下の枠に「どこからどこへ」「何という往復か」「発行元の`message`」を出す。どれも発行元が書いた文字列と箱の固定の見出しを置くだけで、ブラウザが文を作ることはない（RULE-54）。`hops`も宛先も持たないイベント——権限の決定や登録のように、1つの箱の中で起きたこと——は、矢印を描かずにその箱を光らせる。以前はこうしたイベントを、直前の箱へ戻る矢印として描いていたが、それは起きていない呼び出しを描くことだった。
+
+**線と文字は箱に重ねない。** 箱の上に引かれた線は、その箱がその呼び出しに関わっていたと読める。だから矢印は両端とも箱の縁から縁へ引き、間に別の箱がある往復——Agent RuntimeからResource APIのように、Resource ASを挟むもの——は、段の外の空き帯を通して迂回させる。`label`も箱の上には置かず、上段の上・下段の下・2段の間という、箱が決して置かれない3つの帯のいずれかに出す。文字の幅はブラウザしか知らないので、位置は高さだけで決める。
+
 再生は次の順で進む。
 
-1. そのTaskのActivity Eventを`occurred_at`の順に並べる。
-2. 1件ずつ、発生元から宛先へ向かう動きを表示し、到達した時点でそのイベントの`message`を示す。
-3. `outcome`が`blocked`のイベントは、宛先の手前で止め、到達させない。同時に`message`（拒否の理由）を示す。`task-2`の例では、Agent RuntimeからResource APIへ向かう動きがTool Executorの位置で止まり、「mail.message.send は許可されたToolに含まれないため、実行を拒否しました」を示す。
-4. 全イベントを表示し終えたら、そのTaskの結果（成功／遮断）を静止した状態で残す。
+1. そのTaskのActivity Eventを`occurred_at`の順に並べ、`hops`を持つイベントはその順に展開する。
+2. 1件ずつ、発生元から宛先へ向かう動きを表示し、到達した時点でその`message`を示す。同時に、[§5.4](#54-やったこと)の対応する行を強調する。図に出すのは、いま動いている1件だけである。前の1件が描いた矢印・`label`・`message`は次へ進む前に消す。全部を残すと、絵は「いま何が起きているか」に、それまでに起きたこと全部を重ねて答えることになる。起きたことの全部は[§5.4](#54-やったこと)に順番どおり残る。
+3. `outcome`が`blocked`のものは、宛先の手前で止め、到達させない。同時に`message`（拒否の理由）を示す。`task-2`の例では、Agent RuntimeからResource APIへ向かう動きがTool Executorの位置で止まり、「mail.message.send は許可されたToolに含まれないため、実行を拒否しました」を示す。
+4. 全ステップを表示し終えたら、そのTaskの結果（成功／遮断）を静止した状態で残す。
 
-再生の間隔は実際の経過時間に比例させない。Provisioning中のConsent待ちのように数分かかる区間もあれば、Tool呼び出しのように数百ミリ秒で終わる区間もあり、実時間のまま再生すると間延びするか速すぎるかのどちらかになる。1ステップあたり一定の長さで進め、長さそのものは実装時に調整する。
+再生の間隔は実際の経過時間に比例させない。Provisioning中のConsent待ちのように数分かかる区間もあれば、Tool呼び出しのように数百ミリ秒で終わる区間もあり、実時間のまま再生すると間延びするか速すぎるかのどちらかになる。1ステップあたり一定の長さで進める。**1ステップは4〜5秒とし、そのうち動きは1〜2秒に収める。** 残りは動き終わった絵をそのまま止めておく時間であり、添えた文を読むのはこの間である。1ステップを2秒に収めていたときは、丸が着いたときにはまだ文を読み終えていなかった。5秒を超えると、4往復あるTool呼び出しが待ち時間になる。
+
+一定の速さで一度流れるだけの再生は、読むものではなく眺めるものになる。人が止まりたいのは、意外なことを言っているステップである。そこで再生・一時停止・次へ・最初から の4操作と、いま何ステップ目かの表示を付ける。押しても記録は変わらない。動かしているのは絵だけである。
+
+**絵の隣に、その手で何を考えたかを出す。** 図が答えるのは「何がどこへ行ったか」だけで、人が実際に聞きたい「AIエージェントが何を考えて、どうすると決めたのか」には答えていない。その答えは[§3.4](#34-activity-record)のRecordに最初から入っているが、要求本文やTokenの有効期限と同じ形で図の下に畳まれていて、絵が動いている間は誰も開かない。そこで再生中の1手について、Recordを次の4つに仕分けて図の隣に出す。
+
+| 区分 | 何を出すか | どこから取るか |
+|---|---|---|
+| 読み取ったこと | その手の頭で読んだ指示、AIが読み取った作業 | `sections`のうち`received`と`work_definition` |
+| 考えたこと | モデル自身の言葉、AIが述べた根拠 | 発行元が`format: text`と印を付けた`sections`（引用として出す） |
+| 決めたこと | 選んだTool、渡そうとした引数、Policy Engineの可否 | 上記以外の`sections`（名前と値の組） |
+| 確かめたこと | 実行前の検査とその判定 | `checks` |
+
+仕分けの根拠は、発行元が書いた`id`と「本文を散文と宣言したかどうか」の2つだけである。並べ替えと見出しは画面のものだが、文は1つも画面が作らない（RULE-54、REQ-11-002）。1件のイベントが4つのhopsに展開されるとき、この枠はそのイベントの間ずっと同じものを出し続ける。考えたのはhopではなくイベントだからである。
 
 一覧の各行は、再生を見る前後どちらでも[§3.1](#31-スキーマ)の`detail`を開けるようにし、技術的な内容はそこで確認できるようにする。
 
@@ -163,6 +241,33 @@ lifecycle      Agentの終了                                     成功   10:05
 - `detail`は既定で折りたたみ、必要な人だけが技術的な内容（Capabilityの一覧、Policy ID、Finding IDなど）を開けるようにする。
 - 一覧はAgentごとに区切る。`provisioning`と`lifecycle`は各Agentの先頭と末尾に固定で並べ、`task-{n}`はその間に完了順で並べる。
 - `is_simulated: true`のTaskには常時「デモ実行（模擬）」の表示を付け、実イベントと同じ見た目にはしない（[§6.2](#62-台本で補う)）。
+
+### 5.4 やったこと
+
+そのAgentの再生をすべて並べたあとに、同じイベントを文章として上から並べる（[§5.1](#51-画面の構成)）。1件ごとに、発生元の箱の名前、**その箱が何をするところかの一行**、時刻、`outcome`のバッジ、`title`、`message`、そして[§3.4](#34-activity-record)のRecordを置く。名前と一行はどちらも§5.2の辞書から取り、図と同じ言葉で呼ぶ。Recordのうち`checks`は最初から開いておく。「何かに止められたのか」への答えであり、開かないと分からない形にすると読まれないからである。発行元が`format: text`と印を付けた文章——Agentが自分で書いた考え、Authorization AIが述べた根拠、人が書いた指示——も開いたまま引用として出す。読む人が最初に知りたいのは「何を考えていたか」だからである。技術的な値（要求、応答、Token の有効期限など）は畳んでおく。`hops`は「やり取りの経路」として畳んで並べ、図を見ない人にも経路が残るようにする。
+
+時刻は記録どおりの値（UTC）を`<time>`に持たせ、ブラウザが読む人の時計で表示し直す。並び順は変わらない。記録の値そのものは要素に残す。
+
+この一覧はサーバー側で描画する。ブラウザが行うのは、再生がいま説明している行に印を付けることだけで、文章は書かない。ブラウザが一文でも作れば、それは立ち会っていない出来事についてブラウザが述べたことになる（RULE-54）。
+
+### 5.5 Agent画面の実行ログ
+
+タイムラインはTaskが終わってから再生する（RULE-59）。だが8手動くAgentを見ている人が、3手を権限外で断られていたことを、終わるまで知れないのは困る。
+
+そこでAgent画面（[02. §5](./02-automation-design.md#5-実行中agentの操作)）に**実行ログ**を置く。読むのはCheckpointであり、Checkpointは1手ごとに書き換わるので、実行中の内容が見える。表示するものは[§3.4](#34-activity-record)の同じRecordであり、タイムラインと同じ記録を別の場所から読んでいるだけである。
+
+この画面はタイムラインではない。`task_id`の行も、再生も持たない。両者が答える問いは違い、混同されると「まだ動いているのに記録が無い」と読まれてしまう。
+
+### 5.6 実行状況と分析進捗の更新
+
+Agent画面は、状況確認と詳細な実行ログを認証済みAPIから5秒ごとに取得する。
+ログ分析モニター（`/security`）も同じ間隔で、Security Detectionが記録した段階、所要時間、スコア内訳、AIの起動理由、対応結果を読み取る。
+各画面はReactの状態を更新し、展開した詳細と入力中の操作欄を保持する。
+自動更新は停止でき、取得に失敗した場合は前回の表示であることを示す。
+
+これらのモニターは表示専用であり、分析や状態遷移を決定しない。
+AIの回答の詳細は既存のAnalysis Consoleで確認する。
+異常系試験とモニターの利用手順は[利用手順](./user-guide.md#72-実際の実行失敗を試す)に記載する。
 
 ## 6. 侵害を見せるデモ
 
@@ -176,7 +281,7 @@ lifecycle      Agentの終了                                     成功   10:05
 |---|---|---|
 | 権限外の操作を拒否される | 追加指示で許可されていない作業を指示する | [02. §5](./02-automation-design.md#5-実行中agentの操作)、[04. §7](./04-tool-catalog.md#7-agentに任意httpを許さない) |
 | 組織ポリシーで禁止された操作が通らない | 社外ドメイン宛の送信など、Organization Policyに反する作業を依頼する | [03. §2](./03-authorization.md#2-権限の種類)、[03. §6](./03-authorization.md#6-policy-engine) |
-| 有効期限切れ後にアクセスできない | `requested_lifetime_hours`を短く設定したAgentを作り、期限後に追加指示を送る | [07. §4.2](./07-lifecycle.md#42-lifetimeの多層強制)、[07. §6](./07-lifecycle.md#6-expiration--緊急停止) |
+| 有効期限切れ後にアクセスできない | `requested_lifetime_minutes`を短く設定したAgentを作り、期限後に追加指示を送る | [07. §4.2](./07-lifecycle.md#42-lifetimeの多層強制)、[07. §6](./07-lifecycle.md#6-expiration--緊急停止) |
 | 権限縮小でAgentが作り直される | デモ用にHuman Permissionを縮小するイベントを発行する | [07. §7.2](./07-lifecycle.md#72-human-userの権限が変更された場合re-provisioning) |
 
 いずれも攻撃コードを書く必要がなく、本番の仕組みをそのまま安全に踏める。デモの説得力は、これが演出ではなく実際の拒否であることに支えられている。
@@ -196,7 +301,7 @@ lifecycle      Agentの終了                                     成功   10:05
 
 ## 7. アクセス制御
 
-- タイムラインの参照範囲はAccess Tokenの`sub`と一致する`human_subject`に限る（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)と同じ考え方）。
+- タイムラインの参照範囲はAccess Tokenの`sub`と一致する`human_subject`に限る（[05. §1.1](./05-identity.md#11-human_subjectの出どころ)と同じ考え方）。[09. §7.1](./09-security-monitoring.md#71-analysis-console)も同じ範囲に閉じる。
 - ブラウザはFirestoreへ直接アクセスしない。取得はAutomation Appの認証済みセッションを介してのみ行う（[§4](#4-配信経路)）。
 - [§6.2](#62-台本で補う)の台本再生も操作者自身のセッション範囲に閉じる。他ユーザーのタイムラインへ`is_simulated`イベントを注入することはできない。
 

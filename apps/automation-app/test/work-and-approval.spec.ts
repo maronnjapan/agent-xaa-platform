@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { LifetimeOutOfRange, validateLifetimeHours } from '../src/work-definition/lifetime.js';
+import { INITIAL_TASK_ID, TASK_ID_PATTERN } from '@xaa/contracts';
+import { LifetimeOutOfRange, validateLifetimeMinutes } from '../src/work-definition/lifetime.js';
 import { WORK_DEFINITION_FIELDS, confirm } from '../src/work-definition/model.js';
 import { buildBusinessWorkRequest, upstreamRefusal, WorkDefinitionNotConfirmed } from '../src/work-definition/submit.js';
 import { BUSINESS_WORK_REQUEST_KEYS } from '../src/schemas/index.js';
@@ -9,163 +10,185 @@ import { LifetimeInput } from '../src/ui/components/lifetime-input.js';
 import {
   PRESENTED_CAPABILITIES, PRESENTED_CAPABILITIES_REORDERED, PRESENTED_CAPABILITIES_WIDENED,
 } from './fixtures/presented-capabilities.fixture.js';
-import { startAutomationApp } from './helpers.js';
-import { failureMessage } from '../../automation-app/client/src/messages.js';
+import { AGENT_ID, startAutomationApp, type Harness } from './helpers.js';
+import { failureMessage } from '../src/ui/actions/messages.js';
+import { html as render } from './render.js';
 
 const definition = {
   work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED' as const,
-  purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
-  operations: ['作業記録を読む', '日報を作る'], user_confirmations: ['内容を確認する'], safety_notes: ['社外に送らない'],
-  requested_lifetime_hours: 2, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+  title: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
+  context: '作業記録は「業務記録」フォルダにある', done_criteria: ['日報が1件保存されている'],
+  steps: ['作業記録を読む', '日報を作る'], notes: ['社外に送らない'],
+  priority: 'normal' as const, due_on: null, requested_lifetime_minutes: 120, source: 'screen' as const, agent_id: null,
+  created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', completed_at: null,
 };
 
 describe('the requested lifetime', () => {
-  it('accepts 24 and rejects 25', () => {
-    expect(validateLifetimeHours(24)).toBe(24);
-    expect(() => validateLifetimeHours(25)).toThrow(LifetimeOutOfRange);
+  it('accepts 1440 minutes and rejects 1441', () => {
+    expect(validateLifetimeMinutes(1440)).toBe(1440);
+    expect(() => validateLifetimeMinutes(1441)).toThrow(LifetimeOutOfRange);
+  });
+
+  // The point of counting minutes: a three-minute errand no longer has to ask for an
+  // hour of standing permission.
+  it('accepts a single minute', () => {
+    expect(validateLifetimeMinutes(1)).toBe(1);
+    expect(validateLifetimeMinutes(3)).toBe(3);
   });
 
   it('rejects 1.5, "3" and 0', () => {
     for (const value of [1.5, '3', 0, -1, null, undefined, Number.NaN]) {
-      expect(() => validateLifetimeHours(value)).toThrow(LifetimeOutOfRange);
+      expect(() => validateLifetimeMinutes(value)).toThrow(LifetimeOutOfRange);
     }
   });
 
   it('answers 400 with lifetime_out_of_range', async () => {
     const harness = await startAutomationApp();
-    // 25 is over the cap; 1.5 is not a whole hour; "3" is the string a form sends when
-    // nobody parsed it; 0 is no life at all. None of them is rounded into range.
-    for (const requested_lifetime_hours of [25, 1.5, '3', 0]) {
-      const response = await harness.fetch('/api/work-definitions', {
+    // 1441 is over the cap; 1.5 is not a whole minute; "3" is the string a form sends
+    // when nobody parsed it; 0 is no life at all. None of them is rounded into range.
+    for (const requested_lifetime_minutes of [1441, 1.5, '3', 0]) {
+      const response = await harness.fetch('/api/todos', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ purpose: 'x', requested_lifetime_hours }),
+        body: JSON.stringify({ title: 'x', requested_lifetime_minutes }),
       });
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: 'lifetime_out_of_range' });
     }
   });
 
-  it('renders the configured default with the fixed bounds', async () => {
-    const html = String(await LifetimeInput({ defaultHours: 2 }));
-    expect(html).toContain('value="2"');
+  it('renders the configured default with the fixed bounds', () => {
+    const html = render(LifetimeInput({ defaultMinutes: 120 }));
+    expect(html).toContain('value="120"');
     expect(html).toContain('min="1"');
-    expect(html).toContain('max="24"');
+    expect(html).toContain('max="1440"');
   });
 });
 
 describe('the work definition', () => {
-  it('has exactly eleven fields', async () => {
+  it('has exactly the fields the schema names, and starts as a draft from the screen', async () => {
     const harness = await startAutomationApp();
-    const created = await (await harness.fetch('/api/work-definitions', {
+    const created = await (await harness.fetch('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: 'x', operations: ['a', 'b'], requested_lifetime_hours: 3 }),
+      body: JSON.stringify({ title: 'x', steps: ['a', 'b'], requested_lifetime_minutes: 180 }),
     })).json() as Record<string, unknown>;
     expect(Object.keys(created).sort()).toEqual([...WORK_DEFINITION_FIELDS].sort());
+    expect(created).toMatchObject({ status: 'DRAFT', source: 'screen', agent_id: null, completed_at: null, priority: 'normal', due_on: null });
   });
 
   it('stays DRAFT despite an LLM confirmation phrase', async () => {
     const harness = await startAutomationApp();
-    const created = await (await harness.fetch('/api/work-definitions', {
+    const created = await (await harness.fetch('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '確定しました', description: 'この内容で確定します' }),
+      body: JSON.stringify({ title: '確定しました', description: 'この内容で確定します' }),
     })).json() as { work_definition_id: string; status: string };
     expect(created.status).toBe('DRAFT');
 
-    const afterMessage = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+    const afterMessage = await (await harness.fetch(`/api/todos/${created.work_definition_id}/messages`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: '確定でお願いします' }),
     })).json() as { status: string };
     expect(afterMessage.status).toBe('DRAFT');
   });
 
-  it('takes the five fields the model rewrote and leaves the state alone', async () => {
+  it('takes the six fields the model rewrote and leaves the state and the ordering alone', async () => {
     const harness = await startAutomationApp({
       generate: async () => ({
-        purpose: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
-        operations: ['作業記録を読む', '日報を作る'], user_confirmations: ['内容を確認する'],
-        safety_notes: ['社外に送らない'],
+        title: '毎朝の日報をまとめる', description: '前日の作業記録から日報を作る',
+        context: '作業記録は「業務記録」フォルダにある', done_criteria: ['日報が1件保存されている'],
+        steps: ['作業記録を読む', '日報を作る'], notes: ['社外に送らない'],
       }),
     });
-    const created = await (await harness.fetch('/api/work-definitions', {
+    const created = await (await harness.fetch('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '日報', description: '' }),
+      body: JSON.stringify({ title: '日報', description: '', priority: 'high', due_on: '2026-03-01' }),
     })).json() as { work_definition_id: string };
 
-    const revised = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+    const revised = await (await harness.fetch(`/api/todos/${created.work_definition_id}/messages`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: '前日の記録から作ってほしい' }),
-    })).json() as { status: string; operations: string[]; purpose: string };
+    })).json() as { status: string; steps: string[]; title: string; context: string; priority: string; due_on: string };
     expect(revised.status).toBe('DRAFT');
-    expect(revised.operations).toEqual(['作業記録を読む', '日報を作る']);
+    expect(revised.steps).toEqual(['作業記録を読む', '日報を作る']);
+    expect(revised.context).toBe('作業記録は「業務記録」フォルダにある');
+    // The person's ordering of their own list is not wording, and the model cannot touch it.
+    expect(revised.priority).toBe('high');
+    expect(revised.due_on).toBe('2026-03-01');
 
-    const stored = await harness.documents.get<{ purpose: string; status: string }>(
+    const stored = await harness.documents.get<{ title: string; status: string }>(
       'work_definitions', created.work_definition_id,
     );
-    expect(stored?.purpose).toBe('毎朝の日報をまとめる');
+    expect(stored?.title).toBe('毎朝の日報をまとめる');
     expect(stored?.status).toBe('DRAFT');
   });
 
   it('ignores an answer that tries to set the state itself', async () => {
     const harness = await startAutomationApp({
       generate: async () => ({
-        status: 'CONFIRMED', purpose: '確定済み', description: '', operations: [],
-        user_confirmations: [], safety_notes: [],
+        status: 'CONFIRMED', title: '確定済み', description: '', context: '', done_criteria: [], steps: [], notes: [],
       }),
     });
-    const created = await (await harness.fetch('/api/work-definitions', {
+    const created = await (await harness.fetch('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '日報' }),
+      body: JSON.stringify({ title: '日報' }),
     })).json() as { work_definition_id: string };
 
-    const answered = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+    const answered = await (await harness.fetch(`/api/todos/${created.work_definition_id}/messages`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: 'これで確定してください' }),
-    })).json() as { status: string; purpose: string };
-    // A sixth key means the whole answer is unusable: taking the five it did get right
+    })).json() as { status: string; title: string };
+    // A seventh key means the whole answer is unusable: taking the six it did get right
     // would be accepting a shape that also carried the one field it may never write.
     expect(answered.status).toBe('DRAFT');
-    expect(answered.purpose).toBe('日報');
+    expect(answered.title).toBe('日報');
   });
 
   it('refuses a message with no text', async () => {
     const harness = await startAutomationApp();
-    const created = await (await harness.fetch('/api/work-definitions', {
+    const created = await (await harness.fetch('/api/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: '日報' }),
+      body: JSON.stringify({ title: '日報' }),
     })).json() as { work_definition_id: string };
-    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/messages`, {
+    const response = await harness.fetch(`/api/todos/${created.work_definition_id}/messages`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
     });
     expect(response.status).toBe(400);
   });
 
-  it('is confirmed only by the confirm route', async () => {
+  it('is confirmed only by the confirm route, and only once', async () => {
     const harness = await startAutomationApp();
-    const created = await (await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
+    const created = await (await harness.fetch('/api/todos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'x' }),
     })).json() as { work_definition_id: string };
-    const confirmed = await (await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, {
+    const confirmed = await (await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, {
       method: 'POST',
     })).json() as { status: string };
     expect(confirmed.status).toBe('CONFIRMED');
+    // The wording is settled: neither the model nor the person rewrites it now.
+    const again = await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toEqual({ error: 'todo_not_draft' });
+    const rewrite = await harness.fetch(`/api/todos/${created.work_definition_id}/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '直して' }),
+    });
+    expect(rewrite.status).toBe(409);
   });
 
-  it('keeps the order of operations', async () => {
+  it('keeps the order of steps', async () => {
     const harness = await startAutomationApp();
-    const operations = ['三番目', '一番目', '二番目'];
-    const created = await (await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x', operations }),
+    const steps = ['三番目', '一番目', '二番目'];
+    const created = await (await harness.fetch('/api/todos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'x', steps }),
     })).json() as { work_definition_id: string };
-    const stored = await harness.documents.get<{ operations: string[] }>('work_definitions', created.work_definition_id);
-    expect(stored!.operations).toEqual(operations);
+    const stored = await harness.documents.get<{ steps: string[] }>('work_definitions', created.work_definition_id);
+    expect(stored!.steps).toEqual(steps);
   });
 
   it('refuses to submit while still a draft', async () => {
     const harness = await startAutomationApp();
-    const created = await (await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
+    const created = await (await harness.fetch('/api/todos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'x' }),
     })).json() as { work_definition_id: string };
-    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+    const response = await harness.fetch(`/api/todos/${created.work_definition_id}/submit`, { method: 'POST' });
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: 'work_definition_not_confirmed' });
     expect(harness.upstream).toHaveLength(0);
@@ -183,6 +206,16 @@ describe('the business work request', () => {
     for (const word of ['capability', 'scope', 'audience', 'tool_id', 'isolation']) {
       expect(serialized).not.toContain(word);
     }
+    // The title is the purpose; the context stays with the ToDo and travels to the
+    // agent, not to the decision.
+    expect(buildBusinessWorkRequest(definition).purpose).toBe('毎朝の日報をまとめる');
+    expect(serialized).not.toContain('業務記録');
+  });
+
+  it('declares sending when the person wrote it anywhere in the ToDo', () => {
+    expect(buildBusinessWorkRequest(definition).constraints).toEqual({ external_message_send: false });
+    expect(buildBusinessWorkRequest({ ...definition, steps: ['日報をメールで送信する'] }).constraints.external_message_send).toBe(true);
+    expect(buildBusinessWorkRequest({ ...definition, description: '上司へ送信する' }).constraints.external_message_send).toBe(true);
   });
 
   it('refuses a draft', () => {
@@ -191,11 +224,11 @@ describe('the business work request', () => {
 
   it('reaches the Authorization Platform with five keys and a proof', async () => {
     const harness = await startAutomationApp();
-    const created = await (await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: '日報を作る' }),
+    const created = await (await harness.fetch('/api/todos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: '日報を作る' }),
     })).json() as { work_definition_id: string };
-    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
-    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+    await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
+    await harness.fetch(`/api/todos/${created.work_definition_id}/submit`, { method: 'POST' });
 
     const call = harness.upstream.at(-1)!;
     expect(call.url).toBe('https://authorization.test/api/work-requests');
@@ -218,13 +251,13 @@ describe('the business work request', () => {
         denied: [],
       }, { status: 200 }),
     });
-    const created = await (await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: '日報を作る' }),
+    const created = await (await harness.fetch('/api/todos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: '日報を作る' }),
     })).json() as { work_definition_id: string };
-    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+    await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
 
     const submitted = await (await harness.fetch(
-      `/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' },
+      `/api/todos/${created.work_definition_id}/submit`, { method: 'POST' },
     )).json() as { agent_definition_id: string };
 
     expect(submitted.agent_definition_id).toMatch(/^ad_/);
@@ -253,12 +286,12 @@ describe('the business work request', () => {
         status: 404, headers: { 'Content-Type': 'text/html' },
       }),
     });
-    const created = await (await harness.fetch('/api/work-definitions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: '日報を作る' }),
+    const created = await (await harness.fetch('/api/todos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: '日報を作る' }),
     })).json() as { work_definition_id: string };
-    await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
+    await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
 
-    const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+    const response = await harness.fetch(`/api/todos/${created.work_definition_id}/submit`, { method: 'POST' });
     const body = await response.json() as { error: string };
 
     expect(response.status).toBe(502);
@@ -267,6 +300,36 @@ describe('the business work request', () => {
     expect(failureMessage(response.status, body)).toContain('権限を判定する仕組みに届きませんでした');
     // Nothing was presented, so there is nothing for the person to approve.
     expect(await harness.documents.get('agent_definitions', 'ad_1')).toBeUndefined();
+  });
+
+  /**
+   * One name reaches the screen, and the answer behind it reaches the log.
+   *
+   * The name is right for the person: `invalid_token` is not something they can act on.
+   * It is not enough for whoever has to fix the deployment, and every cause used to
+   * arrive as the same sentence with nothing behind it — a stale aggregate JWKS answers
+   * 401, a missing invoker binding answers 403 at the front end, and a decision that
+   * threw answers 500.
+   */
+  it('records the status and the code the Authorization Platform actually answered', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json({ error: 'invalid_token' }, { status: 401 }),
+    });
+    const created = await (await harness.fetch('/api/todos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: '日報を作る' }),
+    })).json() as { work_definition_id: string };
+    await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
+
+    const response = await harness.fetch(`/api/todos/${created.work_definition_id}/submit`, { method: 'POST' });
+    expect(await response.json()).toEqual({ error: 'authorization_platform_unreachable' });
+
+    const line = harness.logLines
+      .map((entry) => JSON.parse(entry) as Record<string, unknown>)
+      .find((entry) => entry.logType === 'xaa.authorization_platform_refused');
+    expect(line).toMatchObject({
+      severity: 'ERROR', status: 401, error: 'invalid_token',
+      work_definition_id: created.work_definition_id, human_subject: 'testuser',
+    });
   });
 
   /**
@@ -289,11 +352,11 @@ describe('the business work request', () => {
   it('does not send when the session token is for a different audience', async () => {
     for (const options of [{ authorizationAudience: 'agent-provisioner' }, { scope: 'nothing:useful' }]) {
       const harness = await startAutomationApp(options);
-      const created = await (await harness.fetch('/api/work-definitions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: 'x' }),
+      const created = await (await harness.fetch('/api/todos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'x' }),
       })).json() as { work_definition_id: string };
-      await harness.fetch(`/api/work-definitions/${created.work_definition_id}/confirm`, { method: 'POST' });
-      const response = await harness.fetch(`/api/work-definitions/${created.work_definition_id}/submit`, { method: 'POST' });
+      await harness.fetch(`/api/todos/${created.work_definition_id}/confirm`, { method: 'POST' });
+      const response = await harness.fetch(`/api/todos/${created.work_definition_id}/submit`, { method: 'POST' });
       expect(response.status).toBe(500);
       expect(harness.upstream).toHaveLength(0);
     }
@@ -386,12 +449,10 @@ describe('approval', () => {
       created_at: '2026-01-01T00:00:00.000Z',
     });
     await harness.authorizationSeed.set('authorization_decisions', 'dec_1', { effective_capabilities: ['a'] });
-    // The lifetime the person asked for, on the work definition this agent is for.
+    // The lifetime the person asked for, on the ToDo this agent is for.
     await harness.documents.set('work_definitions', 'wd_1', {
-      work_definition_id: 'wd_1', human_subject: 'testuser', status: 'CONFIRMED',
-      purpose: '書類を読む', description: '毎朝', operations: [], user_confirmations: [], safety_notes: [],
-      requested_lifetime_hours: 3,
-      created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+      ...definition, title: '書類を読む', description: '毎朝', context: '', done_criteria: [], steps: [], notes: [],
+      requested_lifetime_minutes: 180,
     });
 
     expect((await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' })).status).toBe(200);
@@ -400,11 +461,108 @@ describe('approval', () => {
     expect(call.url).toBe('https://provisioner.test/provisioning');
     // The Provisioner's schema is closed: three keys, and `agent_definition_id` is not
     // one of them, so sending it made every provisioning request a 400.
+    //
+    // `task_id` is the id the agent's events are grouped under, so it has to be one of
+    // the four shapes the timeline can file (docs 11 §3.3). The work definition id was
+    // sent here, and `wd_<uuid>` is not one of them — the events reached the store and
+    // `readTimeline` then dropped every one of them without a word.
     expect(JSON.parse(String(call.init.body))).toEqual({
-      decision_id: 'dec_1', task_id: 'wd_1', requested_lifetime_hours: 3,
+      decision_id: 'dec_1', task_id: INITIAL_TASK_ID, requested_lifetime_minutes: 180,
     });
+    expect(TASK_ID_PATTERN.test(INITIAL_TASK_ID)).toBe(true);
+  });
+
+  /**
+   * An agent that knows what it was created for.
+   *
+   * The Runtime is started with ten environment values and a Tool Manifest, none of
+   * which is the work: `TASK_ID` is an id and the manifest is a permission. So a new
+   * agent's first reasoning step used to see a tool list, an empty history, and no job
+   * — and did nothing anybody had asked for. This is where the words the person
+   * confirmed reach it, over the channel that already exists for telling an agent
+   * things.
+   */
+  it('tells the new agent what work it was created for', async () => {
+    // Provisioning answers with the agent it started; the agent is ACTIVE by then,
+    // which is what `addInstruction` requires.
+    const harness = await startAutomationApp({ upstreamHandler: () => provisioned() });
+    await seedApprovedDefinition(harness);
+    await harness.seed.set('agents', `${AGENT_ID}__meta`, {
+      agent_id: AGENT_ID, human_subject: 'testuser', status: 'ACTIVE',
+      expires_at: '2026-01-02T00:00:00.000Z',
+    });
+
+    expect((await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' })).status).toBe(201);
+
+    const stored = await harness.documents.queryEqual<{ text: string; created_by: string }>(
+      'agent_instructions', [['agent_id', AGENT_ID]],
+    );
+    expect(stored).toHaveLength(1);
+    const { text } = stored[0]!.data;
+    // The confirmed text, in the person's own words — title, description, the context
+    // they wanted the agent to hold, and each list they wrote. Not a capability, a tool
+    // id or a scope: an instruction is words, which is what keeps this from being a way
+    // to widen what the agent may do.
+    expect(text).toContain('タイトル: 経費の申請書を読む');
+    expect(text).toContain('毎朝9時に確認する');
+    expect(text).toContain('申請書は経理フォルダの「未処理」にある');
+    expect(text).toContain('- 申請書の一覧を開く');
+    expect(text).toContain('- 金額が10万円を超えるものは報告する');
+    expect(text).toContain('- 承認はしない');
+    expect(text).toContain('優先度: 高');
+    expect(text).toContain('期限: 2026-01-05');
+    expect(stored[0]!.data.created_by).toBe('testuser');
+
+    // And the ToDo now knows its agent, and reads as in progress on the list.
+    const todo = await harness.documents.get<{ status: string; agent_id: string | null }>('work_definitions', 'wd_1');
+    expect(todo).toMatchObject({ status: 'IN_PROGRESS', agent_id: AGENT_ID });
+  });
+
+  /**
+   * The agent was created; only the instruction failed. Answering 500 would tell the
+   * person their agent does not exist, and they would make a second one.
+   */
+  it('still reports the agent when its first instruction cannot be written', async () => {
+    const harness = await startAutomationApp({ upstreamHandler: () => provisioned() });
+    await seedApprovedDefinition(harness);
+    // No meta row, so the agent reads as not ACTIVE and the instruction is refused.
+
+    const response = await harness.fetch('/api/agent-definitions/ad_1/provision', { method: 'POST' });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ agent_id: AGENT_ID });
+    expect(harness.logLines.join('\n')).toContain('xaa.initial_instruction_not_written');
   });
 });
+
+/** The Provisioner's answer for an agent it started. */
+function provisioned(): Response {
+  return new Response(
+    JSON.stringify({ status: 'PROVISIONED', agent_id: AGENT_ID, task_id: 'wd_1' }),
+    { status: 201, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+/** An approved definition, its decision and the confirmed work behind it. */
+async function seedApprovedDefinition(harness: Harness): Promise<void> {
+  await harness.documents.set('agent_definitions', 'ad_1', {
+    agent_definition_id: 'ad_1', human_subject: 'testuser', work_definition_id: 'wd_1', decision_id: 'dec_1',
+    presented_capabilities: ['a'], presented_capabilities_hash: await capabilitiesHash(['a']),
+    isolation_level: 'standard', approved_by: 'testuser', approved_at: '2026-01-01T00:00:00.000Z',
+    created_at: '2026-01-01T00:00:00.000Z',
+  });
+  await harness.authorizationSeed.set('authorization_decisions', 'dec_1', { effective_capabilities: ['a'] });
+  await harness.documents.set('work_definitions', 'wd_1', {
+    ...definition,
+    title: '経費の申請書を読む', description: '毎朝9時に確認する',
+    context: '申請書は経理フォルダの「未処理」にある',
+    done_criteria: ['金額が10万円を超えるものは報告する'],
+    steps: ['申請書の一覧を開く', '金額を確かめる'],
+    notes: ['承認はしない'],
+    priority: 'high', due_on: '2026-01-05',
+    requested_lifetime_minutes: 180,
+  });
+}
 
 /**
  * The other half of the consent round trip. The Agent OP redirects the browser here
@@ -412,7 +570,30 @@ describe('approval', () => {
  * 404 and the provisioning it paused is never resumed.
  */
 describe('returning from a consent screen', () => {
-  it('presents the one-time code to the Provisioner and comes back to the dashboard', async () => {
+  /**
+   * The consent produced an agent, so the person is shown it. Landing back on the
+   * dashboard instead is the answer to a resume that named no agent, not to the
+   * ordinary one.
+   */
+  it('presents the one-time code to the Provisioner and opens the agent it made', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json(
+        { status: 'PROVISIONED', transaction_id: 'txn-1', agent_id: 'agent-abcdefghijklmnopqrstuvwxyz' },
+        { status: 201 },
+      ),
+    });
+
+    const response = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time', { redirect: 'manual' });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/agents/agent-abcdefghijklmnopqrstuvwxyz');
+    const call = harness.upstream.at(-1)!;
+    expect(call.url).toBe('https://provisioner.test/provisioning/txn-1/resume');
+    expect(call.init.method).toBe('POST');
+    expect(JSON.parse(String(call.init.body))).toEqual({ one_time_code: 'one-time' });
+  });
+
+  it('comes back to the dashboard when the resume names neither an agent nor a consent', async () => {
     const harness = await startAutomationApp({
       upstreamHandler: () => Response.json({ status: 'RESUMABLE', transaction_id: 'txn-1' }, { status: 200 }),
     });
@@ -421,10 +602,6 @@ describe('returning from a consent screen', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/');
-    const call = harness.upstream.at(-1)!;
-    expect(call.url).toBe('https://provisioner.test/provisioning/txn-1/resume');
-    expect(call.init.method).toBe('POST');
-    expect(JSON.parse(String(call.init.body))).toEqual({ one_time_code: 'one-time' });
   });
 
   it('follows a second consent url rather than building one', async () => {
@@ -451,11 +628,45 @@ describe('returning from a consent screen', () => {
     expect(failed.status).toBe(502);
     expect(await failed.text()).toContain('やり直して');
   });
+
+  /**
+   * The page says nothing, so the log has to. Without it a consent that came back and
+   * failed was indistinguishable from every other one that came back and failed, and
+   * the person was told to try again with no way of knowing whether it could work.
+   */
+  it('records why the resume failed, and never the one-time code', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => Response.json({ error: 'connection_not_ready' }, { status: 409 }),
+    });
+
+    await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time');
+
+    const line = JSON.parse(harness.logLines.at(-1)!) as Record<string, unknown>;
+    expect(line.logType).toBe('xaa.consent_resume_failed');
+    expect(line.status).toBe(409);
+    expect(line.reason).toBe('connection_not_ready');
+    expect(line.transaction_id).toBe('txn-1');
+    expect(harness.logLines.join('\n')).not.toContain('one-time');
+  });
+
+  /** A call that never arrived has no status and no error code, and still says so. */
+  it('records a Provisioner it could not reach', async () => {
+    const harness = await startAutomationApp({
+      upstreamHandler: () => { throw new Error('connect ECONNREFUSED'); },
+    });
+
+    const failed = await harness.fetch('/provisioning/resume?transaction_id=txn-1&code=one-time');
+
+    expect(failed.status).toBe(502);
+    const line = JSON.parse(harness.logLines.at(-1)!) as Record<string, unknown>;
+    expect(line.status).toBeNull();
+    expect(line.reason).toContain('ECONNREFUSED');
+  });
 });
 
 describe('automation suggestions', () => {
   it('schema violation yields empty list', async () => {
-    const harness = await startAutomationApp({ generate: async () => ({ suggestions: [{ purpose: 'incomplete' }] }) });
+    const harness = await startAutomationApp({ generate: async () => ({ suggestions: [{ title: 'incomplete' }] }) });
     const response = await harness.fetch('/api/automation/suggestions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: 'a', to: 'b' }),
     });
@@ -470,14 +681,14 @@ describe('automation suggestions', () => {
     expect(result).toEqual({ suggestions: [] });
   });
 
-  it('keeps the candidates that have all six fields', async () => {
+  it('keeps the candidates that have all seven fields', async () => {
     const good = {
-      candidate_id: 'c1', purpose: '日報作成', description: '毎朝', operations: ['読む'],
-      user_confirmations: ['確認'], safety_notes: ['注意'],
+      candidate_id: 'c1', title: '日報作成', description: '毎朝', context: '記録は業務記録にある',
+      done_criteria: ['日報が保存されている'], steps: ['読む'], notes: ['注意'],
     };
     const result = await suggestAutomations({
       signals: [], promptTemplate: '{{signals}}',
-      generate: async () => ({ suggestions: [good, { purpose: 'broken' }] }),
+      generate: async () => ({ suggestions: [good, { title: 'broken' }] }),
     });
     expect(result.suggestions).toHaveLength(1);
     expect(Object.keys(result.suggestions[0]!).sort()).toEqual([...SUGGESTION_FIELDS].sort());

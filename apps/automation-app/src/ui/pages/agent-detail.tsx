@@ -1,76 +1,48 @@
+import { useMonitor } from '../hooks/use-monitor.js';
+import { agentMonitorPath } from '../../agents/page-link.js';
+import { FaultControls } from '../components/fault-controls.js';
 import type { FaultTrial } from '../../agents/faults.js';
 import type { AgentStatusResponse } from '../../agents/status.js';
 import { AgentControls } from '../components/agent-controls.js';
+import { CastPanel } from '../components/cast-panel.js';
+import { ExecutionLog } from '../components/execution-log.js';
 import { StatusPanel } from '../components/status-panel.js';
 import { TimelineLink } from '../components/timeline-link.js';
 import { BlockedGuidance } from '../components/blocked-guidance.js';
 import type { Element } from '../element.js';
 
 /**
- * Status above, the two operations under it, timeline link below, and the guidance only
- * when something was refused.
+ * Status, then what the agent has actually been doing, then the two operations, the
+ * timeline link, and the guidance only when something was refused.
  *
- * The two sections carry distinct `data-section` attributes and share no data: the
- * status panel never reads timeline events, and the timeline link never reads the
- * checkpoint. Keeping them apart in the DOM is how the distinction survives later edits.
+ * The sections carry distinct `data-section` attributes and share no source: the status
+ * panel and the execution log both read the checkpoint, and the timeline link reads
+ * nothing at all. Keeping them apart in the DOM is how the distinction survives later
+ * edits — and the execution log is emphatically not a timeline, which is why it carries
+ * no task id and no row a person could mistake for one (RULE-59).
+ *
+ * The list of what each part is sits between the two, because the log below it names
+ * the Agent OP and the Resource AS in every line and assumes the reader knows both. It
+ * names only the parts this agent's own steps went through, read off the routes the
+ * records list.
  */
-export function AgentDetailPage(props: {
-  agentId: string;
-  status: AgentStatusResponse;
-  faultInjectionEnabled?: boolean;
-  faultTrials?: FaultTrial[];
-}): Element {
-  const blocked = props.status.tool_invocations.some((invocation) => invocation.outcome === 'blocked');
+export function AgentDetailPage(props: { agentId: string; status: AgentStatusResponse; faultInjectionEnabled?: boolean; faultTrials?: FaultTrial[] }): Element {
+  const monitor = useMonitor(agentMonitorPath(props.agentId), { status: props.status, faultTrials: props.faultTrials ?? [] });
+  const { status, faultTrials } = monitor.data;
+  const blocked = status.tool_invocations.some((invocation) => invocation.outcome === 'blocked');
+  const sources = status.execution_log.flatMap((record) =>
+    (record.hops ?? []).flatMap((hop) => [hop.from, hop.to]));
   return (
-    <main class="agent-detail" data-agent-id={props.agentId}>
-      <header class="page-heading">
-        <div>
-          <span class="eyebrow">AGENT EXECUTION</span>
-          <h1>エージェントの実行状況</h1>
-          <p class="muted agent-identifier">{props.agentId}</p>
-        </div>
-        <button type="button" data-action="monitor-refresh">
-          更新
-        </button>
-      </header>
-      <div class="monitor-toolbar">
-        <label>
-          <input type="checkbox" data-monitor-auto="true" checked /> 5秒ごとに更新
-        </label>
-        <span data-monitor-status="true" role="status" />
-      </div>
-      <StatusPanel status={props.status} faultTrials={props.faultTrials ?? []} />
+    <main className="agent-detail" data-agent-id={props.agentId}>
+      <header className="page-heading"><div><span className="eyebrow">AGENT EXECUTION</span><h1>エージェントの実行状況</h1><p className="agent-identifier">{props.agentId}</p></div>
+        <button type="button" data-action="monitor-refresh" disabled={monitor.busy} onClick={() => void monitor.refresh()}>更新</button></header>
+      <div className="monitor-toolbar"><label><input type="checkbox" data-monitor-auto="true" checked={monitor.auto} onChange={(event) => monitor.setAuto(event.target.checked)} /> 5秒ごとに更新</label><span data-monitor-status="true" role="status">{monitor.message}</span></div>
+      <StatusPanel status={status} faultTrials={faultTrials} />
+      <CastPanel sources={sources.length === 0 ? ['agent-runtime', 'agent-op', 'resource-as', 'resource-api'] : sources} />
+      <ExecutionLog records={status.execution_log} />
       <AgentControls agentId={props.agentId} />
       {blocked ? <BlockedGuidance /> : null}
-      {props.faultInjectionEnabled ? (
-        <section class="card fault-panel">
-          <span class="eyebrow">FAILURE TEST</span>
-          <h2>異常系を試す</h2>
-          <p>
-            実行中のAgentに例外を発生させます。次の処理開始時に実行が失敗し、失敗ログとタスク結果が記録されます。実行が終了済みの場合は適用されません。
-          </p>
-          <ol class="test-flow" aria-label="異常系試験の流れ">
-            <li><b>01</b><strong>要求を登録</strong><span>現在のTaskを指定</span></li>
-            <li><b>02</b><strong>Runtimeで例外</strong><span>次の推論ステップで適用</span></li>
-            <li><b>03</b><strong>失敗を確認</strong><span>実行ログとアクティビティ</span></li>
-          </ol>
-          <p class="notice">実行の失敗とAgentの管理状態は別です。試験後も管理状態は ACTIVE のままです。</p>
-          <label>
-            <input type="checkbox" data-fault-consent="true" /> このAgentの実行を失敗させる
-          </label>
-          <button
-            type="button"
-            class="danger-button"
-            data-action="inject-fault"
-            data-agent-id={props.agentId}
-            disabled
-          >
-            実行失敗を発生させる
-          </button>
-          <p data-fault-status="true" role="status" />
-          <p class="muted">Agentの停止・資格情報の失効を試す場合は「停止」を使用してください。</p>
-        </section>
-      ) : null}
+      {props.faultInjectionEnabled ? <FaultControls key={status.current_task ?? 'finished'} agentId={props.agentId} onAccepted={monitor.refresh} /> : null}
       <TimelineLink agentId={props.agentId} />
     </main>
   );

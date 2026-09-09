@@ -26,6 +26,9 @@
       "path": "packages/xaa-docs-check"
     },
     {
+      "path": "packages/xaa-admin-ui"
+    },
+    {
       "path": "apps/seed"
     },
     {
@@ -36,6 +39,9 @@
     },
     {
       "path": "apps/automation-app"
+    },
+    {
+      "path": "apps/analysis-console"
     },
     {
       "path": "apps/authorization"
@@ -78,6 +84,12 @@
     },
     {
       "path": "e2e"
+    },
+    {
+      "path": "apps/local-runner"
+    },
+    {
+      "path": "apps/review-markdown-import"
     }
   ]
 }
