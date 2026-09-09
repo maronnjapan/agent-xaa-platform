@@ -202,7 +202,7 @@ export function HomePage(props: {
               ))}
             </ul>
           )}
-        <p><a href="/activity">実行の様子をタイムラインで見る</a></p>
+        <p><a href="/activity">実行の様子をアクティビティで見る</a></p>
       </section>
     </main>
   );

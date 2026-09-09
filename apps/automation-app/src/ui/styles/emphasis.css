@@ -8,18 +8,21 @@
  * skim past both.
  *
  * The classes come from `emphasisClass`; no rule here branches on an event type, and
- * there is deliberately no selector that recreates the decision in CSS.
+ * there is deliberately no selector that recreates the decision in CSS. Every colour
+ * that means something on any screen is in this file, so it can be read in one place.
  */
 
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.1rem 0.45rem;
+  padding: 0.05rem 0.5rem;
   border: 1px solid transparent;
-  border-radius: 0.25rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
 }
 
 .ev-info {
@@ -49,6 +52,14 @@
   font-weight: 700;
 }
 
+/* A task that has not ended: not an outcome, so not one of the four, and drawn as none of them. */
+.ev-running {
+  border-color: #9db4c8;
+  border-style: dashed;
+  background: #ffffff;
+  color: #2f6fb5;
+}
+
 .warning-icon {
   flex: none;
 }
@@ -61,15 +72,16 @@
 .simulated-badge {
   display: inline-block;
   margin-right: 0.5rem;
-  padding: 0.1rem 0.4rem;
+  padding: 0.05rem 0.45rem;
   border: 1px solid #7a5aa8;
-  border-radius: 0.25rem;
+  border-radius: 999px;
   background: #f2ecfa;
   color: #46296e;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
-.task-button:has(.simulated-badge),
+.stage[data-simulated="true"] > .stage-card > .stage-head,
 .replay:has(.simulated-canvas) {
   background-image: repeating-linear-gradient(
     45deg,
@@ -81,22 +93,49 @@
 }
 
 /*
- * The same four kinds, on the written entries under a replay.
+ * The same four kinds, on the written entries under a task and on the marks of the
+ * rail an agent's tasks hang on.
  *
  * The badge inside each entry already names the kind; this puts the weight on the
- * entry's own edge, so a person scrolling a long task can find the blocked step
- * without reading. The classes come from `emphasisClass`, exactly as the badges do —
- * there is no second decision here about what counts as serious.
+ * entry's own number and the task's own mark, so a person scrolling a long task can
+ * find the blocked step without reading. The classes come from `emphasisClass`,
+ * exactly as the badges do — there is no second decision here about what counts as
+ * serious.
  */
-.event-entry[data-emphasis="ev-info"] { border-left-color: #b6c2cf; }
-.event-entry[data-emphasis="ev-success"] { border-left-color: #8fc7a1; }
-.event-entry[data-emphasis="ev-blocked-tool"] { border-left-color: #d8a94f; }
+.event-entry[data-emphasis="ev-success"] .event-order { border-color: #8fc7a1; color: #1d5c33; }
+.event-entry[data-emphasis="ev-blocked-tool"] .event-order { border-color: #d8a94f; background: #fdf3e1; color: #6b4a06; }
+
+.event-entry[data-emphasis="ev-blocked-security"] .event-order {
+  border-color: #a32020;
+  background: #a32020;
+  color: #fff;
+}
 
 .event-entry[data-emphasis="ev-blocked-security"] {
-  border-left-color: #a32020;
-  border-left-width: 6px;
   background: #fdf6f5;
+  box-shadow: inset 3px 0 0 #a32020;
 }
+
+.event-entry[data-emphasis="ev-blocked-security"][data-entry-state="current"] {
+  box-shadow: inset 3px 0 0 #a32020, 0 0 0 2px #2f6fb5;
+}
+
+.stage[data-emphasis="ev-success"] > .stage-marker { border-color: #1d5c33; background: #8fc7a1; }
+.stage[data-emphasis="ev-blocked-tool"] > .stage-marker { border-color: #b98a2a; background: #f0cf7a; }
+.stage[data-emphasis="ev-blocked-security"] > .stage-marker { border-color: #a32020; background: #a32020; }
+.stage[data-status="running"] > .stage-marker { border-color: #2f6fb5; border-style: dashed; background: #ffffff; }
+
+.stage[data-emphasis="ev-blocked-security"] > .stage-card { border-color: #d89a97; }
+
+.execution-step { border-left-color: #b6c2cf; }
+
+/* The counts on the heads: a refusal reads amber wherever it is counted. */
+.chip-running { border-color: #9db4c8; color: #2f6fb5; background: #f2f7fd; }
+.chip-blocked { border-color: #d8a94f; color: #6b4a06; background: #fdf3e1; }
+.chip-ended { border-color: #b6c2cf; color: #2b3a46; background: #eef2f6; }
+.chip-demo { border-color: #7a5aa8; color: #46296e; background: #f2ecfa; }
+.chip-pending { border-style: dashed; color: #5b5b66; }
+.stage-blocked { color: #6b4a06; }
 
 /* A check that stopped something reads differently from one that merely ran. */
 .check-mark[data-check-mark="blocked"] {
@@ -121,3 +160,18 @@
 .check-mark[data-check-mark="skipped"] {
   color: #5b5b66;
 }
+
+/*
+ * The agent's own state, as the status panel and the ToDo card show it. Green while it
+ * works, blue while it is being made, amber when its time is nearly up or something
+ * looks off, red when it has been quarantined or revoked, grey once it is gone.
+ */
+.status-pill[data-agent-status="ACTIVE"] { border-color: #8fc7a1; background: #e8f5ec; color: #1d5c33; }
+.status-pill[data-agent-status="CREATED"],
+.status-pill[data-agent-status="PROVISIONING"] { border-color: #9db4c8; background: #f2f7fd; color: #2f6fb5; }
+.status-pill[data-agent-status="EXPIRING"],
+.status-pill[data-agent-status="SUSPICIOUS"] { border-color: #d8a94f; background: #fdf3e1; color: #6b4a06; }
+.status-pill[data-agent-status="QUARANTINED"],
+.status-pill[data-agent-status="REVOKED"] { border-color: #a32020; background: #f8dcda; color: #6d1111; }
+.status-pill[data-agent-status="EXPIRED"],
+.status-pill[data-agent-status="DESTROYED"] { border-color: #b6c2cf; background: #eef2f6; color: #5b5b66; }

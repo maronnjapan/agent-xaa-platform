@@ -26,7 +26,13 @@ export type RoleLane = 'person' | 'control' | 'agent' | 'resource' | 'watch';
 export interface ActorRole {
   /** The `source` an Activity Event carries, and the diagram node's id. */
   id: string;
+  /**
+   * The formal name, as docs 05 and the Analysis Console spell it. Kept beside the
+   * Japanese one so a reader can match the screen against a document or a log.
+   */
   label: string;
+  /** What the screen calls the part: short enough for a box, plain enough to read. */
+  name: string;
   /** The one phrase inside the box. Short enough to sit under the name. */
   role: string;
   lane: RoleLane;
@@ -53,6 +59,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'human-user',
     label: '利用者',
+    name: '利用者',
     role: '指示する人',
     lane: 'person',
     does: '自動化したい作業を言葉で書き、提示された権限を読んで承認する。Agent を止めるのもここ。',
@@ -61,6 +68,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'automation-app',
     label: 'Automation App',
+    name: 'ToDo の画面',
     role: '画面と記録',
     lane: 'control',
     does: 'いま見ているこの画面。作業の下書きを預かり、権限の承認を受け取り、起きたことを時系列で見せる。',
@@ -69,6 +77,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'authorization-platform',
     label: 'Authorization Platform',
+    name: '権限決定',
     role: '権限を決める',
     lane: 'control',
     does: '書かれた作業を読み、その作業に要る権限を決める。AI が候補を挙げ、Policy Engine が可否を出す。',
@@ -77,6 +86,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'agent-provisioner',
     label: 'Agent Provisioner',
+    name: 'Agent 作成',
     role: 'Agent を作る',
     lane: 'control',
     does: '承認された権限のとおりに Agent を1体だけ登録し、使えるツールと有効期限を固定して動かす。',
@@ -85,6 +95,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'agent-op',
     label: 'Agent OP',
+    name: 'Agent の身元発行',
     role: '身元を発行する',
     lane: 'agent',
     does: 'その Agent が誰の代理で何をしてよいかを示す証（ID-JAG）を、要求のたびに発行する。',
@@ -93,6 +104,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'agent-runtime',
     label: 'Agent Runtime',
+    name: 'Agent 実行環境',
     role: 'Agent が動く場所',
     lane: 'agent',
     does: 'AI が1手ずつ考え、使うツールを選び、実行する。送る前に、許可・有効期限・人が付けた条件を自分で確かめる。',
@@ -101,6 +113,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'resource-as',
     label: 'Resource AS',
+    name: 'リソース認可',
     role: 'Access Token を出す',
     lane: 'resource',
     does: 'Agent OP が出した証を受け取り、そのリソースに対してだけ使える Access Token に引き換える。',
@@ -109,6 +122,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'resource-api',
     label: 'Resource API',
+    name: 'リソース API',
     role: 'データを持つ',
     lane: 'resource',
     does: '文書や支払いの実体を持ち、Access Token に書かれた範囲だけ読み書きさせる。',
@@ -117,6 +131,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'lifecycle-manager',
     label: 'Lifecycle Manager',
+    name: '終了管理',
     role: 'Agent を終わらせる',
     lane: 'watch',
     does: '有効期限が来た Agent と、止められた Agent を確実に終了させる。',
@@ -125,6 +140,7 @@ export const ACTOR_ROLES: readonly ActorRole[] = [
   {
     id: 'security-detection',
     label: 'Security Detection',
+    name: '不正検知',
     role: 'おかしな動きを見つける',
     lane: 'watch',
     does: '各アプリが出した記録をあとから突き合わせ、規約違反や不正利用の兆候を見つける。',
@@ -152,9 +168,18 @@ export function roleOf(source: string): ActorRole | null {
   return BY_ID.get(ALIASES[source] ?? source) ?? null;
 }
 
-/** A part's name as this platform prints it; an unknown source keeps its own name. */
+/** A part's formal name; an unknown source keeps its own name. */
 export function labelOf(source: string): string {
   return roleOf(source)?.label ?? source;
+}
+
+/**
+ * What the screen calls a part. The rows, the boxes and the captions all print this
+ * one, with the formal name beside it or behind it — never instead of it, because
+ * `agent-op` on its own is what nobody could read.
+ */
+export function nameOf(source: string): string {
+  return roleOf(source)?.name ?? source;
 }
 
 /** The one phrase for a part, or an empty string when there is nothing fixed to say. */

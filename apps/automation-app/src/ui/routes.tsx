@@ -135,7 +135,7 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     const shown = agentId ? tasks.filter((task) => task.agent_id === agentId) : tasks;
     return context.html(renderPage({
       analysisConsoleUrl: deps.config.analysisConsoleUrl,
-      title: 'アクティビティ', styles: STYLES, script: SCRIPT, data: { page: 'timeline', tasks: shown },
+      title: 'アクティビティ', styles: STYLES, script: SCRIPT, data: { page: 'timeline', tasks: shown, agentId: agentId ?? null },
     }));
   });
 

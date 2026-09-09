@@ -24,7 +24,7 @@ export type PageData =
     page: 'home'; defaultMinutes: number; items: HomeTodoItem[]; agents: HomeAgent[];
     defaultFrom: string; defaultTo: string; today: string;
   }
-  | { page: 'timeline'; tasks: TimelineTask[] }
+  | { page: 'timeline'; tasks: TimelineTask[]; agentId: string | null }
   | { page: 'agent-detail'; agentId: string; status: AgentStatusResponse }
   | { page: 'todo-new'; defaultMinutes: number }
   | { page: 'guide' };

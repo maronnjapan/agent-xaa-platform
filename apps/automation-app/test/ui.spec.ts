@@ -13,8 +13,7 @@ import { REPLAY_MOTION_MS, REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../src/ui/
 import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
 import { ReplayCanvas } from '../src/ui/components/replay-canvas.js';
-import { RunReplay } from '../src/ui/components/run-replay.js';
-import { TaskRow } from '../src/ui/components/task-row.js';
+import { StageCard, STAGE_RUNNING_LABEL } from '../src/ui/components/stage-card.js';
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { BLOCKED_GUIDANCE_TEXT } from '../src/ui/components/blocked-guidance.js';
@@ -26,21 +25,24 @@ import { html as render, mount } from './render.js';
 
 
 /**
- * One finished task, mounted the way the timeline mounts it: the picture in
- * 「動きを見る」 and its account in 「やったこと」, sharing one step index.
+ * One finished task, mounted the way the timeline mounts it: its list of events and
+ * its picture under one card, sharing one step index. The key the page gives a task
+ * is `run_id:task_id`, so the run is whatever precedes the colon.
  */
 function oneTask(input: { taskId: string; taskKey: string; events: Array<Record<string, unknown>> }) {
-  return createElement(RunReplay, {
-    runId: 'run',
-    tasks: [{
-      taskId: input.taskId,
-      taskKey: input.taskKey,
+  const runId = input.taskKey.slice(0, input.taskKey.length - input.taskId.length - 1);
+  return createElement(StageCard, {
+    task: {
+      run_id: runId,
+      task_id: input.taskId,
+      agent_id: null,
       purpose: '作業',
-      completedAt: '2026-01-01T00:00:10.000Z',
+      status: 'completed',
+      terminal_outcome: 'success',
+      completed_at: '2026-01-01T00:00:10.000Z',
       events: input.events as never,
-      logEvents: input.events as never,
-      simulated: false,
-    }],
+    },
+    open: true,
   });
 }
 
@@ -216,25 +218,49 @@ describe('the detail disclosure', () => {
   });
 });
 
-describe('the task list', () => {
-  it('renders a running task as a disabled button with no outcome', () => {
-    const html = render(TaskRow({ task_id: 'task-1', purpose: '日報', status: 'running' }));
-    expect(html).toContain('disabled');
+describe('the task rail', () => {
+  it('renders a running task as a head that does not open, with no outcome', () => {
+    const html = render(createElement(StageCard, {
+      task: { run_id: 'agent-a', task_id: 'task-1', agent_id: 'agent-a', purpose: '日報', status: 'running' },
+    }));
     expect(html).toContain('data-status="running"');
-    expect(html).toContain('実行中');
+    expect(html).toContain(STAGE_RUNNING_LABEL);
+    expect(html).not.toContain('<details');
+    expect(html).not.toContain('data-event-log');
+    // Called what a person calls it; the id stays on the element.
+    expect(html).toContain('>作業 1<');
+    expect(html).toContain('data-task-id="task-1"');
   });
 
-  it('renders a completed task with four columns', () => {
-    const html = render(TaskRow({
-      task_id: 'task-1', purpose: '日報', status: 'completed',
-      terminal_outcome: 'blocked', completed_at: '2026-01-01T00:00:00.000Z', phase: 'tool_call',
+  it('heads a completed task with its kind, the publisher\'s last word, the outcome and the count', () => {
+    const html = render(createElement(StageCard, {
+      task: {
+        run_id: 'agent-a', task_id: 'provisioning', agent_id: 'agent-a', purpose: '日報', status: 'completed',
+        terminal_outcome: 'success', completed_at: '2026-01-01T00:03:00.000Z',
+        events: [
+          { event_id: 'a', trace_id: 'tr', human_subject: 'testuser', agent_id: null, task_id: 'provisioning', occurred_at: '2026-01-01T00:00:00.000Z', source: 'automation-app', phase: 'login', outcome: 'info', title: 'ログインしました', message: 'm', related_finding_id: null, is_simulated: false },
+          { event_id: 'b', trace_id: 'tr', human_subject: 'testuser', agent_id: 'agent-a', task_id: 'provisioning', occurred_at: '2026-01-01T00:03:00.000Z', source: 'provisioner', phase: 'provisioning', outcome: 'success', title: 'Agent が使えるようになりました', message: 'm', related_finding_id: null, is_simulated: false },
+        ],
+      },
     }));
-    expect(html).toContain('data-task-id="task-1"');
-    expect(html).toContain('data-outcome="blocked"');
-    expect(html).not.toContain('disabled');
-    for (const column of ['col-purpose', 'col-task-id', 'col-outcome', 'col-completed-at']) {
-      expect(html).toContain(column);
-    }
+    expect(html).toContain('data-task-id="provisioning"');
+    expect(html).toContain('data-outcome="success"');
+    expect(html).toContain('>準備<');
+    // The head's title is the publisher's own last sentence about the task.
+    expect(html).toMatch(/data-field="stage-title">Agent が使えるようになりました</);
+    expect(html).toContain('2 件のできごと');
+    expect(html).toContain('所要 3 分');
+    expect(html).toMatch(/datetime="2026-01-01T00:03:00\.000Z"/i);
+    // Not `provisioning`, not `task_id`, anywhere a person reads.
+    expect(html.replace(/data-[a-z-]+="[^"]*"/g, '')).not.toContain('provisioning');
+    // Both halves of an opened task, the list first.
+    expect(html.indexOf('data-event-log="provisioning"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-event-log="provisioning"')).toBeLessThan(html.indexOf('data-stage-player="agent-a:provisioning"'));
+    // Who did each thing, in words, with the phase captioned.
+    expect(html).toContain('ToDo の画面');
+    expect(html).toContain('Agent 作成');
+    expect(html).toContain('>ログイン<');
+    expect(html).toContain('>Agent の作成<');
   });
 
   it('labels a simulated task everywhere and a real one nowhere', () => {
@@ -249,17 +275,20 @@ describe('the task list', () => {
         }],
       }],
     }));
-    // Row, canvas and detail summary: three places, none of them behind a disclosure
-    // that starts closed.
-    expect(simulated.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(3);
+    // The agent's head, the task's head, the canvas and the detail summary: four
+    // places, and the first two are readable with every card shut (RULE-58).
+    expect(simulated.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(4);
+    expect(simulated).toContain('data-chip="demo"');
     expect(simulated).toContain('simulated-row');
     expect(simulated).toContain('simulated-canvas');
-    // With every disclosure shut, the label is still on the page twice: once on the row
-    // and once on the canvas. A badge only inside `<details>` would be invisible to
-    // anyone who never opened one (RULE-58).
-    expect(simulated).not.toContain('<details open');
-    const outsideDisclosures = simulated.split(/<details[\s\S]*?<\/details>/g).join('');
-    expect(outsideDisclosures.match(new RegExp(SIMULATED_LABEL, 'g'))).toHaveLength(2);
+    expect(simulated).toContain('data-simulated="true"');
+    // The head of the agent's card is outside every disclosure; the task's head is the
+    // `<summary>` of its card, which is what a closed card shows.
+    const head = simulated.slice(simulated.indexOf('class="run-head"'), simulated.indexOf('class="stages"'));
+    expect(head.split(/<details[\s\S]*?<\/details>/g).join('')).toContain(SIMULATED_LABEL);
+    expect(simulated).toMatch(new RegExp(`<summary class="stage-head">[^]*?${SIMULATED_LABEL}[^]*?</summary>`));
+    // And the scripted task is named as a script, not as work.
+    expect(simulated).toContain('デモ：DPoP Proof の再送');
 
     const real = render(createElement(TimelinePage, {
       tasks: [{ run_id: 'work:wd_1', task_id: 'task-1', agent_id: null, purpose: '実作業', status: 'running' }],
@@ -335,6 +364,55 @@ describe('what the timeline asks for, and when', () => {
       vi.useRealTimers();
       globalThis.fetch = original;
     }
+  });
+});
+
+describe('the view switch', () => {
+  const stamp = (overrides: Record<string, unknown>) => ({
+    trace_id: 'tr', human_subject: 'testuser', task_id: 'task-1', phase: 'tool_call', outcome: 'success',
+    title: 't', message: 'm', related_finding_id: null, is_simulated: false, ...overrides,
+  });
+  const tasks = [
+    {
+      run_id: 'agent-a', task_id: 'task-1', agent_id: 'agent-a', purpose: '一', status: 'completed' as const,
+      terminal_outcome: 'success', completed_at: '2026-01-01T00:00:10.000Z',
+      events: [stamp({ event_id: 'ok-1', agent_id: 'agent-a', occurred_at: '2026-01-01T00:00:10.000Z' })],
+    },
+    {
+      run_id: 'agent-a', task_id: 'task-2', agent_id: 'agent-a', purpose: '一', status: 'completed' as const,
+      terminal_outcome: 'blocked', completed_at: '2026-01-01T00:00:20.000Z',
+      events: [
+        stamp({ event_id: 'ok-2', agent_id: 'agent-a', task_id: 'task-2', occurred_at: '2026-01-01T00:00:15.000Z' }),
+        stamp({ event_id: 'no-2', agent_id: 'agent-a', task_id: 'task-2', occurred_at: '2026-01-01T00:00:20.000Z', outcome: 'blocked' }),
+      ],
+    },
+  ] as never;
+
+  /**
+   * Every row is served and stays in the document; the switch only changes which cards
+   * stand open — exactly the ones with a refusal in them — and marks the page so the
+   * stylesheet can hide the rest. A person without script sees everything.
+   */
+  it('opens exactly the cards with a refusal, and keeps every row in the document', async () => {
+    const view = await mount(createElement(TimelinePage, { tasks }));
+    const opened = () => view.all('[data-stage-card]').map((card) => [card.getAttribute('data-stage-card'), card.hasAttribute('open')]);
+    // The newest agent's cards start opened.
+    expect(opened()).toEqual([['agent-a:task-1', true], ['agent-a:task-2', true]]);
+    expect(view.find('main')!.getAttribute('data-view')).toBe('all');
+
+    await view.click('[data-action="view-blocked"]');
+    expect(view.find('main')!.getAttribute('data-view')).toBe('blocked');
+    expect(opened()).toEqual([['agent-a:task-1', false], ['agent-a:task-2', true]]);
+    expect(view.all('[data-event-id]')).toHaveLength(3);
+    expect(view.find('[data-action="view-blocked"]')!.getAttribute('aria-pressed')).toBe('true');
+    // The card with no refusal says so, once, in the place its rows would be.
+    expect(view.find('[data-stage="agent-a:task-1"]')!.getAttribute('data-blocked-count')).toBe('0');
+    expect(view.find('[data-stage="agent-a:task-2"]')!.getAttribute('data-blocked-count')).toBe('1');
+
+    await view.click('[data-action="view-all"]');
+    expect(view.find('main')!.getAttribute('data-view')).toBe('all');
+    expect(opened()).toEqual([['agent-a:task-1', true], ['agent-a:task-2', true]]);
+    await view.unmount();
   });
 });
 
@@ -572,7 +650,7 @@ describe('the replay as it is drawn', () => {
     const panel = view.find('[data-thinking]')!;
     expect(panel.getAttribute('data-thinking-state')).toBe('playing');
     // Who was thinking, named the way the diagram names the same box.
-    expect(view.text('[data-field="thinking-who"]')).toContain('Agent Runtime');
+    expect(view.text('[data-field="thinking-who"]')).toContain('Agent 実行環境');
     expect(view.text('[data-field="thinking-headline"]')).toBe('internal.document.list を実行しました');
     expect(view.find('[data-beat="read"]')!.textContent).toContain('日報をまとめて');
     // The model's own words are a quotation, so they are not read as the screen's.
@@ -582,24 +660,32 @@ describe('the replay as it is drawn', () => {
     await view.unmount();
   });
 
-  /** The written log follows the picture, one row at a time. */
+  /** The written log follows the picture, one row at a time, and brings that row into view. */
   it('marks the log row the picture has reached', async () => {
     const events = [
       event({ event_id: 'a', occurred_at: '2026-01-01T00:01:00.000Z', message: '一番目' }),
       event({ event_id: 'b', occurred_at: '2026-01-01T00:02:00.000Z', message: '二番目' }),
     ];
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this.getAttribute('data-event-id') ?? '');
+    };
     vi.useFakeTimers();
     const view = await mount(oneTask({ taskId: 'task-1', taskKey: 'run:task-1', events }));
     try {
       expect(view.all('[data-entry-state="waiting"]')).toHaveLength(2);
+      expect(scrolled).toEqual([]);
       await view.act(() => { view.find('[data-action="replay-step"]')!.click(); });
       expect(view.find('[data-event-id="a"]')!.getAttribute('data-entry-state')).toBe('current');
       expect(view.find('[data-event-id="b"]')!.getAttribute('data-entry-state')).toBe('waiting');
       await view.act(() => { view.find('[data-action="replay-step"]')!.click(); });
       expect(view.find('[data-event-id="a"]')!.getAttribute('data-entry-state')).toBe('played');
       expect(view.find('[data-event-id="b"]')!.getAttribute('data-entry-state')).toBe('current');
+      expect(scrolled).toEqual(['a', 'b']);
     } finally {
       vi.useRealTimers();
+      Element.prototype.scrollIntoView = original;
     }
     await view.unmount();
   });
@@ -631,7 +717,7 @@ describe('the replay as it speaks', () => {
       record: { headline: 'h', sections: [], hops: [{ from: 'agent-runtime', to: 'agent-op', label: 'ID-JAG を要求', outcome: 'info', message: 'Agent OP に身元を求めました。' }] },
     })]);
     expect(view.text('[data-field="caption-step"]')).toBe('1 / 1');
-    expect(view.text('[data-field="caption-route"]')).toBe('Agent Runtime → Agent OP');
+    expect(view.text('[data-field="caption-route"]')).toBe('Agent 実行環境 → Agent の身元発行');
     expect(view.text('[data-field="caption-label"]')).toBe('ID-JAG を要求');
     expect(view.text('[data-field="caption-message"]')).toBe('Agent OP に身元を求めました。');
     expect(view.find('[data-caption]')!.getAttribute('data-caption-state')).toBe('playing');
@@ -652,7 +738,7 @@ describe('the replay as it speaks', () => {
     })]);
     expect(view.all('[data-pulse="true"]')).toHaveLength(1);
     expect(view.all('[data-arrow-label]')).toHaveLength(0);
-    expect(view.text('[data-field="caption-route"]')).toBe('Authorization Platform');
+    expect(view.text('[data-field="caption-route"]')).toBe('権限決定');
     expect(view.text('[data-field="caption-label"]')).toBe('権限を決定しました');
     const box = view.find('[data-node="authorization-platform"]')!;
     expect(box.getAttribute('data-active')).toBe('self');
@@ -779,6 +865,8 @@ describe('the replay as a thing a person can stop', () => {
     expect(view.find('[data-role-open]')).toBeNull();
     await view.click('[data-node="agent-runtime"]');
     const opened = view.find('[data-role-open="agent-runtime"]')!;
+    expect(opened.textContent).toContain('Agent 実行環境');
+    expect(opened.textContent).toContain('Agent Runtime');
     expect(opened.textContent).toContain('Agent が動く場所');
     expect(opened.querySelector('[data-field="role-does-not"]')!.textContent).not.toBe('');
     await view.click('[data-action="close-role"]');

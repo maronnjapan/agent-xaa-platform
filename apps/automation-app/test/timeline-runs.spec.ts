@@ -6,9 +6,9 @@ import {
 import { capabilitiesHash } from '../src/agent-definition/approval.js';
 import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline, taskKeyOf } from '../src/activity/query.js';
-import { NO_AGENT_YET } from '../src/ui/components/agent-group.js';
+import { NO_AGENT_YET } from '../src/ui/components/run-card.js';
 import { RecordView, HOPS_CAPTION } from '../src/ui/components/record-view.js';
-import { RUN_RECORD_CAPTION, RUN_STAGES_CAPTION } from '../src/ui/components/run-replay.js';
+import { STAGE_LOG_CAPTION, STAGE_PLAYER_CAPTION } from '../src/ui/components/stage-card.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { SOURCE_TO_NODE } from '../src/ui/replay/nodes.js';
 import { buildReplayPlan } from '../src/ui/replay/plan.js';
@@ -137,31 +137,69 @@ describe('one agent, one story', () => {
   });
 
   /**
-   * The pictures of one agent's tasks are next to each other, and every account of them
-   * comes after. They used to alternate, and an account runs long enough that no two
-   * pictures were ever on screen together.
+   * Each task carries its own list and its own picture, one after the other under one
+   * card, so a person reading a task has its picture beside it — and the next task's
+   * picture is one folded card down rather than a screenful of writing away.
    */
-  it('puts an agent\'s pictures together, and the accounts of them after', async () => {
+  it('puts each task\'s list and picture together under one card', async () => {
     const harness = await startAutomationApp();
     await seed(harness, story({ agent: AGENT_ID, work: 'wd_a', decision: 'dec_a', from: 0, purpose: 'A' }));
     const tasks = await readTimeline({ documents: harness.documents, humanSubject: SUBJECT });
     expect(tasks).toHaveLength(2);
     const html = render(createElement(TimelinePage, { tasks }));
 
-    const stages = html.indexOf('data-run-stages=');
-    const record = html.indexOf('data-run-record=');
-    expect(stages).toBeGreaterThan(-1);
-    expect(record).toBeGreaterThan(stages);
-    expect(html).toContain(RUN_STAGES_CAPTION);
-    expect(html).toContain(RUN_RECORD_CAPTION);
-    // Both of this agent's canvases stand before the first of its accounts.
-    for (const task of tasks) {
-      expect(html.indexOf(`data-replay-key="${taskKeyOf(task)}"`)).toBeLessThan(record);
-      expect(html.indexOf(`data-log-key="${taskKeyOf(task)}"`)).toBeGreaterThan(record);
+    expect(html).toContain(STAGE_LOG_CAPTION);
+    expect(html).toContain(STAGE_PLAYER_CAPTION);
+    const cards = tasks.map((task) => html.indexOf(`data-stage-card="${taskKeyOf(task)}"`));
+    expect(cards.every((at) => at > -1)).toBe(true);
+    for (const [index, task] of tasks.entries()) {
+      const key = taskKeyOf(task);
+      const from = cards[index]!;
+      const to = cards[index + 1] ?? html.length;
+      // This task's list and picture both sit inside this task's card, list first.
+      const log = html.indexOf(`data-log-key="${key}"`);
+      const replay = html.indexOf(`data-replay-key="${key}"`);
+      expect(log).toBeGreaterThan(from);
+      expect(replay).toBeGreaterThan(log);
+      expect(replay).toBeLessThan(to);
     }
-    // Nothing is playing, so no row of any account is dimmed.
+    // The tasks are called what a person calls them, not by their ids.
+    expect(html).toContain('>準備<');
+    expect(html).toContain('>作業 1<');
+    // Nothing is playing, so no row of any list is dimmed.
     expect(html).toContain('data-log-state="idle"');
     expect(html).not.toContain('data-log-state="playing"');
+  });
+
+  /**
+   * The head of an agent's card counts what the publishers said, and prints the id
+   * only behind a disclosure: it is a thing to copy, not a thing to read.
+   */
+  it('heads an agent\'s card with the counts, and folds its id away', async () => {
+    const harness = await startAutomationApp();
+    await seed(harness, [
+      ...story({ agent: AGENT_ID, work: 'wd_a', decision: 'dec_a', from: 0, purpose: '日報をまとめる' }),
+      event({ occurred_at: at(20), agent_id: AGENT_ID, task_id: 'task-2', source: 'agent-runtime', phase: 'tool_call', outcome: 'blocked', detail: { event_type: 'TOOL_BLOCKED', target: 'resource-api' } }),
+      event({ occurred_at: at(21), agent_id: AGENT_ID, task_id: 'task-2', source: 'agent-runtime', phase: 'tool_call', outcome: 'blocked', detail: { event_type: 'TASK_BLOCKED' } }),
+      event({ occurred_at: at(22), agent_id: AGENT_ID, task_id: 'task-3', source: 'agent-runtime', phase: 'tool_call', outcome: 'info', detail: { event_type: 'TOOL_SUCCEEDED' } }),
+    ]);
+    const tasks = await readTimeline({ documents: harness.documents, humanSubject: SUBJECT });
+    const html = render(createElement(TimelinePage, { tasks }));
+    const head = html.slice(html.indexOf('class="run-head"'), html.indexOf('class="stages"'));
+    expect(head).toContain('日報をまとめる');
+    expect(head).toContain('data-chip="running"');
+    expect(head).toContain('遮断あり 1 件');
+    expect(head).toContain('実行中 1 件');
+    expect(head).not.toContain('data-chip="ended"');
+    // The id is on the page, inside the disclosure, and nowhere a person reads: the
+    // links carry it, the words do not.
+    const outsideDisclosures = head.split(/<details[\s\S]*?<\/details>/g).join('');
+    expect(outsideDisclosures.replace(/<[^>]+>/g, '')).not.toContain(AGENT_ID);
+    expect(head).toContain(`<code data-field="agent-id">${AGENT_ID}</code>`);
+    // The blocked task says how many of its events were refusals.
+    const blocked = html.slice(html.indexOf(`data-stage-card="${AGENT_ID}:task-2"`), html.indexOf(`data-stage-card="${AGENT_ID}:task-3"`));
+    expect(blocked).toContain('遮断 2 件');
+    expect(html).toContain(`data-task-key="${AGENT_ID}:task-3" data-task-id="task-3" data-task-kind="task" data-status="running"`);
   });
 
   it('keys each canvas and log by agent and task together', async () => {
@@ -352,8 +390,9 @@ describe('what the record panel shows in the open', () => {
     // The route, listed under the record in the diagram's own names, folded.
     expect(html).toContain(HOPS_CAPTION);
     expect(html).toContain('data-hop-outcome="info"');
-    expect(html).toContain('Agent Runtime');
-    expect(html).toContain('Agent OP');
+    expect(html).toContain('Agent 実行環境');
+    expect(html).toContain('Agent の身元発行');
+    expect(html).toContain('title="Agent OP"');
     expect(html).toContain('ID-JAG を要求');
   });
 });

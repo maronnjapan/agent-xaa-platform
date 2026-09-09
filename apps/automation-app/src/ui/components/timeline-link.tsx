@@ -13,7 +13,7 @@ export const TIMELINE_NOTE = '完了した処理だけを再生します。実�
 export function TimelineLink(props: { agentId: string }): Element {
   return (
     <section data-section="timeline-link" className="timeline-link">
-      <h2>タイムライン</h2>
+      <h2>アクティビティ</h2>
       <a href={`/activity?agent_id=${encodeURIComponent(props.agentId)}`}>この Agent の記録を見る</a>
       <p className="timeline-note">{TIMELINE_NOTE}</p>
     </section>

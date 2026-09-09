@@ -77,7 +77,7 @@ function ThinkingBody(props: { frame: ThinkingFrame }): Element {
           {frame.actor
             ? (
               <>
-                <span className="thinking-actor">{frame.actor.label}</span>
+                <span className="thinking-actor" title={frame.actor.label}>{frame.actor.name}</span>
                 <span className="thinking-actor-role">{frame.actor.role}</span>
               </>
             )

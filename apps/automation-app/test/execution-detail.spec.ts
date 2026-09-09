@@ -5,7 +5,7 @@ import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline } from '../src/activity/query.js';
 import { RecordView } from '../src/ui/components/record-view.js';
 import { EventLog } from '../src/ui/components/event-log.js';
-import { RUN_RECORD_CAPTION, RUN_STAGES_CAPTION } from '../src/ui/components/run-replay.js';
+import { STAGE_LOG_CAPTION, STAGE_PLAYER_CAPTION } from '../src/ui/components/stage-card.js';
 import { ExecutionLog, EXECUTION_LOG_EMPTY, EXECUTION_LOG_HEADING } from '../src/ui/components/execution-log.js';
 import { ReplayCanvas, REPLAY_LEGEND } from '../src/ui/components/replay-canvas.js';
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
@@ -146,8 +146,12 @@ describe('the written log beside a replay', () => {
     // The publisher's own sentences, and the breakdown under them.
     expect(html).toContain('実行し、結果を受け取りました。');
     expect(html).toContain(record.headline);
-    // The picture and the text call the same box by the same name.
-    expect(html).toContain('Agent Runtime');
+    // The picture and the text call the same box by the same name, in words a person
+    // can read, with the formal name kept as the tooltip.
+    expect(html).toContain('Agent 実行環境');
+    expect(html).toContain('title="Agent Runtime"');
+    // The phase, captioned rather than printed as its code.
+    expect(html).toContain('ツールの実行');
   });
 
   it('is rendered by the server, so it reads with no animation at all', () => {
@@ -161,10 +165,14 @@ describe('the written log beside a replay', () => {
     expect(html).toContain('data-event-log="task-1"');
     expect(html).toContain(record.headline);
     expect(html).toContain('送ったリクエスト');
-    // The account sits under its own heading, after the picture rather than inside it.
-    expect(html).toContain(RUN_STAGES_CAPTION);
-    expect(html).toContain(RUN_RECORD_CAPTION);
-    expect(html.indexOf('data-run-stages=')).toBeLessThan(html.indexOf('data-run-record='));
+    // The list and the picture sit under one task, each under its own heading, the
+    // list first: it is the half that reads with no script at all.
+    expect(html).toContain(STAGE_LOG_CAPTION);
+    expect(html).toContain(STAGE_PLAYER_CAPTION);
+    const card = html.indexOf(`data-stage-card="${AGENT_ID}:task-1"`);
+    expect(card).toBeGreaterThan(-1);
+    expect(html.indexOf('data-event-log="task-1"')).toBeGreaterThan(card);
+    expect(html.indexOf('data-event-log="task-1"')).toBeLessThan(html.indexOf(`data-stage-player="${AGENT_ID}:task-1"`));
   });
 
   it('adds no replay and no log for a task that has not finished', () => {
@@ -182,6 +190,7 @@ describe('the diagram', () => {
     const html = render(ReplayCanvas({
       taskId: 'task-1', visible: visibleNodeIds([{ source: 'agent-runtime', record }]), state: 'idle', total: 1,
     }));
+    expect(html).toContain('Agent 実行環境');
     expect(html).toContain('Agent Runtime');
     expect(html).toContain('Agent が動く場所');
     // Explaining the picture is part of the picture, not part of any event.

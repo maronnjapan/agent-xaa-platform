@@ -37,8 +37,9 @@ export function Layout(props: {
       </head>
       <body>
         <nav className="app-nav">
+          <span className="app-brand">Agent XAA</span>
           <a href="/">ToDo</a>
-          <a href="/activity">タイムライン</a>
+          <a href="/activity">アクティビティ</a>
           <a href={props.analysisConsoleUrl}>分析エージェントの判断</a>
           <a href="/guide">使い方</a>
         </nav>

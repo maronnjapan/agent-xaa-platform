@@ -1,5 +1,5 @@
 import type { ActivityRecord, ActivityRecordCheck, ActivityRecordHop, ActivityRecordSection } from '@xaa/contracts';
-import { labelOf, roleTextOf } from '../roles.js';
+import { labelOf, nameOf, roleTextOf } from '../roles.js';
 import { isProse } from '../replay/thinking.js';
 import type { Element } from '../element.js';
 
@@ -152,9 +152,9 @@ function HopsList(props: { hops: readonly ActivityRecordHop[] }): Element {
         {props.hops.map((hop, index) => (
           <li key={index} data-hop-index={String(index)} data-hop-outcome={hop.outcome}>
             <span className="hop-route">
-              <span className="hop-from">{labelOf(hop.from)}</span>
+              <span className="hop-from" title={labelOf(hop.from)}>{nameOf(hop.from)}</span>
               <span className="hop-arrow" aria-hidden="true">→</span>
-              <span className="hop-to">{labelOf(hop.to)}</span>
+              <span className="hop-to" title={labelOf(hop.to)}>{nameOf(hop.to)}</span>
             </span>
             <span className="hop-role" data-field="hop-role">{roleTextOf(hop.to)}</span>
             <span className="hop-label">{hop.label}</span>
