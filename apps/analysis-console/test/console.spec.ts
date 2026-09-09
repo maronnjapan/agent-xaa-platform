@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_ID, CONSOLE_BASE, OTHER_AGENT_ID, SUBJECT, config, startConsole, storedFinding, type Harness,
+  AGENT_ID, CONSOLE_BASE, OTHER_AGENT_ID, SUBJECT, config, startConsole, storedFinding,
+  storedInspection, type Harness,
 } from './helpers.js';
 import { readAgentStates, readFindingsFor } from '../src/findings/read.js';
-import { CONSOLE_AGENT_GONE, CONSOLE_EMPTY } from '../src/ui/pages/findings.js';
-import { FINDING_NOT_ANALYSED, FINDING_NO_ANALYSIS } from '../src/ui/components/finding-card.js';
+import { CONSOLE_AGENT_GONE, CONSOLE_EMPTY, CONSOLE_NO_FINDINGS } from '../src/ui/pages/findings.js';
+import {
+  FINDING_NOT_ANALYSED, FINDING_NO_ANALYSIS, FINDING_RULES_ONLY,
+} from '../src/ui/components/finding-card.js';
+import {
+  INSPECTION_HEADING, INSPECTION_NO_CODES, INSPECTION_SKIPPED_LEAD,
+} from '../src/ui/components/inspection-card.js';
 
 const OTHER_SUBJECT = 'someone-else';
 
 async function seed(harness: Harness, finding: Record<string, unknown>): Promise<void> {
   await harness.detectorSeed.set('security_findings', String(finding.finding_id), finding);
+}
+
+async function seedInspection(harness: Harness, inspection: Record<string, unknown>): Promise<void> {
+  await harness.detectorSeed.set('security_inspections', String(inspection.inspection_id), inspection);
 }
 
 async function seedAgent(harness: Harness, options: { agentId?: string; humanSubject?: string; status?: string } = {}): Promise<void> {
@@ -106,8 +116,81 @@ describe('the screen', () => {
   it('says so when the analyser has recorded nothing about this person', async () => {
     const harness = await startConsole();
     await seed(harness, storedFinding({ finding_id: 'f_theirs', human_subject: OTHER_SUBJECT }));
+    await seedInspection(harness, storedInspection({
+      inspection_id: 'i_theirs', human_subject: OTHER_SUBJECT, agent_id: OTHER_AGENT_ID,
+    }));
     const body = await (await harness.fetch('/', { headers: { cookie: await harness.signIn() } })).text();
     expect(body).toContain(CONSOLE_EMPTY);
+  });
+});
+
+/**
+ * The half of the screen that exists when nothing is wrong.
+ *
+ * A finding is written only where something tripped, so an agent that behaved leaves
+ * none — and a blank page cannot tell a person whether their agent was read and found
+ * clean or whether its logs never reached the analyser. The inspection record is the
+ * detector answering that, and these tests are about it reaching the page unaltered.
+ */
+describe('the mechanical record', () => {
+  it('gives an agent with no finding a card of its own', async () => {
+    const harness = await startConsole();
+    await seedInspection(harness, storedInspection());
+    await seedAgent(harness, { status: 'ACTIVE' });
+    const body = await (await harness.fetch('/', { headers: { cookie: await harness.signIn() } })).text();
+    expect(body).not.toContain(CONSOLE_EMPTY);
+    expect(body).toContain(`data-agent-id="${AGENT_ID}"`);
+    expect(body).toContain(CONSOLE_NO_FINDINGS);
+  });
+
+  it('prints what was read and which passes were made over it', async () => {
+    const harness = await startConsole();
+    await seedInspection(harness, storedInspection());
+    const body = await (await harness.fetch('/', { headers: { cookie: await harness.signIn() } })).text();
+    expect(body).toContain(INSPECTION_HEADING);
+    expect(body).toContain('12 件');
+    expect(body).toContain('プロトコル違反');
+    expect(body).toContain('通常の挙動との差');
+    expect(body).toContain(INSPECTION_NO_CODES);
+  });
+
+  it('does not report a pass that could not run as a pass that came back clean', async () => {
+    const harness = await startConsole();
+    await seedInspection(harness, storedInspection({
+      checks_run: ['protocol_validation', 'authorization', 'tool', 'lifetime', 'isolation', 'authorization_ai'],
+      checks_skipped: ['token_rate', 'baseline_deviation'],
+    }));
+    const body = await (await harness.fetch('/', { headers: { cookie: await harness.signIn() } })).text();
+    expect(body).toContain(INSPECTION_SKIPPED_LEAD);
+    expect(body).toContain('トークン要求の回数');
+  });
+
+  it("shows nobody else's record, whoever the agent belongs to", async () => {
+    const harness = await startConsole();
+    await seedInspection(harness, storedInspection());
+    await seedInspection(harness, storedInspection({
+      inspection_id: 'i_theirs', human_subject: OTHER_SUBJECT, agent_id: OTHER_AGENT_ID,
+    }));
+    const body = await (await harness.fetch('/', { headers: { cookie: await harness.signIn() } })).text();
+    expect(body).toContain(`data-agent-id="${AGENT_ID}"`);
+    expect(body).not.toContain(`data-agent-id="${OTHER_AGENT_ID}"`);
+    expect(body).not.toContain('data-inspection-id="i_theirs"');
+  });
+
+  it('tells a LOW row apart from one still on its way to the model', async () => {
+    const harness = await startConsole();
+    await seed(harness, storedFinding({
+      finding_id: 'f_low', finding_type: 'anomalous_agent_activity',
+      risk_score: 10, risk_level: 'LOW', review_status: 'none',
+      contributing_codes: ['expired_token'],
+      recommended_response: null, confidence: null,
+      analysis: null, analysis_source: 'rules', analyzed_at: '2026-01-01T12:10:05.000Z',
+    }));
+    const body = await (await harness.fetch('/', { headers: { cookie: await harness.signIn() } })).text();
+    expect(body).toContain('data-risk-level="LOW"');
+    expect(body).toContain('expired_token');
+    expect(body).toContain(FINDING_RULES_ONLY);
+    expect(body).not.toContain(FINDING_NOT_ANALYSED);
   });
 });
 

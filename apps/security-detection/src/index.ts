@@ -14,7 +14,10 @@ import { needsHumanReview, REVIEW_CONFIDENCE_FLOOR } from './response/review.js'
 import { requestTransition, type LifecycleSender, type TransitionOutcome } from './response/dispatch.js';
 import { emitQuarantineEvent } from './activity/quarantine-event.js';
 import { createInternalBatchRoutes } from './routes/internal-batch.js';
-import type { StoredFinding } from './findings/stored.js';
+import { mergeFinding, type StoredFinding } from './findings/stored.js';
+import {
+  INSPECTIONS_COLLECTION, inspectionsFor, mergeInspection, type StoredInspection,
+} from './findings/inspection.js';
 import type { RuleHitRow } from './batch/signing-key-misuse.js';
 
 export interface SecurityDetectionDeps {
@@ -38,6 +41,7 @@ export interface SecurityDetectionDeps {
 }
 
 export type { StoredFinding } from './findings/stored.js';
+export type { StoredInspection } from './findings/inspection.js';
 
 /** One batch of raw log payloads, taken through the six stages and dispatched. */
 export type DetectionRun = (payloads: readonly unknown[]) => Promise<void>;
@@ -165,6 +169,10 @@ export function createSecurityDetection(deps: SecurityDetectionDeps): { app: Hon
       const correlated = pipeline.correlate(ruled);
       await monitor.stage('score');
       const scored = pipeline.score(correlated);
+      // Before the findings, and outside the LOW branch: a window in which every pass
+      // came back clean produces no finding at all, and that is exactly the window the
+      // Analysis Console has to be able to name.
+      await recordInspections({ events: scored.events, findings: scored.findings, baselines: agents.baselines });
       const responses: Array<{ finding: SecurityFinding; decision: AnalysisDecision; response: ResponseState }> = [];
       await monitor.stage('analyze');
       for (const finding of scored.findings) {
@@ -172,15 +180,46 @@ export function createSecurityDetection(deps: SecurityDetectionDeps): { app: Hon
           finding.risk_level === 'LOW' ? 'below_ai_threshold' : 'awaiting_analysis'));
       }
       await dispatch(scored, {
-        storeNormalized: async () => undefined,
-        storeFinding: async (finding) => {
-          await deps.documents.set('security_findings', finding.finding_id, finding as unknown as Record<string, unknown>);
+        /**
+         * LOW, written as what it is.
+         *
+         * This used to be a no-op, and the effect was that the mechanical passes were
+         * the end of the road for almost everything: a lone refused request scores 10,
+         * a lone unknown tool 25, and neither reaches 30, so the row was counted and
+         * thrown away and the console had nothing to show. `analysis_source: 'rules'`
+         * is what keeps the saved row honest — the passes ran, the model was not asked,
+         * and the screen says so rather than leaving a person to read 「まだ分析されて
+         * いません」 forever.
+         */
+        storeLowFinding: async (finding) => {
+          await writeFinding({
+            ...finding,
+            review_status: 'none',
+            analysis_source: 'rules',
+            analyzed_at: new Date(now()).toISOString(),
+          });
         },
+        storeFinding: async (finding) => { await writeFinding(finding); },
         analyze: async (finding, events) => {
           const baseline = agents.baselines.get(finding.agent_id ?? '');
           if (!baseline || !deps.analyze) {
             await monitor.decision(finding.human_subject, decisionFor(finding, 'skipped',
               !baseline ? 'baseline_missing' : 'ai_not_configured'));
+            // And on the finding itself, which is what the Analysis Console reads. An
+            // untouched row shows as 「まだ分析されていません」 — a promise of an
+            // analysis that is never coming — and `review_status: 'none'` shows as
+            // 「不要（自動で対応済み）」, which would be the screen reporting a response
+            // that was never made. This is MEDIUM or above with nothing behind it, so it
+            // waits for a person, as a fallback does (`needsHumanReview`).
+            await deps.documents.update('security_findings', finding.finding_id, {
+              review_status: 'pending',
+              analysis_source: 'rules',
+              analyzed_at: new Date(now()).toISOString(),
+            }).catch(() => undefined);
+            logger.warning('security_analysis_skipped', {
+              request_id: 'security', trace_id: finding.finding_id,
+              agent_id: finding.agent_id, human_subject: finding.human_subject || null,
+            }, { finding_id: finding.finding_id, reason: baseline ? 'no_model_configured' : 'no_baseline' });
             return;
           }
           const decision = decisionFor(finding, 'analyzing', 'score_requires_ai');
@@ -233,6 +272,65 @@ export function createSecurityDetection(deps: SecurityDetectionDeps): { app: Hon
     } catch (error) {
       await monitor.finish(true);
       throw error;
+    }
+  }
+
+  /**
+   * One finding row, written without losing what the row already said.
+   *
+   * Read-then-write rather than `update`, because the row may not exist yet and because
+   * the merge has to see both halves. Two batches of the same window race here in
+   * principle; they carry the same evidence either way, and the loser of a race writes a
+   * row that the next batch of that window repairs.
+   */
+  async function writeFinding(finding: StoredFinding): Promise<void> {
+    const previous = await deps.documents
+      .get<StoredFinding>('security_findings', finding.finding_id)
+      .catch(() => undefined);
+    await deps.documents.set(
+      'security_findings', finding.finding_id,
+      mergeFinding(previous, finding) as unknown as Record<string, unknown>,
+    );
+  }
+
+  /**
+   * That the logs were read, written whether or not anything was wrong with them.
+   *
+   * Before the findings, and outside the LOW branch, because this is not a finding: a
+   * window in which every pass came back clean produces no finding at all, and that is
+   * the case the console most needs to be able to name. Without it the screen cannot
+   * distinguish an agent that behaved from an agent whose logs never arrived, and the
+   * person reading it is left to guess at the platform's plumbing.
+   *
+   * A failure here is logged and swallowed. This row is an account of the detection run;
+   * losing it must not cost the detection run itself.
+   */
+  async function recordInspections(input: {
+    events: readonly NormalizedEvent[];
+    findings: readonly SecurityFinding[];
+    baselines: ReadonlyMap<string, AgentBaseline>;
+  }): Promise<void> {
+    const inspections = inspectionsFor({
+      events: input.events,
+      findings: input.findings,
+      hasBaseline: (agentId) => input.baselines.has(agentId),
+      at: new Date(now()).toISOString(),
+    });
+    for (const inspection of inspections) {
+      try {
+        const previous = await deps.documents
+          .get<StoredInspection>(INSPECTIONS_COLLECTION, inspection.inspection_id)
+          .catch(() => undefined);
+        await deps.documents.set(
+          INSPECTIONS_COLLECTION, inspection.inspection_id,
+          mergeInspection(previous, inspection) as unknown as Record<string, unknown>,
+        );
+      } catch (error) {
+        logger.warning('security_inspection_write_failed', {
+          request_id: 'security', trace_id: inspection.inspection_id,
+          agent_id: inspection.agent_id, human_subject: inspection.human_subject || null,
+        }, { reason: (error as Error).message });
+      }
     }
   }
 

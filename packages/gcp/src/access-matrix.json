@@ -77,6 +77,7 @@
       "console_sessions/**",
       "console_login_transactions/**",
       "security_findings/**",
+      "security_inspections/**",
       "agents/*/meta"
     ],
     "write": [
@@ -278,11 +279,13 @@
       "agents/*/baseline",
       "agents/*/meta",
       "security_findings/**",
+      "security_inspections/**",
       "batch_state/**",
       "security_analysis/**"
     ],
     "write": [
       "security_findings/**",
+      "security_inspections/**",
       "batch_state/**",
       "security_analysis/**"
     ]

@@ -37,14 +37,20 @@ export const SECURITY_RESPONSE_STATES = [
 export type SecurityResponseState = (typeof SECURITY_RESPONSE_STATES)[number];
 
 /**
- * Which of the two produced the recommendation.
+ * Which of the three wrote what the screen is showing.
  *
  * `fallback` means the model returned nothing usable and the risk level alone decided.
  * It is on the wire because a screen that showed the two identically would present a
  * default as a conclusion, and a person reading 「隔離を推奨」 would believe something
  * had reasoned about their agent when nothing had.
+ *
+ * `rules` means no model was asked at all: the window scored LOW, so the mechanical
+ * passes are the whole of what is known about it (docs 09 §5.5). It is a third value
+ * rather than a null because null already means 「まだ分析されていません」 — a row still
+ * on its way to the model — and a LOW row is never on its way anywhere. Telling a person
+ * 「まだ」 about a row that is finished is the same lie in the other direction.
  */
-export const SECURITY_ANALYSIS_SOURCES = ['model', 'fallback'] as const;
+export const SECURITY_ANALYSIS_SOURCES = ['model', 'fallback', 'rules'] as const;
 export type SecurityAnalysisSource = (typeof SECURITY_ANALYSIS_SOURCES)[number];
 
 const analysisSchema = {

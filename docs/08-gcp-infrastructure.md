@@ -344,7 +344,7 @@ Automation Appの中の1画面ではなく別のデプロイ単位とし、Human
 もう1つは、この画面が将来、運用者が全ユーザーのFindingを横断で見る画面になりうることである（[11. §8](./11-activity-timeline.md#9-今後の検討事項)）。その権限モデルは自分の分だけを見る画面のものと別であり、境界をアプリの外に置いておくほうが後から足しやすい。
 
 Analysis Consoleはどのサービスも呼ばない。
-Firestoreの `security_findings` と `agents/{agent_id}/meta` を[アクセス行列](../packages/gcp/src/access-matrix.json)の読み取り専用として読む。
+Firestoreの `security_findings`、`security_inspections` と `agents/{agent_id}/meta` を[アクセス行列](../packages/gcp/src/access-matrix.json)の読み取り専用として読む。
 Security Detectionへ向かうinvokerエッジを作らないのは、T-SEC-08が検知を一方向の経路と決めているためである（[09. §4](./09-security-monitoring.md#4-正規化と保存)）。
 Consent後のリダイレクト先はいずれもAutomation Appとし、Automation AppがProvisionerのTransaction再開をServer-to-Serverで呼ぶ（[06. §5](./06-oauth-bridge.md#5-google-consent)、[07. §3.3](./07-lifecycle.md#33-end-to-end-provisioning-flow)）。
 それ以外のCloud Run ServiceはIngressを内部に限定し、Cloud Run IAMで呼び出し元のService Accountを絞る。

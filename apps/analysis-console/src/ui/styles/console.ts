@@ -133,4 +133,35 @@ h2 { font-size: 1.15rem; word-break: break-all; }
 }
 
 .finding-note { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.88rem; }
+
+/*
+ * The mechanical record sits below the judgements and folded shut.
+ *
+ * It is reference, not reading matter: a person opens it to ask whether their logs are
+ * being read at all, and having asked once does not want the answer in the way of the
+ * findings every time afterwards. Folded is the difference between available and loud.
+ */
+.inspections {
+  margin: 0.8rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--edge);
+  font-size: 0.88rem;
+}
+
+.inspections summary { color: var(--muted); cursor: pointer; }
+.inspections ol { margin: 0.5rem 0 0; padding: 0; list-style: none; }
+
+.inspection {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.inspection-facts { margin: 0; }
+.inspection-facts dt { color: var(--muted); font-weight: 700; }
+.inspection-facts dd { margin: 0 0 0.3rem; line-height: 1.6; }
+
+/* A pass that could not run is the one line here that must not read as reassurance. */
+.inspection-skipped { margin: 0.3rem 0 0; color: #8a5a1f; }
 `;

@@ -514,7 +514,7 @@ describe('dispatch', () => {
     risk_level: level, review_status: 'none', created_at: '2026-01-01T12:10:00.000Z',
   });
 
-  it('score 29 stores only', async () => {
+  it('score 29 stores the mechanical result and asks no model', async () => {
     const counters: DispatchCounters = { low_events_total: 0, unmapped_code_total: 0 };
     let analyzed = 0;
     let stored = 0;
@@ -524,7 +524,7 @@ describe('dispatch', () => {
     await dispatch({ __stage: 'scored', findings: [finding('LOW')], events: [] }, {
       analyze: async () => { analyzed += 1; },
       storeFinding: async () => { stored += 1; },
-      storeNormalized: async () => { normalized += 1; },
+      storeLowFinding: async () => { normalized += 1; },
     }, counters);
     expect(analyzed).toBe(0);
     expect(stored).toBe(0);
@@ -541,7 +541,7 @@ describe('dispatch', () => {
     await dispatch({ __stage: 'scored', findings: [finding('MEDIUM')], events: [] }, {
       analyze: async () => { analyzed += 1; },
       storeFinding: async () => { stored += 1; },
-      storeNormalized: async () => undefined,
+      storeLowFinding: async () => undefined,
     }, counters);
     expect(analyzed).toBe(1);
     expect(stored).toBe(1);
