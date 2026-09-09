@@ -789,3 +789,243 @@ main.agent-detail, main.security-page { max-width: 76rem; }
   .task-button .col-purpose { flex-basis: calc(100% - 4rem); }
   .task-button .col-task-id, .task-button .col-completed-at { overflow-wrap: anywhere; }
 }
+
+/*
+ * The pictures beside the words.
+ *
+ * Everything below lays out a shape that a list already says in text: the bar under
+ * the tiles, the line of stops over an agent's rows, the dots in a row, the rail down a
+ * log, the route a step took, the ribbon of a run, the tracker of an exercise, the
+ * flowchart of the detector, the trace under a decision. None of them carries a colour
+ * that means anything on its own — the meaning colours are in emphasis.css.
+ */
+
+/* One bar for how a set of things ended. */
+.outcome-bar { margin: -.4rem 0 1.25rem; }
+.outcome-bar-track { display: flex; height: .55rem; border-radius: 999px; overflow: hidden; background: #e6e9ef; }
+.outcome-bar-segment { display: block; min-width: 3px; }
+.outcome-bar-legend { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin: .4rem 0 0; padding: 0; list-style: none; font-size: .8rem; color: var(--muted); }
+.outcome-bar-legend li { display: inline-flex; align-items: center; gap: .35rem; }
+.outcome-bar-legend b { color: var(--ink); }
+.outcome-bar-swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 3px; }
+
+/* The marks, explained where the rows that use them begin. */
+.mark-legend { display: flex; flex-wrap: wrap; gap: .4rem .9rem; margin: 0; padding: 0; list-style: none; font-size: .8rem; color: var(--muted); }
+.mark-legend li { display: inline-flex; align-items: center; gap: .3rem; }
+.mark-legend .result-mark { width: 1.5rem; height: 1.5rem; font-size: .8rem; }
+
+/* A small glyph beside a phase's name. */
+.phase-icon { width: 1em; height: 1em; vertical-align: -.12em; margin-right: .3rem; flex: none; }
+.col-purpose .row-phase { color: var(--muted); }
+
+/*
+ * One agent's story as a line of stops.
+ *
+ * The stops are buttons, the line between them is drawn by the list, and the mark
+ * on each is the same mark the row below carries. The line does not bend: an agent's
+ * story is read left to right, and on a narrow screen it scrolls rather than wraps so
+ * the order survives.
+ */
+.journey { display: flex; align-items: stretch; gap: 0; margin: .5rem 0 1rem; padding: .25rem 0; list-style: none; overflow-x: auto; }
+.journey-stop { position: relative; display: flex; flex: 1 0 9rem; max-width: 14rem; }
+.journey-stop + .journey-stop::before { content: ''; position: absolute; left: -1px; top: 2.05rem; width: 1.2rem; height: 2px; background: #c6ccd6; transform: translateX(-100%); }
+.journey-stop + .journey-stop { margin-left: 1.2rem; }
+.journey-node { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; width: 100%; padding: .55rem .75rem; color: var(--ink); background: #fff; border: 1px solid var(--edge); border-radius: 10px; text-align: left; cursor: pointer; }
+.journey-node[disabled] { cursor: default; opacity: 1; border-style: dashed; }
+.journey-node:not([disabled]):hover { border-color: var(--accent); }
+.journey-glyph { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--ground); color: #40536c; }
+.journey-glyph .phase-icon { margin: 0; width: 1.05rem; height: 1.05rem; }
+.journey-label { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; overflow-wrap: anywhere; }
+.journey-outcome { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; }
+.journey-outcome .result-mark { width: 1.4rem; height: 1.4rem; font-size: .75rem; }
+.journey-meta { font-size: .72rem; color: var(--muted); }
+
+/* The dots that make a row's shape, and the count beside them. */
+.col-shape { display: flex; align-items: center; gap: .6rem; flex-basis: 100%; }
+.task-shape { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.shape-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: #b6c2cf; }
+.shape-more { font-size: .7rem; color: var(--muted); margin-left: .2rem; }
+.col-duration { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/*
+ * The rail down the account of a task.
+ *
+ * Each entry is pushed right to make room for a mark in its margin; a line joins the
+ * marks so the eye runs down the column. The mark is the phase's glyph on a disc in
+ * the colour of how the entry ended, which is what lets a person find the one refused
+ * step of twelve without reading twelve.
+ */
+.event-entries { position: relative; margin: 0; padding: 0 0 0 2.6rem; list-style: none; }
+.event-entries::before { content: ''; position: absolute; left: 1.05rem; top: 1rem; bottom: 1rem; width: 2px; background: #dfe3ea; }
+.event-entry { position: relative; }
+.event-rail { position: absolute; left: -2.6rem; top: .9rem; display: inline-flex; align-items: center; justify-content: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: #ecf1f7; color: #40536c; border: 2px solid #fff; box-shadow: 0 0 0 1px #dfe3ea; }
+.event-rail .phase-icon { margin: 0; width: 1rem; height: 1rem; }
+.event-elapsed { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; color: #5f7080; padding: 0 .35rem; border: 1px dashed #c6ccd6; border-radius: 4px; }
+.event-outline li strong { display: inline-flex; align-items: center; }
+
+/*
+ * The route a step took, as boxes and the arrows between them.
+ *
+ * The same boxes the diagram draws, laid in a row in the order the hops visited them.
+ * A refused hop is an arrow with a stop on it, and the box it never reached is drawn
+ * dashed — the same two facts the picture animates, standing still.
+ */
+.route-strip { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem 0; margin: .5rem 0; padding: .55rem .7rem; list-style: none; background: #f7f9fd; border: 1px solid var(--edge); border-radius: 8px; font-size: .8rem; }
+.route-stop { display: inline-flex; align-items: center; }
+.route-node { padding: .2rem .55rem; border: 1.5px solid #5a6b7a; border-radius: 6px; background: #fff; color: #24313b; font-weight: 700; white-space: nowrap; }
+.route-node[data-reached="false"] { border-style: dashed; color: var(--muted); }
+.route-arrow { position: relative; display: inline-flex; flex-direction: column; align-items: center; min-width: 4.2rem; padding: 0 .3rem; color: #35506a; }
+.route-arrow-line { display: block; width: 100%; height: 2px; background: #97a6b2; position: relative; }
+.route-arrow-line::after { content: ''; position: absolute; right: -1px; top: -3px; border: 4px solid transparent; border-left: 6px solid #97a6b2; }
+.route-arrow-label { font-size: .68rem; line-height: 1.3; text-align: center; margin-top: .15rem; max-width: 9rem; }
+.route-stop-mark { position: absolute; top: -.75rem; left: 50%; transform: translateX(-50%); width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 2px solid; background: #fff; font-size: .75rem; font-weight: 700; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.route-strip.is-compact { padding: .35rem .55rem; margin: .35rem 0; }
+.route-strip.is-compact .route-arrow { min-width: 2.2rem; }
+.route-strip.is-compact .route-node { padding: .1rem .4rem; font-size: .75rem; }
+
+/*
+ * A run in one line, and the head of each step.
+ *
+ * The ribbon is the marks of every step side by side; pressing one scrolls to it. The
+ * head of a step repeats its mark, then says how its checks came out as chips, so the
+ * question 「何かが止めたか」 is answered before the record is opened.
+ */
+.step-ribbon { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1rem; padding: .75rem; list-style: none; border: 1px solid var(--edge); background: #f7f9fd; border-radius: 10px; }
+.step-ribbon li { position: relative; }
+.step-ribbon li:not(:last-child)::after { content: '→'; position: absolute; right: -.55rem; top: .55rem; color: #7c8fa7; font-size: .8rem; }
+.ribbon-step { display: inline-flex; align-items: center; gap: .35rem; padding: .25rem .6rem .25rem .3rem; color: var(--ink); background: #fff; border: 1px solid var(--edge); border-radius: 999px; font-size: .75rem; font-weight: 700; cursor: pointer; }
+.ribbon-step:hover { border-color: var(--accent); }
+.ribbon-step .result-mark { width: 1.5rem; height: 1.5rem; font-size: .8rem; }
+.step-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; margin: 0 0 .5rem; }
+.step-order { display: inline-flex; align-items: center; gap: .5rem; }
+.step-order .step-label { margin: 0; font-size: .7rem; }
+.step-facts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.check-chip { padding: .05rem .5rem; border: 1px solid var(--edge); border-radius: 999px; background: #fff; font-size: .72rem; }
+.step-duration { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; color: var(--muted); }
+.execution-step[data-verdict="blocked"] { border-left-color: #d8a94f; }
+.execution-step[data-verdict="failed"] { border-left-color: #a32020; background: #fffafb; }
+.execution-step[data-verdict="success"] { border-left-color: #8fc7a1; }
+
+/*
+ * The failure exercise: what can be asked for, and how far a request has got.
+ *
+ * The kinds are a list of choices that each say what they do; the tracker is three
+ * dots on a line, filled as far as the request has travelled. A request whose
+ * execution ended first shows its later dots crossed rather than empty, so 「まだ」
+ * and 「もう起きない」 are not the same picture.
+ */
+.fault-kinds { margin: 1rem 0; padding: .25rem 0 0; border: 0; }
+.fault-kinds legend { font-weight: 700; font-size: .9rem; padding: 0; }
+.fault-kind { display: flex; align-items: flex-start; gap: .6rem; margin: .5rem 0; padding: .6rem .8rem; border: 1px solid #ecd3d7; border-radius: 8px; background: #fff; cursor: pointer; }
+.fault-kind[data-chosen="true"] { border-color: #b03043; box-shadow: 0 0 0 2px #f6dfe3; }
+.fault-kind input { margin-top: .3rem; }
+.fault-kind-body { display: flex; flex-direction: column; gap: .1rem; font-size: .85rem; }
+.fault-kind-body span { color: var(--muted); font-size: .8rem; }
+.trial-kind { display: inline-block; margin-left: .6rem; padding: 0 .45rem; border: 1px solid var(--edge); border-radius: 4px; background: var(--ground); font-size: .72rem; color: var(--muted); vertical-align: middle; }
+.trial-tracker { display: flex; align-items: flex-start; gap: 0; margin: .5rem 0 .3rem; padding: 0; list-style: none; }
+.trial-tracker li { position: relative; flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: .25rem; font-size: .72rem; color: var(--muted); text-align: center; }
+.trial-tracker li:not(:last-child)::after { content: ''; position: absolute; top: .55rem; left: 50%; width: 100%; height: 2px; background: #dfe3ea; }
+.trial-dot { position: relative; z-index: 1; display: block; width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 2px solid #b6c2cf; background: #fff; }
+.trial-tracker li[data-step-state="done"] .trial-dot { border-color: #196343; background: #196343; }
+.trial-tracker li[data-step-state="done"] { color: var(--ink); }
+.trial-tracker li[data-step-state="done"]:not(:last-child)::after { background: #196343; }
+.trial-tracker li[data-step-state="current"] .trial-dot { border-color: #2452a7; background: #e8efff; box-shadow: 0 0 0 3px #d5e1ff; }
+.trial-tracker li[data-step-state="current"] { color: #2452a7; font-weight: 700; }
+.trial-tracker li[data-step-state="skipped"] .trial-dot { border-color: #c6ccd6; background: repeating-linear-gradient(45deg, #fff 0 2px, #c6ccd6 2px 4px); }
+.trial-tracker li[data-step-state="skipped"] { text-decoration: line-through; }
+
+/*
+ * How the detector decides, drawn.
+ *
+ * The chart is one SVG with the boxes at written-down coordinates; every node is
+ * drawn every time, and a traced decision changes only which of them are lit. Text
+ * is small because the chart is wide, and the chart scrolls sideways on a narrow
+ * screen rather than shrinking below what can be read.
+ */
+.decision-flow { margin: 1rem 0; }
+.decision-flow-canvas { display: block; width: 100%; min-width: 40rem; height: auto; }
+@media (max-width: 700px) { .decision-flow { overflow-x: auto; } }
+.flow-node rect, .flow-node polygon { fill: #fff; stroke: #97a6b2; stroke-width: 1.5; }
+.flow-node[data-kind="stage"] rect { fill: #f1f4f8; }
+.flow-node[data-kind="box"] rect { fill: #eef5ff; stroke: #2f6fb5; }
+.flow-node[data-kind="end"] rect { fill: #f7f9fd; }
+.flow-node[data-tone="skip"] rect { fill: #eef2f6; stroke: #b6c2cf; }
+.flow-node[data-tone="review"] rect { fill: #fff3d7; stroke: #d8a94f; }
+.flow-node[data-tone="continue"] rect { fill: #e8f5ec; stroke: #8fc7a1; }
+.flow-node[data-tone="respond"] rect { fill: #e7efff; stroke: #285ad6; }
+.flow-label { font-size: 12px; fill: #24313b; font-weight: 700; }
+.flow-sub { font-size: 10.5px; fill: #5f7080; }
+.flow-edge { fill: none; stroke: #97a6b2; stroke-width: 1.5; }
+.flow-edge-label { font-size: 10.5px; fill: #5f7080; }
+.decision-flow[data-traced="true"] .flow-node[data-taken="false"] rect, .decision-flow[data-traced="true"] .flow-node[data-taken="false"] polygon { stroke-dasharray: 4 3; opacity: .55; }
+.decision-flow[data-traced="true"] .flow-node[data-taken="false"] text { opacity: .55; }
+.decision-flow[data-traced="true"] [data-flow-edge][data-taken="false"] .flow-edge { stroke-dasharray: 4 3; opacity: .45; }
+.decision-flow[data-traced="true"] [data-flow-edge][data-taken="false"] .flow-edge-label { opacity: .45; }
+.flow-node[data-taken="true"] rect, .flow-node[data-taken="true"] polygon { stroke: #1a4f9c; stroke-width: 3; }
+[data-flow-edge][data-taken="true"] .flow-edge { stroke: #1a4f9c; stroke-width: 3; }
+[data-flow-edge][data-taken="true"] .flow-edge-label { fill: #1a4f9c; font-weight: 700; }
+.flow-node[data-current="true"] rect, .flow-node[data-current="true"] polygon { fill: #e3efff; stroke: #285ad6; stroke-width: 3; }
+.flow-caption { margin: .5rem 0 0; font-size: .8rem; color: var(--muted); }
+
+/* The trace under a decision: the questions, in order, with the answer read off. */
+.decision-path { margin: 1rem 0; padding: .8rem 1rem; background: #fff; border: 1px solid var(--edge); border-radius: 8px; }
+.decision-path .section-heading h3 { margin: 0; font-size: .9rem; }
+.decision-path button.secondary { padding: .25rem .7rem; font-size: .8rem; }
+.decision-trace { margin: .5rem 0 0; padding: 0; list-style: none; font-size: .82rem; }
+.decision-trace li { display: grid; grid-template-columns: 1.2rem minmax(0, 1fr) auto auto; gap: .25rem .6rem; align-items: baseline; padding: .3rem 0; border-top: 1px solid #eef1f5; }
+.decision-trace li:first-child { border-top: 0; }
+.trace-mark { color: #7c8fa7; font-size: .75rem; }
+.trace-question { overflow-wrap: anywhere; }
+.trace-evidence { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; color: var(--muted); }
+.trace-answer { min-width: 3.4rem; padding: 0 .5rem; border-radius: 999px; text-align: center; font-size: .75rem; font-weight: 700; background: #eef2f6; color: #2b3a46; }
+.decision-trace li[data-answer="yes"] .trace-answer { background: #e8f5ec; color: #1d5c33; }
+.decision-trace li[data-answer="yes"] .trace-mark { color: #1d5c33; }
+.decision-trace li[data-answer="no"] .trace-answer { background: #fdf3e1; color: #6b4a06; }
+.decision-trace li[data-answer="no"] .trace-mark { color: #b7791f; }
+.decision-trace li[data-answer="pending"] .trace-answer { background: #e7efff; color: #214da6; }
+.decision-trace li[data-answer="unreached"] { opacity: .5; }
+.trace-end { font-weight: 700; }
+.trace-end[data-tone="skip"] .trace-mark { color: #b6c2cf; }
+.trace-end[data-tone="review"] .trace-mark { color: #d8a94f; }
+.trace-end[data-tone="continue"] .trace-mark { color: #1d5c33; }
+.trace-end[data-tone="respond"] .trace-mark { color: #285ad6; }
+.trace-end[data-tone="failed"] .trace-mark { color: #a32020; }
+.trace-end[data-tone="pending"] .trace-mark { color: #285ad6; }
+.decision[data-traced="true"] { box-shadow: 0 0 0 2px #88aaf6; }
+
+/* Where one analysis spent its time, and how many things each stage let through. */
+.run-shape { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem 2rem; margin: .5rem 0 1rem; }
+.run-shape-heading { margin: 0 0 .4rem; font-size: .85rem; color: var(--muted); }
+.stage-timing-track { display: flex; height: .8rem; border-radius: 6px; overflow: hidden; background: #e6e9ef; }
+.stage-timing-segment { display: block; min-width: 3px; background: #a7b6c8; }
+.stage-timing-segment[data-stage="collect"], .stage-timing-legend li[data-stage="collect"] .stage-timing-swatch { background: #9db4c8; }
+.stage-timing-segment[data-stage="normalize"], .stage-timing-legend li[data-stage="normalize"] .stage-timing-swatch { background: #7c9cc0; }
+.stage-timing-segment[data-stage="validateProtocol"], .stage-timing-legend li[data-stage="validateProtocol"] .stage-timing-swatch { background: #6b8fb8; }
+.stage-timing-segment[data-stage="detectRules"], .stage-timing-legend li[data-stage="detectRules"] .stage-timing-swatch { background: #5a82ad; }
+.stage-timing-segment[data-stage="correlate"], .stage-timing-legend li[data-stage="correlate"] .stage-timing-swatch { background: #4a75a2; }
+.stage-timing-segment[data-stage="score"], .stage-timing-legend li[data-stage="score"] .stage-timing-swatch { background: #3a6897; }
+.stage-timing-segment[data-stage="analyze"], .stage-timing-legend li[data-stage="analyze"] .stage-timing-swatch { background: #7c6bb5; }
+.stage-timing-segment[data-stage="respond"], .stage-timing-legend li[data-stage="respond"] .stage-timing-swatch { background: #1d5c33; }
+.stage-timing-segment[data-state="running"] { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 4px, transparent 4px 8px); }
+.stage-timing-segment[data-state="failed"] { background: #a32020; }
+.stage-timing-legend { display: flex; flex-wrap: wrap; gap: .2rem .9rem; margin: .4rem 0 0; padding: 0; list-style: none; font-size: .75rem; color: var(--muted); }
+.stage-timing-legend li { display: inline-flex; align-items: center; gap: .3rem; }
+.stage-timing-swatch { display: inline-block; width: .65rem; height: .65rem; border-radius: 2px; }
+.count-funnel { margin: 0; }
+.funnel-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: .5rem; align-items: center; margin: .2rem 0; font-size: .78rem; }
+.funnel-row dt { color: var(--muted); }
+.funnel-row dd { display: flex; align-items: center; gap: .5rem; margin: 0; }
+.funnel-bar { flex: 1; height: .6rem; border-radius: 4px; background: #eef1f5; overflow: hidden; }
+.funnel-bar > span { display: block; height: 100%; min-width: 2px; background: #688be4; border-radius: 4px; }
+.funnel-row[data-count="finding"] .funnel-bar > span { background: #c58b14; }
+.funnel-row[data-count="analysed"] .funnel-bar > span { background: #7c6bb5; }
+.funnel-note { grid-column: 1 / -1; margin: .3rem 0 0; font-size: .72rem; color: var(--muted); }
+
+@media (max-width: 700px) {
+  .journey-stop { flex-basis: 8rem; }
+  .event-entries { padding-left: 2rem; }
+  .event-rail { left: -2rem; width: 1.7rem; height: 1.7rem; }
+  .event-entries::before { left: .8rem; }
+  .decision-trace li { grid-template-columns: 1.2rem minmax(0, 1fr) auto; }
+  .decision-trace .trace-evidence { grid-column: 2; }
+}

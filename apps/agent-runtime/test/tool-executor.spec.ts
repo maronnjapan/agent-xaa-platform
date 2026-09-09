@@ -53,7 +53,7 @@ describe('step2, allowed tools', () => {
   });
 
   it('names thirteen error codes and no more', () => {
-    expect(TOOL_ERROR_CODES).toHaveLength(13);
+    expect(TOOL_ERROR_CODES).toHaveLength(14);
   });
 
   it('never mutates the allowed tool set', async () => {

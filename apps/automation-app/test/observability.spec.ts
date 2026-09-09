@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FAULT_KINDS } from '@xaa/contracts';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
 import { AGENT_ID, SUBJECT, seedAgent, startAutomationApp } from './helpers.js';
 
@@ -34,6 +35,47 @@ describe('fault injection authorization and lifecycle', () => {
     await seedAgent(h, { expiresAt: new Date(Date.now() - 1000).toISOString() });
     expect((await postFault(h)).status).toBe(409);
     expect((await h.fetch(`/api/agents/${AGENT_ID}/faults`, { method: 'POST', headers: { cookie: '' } })).status).toBe(401);
+  });
+});
+
+describe('the three kinds of failure', () => {
+  it('accepts each kind, carries it on the trial, and offers all three on the page', async () => {
+    for (const kind of FAULT_KINDS) {
+      const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+      await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' } } });
+      expect((await postFault(h, { kind })).status).toBe(202);
+      const monitor = await (await h.fetch(`/api/agents/${AGENT_ID}/monitor`)).json() as { faultTrials: Array<{ kind: string; state: string }> };
+      expect(monitor.faultTrials).toEqual([expect.objectContaining({ kind, state: 'queued' })]);
+      const page = await (await h.fetch(`/agents/${AGENT_ID}`)).text();
+      for (const offered of FAULT_KINDS) expect(page).toContain(`data-fault-kind="${offered}"`);
+      expect(page).toContain(`data-trial-kind="${kind}"`);
+      expect(page).toContain('data-trial-tracker=');
+    }
+  });
+
+  it('confirms a fault the execution survived from the request id alone', async () => {
+    const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' } } });
+    const request = await (await postFault(h, { kind: 'tool_failure' })).json() as { instruction_id: string };
+    await h.documents.update('agent_instructions', request.instruction_id, { applied_at: new Date().toISOString() });
+    // The Runtime wrote down which request it applied and no execution failure,
+    // because a failed tool call is a step of the run, not the end of it.
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' },
+      execution_state: { fault_instruction_id: request.instruction_id, fault_kind: 'tool_failure' } } });
+    const view = await (await h.fetch(`/api/agents/${AGENT_ID}/status-view`)).text();
+    expect(view).toContain('data-trial-state="failed"');
+    expect(view).toContain('ツール呼び出しの失敗を確認');
+    expect(view).toContain('data-step-state="done"');
+    expect(await (await h.fetch(`/api/agents/${AGENT_ID}/status`)).json()).toMatchObject({ execution_failure: null, current_task: 'task-1' });
+  });
+
+  it('names an unanswered model as its own failure on the page', async () => {
+    const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { agent_id: AGENT_ID },
+      execution_state: { failure: 'injected_model_unavailable' } } });
+    const page = await (await h.fetch(`/agents/${AGENT_ID}`)).text();
+    expect(page).toContain('data-failure="injected_model_unavailable"');
+    expect(page).toContain('モデルを呼ばずに');
   });
 });
 

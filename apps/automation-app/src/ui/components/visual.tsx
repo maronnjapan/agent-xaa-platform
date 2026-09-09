@@ -43,3 +43,21 @@ export function phaseLabel(phase: string): string {
     provisioning: 'Agent準備', tool_call: 'ツール実行', security: 'セキュリティ', lifecycle: 'ライフサイクル' };
   return labels[phase] ?? phase;
 }
+
+/** The four marks, spelled out once so a person learns them before the rows use them. */
+export const MARK_LEGEND: ReadonlyArray<{ outcome: string; label: string }> = [
+  { outcome: 'success', label: '成功' },
+  { outcome: 'blocked', label: '遮断' },
+  { outcome: 'failed', label: '失敗' },
+  { outcome: 'running', label: '実行中' },
+];
+
+export function MarkLegend(): Element {
+  return (
+    <ul className="mark-legend" data-mark-legend="true" aria-label="記号の意味">
+      {MARK_LEGEND.map((item) => (
+        <li key={item.outcome}><ResultMark outcome={item.outcome} />{item.label}</li>
+      ))}
+    </ul>
+  );
+}

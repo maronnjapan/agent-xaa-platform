@@ -23,6 +23,9 @@ export const TOOL_ERROR_CODES = [
   'invalid_tool_call',
   'unexpected_token_type',
   'unexpected_subject_response',
+  // The failure exercise: a person asked for the next call to fail, and it did. Its
+  // own code so the record can say so, rather than dressing it as a real error.
+  'injected_fault',
   'tool_execution_error',
 ] as const;
 

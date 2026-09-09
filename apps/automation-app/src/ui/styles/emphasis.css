@@ -121,3 +121,46 @@
 .check-mark[data-check-mark="skipped"] {
   color: #5b5b66;
 }
+
+/*
+ * The same meanings, on the pictures.
+ *
+ * A dot in a row's shape, the disc on a log's rail, an arrow on a route, a segment of
+ * a bar: each takes its colour from the outcome its publisher recorded, through the
+ * same four hues the badges use, so a green dot and a green badge say one thing.
+ */
+.shape-dot[data-outcome="success"], .outcome-bar-segment[data-outcome="success"], .outcome-bar-legend li[data-outcome="success"] .outcome-bar-swatch { background: #5fb27f; }
+.shape-dot[data-outcome="blocked"], .outcome-bar-segment[data-outcome="blocked"], .outcome-bar-legend li[data-outcome="blocked"] .outcome-bar-swatch { background: #d8a94f; }
+.shape-dot[data-outcome="failed"], .outcome-bar-segment[data-outcome="failed"], .outcome-bar-legend li[data-outcome="failed"] .outcome-bar-swatch { background: #c13d4a; }
+.shape-dot[data-outcome="running"], .outcome-bar-segment[data-outcome="running"], .outcome-bar-legend li[data-outcome="running"] .outcome-bar-swatch { background: #5b8def; }
+.shape-dot[data-outcome="info"], .outcome-bar-segment[data-outcome="info"], .outcome-bar-legend li[data-outcome="info"] .outcome-bar-swatch { background: #b6c2cf; }
+.shape-dot[data-phase="security"][data-outcome="blocked"] { background: #a32020; }
+
+.event-rail[data-outcome="success"] { background: #e4f4ec; color: #196343; }
+.event-rail[data-outcome="blocked"] { background: #fff0cb; color: #805309; }
+.event-rail[data-outcome="failed"] { background: #fce5e8; color: #a22335; }
+.event-entry[data-emphasis="ev-blocked-security"] .event-rail { background: #f8dcda; color: #6d1111; box-shadow: 0 0 0 2px #a32020; }
+.event-entry[data-emphasis="ev-failed"] { border-left-color: #a32020; background: #fdf6f5; }
+
+.route-arrow[data-outcome="success"] .route-arrow-line { background: #1d5c33; }
+.route-arrow[data-outcome="success"] .route-arrow-line::after { border-left-color: #1d5c33; }
+.route-arrow[data-outcome="blocked"] .route-arrow-line { background: #d8a94f; }
+.route-arrow[data-outcome="blocked"] .route-arrow-line::after { border-left-color: #d8a94f; }
+.route-arrow[data-outcome="blocked"] { color: #6b4a06; font-weight: 700; }
+.route-arrow[data-outcome="blocked"] .route-stop-mark { border-color: #a32020; color: #a32020; }
+.route-arrow[data-outcome="failed"] .route-arrow-line { background: #a32020; }
+.route-arrow[data-outcome="failed"] .route-arrow-line::after { border-left-color: #a32020; }
+
+.journey-stop[data-outcome="blocked"] .journey-node { border-color: #d8a94f; }
+.journey-stop[data-outcome="failed"] .journey-node { border-color: #c13d4a; }
+.journey-stop[data-outcome="success"] .journey-glyph { background: #e4f4ec; color: #196343; }
+.journey-stop[data-outcome="blocked"] .journey-glyph { background: #fff0cb; color: #805309; }
+.journey-stop[data-outcome="failed"] .journey-glyph { background: #fce5e8; color: #a22335; }
+.journey-stop[data-outcome="running"] .journey-glyph { background: #e8efff; color: #2452a7; }
+
+.step-ribbon li[data-verdict="blocked"] .ribbon-step { border-color: #d8a94f; }
+.step-ribbon li[data-verdict="failed"] .ribbon-step { border-color: #c13d4a; }
+.check-chip[data-check="passed"] { border-color: #8fc7a1; background: #e8f5ec; color: #1d5c33; }
+.check-chip[data-check="blocked"] { border-color: #a32020; background: #f8dcda; color: #6d1111; font-weight: 700; }
+.check-chip[data-check="failed"] { border-color: #d8a94f; background: #fdf3e1; color: #6b4a06; }
+.check-chip[data-check="skipped"] { color: #5b5b66; }

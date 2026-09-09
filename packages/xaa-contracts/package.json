@@ -19,6 +19,10 @@
     "./security-monitoring": {
       "types": "./dist/security-monitoring.d.ts",
       "import": "./dist/security-monitoring.js"
+    },
+    "./fault-injection": {
+      "types": "./dist/fault-injection.d.ts",
+      "import": "./dist/fault-injection.js"
     }
   },
   "scripts": {

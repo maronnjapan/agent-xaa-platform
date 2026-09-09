@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Hono } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
-import { compile, isFaultKind, INITIAL_TASK_ID, TASK_ID_PATTERN } from '@xaa/contracts';
+import { compile, isFaultKind, INITIAL_TASK_ID, TASK_ID_PATTERN, type FaultKind } from '@xaa/contracts';
 import type { AutomationAppConfig } from './config.js';
 import { createSessionStore, type SessionStore } from './auth/session-store.js';
 import { requireUser, type UserVariables } from './auth/require-user.js';
@@ -105,6 +105,17 @@ const assertTimeline: (value: unknown) => asserts value is unknown = compile(tim
  * from a Human IdP Access Token the caller presents rather than from a session. The
  * push endpoint is the one exception, authenticated by Pub/Sub's own OIDC token.
  */
+/**
+ * What a fault request says as an instruction. The Runtime never shows the model these
+ * words — a fault is consumed before the conversation is built — but an instruction
+ * row with no text would read as a bug to anyone looking at the store.
+ */
+const FAULT_REQUEST_TEXT: Readonly<Record<FaultKind, string>> = {
+  runtime_crash: '異常系試験: Runtime の実行を失敗させる',
+  model_unavailable: '異常系試験: モデルの応答なしを起こす',
+  tool_failure: '異常系試験: 次のツール呼び出しを失敗させる',
+};
+
 function createApp(deps: AutomationAppDeps): Hono<Env> {
   const app = new Hono<Env>();
   const sessions = deps.sessions ?? createSessionStore(deps.documents);
@@ -624,7 +635,7 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     try {
       const instruction = await addInstruction({
         documents: deps.documents, agentId: context.get('agentId'), createdBy: context.get('humanSubject'),
-        text: '異常系試験: Runtime の実行を失敗させる', fault: body.kind, now: now(),
+        text: FAULT_REQUEST_TEXT[body.kind], fault: body.kind, now: now(),
       });
       logAgentOperation({ operation: 'fault_injection', agent_id: context.get('agentId'), actor_type: 'human',
         actor_id: context.get('humanSubject'), on_behalf_of: context.get('humanSubject'),

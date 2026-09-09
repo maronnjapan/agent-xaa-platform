@@ -3,11 +3,24 @@ import type { ExecutionFailure } from '@xaa/contracts';
 import type { AgentStatusResponse } from '../../agents/status.js';
 import { Metric, ResultMark, formatTime } from './visual.js';
 import { OutcomeBadge } from './outcome-badge.js';
+import { OutcomeBar } from './outcome-bar.js';
+import { FAULT_KIND_TEXT, TrialTracker } from './trial-tracker.js';
 import type { Element } from '../element.js';
 
 const FAILURE_TEXT: Readonly<Record<ExecutionFailure, string>> = {
-  injected_runtime_crash: '異常系試験の要求により、実行を中断しました。',
+  injected_runtime_crash: '異常系試験の要求により、Runtime が例外を投げて実行を中断しました。',
+  injected_model_unavailable: '異常系試験の要求により、モデルを呼ばずに応答なしとして打ち切りました。',
 };
+
+/** What each state of a request says, in the row's own words. */
+function trialText(trial: FaultTrial): string {
+  switch (trial.state) {
+    case 'queued': return '適用待ち';
+    case 'received': return 'Runtimeが受信済み';
+    case 'failed': return FAULT_KIND_TEXT[trial.kind].confirmed;
+    case 'not_applied': return '対象Taskが実行中ではないため未適用';
+  }
+}
 
 /**
  * The agent as it is right now: one read, no history.
@@ -20,6 +33,11 @@ const FAILURE_TEXT: Readonly<Record<ExecutionFailure, string>> = {
 export function StatusPanel(props: { status: AgentStatusResponse; faultTrials?: FaultTrial[] }): Element {
   const calls = props.status.tool_invocations;
   const failure = props.status.execution_failure;
+  const counts = {
+    success: calls.filter((call) => call.outcome === 'success').length,
+    blocked: calls.filter((call) => call.outcome === 'blocked').length,
+    failed: calls.filter((call) => call.outcome === 'failed').length,
+  };
   return (
     <section data-section="status" className="status-panel card">
       <div className="section-heading">
@@ -30,10 +48,11 @@ export function StatusPanel(props: { status: AgentStatusResponse; faultTrials?: 
       </div>
       <div className="metric-grid">
         <Metric label="ツール実行" value={calls.length} />
-        <Metric label="成功" value={calls.filter((call) => call.outcome === 'success').length} tone="green" />
-        <Metric label="遮断" value={calls.filter((call) => call.outcome === 'blocked').length} tone="amber" />
-        <Metric label="失敗" value={calls.filter((call) => call.outcome === 'failed').length} tone="red" />
+        <Metric label="成功" value={counts.success} tone="green" />
+        <Metric label="遮断" value={counts.blocked} tone="amber" />
+        <Metric label="失敗" value={counts.failed} tone="red" />
       </div>
+      <OutcomeBar counts={counts} label="ツール実行の結果" />
       <dl className="decision-facts">
         <dt>実行中のタスク</dt>
         <dd data-field="current_task">{props.status.current_task ?? '—'}</dd>
@@ -50,12 +69,15 @@ export function StatusPanel(props: { status: AgentStatusResponse; faultTrials?: 
         <section className="fault-history" aria-label="異常系試験の状態">
           <h3>異常系試験の状態</h3>
           {props.faultTrials.map((trial) => (
-            <div key={trial.instruction_id} className="trial-row" data-trial-state={trial.state}>
+            <div key={trial.instruction_id} className="trial-row" data-trial-state={trial.state} data-trial-kind={trial.kind}>
               <ResultMark outcome={trial.state === 'failed' ? 'failed' : trial.state === 'queued' ? 'running' : 'info'} />
-              <div><strong>{ { queued: '適用待ち', received: 'Runtimeが受信済み', failed: '実行の失敗を確認', not_applied: '対象Taskが実行中ではないため未適用' }[trial.state] }</strong>
+              <div>
+                <strong>{trialText(trial)}</strong>
+                <span className="trial-kind">{FAULT_KIND_TEXT[trial.kind].label}</span>
+                <TrialTracker trial={trial} />
                 <p><time dateTime={trial.created_at}>{formatTime(trial.created_at)}</time> · {trial.task_id}</p>
                 <small>要求 ID: {trial.instruction_id}</small>
-                {trial.state === 'received' ? <p className="muted">受信後の結果はアクティビティで確認してください。</p> : null}
+                {trial.state === 'received' ? <p className="muted">{FAULT_KIND_TEXT[trial.kind].watch}</p> : null}
               </div>
             </div>
           ))}

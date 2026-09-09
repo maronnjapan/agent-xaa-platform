@@ -1,4 +1,4 @@
-import { FAULT_FAILURE } from '@xaa/contracts';
+import { FAULT_FAILURE, type FaultKind } from '@xaa/contracts';
 import { generateJson, type VertexClient } from '@xaa/vertex';
 import type { ActivityRecord } from '@xaa/contracts';
 import type { LogContext, Logger } from '@xaa/logging';
@@ -6,7 +6,7 @@ import type { ExecutionContext } from '../context/execution-context.js';
 import type { RuntimeHttpClient } from '../http/http-client.js';
 import { writeCheckpoint, type Checkpoint } from '../state/checkpoint.js';
 import { executeTool } from '../tool-executor/index.js';
-import type { ToolResult } from '../tool-executor/errors.js';
+import { toolFailed, type ToolResult } from '../tool-executor/errors.js';
 import { readPendingInstructions } from '../instructions/read-pending.js';
 import { appendRejection } from '../instructions/record-rejection.js';
 import { createExecutionRecorder, reasoningRecord } from '../telemetry/execution-record.js';
@@ -118,34 +118,53 @@ export async function runReasoningLoop(input: {
   let executionState: Record<string, unknown> = {};
   let stoppedBy: LoopResult['stoppedBy'] = 'reasoning_step_limit';
   let finalNote: string | undefined;
+  /**
+   * The failure exercise a person asked for, once it has been read and until it has
+   * been applied. A fault request is an exercise, not a message to the model: it never
+   * joins the conversation, and one addressed to another execution never reaches the
+   * model or causes this execution to fail. Which kind it is decides where in the step
+   * it lands — before the model, in place of the model, or in place of the tool.
+   */
+  let armed: { kind: FaultKind; instruction_id: string } | null = null;
 
   await checkpoint();
   for (let step = 0; step < maxSteps; step += 1) {
     const pending = await readPendingInstructions(input.context.store, new Date(now()).toISOString());
     for (const instruction of pending) {
-      // A fault request is an exercise, not a message to the model: it never joins the
-      // conversation, and one addressed to another execution never reaches the model or
-      // causes this execution to fail.
-      if (instruction.fault) {
-        if (instruction.fault.task_id === input.context.taskId) {
-          const failure = FAULT_FAILURE[instruction.fault.kind];
-          executionState = { ...executionState, failure, fault_instruction_id: instruction.instruction_id };
-          // The closing checkpoint an ordinary end writes, and for the same reason:
-          // this execution is over. `agent_status` stays the Lifecycle state (docs 07
-          // §2), which the Runtime does not own — what failed is the execution, and
-          // `execution_state.failure` is where the status endpoint reads that from.
-          await checkpoint(true);
-          input.logger.error('fault_injected', input.logContext, {
-            fault: instruction.fault.kind, instruction_id: instruction.instruction_id,
-          });
-          throw new Error(failure);
-        }
-        continue;
+      if (instruction.fault?.task_id === input.context.taskId) {
+        armed = { kind: instruction.fault.kind, instruction_id: instruction.instruction_id };
       }
     }
     const messages = pending.filter((instruction) => !instruction.fault);
     conversation.push(...messages);
     const instructions = messages.map((instruction) => instruction.text);
+
+    if (armed?.kind === 'runtime_crash') {
+      const failure = FAULT_FAILURE.runtime_crash;
+      executionState = { ...executionState, failure, fault_instruction_id: armed.instruction_id };
+      // The closing checkpoint an ordinary end writes, and for the same reason: this
+      // execution is over. `agent_status` stays the Lifecycle state (docs 07 §2),
+      // which the Runtime does not own — what failed is the execution, and
+      // `execution_state.failure` is where the status endpoint reads that from.
+      await checkpoint(true);
+      input.logger.error('fault_injected', input.logContext, { fault: armed.kind, instruction_id: armed.instruction_id });
+      throw new Error(failure);
+    }
+    if (armed?.kind === 'model_unavailable') {
+      // The path a model outage takes, taken on purpose: the step goes unanswered, is
+      // written down as such, and the loop stops the way `no_decision` stops it. The
+      // model is not called, so the exercise costs nothing and reaches nothing.
+      executionState = { ...executionState, failure: FAULT_FAILURE.model_unavailable, fault_instruction_id: armed.instruction_id };
+      input.logger.error('fault_injected', input.logContext, { fault: armed.kind, instruction_id: armed.instruction_id });
+      stoppedBy = 'no_decision';
+      records.push(reasoningRecord({
+        step: step + 1,
+        headline: 'モデルへの接続を失敗させました（異常系試験）',
+        message: '異常系試験の要求により、この手ではモデルを呼ばず、応答なしとして打ち切りました。作業は完了していません。',
+        instructions,
+      }));
+      break;
+    }
 
     const decision = await generate<ReasoningStep>({
       prompt: buildPrompt(input.context, conversation),
@@ -195,10 +214,23 @@ export async function runReasoningLoop(input: {
       toolId: call.tool_id,
       intent: { ...(decision.note ? { note: decision.note } : {}), parameters: call.parameters, instructions },
     });
-    const result = await executeTool({
-      context: input.context, http: input.http, logger: input.logger, logContext: input.logContext,
-      now, recorder, ...(input.stageWrite ? { stageWrite: input.stageWrite } : {}),
-    }, call);
+    let result: ToolResult;
+    if (armed?.kind === 'tool_failure') {
+      // The tool the model chose is not run; what comes back is the failure it would
+      // have reported, so the model — and the person — see a failed step and the loop
+      // decides what to do next, which is the thing this exercise is for. The request
+      // id is written down so the screen can tie the failed step to the button pressed.
+      executionState = { ...executionState, fault_instruction_id: armed.instruction_id, fault_kind: armed.kind };
+      input.logger.error('fault_injected', input.logContext, { fault: armed.kind, instruction_id: armed.instruction_id, tool_id: call.tool_id });
+      armed = null;
+      recorder.stopped({ stage: 'tool_selection', errorCode: 'injected_fault' });
+      result = toolFailed({ toolId: call.tool_id, stage: 'tool_selection', errorCode: 'injected_fault' });
+    } else {
+      result = await executeTool({
+        context: input.context, http: input.http, logger: input.logger, logContext: input.logContext,
+        now, recorder, ...(input.stageWrite ? { stageWrite: input.stageWrite } : {}),
+      }, call);
+    }
     results.push(result);
     const record = recorder.build(result);
     records.push(record);

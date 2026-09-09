@@ -1,4 +1,5 @@
-import { Metric } from '../components/visual.js';
+import { MarkLegend, Metric } from '../components/visual.js';
+import { OutcomeBar } from '../components/outcome-bar.js';
 import { useCallback, useState } from 'react';
 import type { ActivityEvent } from '@xaa/contracts';
 import type { TimelineTask } from '../../activity/query.js';
@@ -26,6 +27,8 @@ function toRow(task: TimelineTask): TaskRowProps {
     return { run_id: task.run_id, task_id: task.task_id, purpose: task.purpose, status: 'running', simulated: false };
   }
   const terminal = task.events[task.events.length - 1];
+  const first = task.events[0];
+  const span = first && terminal ? Date.parse(terminal.occurred_at) - Date.parse(first.occurred_at) : Number.NaN;
   return {
     run_id: task.run_id,
     task_id: task.task_id,
@@ -36,6 +39,10 @@ function toRow(task: TimelineTask): TaskRowProps {
     ...(terminal ? { phase: terminal.phase } : {}),
     ...(terminal?.detail ? { detail: terminal.detail as Record<string, unknown> } : {}),
     simulated: isSimulated(task),
+    event_count: task.events.length,
+    ...(Number.isFinite(span) ? { duration_ms: span } : {}),
+    // The shape of the task: one dot per event, from the two values the schema pins.
+    shape: task.events.map((event) => ({ phase: event.phase, outcome: event.outcome })),
   };
 }
 
@@ -140,12 +147,23 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[] }): Element
         <Metric label="遮断" value={tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'blocked').length} tone="amber" />
         <Metric label="失敗" value={tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'failed').length} tone="red" />
       </div>
+      <OutcomeBar
+        label="タスクの結果"
+        counts={{
+          success: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'success').length,
+          blocked: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'blocked').length,
+          failed: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'failed').length,
+          running: tasks.filter((task) => task.status === 'running').length,
+          info: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'info').length,
+        }}
+      />
       <div className="timeline-toolbar">
         <label>表示する結果 <select data-filter="outcome" value={outcome} onChange={(event) => setOutcome(event.target.value)}>
           <option value="all">すべて</option><option value="running">実行中</option><option value="success">成功</option><option value="blocked">遮断</option><option value="failed">失敗</option>
         </select></label>
         <label className="activity-search">検索<input type="search" data-filter="search" placeholder="作業名・Agent・Task ID" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         <span role="status">{shown.length} 件を表示</span>
+        <MarkLegend />
       </div>
       <p role="status" data-timeline-status="true">{message}</p>
       <p className="lead">{TIMELINE_CAST_LEAD}</p>
