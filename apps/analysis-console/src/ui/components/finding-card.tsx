@@ -50,11 +50,27 @@ const REVIEW_STATUSES: Readonly<Record<SecurityReviewStatus, string>> = {
 const ANALYSIS_SOURCES: Readonly<Record<SecurityAnalysisSource, string>> = {
   model: '分析エージェントの判断',
   fallback: '分析が得られず、リスク値だけで決めた既定の対応',
+  rules: '機械的なチェックのみ。分析エージェントは呼ばれていない',
 };
 
 export const FINDING_NO_ANALYSIS =
   '分析エージェントから読み取れる回答が返らなかったため、四つの観点はありません。';
 export const FINDING_NOT_ANALYSED = 'まだ分析されていません。';
+/**
+ * The end of the road, said as an end rather than as a wait.
+ *
+ * 「まだ」 above is a row on its way to the model. This one is not on its way anywhere:
+ * either it scored below the line where the model is asked, or the model stage could not
+ * run for it — and in both cases the codes above are the whole of what is known and no
+ * fourth aspect is coming. A person who read 「まだ」 here would keep the page open
+ * waiting for it.
+ *
+ * Which of the two it was is deliberately not stated. The detector sends one value for
+ * both, and a screen that guessed at the reason from the risk level beside it would be
+ * writing a sentence nothing had decided (RULE-54).
+ */
+export const FINDING_RULES_ONLY =
+  '機械的なチェックの結果だけです。分析エージェントには渡っていないため、四つの観点はありません。';
 
 /** A count between 0 and 1 read as a percentage; the value itself stays in the title. */
 function percent(confidence: number): string {
@@ -70,6 +86,12 @@ function percent(confidence: number): string {
  */
 function Instant(props: { at: string; className?: string }): Element {
   return <time className={props.className} dateTime={props.at} title={props.at}>{props.at}</time>;
+}
+
+/** Why there are no four aspects, which is a different sentence for each of the three. */
+function noAnalysisNote(source: SecurityAnalysisSource | null): string {
+  if (source === null) return FINDING_NOT_ANALYSED;
+  return source === 'rules' ? FINDING_RULES_ONLY : FINDING_NO_ANALYSIS;
 }
 
 export function FindingCard(props: { finding: SecurityFindingView }): Element {
@@ -125,7 +147,7 @@ export function FindingCard(props: { finding: SecurityFindingView }): Element {
         )
         : (
           <p className="finding-note" data-field="analysis" data-state="none">
-            {finding.analysis_source === null ? FINDING_NOT_ANALYSED : FINDING_NO_ANALYSIS}
+            {noAnalysisNote(finding.analysis_source)}
           </p>
         )}
 

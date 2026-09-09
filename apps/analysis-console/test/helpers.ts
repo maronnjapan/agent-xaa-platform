@@ -126,3 +126,23 @@ export function storedFinding(overrides: Record<string, unknown> = {}): Record<s
     ...overrides,
   };
 }
+
+/** A stored inspection, exactly as Security Detection writes one. */
+export function storedInspection(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    inspection_id: `i_1767268800_${AGENT_ID}`,
+    agent_id: AGENT_ID,
+    human_subject: SUBJECT,
+    window_start: '2026-01-01T12:00:00.000Z',
+    window_end: '2026-01-01T12:10:00.000Z',
+    events_examined: 12,
+    checks_run: [
+      'protocol_validation', 'token_rate', 'authorization', 'tool',
+      'lifetime', 'isolation', 'authorization_ai', 'baseline_deviation',
+    ],
+    checks_skipped: [],
+    codes_raised: [],
+    last_seen_at: '2026-01-01T12:09:00.000Z',
+    ...overrides,
+  };
+}

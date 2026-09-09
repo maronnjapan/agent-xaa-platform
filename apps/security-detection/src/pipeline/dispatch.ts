@@ -16,7 +16,12 @@ export interface DispatchDeps {
    * made of, rather than from a second read of the logs.
    */
   analyze(finding: SecurityFinding, events: readonly NormalizedEvent[]): Promise<void>;
-  storeNormalized(finding: SecurityFinding): Promise<void>;
+  /**
+   * The LOW half of docs 09 §5.5 — 「LOWは保存と観測にとどめ」. Kept apart from
+   * `storeFinding` because the two write different rows: this one is the mechanical
+   * passes and nothing else, and it must never be handed to the model.
+   */
+  storeLowFinding(finding: SecurityFinding): Promise<void>;
   storeFinding(finding: SecurityFinding): Promise<void>;
   financeResourceUrl?: string;
   resourcesFor?(finding: SecurityFinding): readonly string[];
@@ -42,16 +47,19 @@ export function score(batch: CorrelatedBatch, deps: Pick<DispatchDeps, 'financeR
 /**
  * What happens after a score exists.
  *
- * LOW stops here: the event is kept and a counter moves, and no finding row is written
- * and no model is called. The branch is placed before the finding is built, not after —
- * constructing one and discarding it would still put a row-shaped object in front of
- * every later edit, and someone would eventually write it.
+ * LOW stops short of the model: a counter moves and the row is written as the mechanical
+ * result it is, with nothing asked of the model and nothing asked of the Lifecycle
+ * Manager. It is written rather than dropped because a person reading the console has no
+ * other way to tell a window that was read and came back clean from a window whose logs
+ * never arrived, and because 「LOWは保存と観測にとどめ」 (docs 09 §5.5) says stored, not
+ * counted. `storeLowFinding` and `storeFinding` stay separate so that reading this
+ * function still tells you which rows the model ever sees.
  */
 export async function dispatch(batch: ScoredBatch, deps: DispatchDeps, counters: DispatchCounters): Promise<void> {
   for (const finding of batch.findings) {
     if (finding.risk_level === 'LOW') {
       counters.low_events_total += 1;
-      await deps.storeNormalized(finding);
+      await deps.storeLowFinding(finding);
       continue;
     }
     await deps.storeFinding(finding);

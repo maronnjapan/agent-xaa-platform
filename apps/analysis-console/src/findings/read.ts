@@ -1,4 +1,7 @@
-import { assertSecurityFindingView, type SecurityFindingView } from '@xaa/contracts';
+import {
+  assertSecurityFindingView, assertSecurityInspectionView,
+  type SecurityFindingView, type SecurityInspectionView,
+} from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 
 /**
@@ -144,4 +147,59 @@ export async function readAgentStates(input: {
     if (typeof meta.status === 'string') states.set(agentId, meta.status);
   }
   return states;
+}
+
+/**
+ * That the analyser read this person's logs, whether or not it found anything.
+ *
+ * A finding is only written when something tripped, so a well-behaved agent leaves none
+ * and the screen it belongs to is blank. Blank has two meanings — 「見て、何もなかった」
+ * and 「ログが届いていない」 — and a person cannot tell them apart from the outside, nor
+ * do anything about the second if they could. These rows are the detector saying which
+ * it was: how many lines it read, which mechanical passes it made over them, and which
+ * ones it could not make.
+ *
+ * Read the same way findings are, for the same reasons: out of the detector's collection
+ * over the access matrix (DEV-05), narrowed by the session's own subject and nothing
+ * wider (RULE-56), and built field by field so the stored document can grow one this
+ * screen does not show (RULE-38).
+ */
+export async function readInspectionsFor(input: {
+  documents: DocumentStore;
+  humanSubject: string;
+}): Promise<SecurityInspectionView[]> {
+  const rows = await input.documents.queryEqual<Record<string, unknown>>(
+    'security_inspections',
+    [['human_subject', input.humanSubject]],
+  );
+  return rows
+    .map((row) => inspectionOf(row.data))
+    .filter((inspection): inspection is SecurityInspectionView => inspection !== null)
+    .sort((left, right) => right.window_start.localeCompare(left.window_start));
+}
+
+/** One stored inspection, narrowed — or `null` when it is not one this screen can show. */
+function inspectionOf(data: Record<string, unknown>): SecurityInspectionView | null {
+  const text = (key: string): string => (typeof data[key] === 'string' ? data[key] : '');
+  const list = (key: string): string[] => (Array.isArray(data[key])
+    ? (data[key] as unknown[]).filter((item): item is string => typeof item === 'string')
+    : []);
+  const candidate = {
+    inspection_id: text('inspection_id'),
+    agent_id: text('agent_id'),
+    human_subject: text('human_subject'),
+    window_start: text('window_start'),
+    window_end: text('window_end'),
+    events_examined: typeof data.events_examined === 'number' ? Math.trunc(data.events_examined) : 0,
+    checks_run: list('checks_run'),
+    checks_skipped: list('checks_skipped'),
+    codes_raised: list('codes_raised'),
+    last_seen_at: text('last_seen_at'),
+  };
+  try {
+    assertSecurityInspectionView(candidate);
+  } catch {
+    return null;
+  }
+  return candidate;
 }

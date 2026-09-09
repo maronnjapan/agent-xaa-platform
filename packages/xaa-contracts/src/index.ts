@@ -35,6 +35,7 @@ export * from './redirect-guard.js';
 export * from './runtime-names.js';
 export * from './scopes.js';
 export * from './security-finding-view.js';
+export * from './security-inspection-view.js';
 export * from './verify/index.js';
 export * from './service-ids.js';
 export * from './subject-token-response.js';

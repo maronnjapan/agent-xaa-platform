@@ -166,6 +166,10 @@ Delegation MismatchとSigning Key Misuseは、単発でもCRITICALとして扱�
 前者は委譲されていないAgentとしてResourceへ届こうとした事象であり、後者はissuerの署名鍵が意図した用途の外で使われた事象だからである。
 
 LOWは保存と観測にとどめ、MEDIUM以上をSecurity Findingとして次の段階へ渡す。
+「とどめる」は「捨てる」ではない。
+単発のProtocol Violationは10点、単発の未知Toolは25点で、どちらも30に届かない。
+LOWの行を書かなければ、ルールが実際に反応した窓が[§7](#7-判断を本人へ見せる)の画面に1件も出ず、本人には「見られていない」のと区別がつかない。
+LOWの行は `analysis_source` に `rules` を持ち、AIへは渡らない。
 
 ### 5.6 Security AI Analysis
 
@@ -211,8 +215,32 @@ Human Reviewで承認を求められた人も、Agentを隔離された人も、
 | 残すもの | 内容 |
 |---|---|
 | `analysis` | 逸脱・判断・影響の3区画。AIが答えた文章のまま保存する。推奨と確信度は `recommended_response` と `confidence` が持つ |
-| `analysis_source` | `model`（AIの回答を読めた）か `fallback`（読めず、Risk Scoreだけで既定の対応を決めた）か |
+| `analysis_source` | `model`（AIの回答を読めた）、`fallback`（読めず、Risk Scoreだけで既定の対応を決めた）、`rules`（AIを呼んでいない。機械的チェックがすべて）のいずれか |
 | `analyzed_at` | 分析した時刻 |
+
+`rules` を `null` と分けるのは、`null` が「まだ分析されていない」を意味するからである。
+LOWの行と、Baselineが無くAIを呼べなかった行は、待っているのではなく終わっている。
+同じ見た目にすれば、人は来ない分析を待つ。
+
+### 7.2 Inspection Record
+
+Findingは何かが反応したときだけ書かれる。
+そのため、正常に動いたAgentは1行も残さず、画面は空になる。
+空の画面は「見て、何も無かった」と「ログが届いていない」の両方を意味し、本人はどちらか判別できない。
+判別できたとしても、後者は本人に直せるものではない。
+
+そこで、Findingとは別に **Inspection Record** を `security_inspections` へ書く。
+Agent 1つ、窓1つにつき1行で、判断を1つも含まない。
+
+| 残すもの | 内容 |
+|---|---|
+| `events_examined` | その窓で読んだログの本数 |
+| `checks_run` | 実行した機械的チェックの名前 |
+| `checks_skipped` | 実行できなかったチェック。Baselineを読めないとき、それを前提とする2つが黙る |
+| `codes_raised` | 反応したルールのコード。何も無ければ空 |
+
+`checks_skipped` を分けて持つのは、「反応が無い」を「問題が無い」と読ませないためである。
+黙ったチェックと通ったチェックは同じではない。
 
 `analysis_source` を分けるのは、`fallback` を判断として見せないためである。
 AIから読める回答が返らなかったときの対応は [§5.5](#55-risk-score) のScoreだけで決まる既定値であり、何かが推論した結論ではない。
@@ -235,13 +263,14 @@ Human IdPのclientもAutomation Appとは別に持つ。
 利用者はAutomation Appとは別にもう一度ログインする。
 
 参照範囲はログインした本人の `human_subject` に限る（RULE-56）。
-画面が表示するのは、Risk ScoreとLevel、反応したルールのコード、AIの4観点、推奨する対応と確信度、Human Reviewの状態、そしてAgentの現在の状態である。
+画面が表示するのは、Risk ScoreとLevel、反応したルールのコード、AIの4観点、推奨する対応と確信度、Human Reviewの状態、Agentの現在の状態、そして [§7.2](#72-inspection-record) のInspection Recordである。
+Findingが1件も無いAgentも、Inspection Recordがあれば画面に出る。
 Findingが持つ `related_events` と `deviations` は渡さない。
 前者は監査ログを引くための相関idであり、後者は `trace_id` を含む。どちらも画面の説明には要らない（RULE-38）。
 
 Analysis ConsoleはSecurity Detectionを呼ばない。
 [T-SEC-08](../tasks/done/11-security.md) が、いずれのアプリからもSecurity Detectionへ向かうinvokerエッジを作らないと決めているためである。
-`security_findings` と `agents/{agent_id}/meta` を `packages/gcp/src/access-matrix.json` で読み取り専用として許し、Firestoreから直接読む（DEV-05）。
+`security_findings`、`security_inspections` と `agents/{agent_id}/meta` を `packages/gcp/src/access-matrix.json` で読み取り専用として許し、Firestoreから直接読む（DEV-05）。
 これにより、Security Detectionが再デプロイ中でもconsoleは開く。
 
 Sessionの保管先もAutomation Appとは分ける（`console_sessions`）。

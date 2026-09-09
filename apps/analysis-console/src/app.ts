@@ -4,7 +4,7 @@ import type { AnalysisConsoleConfig } from './config.js';
 import { createSessionStore, type SessionStore } from './auth/session-store.js';
 import { createLoginRoutes } from './auth/login.js';
 import { requireUser, type UserVariables } from './auth/require-user.js';
-import { readAgentStates, readFindingsFor } from './findings/read.js';
+import { readAgentStates, readFindingsFor, readInspectionsFor } from './findings/read.js';
 import { FindingsPage, type AgentAnalysis } from './ui/pages/findings.js';
 import { renderPage } from './ui/layout.js';
 import { CONSOLE_CSS } from './ui/styles/console.js';
@@ -53,12 +53,19 @@ export function createApp(deps: AnalysisConsoleDeps): Hono<UserVariables> {
   app.get('/', requireUser({ sessions, now }), async (context) => {
     const humanSubject = context.get('humanSubject');
     const findings = await readFindingsFor({ documents: deps.documents, humanSubject });
-    const agentIds = [...new Set(findings.map((finding) => finding.agent_id).filter((id): id is string => id !== null))];
+    // Read beside the findings, not instead of them: an agent that behaved leaves no
+    // finding at all, and it is the one this screen used to have nothing to say about.
+    const inspections = await readInspectionsFor({ documents: deps.documents, humanSubject });
+    const agentIds = [...new Set([
+      ...findings.map((finding) => finding.agent_id).filter((id): id is string => id !== null),
+      ...inspections.map((inspection) => inspection.agent_id),
+    ])];
     const states = await readAgentStates({ documents: deps.documents, agentIds, humanSubject });
     const agents: AgentAnalysis[] = agentIds.map((agentId) => ({
       agentId,
       status: states.get(agentId) ?? '',
       findings: findings.filter((finding) => finding.agent_id === agentId),
+      inspections: inspections.filter((inspection) => inspection.agent_id === agentId),
     }));
     return context.html(renderPage({
       title: '分析エージェントの判断',
