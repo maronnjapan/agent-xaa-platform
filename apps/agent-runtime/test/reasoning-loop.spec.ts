@@ -217,7 +217,7 @@ describe('runtime failure exercises', () => {
     expect(await h.documents.get('agents', `${AGENT_ID}__state`)).toMatchObject({
       agent_status: 'ACTIVE',
       task_context: { agent_id: AGENT_ID },
-      execution_state: { failure: 'injected_runtime_crash' },
+      execution_state: { failure: 'injected_runtime_crash', fault_instruction_id: 'fault-1' },
     });
     const state = await h.documents.get<{ task_context: Record<string, unknown> }>('agents', `${AGENT_ID}__state`);
     expect(state!.task_context).not.toHaveProperty('task_id');

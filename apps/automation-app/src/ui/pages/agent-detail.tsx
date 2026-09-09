@@ -1,3 +1,4 @@
+import type { FaultTrial } from '../../agents/faults.js';
 import type { AgentStatusResponse } from '../../agents/status.js';
 import { AgentControls } from '../components/agent-controls.js';
 import { StatusPanel } from '../components/status-panel.js';
@@ -17,6 +18,7 @@ export function AgentDetailPage(props: {
   agentId: string;
   status: AgentStatusResponse;
   faultInjectionEnabled?: boolean;
+  faultTrials?: FaultTrial[];
 }): Element {
   const blocked = props.status.tool_invocations.some((invocation) => invocation.outcome === 'blocked');
   return (
@@ -37,7 +39,7 @@ export function AgentDetailPage(props: {
         </label>
         <span data-monitor-status="true" role="status" />
       </div>
-      <StatusPanel status={props.status} />
+      <StatusPanel status={props.status} faultTrials={props.faultTrials ?? []} />
       <AgentControls agentId={props.agentId} />
       {blocked ? <BlockedGuidance /> : null}
       {props.faultInjectionEnabled ? (
@@ -47,6 +49,12 @@ export function AgentDetailPage(props: {
           <p>
             実行中のAgentに例外を発生させます。次の処理開始時に実行が失敗し、失敗ログとタスク結果が記録されます。実行が終了済みの場合は適用されません。
           </p>
+          <ol class="test-flow" aria-label="異常系試験の流れ">
+            <li><b>01</b><strong>要求を登録</strong><span>現在のTaskを指定</span></li>
+            <li><b>02</b><strong>Runtimeで例外</strong><span>次の推論ステップで適用</span></li>
+            <li><b>03</b><strong>失敗を確認</strong><span>実行ログとアクティビティ</span></li>
+          </ol>
+          <p class="notice">実行の失敗とAgentの管理状態は別です。試験後も管理状態は ACTIVE のままです。</p>
           <label>
             <input type="checkbox" data-fault-consent="true" /> このAgentの実行を失敗させる
           </label>

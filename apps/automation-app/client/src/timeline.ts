@@ -45,12 +45,16 @@ export function start(root: Document = document): void {
   })();
   // Reload the server-rendered rows too, preserving the current agent filter in the URL.
   root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => root.location.reload());
-  root.querySelector<HTMLSelectElement>('[data-filter="outcome"]')?.addEventListener('change', (event) => {
-    const value = (event.target as HTMLSelectElement).value;
+  const outcome = root.querySelector<HTMLSelectElement>('[data-filter="outcome"]');
+  const search = root.querySelector<HTMLInputElement>('[data-filter="search"]');
+  const filter = (): void => {
+    const value = outcome?.value ?? 'all';
+    const query = search?.value.trim().toLocaleLowerCase() ?? '';
     let shown = 0;
     for (const button of buttons) {
-      const match = value === 'all' || button.getAttribute('data-status') === value
-        || button.getAttribute('data-outcome') === value;
+      const text = `${button.textContent} ${button.getAttribute('data-agent-id')}`.toLocaleLowerCase();
+      const match = (value === 'all' || button.getAttribute('data-status') === value
+        || button.getAttribute('data-outcome') === value) && text.includes(query);
       const row = button.closest<HTMLElement>('.task-row');
       if (row) row.hidden = !match;
       if (match) shown += 1;
@@ -61,7 +65,9 @@ export function start(root: Document = document): void {
     for (const panel of inspectors) panel.hidden = true;
     for (const button of buttons) button.setAttribute('aria-expanded', 'false');
     cancel?.();
-    if (status) status.textContent = `${shown} 件を表示`;
-  });
+    if (status) status.textContent = shown ? `${shown} 件を表示` : '条件に一致するタスクはありません。';
+  };
+  outcome?.addEventListener('change', filter);
+  search?.addEventListener('input', filter);
 }
 if (typeof document !== 'undefined') start();

@@ -4,6 +4,7 @@ import type { AutomationAppConfig } from '../config.js';
 import type { SessionStore } from '../auth/session-store.js';
 import { requireUser, type UserVariables } from '../auth/require-user.js';
 import { requireAgentOwner, type AgentOwnerVariables } from '../agents/require-owner.js';
+import { readFaultTrials } from '../agents/faults.js';
 import { readAgentStatus } from '../agents/status.js';
 import { readTimeline, type TimelineTask } from '../activity/query.js';
 import { createWorkDefinitionStore } from '../work-definition/store.js';
@@ -145,7 +146,8 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
     return context.html(await renderDocument(
       <Layout title="Agent の状況" styles={STYLES} script="/agent-detail.js">
-        <AgentDetailPage agentId={agentId} status={status} faultInjectionEnabled={deps.config.faultInjectionEnabled === true} />
+        <AgentDetailPage agentId={agentId} status={status}
+          faultTrials={deps.config.faultInjectionEnabled ? await readFaultTrials(deps.documents, agentId, now()) : []} faultInjectionEnabled={deps.config.faultInjectionEnabled === true} />
       </Layout>,
     ));
   });

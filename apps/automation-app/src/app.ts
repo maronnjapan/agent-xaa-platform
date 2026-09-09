@@ -9,6 +9,7 @@ import { requireAgentOwner, type AgentOwnerVariables } from './agents/require-ow
 import { readAnalysisRuns } from './security/query.js';
 import { AnalysisResults } from './ui/pages/security.js';
 import { StatusPanel } from './ui/components/status-panel.js';
+import { readFaultTrials } from './agents/faults.js';
 import { readAgentStatus } from './agents/status.js';
 import { stopAgent } from './agents/stop.js';
 import { addInstruction, AgentNotActive, FaultAlreadyPending } from './agents/instructions.js';
@@ -390,7 +391,8 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
   app.get('/api/agents/:agent_id/status-view', async (context) => {
     const status = await readAgentStatus({ documents: deps.documents, agentId: context.get('agentId'), now: now() });
     audit('status_read', context.get('agentId'), context.get('humanSubject'));
-    return context.html(String(await StatusPanel({ status })));
+    return context.html(String(await StatusPanel({ status, faultTrials: deps.config.faultInjectionEnabled
+      ? await readFaultTrials(deps.documents, context.get('agentId'), now()) : [] })));
   });
 
   app.get('/api/agents/:agent_id/status', async (context) => {

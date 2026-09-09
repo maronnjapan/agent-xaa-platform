@@ -87,3 +87,72 @@ describe('analysis monitoring privacy', () => {
     expect((await h.fetch('/security', { headers: { cookie: '' } })).status).toBe(302);
   });
 });
+
+
+describe('fault trial progress', () => {
+  it('ties confirmation to the exact request and preserves it when the task ends', async () => {
+    const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' } } });
+    const request = await (await postFault(h)).json() as { instruction_id: string };
+    const view = () => h.fetch(`/api/agents/${AGENT_ID}/status-view`).then((r) => r.text());
+    expect(await view()).toContain('data-trial-state="queued"');
+    await h.documents.update('agent_instructions', request.instruction_id, { applied_at: new Date().toISOString() });
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: {},
+      execution_state: { failure: 'injected_runtime_crash', fault_instruction_id: 'another-request' } } });
+    expect(await view()).toContain('data-trial-state="received"');
+    expect(await view()).not.toContain('data-trial-state="failed"');
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: {},
+      execution_state: { failure: 'injected_runtime_crash', fault_instruction_id: request.instruction_id } } });
+    expect(await view()).toContain('data-trial-state="failed"');
+    expect(await view()).toContain('実行の失敗を確認');
+    expect((await h.fetch(`/api/agents/${AGENT_ID}/status-view`, { headers: { cookie: '' } })).status).toBe(401);
+    await seedAgent(h, { humanSubject: 'another-person' });
+    expect((await h.fetch(`/api/agents/${AGENT_ID}/status-view`)).status).toBe(404);
+  });
+
+  it('shows an unapplied request after its task ends without blocking a new task', async () => {
+    const h = await startAutomationApp({ config: { faultInjectionEnabled: true } });
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-1' } } });
+    expect((await postFault(h)).status).toBe(202);
+    await seedAgent(h, { state: { agent_status: 'ACTIVE', task_context: { task_id: 'task-2' } } });
+    const html = await (await h.fetch(`/agents/${AGENT_ID}`)).text();
+    expect(html).toContain('data-trial-state="not_applied"');
+    expect((await postFault(h)).status).toBe(202);
+    expect((await postFault(h)).status).toBe(409);
+  });
+});
+
+it('projects score contributions and timing without forwarding nested private fields', async () => {
+  const shared = createFirestoreDouble();
+  const writer = createFirestoreDocumentStore(shared, 'security-detection');
+  await writer.set('security_analysis', 'explained', {
+    run_id: 'explained', human_subject: SUBJECT,
+    started_at: '2026-09-09T00:00:00Z', updated_at: '2026-09-09T00:00:04Z',
+    stage_started_at: '2026-09-09T00:00:01Z', stage_durations_ms: { collect: 1000, analyze: 3000, secret: 'private-time' },
+    status: 'completed', stage: 'respond', completed_stages: ['collect', 'analyze', 'respond'],
+    input_count: 1, normalized_count: 1, unmapped_count: 0, violation_count: 1, rule_hit_count: 1, error_code: null,
+    decisions: [{ finding_id: 'f-1', agent_id: AGENT_ID, codes: ['invalid_scope'], score: 45, level: 'MEDIUM',
+      state: 'skipped', reason: 'baseline_missing', response: null, confidence: null, transition: null,
+      score_breakdown: { critical_override: false, unmapped_count: 0, prompt: 'private-prompt',
+        contributions: [{ factor: 'authorization_violation', count: 4, per_event: 15, cap: 45, points: 45, raw_log: 'private-evidence' }] },
+    }],
+  });
+  const h = await startAutomationApp({ shared });
+  for (const path of ['/api/security/analysis', '/api/security/analysis-view', '/security']) {
+    const response = await h.fetch(path);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toMatch(/private-time|private-prompt|private-evidence|raw_log/);
+    if (path === '/api/security/analysis') {
+      const data = JSON.parse(text);
+      expect(data.runs[0].stage_durations_ms).toEqual({ collect: 1000, analyze: 3000 });
+      expect(data.runs[0].decisions[0].score_breakdown.contributions[0]).toEqual({
+        factor: 'authorization_violation', count: 4, per_event: 15, cap: 45, points: 45,
+      });
+    } else {
+      expect(text).toContain('スコアの算出根拠');
+      expect(text).toContain('1.0 秒');
+      expect(text).toContain('比較基準がないためAI分析を省略');
+    }
+  }
+});

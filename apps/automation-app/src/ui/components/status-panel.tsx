@@ -1,6 +1,7 @@
+import type { FaultTrial } from '../../agents/faults.js';
 import type { ExecutionFailure } from '@xaa/contracts';
 import type { AgentStatusResponse } from '../../agents/status.js';
-import { Metric, ResultMark } from './visual.js';
+import { Metric, ResultMark, formatTime } from './visual.js';
 import { OutcomeBadge } from './outcome-badge.js';
 import type { Element } from '../element.js';
 
@@ -16,7 +17,7 @@ const FAILURE_TEXT: Readonly<Record<ExecutionFailure, string>> = {
  * what has finished. It reads the status endpoint and nothing else, so there is no way
  * for a partial event stream to leak into it.
  */
-export function StatusPanel(props: { status: AgentStatusResponse }): Element {
+export function StatusPanel(props: { status: AgentStatusResponse; faultTrials?: FaultTrial[] }): Element {
   const calls = props.status.tool_invocations;
   const failure = props.status.execution_failure;
   return (
@@ -45,7 +46,25 @@ export function StatusPanel(props: { status: AgentStatusResponse }): Element {
           直近の実行は失敗しました。{FAILURE_TEXT[failure]}
         </p>
       ) : null}
-      <h3>実行ログ</h3>
+      {props.faultTrials?.length ? (
+        <section class="fault-history" aria-label="異常系試験の状態">
+          <h3>異常系試験の状態</h3>
+          {props.faultTrials.map((trial) => (
+            <div class="trial-row" data-trial-state={trial.state}>
+              <ResultMark outcome={trial.state === 'failed' ? 'failed' : trial.state === 'queued' ? 'running' : 'info'} />
+              <div><strong>{ { queued: '適用待ち', received: 'Runtimeが受信済み', failed: '実行の失敗を確認', not_applied: '対象Taskが実行中ではないため未適用' }[trial.state] }</strong>
+                <p><time datetime={trial.created_at}>{formatTime(trial.created_at)}</time> · {trial.task_id}</p>
+                <small>要求 ID: {trial.instruction_id}</small>
+                {trial.state === 'received' ? <p class="muted">受信後の結果はアクティビティで確認してください。</p> : null}
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+      <div class="section-heading"><h3>実行ログ</h3><span class="muted">{calls.length} STEPS</span></div>
+      {calls.length > 0 ? <ol class="execution-strip" aria-label="ツール実行の結果一覧">
+        {calls.map((call, index) => <li data-outcome={call.outcome}><ResultMark outcome={call.outcome} /><span>{String(index + 1).padStart(2, '0')}</span><span class="sr-only">{call.tool_id} {call.outcome}</span></li>)}
+      </ol> : null}
       <p class="muted">最新の実行スナップショット。完了した処理の履歴はアクティビティで確認できます。</p>
       {calls.length === 0 ? <p class="empty-state">まだツール実行の記録がありません。</p> : null}
       <ol class="tool-invocations event-stream">

@@ -1,7 +1,7 @@
 import type { NormalizedEvent } from '../normalize/index.js';
 import type { SecurityFinding } from '../correlate/finding.js';
 import { toLevel } from '../score/level.js';
-import { computeScore } from '../score/compute.js';
+import { explainScore } from '../score/compute.js';
 import type { ScoredBatch, CorrelatedBatch } from './types.js';
 
 export interface DispatchCounters {
@@ -27,14 +27,14 @@ export function score(batch: CorrelatedBatch, deps: Pick<DispatchDeps, 'financeR
     __stage: 'scored',
     events: batch.events,
     findings: batch.findings.map((finding) => {
-      const value = computeScore({
+      const { score: value, ...breakdown } = explainScore({
         finding,
         ...(deps.financeResourceUrl ? { financeResourceUrl: deps.financeResourceUrl } : {}),
         ...(deps.resourcesFor ? { resources: deps.resourcesFor(finding) } : {}),
         counters: { get unmapped_code_total() { return counters.unmapped_code_total; },
                     set unmapped_code_total(next: number) { counters.unmapped_code_total = next; } },
       });
-      return { ...finding, risk_score: value, risk_level: toLevel(value) };
+      return { ...finding, risk_score: value, risk_level: toLevel(value), score_breakdown: breakdown };
     }),
   };
 }

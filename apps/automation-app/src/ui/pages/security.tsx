@@ -1,6 +1,6 @@
 import { agentPagePath } from '../../agents/page-link.js';
 import { ANALYSIS_STAGES, LEVEL_BOUNDARIES, REVIEW_CONFIDENCE_FLOOR, type AnalysisRun } from '@xaa/contracts';
-import { Metric, formatTime } from '../components/visual.js';
+import { Metric, formatTime, formatDuration } from '../components/visual.js';
 import type { Element } from '../element.js';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -13,6 +13,16 @@ const STAGE_LABELS: Record<string, string> = {
   analyze: 'AI分析',
   respond: '対応判定',
 };
+const FACTOR_LABELS: Record<string, string> = {
+  protocol_violation: 'プロトコル違反', authorization_violation: '認可違反',
+  authorization_ai_anomaly: '認可AIの異常', behavior_deviation: '通常動作からの逸脱',
+  request_rate: 'リクエスト頻度', resource_sensitivity: '機密リソースへのアクセス',
+  cross_agent_activity: 'Agent間のアクセス', dpop_failure: 'DPoP検証失敗',
+  delegation_mismatch: '委任の不一致', signing_key_misuse: '署名鍵の不正使用',
+  privilege_escalation_attempt: '権限昇格の試行', agent_expiration_violation: '有効期限違反',
+  isolation_boundary_violation: '隔離境界の違反',
+};
+
 const REASONS: Record<string, string> = {
   below_ai_threshold: 'スコアがAI分析の閾値未満',
   awaiting_analysis: '分析の順番待ち',
@@ -89,6 +99,11 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
           {run.status === 'running' && props.now - Date.parse(run.updated_at) > 60_000 ? (
             <p class="notice">60秒以上進捗が更新されていません。処理の遅延または中断の可能性があります。</p>
           ) : null}
+          <div class="analysis-progress">
+            <span>{run.completed_stages.length} / {ANALYSIS_STAGES.length} 段階完了</span>
+            <span>経過 {formatDuration((run.status === 'running' ? props.now : Date.parse(run.updated_at)) - Date.parse(run.started_at))}</span>
+          </div>
+          <progress class="stage-progress" value={run.completed_stages.length} max={ANALYSIS_STAGES.length} aria-label="分析の進捗" />
           <ol class="pipeline">
             {ANALYSIS_STAGES.map((stage, index) => (
               <li
@@ -98,6 +113,11 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
               >
                 <span>{run.completed_stages.includes(stage) ? '✓' : index + 1}</span>
                 {STAGE_LABELS[stage]}
+                <small>{run.stage_durations_ms?.[stage] !== undefined
+                  ? formatDuration(run.stage_durations_ms[stage]!)
+                  : run.stage === stage && run.status === 'running' && run.stage_started_at
+                    ? `${formatDuration(props.now - Date.parse(run.stage_started_at))} 経過`
+                    : run.completed_stages.includes(stage) ? '完了' : run.stage === stage && run.status === 'failed' ? '失敗' : '待機'}</small>
               </li>
             ))}
           </ol>
@@ -145,7 +165,30 @@ export function AnalysisResults(props: { runs: readonly AnalysisRun[]; now: numb
                 value={item.score}
                 aria-label="リスクスコア"
               />
+              <div class="decision-route" aria-label="この検知の判断経路">
+                <span><small>検知スコア</small><b>{item.score} / 100</b></span>
+                <span aria-hidden="true">→</span>
+                <span><small>AI分析</small><b>{item.state === 'skipped' ? '省略' : item.state === 'queued' ? '待機' : item.state === 'analyzing' ? '実行中' : item.reason === 'analysis_run_failed' ? '中断' : '実施'}</b></span>
+                <span aria-hidden="true">→</span>
+                <span><small>対応</small><b>{STATES[item.state] ?? item.state}</b></span>
+              </div>
               <p>{REASONS[item.reason] ?? item.reason}</p>
+              {item.score_breakdown ? (
+                <details class="score-details">
+                  <summary>スコアの算出根拠</summary>
+                  {item.score_breakdown.critical_override ? <p class="notice">委任の不一致または署名鍵の不正使用を検知したため、加算結果によらず100点です。</p>
+                    : <p class="muted">要因ごとに「該当数 × 重み」を上限まで加算し、合計を100点で制限します。</p>}
+                  <p class="muted">該当数は検知コードの数です。リソースへの加点は対象へのアクセス有無で決まります。</p>
+                  <div class="table-scroll"><table>
+                    <thead><tr><th>要因</th><th>該当数 × 重み</th><th>上限</th><th>{item.score_breakdown.critical_override ? '通常計算' : '加点'}</th></tr></thead>
+                    <tbody>{item.score_breakdown.contributions.map((part) => <tr>
+                      <th>{FACTOR_LABELS[part.factor] ?? part.factor}</th><td>{part.count} × {part.per_event}</td><td>{part.cap}</td>
+                      <td><b>{part.points}</b><span class="contribution-bar" style={`width:${part.points}%`} /></td>
+                    </tr>)}</tbody>
+                  </table></div>
+                  {item.score_breakdown.unmapped_count > 0 ? <p class="notice">スコアへの対応がないコード: {item.score_breakdown.unmapped_count}件</p> : null}
+                </details>
+              ) : <p class="muted">この記録にはスコア内訳がありません。</p>}
               <div class="code-list">
                 {item.codes.map((code) => (
                   <code>{code}</code>
@@ -206,11 +249,12 @@ export function SecurityPage(props: { runs: readonly AnalysisRun[]; now: number 
         </button>
       </header>
       <section class="card policy-guide">
-        <h2>プラットフォームの判断条件</h2>
-        <p>
-          ログ配信を受けてルール検知・相関分析を実行し、検知結果のスコアが {LEVEL_BOUNDARIES.medium}{' '}
-          以上でAI分析を起動します。Agentの比較基準とAI接続が必要です。
-        </p>
+        <div class="section-heading"><h2>プラットフォームの判断条件</h2><span class="eyebrow">DECISION FLOW</span></div>
+        <ol class="policy-flow">
+          <li><span class="flow-number">01</span><h3>ログから検知</h3><p>受信 → 違反・ルール確認 → 相関分析</p><small>通常ログも記録。検知なしならAIは起動しません。</small></li>
+          <li><span class="flow-number">02</span><h3>AIの起動を判断</h3><p>スコア {LEVEL_BOUNDARIES.medium} 以上</p><small>比較基準とAI接続がそろった場合に分析します。</small></li>
+          <li><span class="flow-number">03</span><h3>対応を選ぶ</h3><p>確信度・推奨状態を確認</p><small>継続、自動で状態変更、人の確認待ちに分岐します。</small></li>
+        </ol>
         <div class="risk-bands">
           <span>LOW 0–{LEVEL_BOUNDARIES.medium - 1}</span>
           <span>
@@ -232,9 +276,10 @@ export function SecurityPage(props: { runs: readonly AnalysisRun[]; now: number 
           <input type="checkbox" data-monitor-auto="true" checked /> 5秒ごとに更新
         </label>
         <span role="status" data-monitor-status="true">
-          最新30件・自分に関連する分析のみ。判定は各実行時点の記録です。
+          自動更新を待っています。
         </span>
       </div>
+      <p class="muted">最新30件・自分に関連する分析のみ。判定は各実行時点の記録です。</p>
       <AnalysisResults {...props} />
     </main>
   );

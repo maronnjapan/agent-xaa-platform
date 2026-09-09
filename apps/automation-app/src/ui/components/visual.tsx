@@ -29,3 +29,17 @@ export function ResultMark(props: { outcome: string }): Element {
     </span>
   );
 }
+
+export function formatDuration(millis: number): string {
+  if (!Number.isFinite(millis)) return '—';
+  const seconds = Math.max(0, millis) / 1000;
+  if (seconds < 1) return `${Math.round(Math.max(0, millis))} ms`;
+  if (seconds < 60) return `${seconds.toFixed(1)} 秒`;
+  return `${Math.floor(seconds / 60)} 分 ${Math.floor(seconds % 60)} 秒`;
+}
+
+export function phaseLabel(phase: string): string {
+  const labels: Record<string, string> = { login: 'ログイン', work_definition: '作業定義', authorization: '権限確認',
+    provisioning: 'Agent準備', tool_call: 'ツール実行', security: 'セキュリティ', lifecycle: 'ライフサイクル' };
+  return labels[phase] ?? phase;
+}

@@ -79,8 +79,20 @@ async function injectFault(root: Document, button: HTMLButtonElement): Promise<v
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kind: 'runtime_crash' }),
     });
-    if (!response.ok) throw new Error(String(response.status));
-    if (status) status.textContent = '試験要求を受け付けました。次の処理開始時に適用されます。実行状態が FAILED になることを確認してください。';
+    const body = await response.json().catch(() => ({})) as { error?: string; instruction_id?: string };
+    if (!response.ok) {
+      const messages: Record<string, string> = {
+        agent_not_active: '現在実行中のTaskがありません。実行状況を更新してください。',
+        fault_already_pending: 'このTaskには試験要求が登録済みです。異常系試験の状態を確認してください。',
+        fault_injection_disabled: 'この環境では異常系試験が無効です。',
+      };
+      if (status) status.textContent = messages[body.error ?? ''] ?? failureMessage(response.status, body);
+      consent.disabled = false;
+      button.disabled = !consent.checked;
+      return;
+    }
+    if (status) status.textContent = `試験要求を受け付けました（${body.instruction_id ?? '受付済み'}）。次の処理開始時に適用されます。「異常系試験の状態」で実行の失敗を確認してください。Agentの管理状態は ACTIVE のままです。`;
+    root.querySelector<HTMLButtonElement>('[data-action="monitor-refresh"]')?.click();
   } catch {
     if (status) status.textContent = '試験要求を確認できませんでした。実行終了、要求済み、または通信エラーの可能性があります。状態を更新してください。';
     consent.disabled = false;

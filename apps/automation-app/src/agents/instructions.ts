@@ -56,7 +56,7 @@ export async function addInstruction(input: {
       const pending = await transaction.queryEqual<StoredInstruction>('agent_instructions', [
         ['agent_id', input.agentId], ['applied_at', null],
       ]);
-      if (pending.some((row) => row.data.fault)) throw new FaultAlreadyPending();
+      if (pending.some((row) => row.data.fault?.task_id === taskId)) throw new FaultAlreadyPending();
       instruction.fault = { kind: input.fault, task_id: taskId };
     }
     transaction.set('agent_instructions', instruction.instruction_id, instruction as unknown as Record<string, unknown>);

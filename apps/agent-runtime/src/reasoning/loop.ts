@@ -73,7 +73,7 @@ export async function runReasoningLoop(input: {
       if (instruction.fault) {
         if (instruction.fault.task_id === input.context.taskId) {
           const failure = FAULT_FAILURE[instruction.fault.kind];
-          executionState = { ...executionState, failure };
+          executionState = { ...executionState, failure, fault_instruction_id: instruction.instruction_id };
           // The closing checkpoint an ordinary end writes, and for the same reason:
           // this execution is over. `agent_status` stays the Lifecycle state (docs 07
           // §2), which the Runtime does not own — what failed is the execution, and

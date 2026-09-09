@@ -1,5 +1,5 @@
 import type { TimelineTask } from '../../activity/query.js';
-import { Metric, ResultMark, formatTime } from '../components/visual.js';
+import { Metric, ResultMark, formatTime, formatDuration, phaseLabel } from '../components/visual.js';
 import { OutcomeBadge } from '../components/outcome-badge.js';
 import { DetailDisclosure } from '../components/detail-disclosure.js';
 import { AgentGroup } from '../components/agent-group.js';
@@ -102,6 +102,7 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[] }): Element
             <option value="failed">失敗</option>
           </select>
         </label>
+        <label class="activity-search">検索<input type="search" data-filter="search" placeholder="作業名・Agent・Task ID" /></label>
         <span class="muted">時刻は日本時間 · タスクを選ぶと経路とログを表示</span>
       </div>
       <p role="status" data-timeline-status="true" />
@@ -140,19 +141,23 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[] }): Element
               </button>
             </header>
             <ReplayCanvas taskId={task.task_id} events={task.events} simulated={isSimulated(task)} />
-            <h3>イベントログ</h3>
+            <div class="section-heading"><h3>イベントログ</h3><span class="muted">{task.events.length} イベント · 記録区間 {formatDuration(Date.parse(task.completed_at) - Date.parse(task.events[0]?.occurred_at ?? task.completed_at))}</span></div>
+            <ol class="event-outline" aria-label="記録された処理の流れ">{task.events.map((event, index) => <li data-outcome={event.outcome}>
+              <span>{String(index + 1).padStart(2, '0')}</span><ResultMark outcome={event.outcome} /><strong>{phaseLabel(event.phase)}</strong>
+              <small>{event.source}</small><span class="sr-only">{event.outcome}</span>
+            </li>)}</ol>
             <ol class="event-stream">
-              {task.events.map((event) => (
+              {task.events.map((event, index) => (
                 <li data-outcome={event.outcome}>
                   <ResultMark outcome={event.outcome} />
                   <div class="event-content">
                     <div class="section-heading">
-                      <strong>{event.message}</strong>
+                      <strong><small class="step-label">STEP {String(index + 1).padStart(2, '0')}</small>{event.message}</strong>
                       <OutcomeBadge outcome={event.outcome} phase={event.phase} />
                     </div>
                     <p class="muted">
                       <time datetime={event.occurred_at}>{formatTime(event.occurred_at)}</time> ·{' '}
-                      {event.source} · {event.phase}
+                      {event.source} · {phaseLabel(event.phase)}
                     </p>
                     <DetailDisclosure
                       detail={event.detail as Record<string, unknown>}

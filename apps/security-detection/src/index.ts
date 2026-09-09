@@ -367,5 +367,6 @@ export default createApp;
 function decisionFor(finding: SecurityFinding, state: AnalysisDecision['state'], reason: string): AnalysisDecision {
   return { finding_id: finding.finding_id, agent_id: finding.agent_id,
     codes: [...finding.contributing_codes], score: finding.risk_score ?? 0, level: finding.risk_level ?? 'LOW',
-    state, reason, response: null, confidence: null, transition: null };
+    state, reason, response: null, confidence: null, transition: null,
+    ...(finding.score_breakdown ? { score_breakdown: finding.score_breakdown } : {}) };
 }
