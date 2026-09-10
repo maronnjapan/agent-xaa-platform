@@ -1,4 +1,4 @@
-import { compile, isExecutionFailure, type ExecutionFailure } from '@xaa/contracts';
+import { compile, isExecutionFailure, type ExecutionFailure, type ActivityRecord } from '@xaa/contracts';
 import type { DocumentStore } from '@xaa/gcp';
 import { agentStatusResponseSchema, AGENT_STATUS_RESPONSE_KEYS } from '../schemas/index.js';
 
@@ -8,6 +8,8 @@ export interface AgentStatusResponse {
   current_task: string | null;
   execution_failure: ExecutionFailure | null;
   tool_invocations: Array<{ tool_id: string; outcome: string; summary: string }>;
+  /** The Runtime's own account of each step so far, in order (docs 11 §3.4). */
+  execution_log: ActivityRecord[];
 }
 
 const assertResponse: (value: unknown) => asserts value is AgentStatusResponse =
@@ -36,6 +38,7 @@ export async function readAgentStatus(input: {
     task_context?: { task_id?: string };
     execution_state?: { failure?: unknown };
     pending_tool_calls?: Array<Record<string, unknown>>;
+    execution_log?: unknown[];
   }>('agents', `${input.agentId}__state`);
 
   const expiresAt = meta?.expires_at ? Date.parse(meta.expires_at) : now;
@@ -54,6 +57,11 @@ export async function readAgentStatus(input: {
       outcome: String(call.outcome ?? ''),
       summary: String(call.reason ?? call.error_code ?? ''),
     })),
+    // Forwarded whole rather than field by field, which is the one exception and needs
+    // to be: a record is a shape this app shares with the Runtime through
+    // `@xaa/contracts`, and `assertResponse` below validates every one of them against
+    // it. A Runtime that wrote something else fails here rather than reaching a screen.
+    execution_log: (state?.execution_log ?? []) as ActivityRecord[],
   };
   assertResponse(response);
   return response;

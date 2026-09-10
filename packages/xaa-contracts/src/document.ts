@@ -38,12 +38,18 @@ export const documentSchema = {
  * `owner_subject`, `document_id` and `version` are absent from the input schema on
  * purpose: the owner is the token's `sub`, the id is minted here and the version is
  * managed by the store. A body that carries them is rejected, not silently ignored.
+ *
+ * `occurred_at` is accepted but not required. The caller that has one is a seed or an
+ * importer restating when something already happened; an agent writing a document now
+ * has no such instant to state, and no clock either — the only date it could put in
+ * the field is one it made up. So the store stamps the moment it wrote the row, and
+ * the field stays available to the callers that genuinely know better.
  */
 export const documentCreateSchema = {
   $id: 'document-create',
   type: 'object',
   additionalProperties: false,
-  required: ['type', 'title', 'body', 'occurred_at'],
+  required: ['type', 'title', 'body'],
   properties: {
     type: { enum: DOCUMENT_TYPES },
     title: { type: 'string', minLength: 1, maxLength: 200 },

@@ -2,8 +2,10 @@
  * REQ-05-004 / REQ-02-013. core only checks that `openid` is present, so the
  * registered-scope narrowing lives here.
  *
- * `agent:operate` means "check status of a running agent and add instructions".
- * Stopping an agent is `agent:revoke`; it is deliberately not folded into operate.
+ * `agent:operate` means "operate the agents this person delegates to": check the
+ * status of a running agent, add instructions, and register a ToDo for one to carry
+ * out (the Automation App's `/external/todos` checks for it). Stopping an agent is
+ * `agent:revoke`; it is deliberately not folded into operate.
  */
 export const SUPPORTED_SCOPES = [
   'openid',
@@ -23,6 +25,11 @@ export type OperationScope = (typeof OPERATION_SCOPES)[number];
 export const CLIENT_ALLOWED_SCOPES: Readonly<Record<string, readonly SupportedScope[]>> = {
   'automation-app': ['openid', 'profile', 'workdef:submit', 'agent:provision', 'agent:revoke', 'agent:operate'],
   'agent-platform': ['openid', 'offline_access'],
+  // A name and nothing else. The console reads its own Firestore rows as itself and
+  // calls no Control Plane API, so an operation scope here would be a permission it
+  // has no use for — and would pull the blanket DPoP requirement in with it
+  // (`blanketDpopApplies` is read off this table).
+  'analysis-console': ['openid', 'profile'],
 };
 
 export const UNREGISTERED_SCOPE_DESCRIPTION = 'Requested scope is not registered for this client';

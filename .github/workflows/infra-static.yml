@@ -8,5 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The checks need no credentials, but one of them — no-firestore-sdk-in-frontend —
+      # scans the browser bundle, which is build output and is not committed. It fails
+      # when the file is absent rather than reporting success on an empty scan, so the
+      # bundle is built here. Nothing else in this job needs Node.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:client
       - name: Run credential-free infrastructure checks
         run: bash infra/tests/static-all.sh

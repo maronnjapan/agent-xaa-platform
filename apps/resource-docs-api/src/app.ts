@@ -1,4 +1,6 @@
 import { Hono, type Context } from 'hono';
+import { ADMIN_CONSOLE_CSS, ADMIN_STYLESHEET_PATH } from '@xaa/admin-ui';
+import { adminConsoleAuth, type AdminConsoleVariables } from '@xaa/control-plane-auth';
 import { DOCS_SCOPES, TOOL_IDS } from '@xaa/contracts';
 import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
 import { createLogger, type Logger } from '@xaa/logging';
@@ -9,8 +11,9 @@ import {
 } from '@xaa/resource-guard';
 import { createDocumentRepository } from './store/documents.js';
 import { createDocumentRoutes, DOCUMENT_OPERATIONS } from './routes/documents.js';
+import { createAdminDocumentRoutes } from './routes/admin-documents.js';
 
-type Env = { Variables: { xaa: XaaResourceContext } };
+type Env = { Variables: { xaa: XaaResourceContext } & AdminConsoleVariables['Variables'] };
 
 export interface DocsApiDeps {
   documents: DocumentStore;
@@ -27,6 +30,15 @@ export interface DocsApiDeps {
   automationAppServiceAccount?: string;
   /** Injectable so a caller and this app agree on one ledger instance. */
   revocationLedger?: RevocationLedger;
+  /**
+   * The document console (docs 04 §2.1). Empty leaves it reachable by nobody, which is
+   * what an unconfigured deployment should be rather than an open one.
+   */
+  adminPrincipals?: readonly string[];
+  /** The service's own public base URL: the audience an administrator's token names. */
+  publicBaseUrl?: string;
+  /** Test seam: resolves a console bearer token to the account it names. */
+  verifyAdmin?(token: string, audience: string): Promise<string | null>;
 }
 
 /** A write needs `docs.write`; everything else needs `docs.read` (specs §5.1). */
@@ -82,6 +94,36 @@ function createApp(deps: DocsApiDeps): Hono {
   });
   app.use('/documents/*', protect);
   app.route('/documents', createDocumentRoutes(repository));
+
+  /**
+   * The document console, behind its own guard.
+   *
+   * It is a separate door on the same rows: `protect` above answers an agent's
+   * DPoP-bound XAA Access Token, and this answers an administrator's Google-signed
+   * identity token for an account in `ADMIN_PRINCIPALS`. The service is not on the
+   * public surface (RULE-37), so the console is reached through
+   * `gcloud run services proxy`, which is what attaches that token.
+   *
+   * The stylesheet sits inside `/admin` so it is behind the same guard as the screens:
+   * a path outside it would be one route on this service reachable without an
+   * administrator's token, and "it is only CSS" is the argument that ends with a second
+   * such route.
+   */
+  if (deps.publicBaseUrl) {
+    app.use('/admin/*', adminConsoleAuth({
+      audience: deps.publicBaseUrl,
+      allowedPrincipals: deps.adminPrincipals ?? [],
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      ...(deps.verifyAdmin ? { verify: deps.verifyAdmin } : {}),
+      onRefusal: (reason) => logger.warning('admin.refused', {
+        request_id: '', trace_id: '', agent_id: null, human_subject: null,
+      }, { reason }),
+    }));
+    app.get(ADMIN_STYLESHEET_PATH, (context) =>
+      context.body(ADMIN_CONSOLE_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8' }));
+    app.route('/admin', createAdminDocumentRoutes({ repository, logger }));
+  }
+
   return app as unknown as Hono;
 }
 

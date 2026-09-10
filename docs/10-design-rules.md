@@ -83,7 +83,7 @@
 | RULE-34 | 実行系と監査ログを同一 GCP Project 内で、BigQuery dataset と Service Account と IAM で分離する。Platform 側の Service Account に監査 dataset の削除権限を与えない。同一プロジェクトの Owner は実行系と監査ログの両方に届くため、プロジェクトを分ける構成より保護は弱い | [08. §1](./08-gcp-infrastructure.md#1-gcp-projectと監査領域の構成) |
 | RULE-35 | 責務分離はService Account、IAM、KMS Key、Secret、DB Userで行う。アプリごとに専用のService Accountを作り、デフォルトService Accountを使わない | [08. §4](./08-gcp-infrastructure.md#4-gcp-service-accountとは)、[08. §5](./08-gcp-infrastructure.md#5-service-account一覧) |
 | RULE-36 | Cloud Run IAMはXAAの代替ではない。IAMは「どのアプリが呼べるか」、ID-JAGは「どのAgentとして何にアクセスできるか」を決める | [08. §8](./08-gcp-infrastructure.md#8-ネットワークと公開範囲) |
-| RULE-37 | Internetへ公開するのは、Automation App、Google BridgeとAgent OPのOAuth Callback、issuerのメタデータとJWKSだけとする | [08. §8](./08-gcp-infrastructure.md#8-ネットワークと公開範囲) |
+| RULE-37 | Internetへ公開するのは、人がログインして開く画面（Automation App、Analysis Console）、Google BridgeとAgent OPのOAuth Callback、issuerのメタデータとJWKSだけとする | [08. §8](./08-gcp-infrastructure.md#8-ネットワークと公開範囲) |
 | RULE-53 | 共有 JWKS はアプリではなく Cloud Storage から配信する。各アプリは自分専用のオブジェクト `keys/<prefix>-<kid>.json` だけを書き、`jwks.json` への集約は jwks-publish Job が行う | [08. §2.1](./08-gcp-infrastructure.md#21-human-idpとagent-opの配置) |
 
 ## 監視

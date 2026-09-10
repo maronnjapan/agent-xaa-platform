@@ -70,6 +70,56 @@ describe('Document API', () => {
     expect(created.status).toBe(400);
   });
 
+  /**
+   * The shape an agent can actually send. `internal.document.create` declares `type`,
+   * `title` and `body` and nothing else, because the Runtime drops every argument the
+   * Tool Catalog did not declare and an agent has no clock to date the document with.
+   * The write has to succeed on those three alone, or the tool is unusable.
+   */
+  it('creates a document from the three fields an agent can supply', async () => {
+    const { docs, accessToken, keyPair } = await writer();
+    const created = await callResource(docs, {
+      method: 'POST', path: '/documents', accessToken, keyPair, toolId: 'internal.document.create',
+      body: { type: 'note', title: '調べたこと', body: '本文' },
+    });
+    expect(created.status).toBe(201);
+    const documentId = (await created.json() as { document_id: string }).document_id;
+    const fetched = await callResource(docs, { method: 'GET', path: `/documents/${documentId}`, accessToken, keyPair });
+    const document = await fetched.json() as { occurred_at: string; created_at: string };
+    // Dated by the write itself, so the row still sorts and filters like any other.
+    expect(document.occurred_at).toBe(document.created_at);
+    expect(Number.isFinite(Date.parse(document.occurred_at))).toBe(true);
+  });
+
+  /**
+   * The whole of what an agent can do to an existing document, using only what the Tool
+   * Catalog declares and only what a read gives back. The version is the part that made
+   * this impossible: `internal.document.update` sends the optimistic lock the API
+   * insists on, and the only place an agent can read one is the document itself.
+   */
+  it('updates a document from the version its own read returned', async () => {
+    const { docs, accessToken, keyPair } = await writer();
+    const documentId = await seedDocument(docs, 'testuser', { title: 'original' });
+
+    const read = await callResource(docs, {
+      method: 'GET', path: `/documents/${documentId}`, accessToken, keyPair, toolId: 'internal.document.get',
+    });
+    const { version } = await read.json() as { version: number };
+    expect(version).toBe(1);
+
+    const patched = await callResource(docs, {
+      method: 'PATCH', path: `/documents/${documentId}`, accessToken, keyPair, toolId: 'internal.document.update',
+      body: { version, title: '改題', body: '書き直した本文' },
+    });
+    expect(patched.status).toBe(200);
+    expect((await patched.json() as { version: number }).version).toBe(2);
+
+    const after = await callResource(docs, { method: 'GET', path: `/documents/${documentId}`, accessToken, keyPair });
+    const document = await after.json() as { title: string; body: string };
+    expect(document.title).toBe('改題');
+    expect(document.body).toBe('書き直した本文');
+  });
+
   it('answers 409 on a stale version and leaves the record alone', async () => {
     const { docs, accessToken, keyPair } = await writer();
     const documentId = await seedDocument(docs, 'testuser', { title: 'original' });

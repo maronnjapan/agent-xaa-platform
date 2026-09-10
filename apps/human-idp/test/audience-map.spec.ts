@@ -18,8 +18,18 @@ describe('scope to audience', () => {
     expect(decideAudience(['openid', 'offline_access'], undefined)).toEqual({ outcome: 'none' });
   });
 
-  it('rejects two operation scopes that map to different audiences', () => {
+  it('gives two operation scopes no audience rather than one of them', () => {
+    // The consent request the Automation App makes: every scope it will need, named
+    // once. No Access Token audience follows from it, so the token it produces is
+    // addressed to the UserInfo endpoint alone and opens no Control Plane app.
     expect(decideAudience(['openid', 'workdef:submit', 'agent:provision'], undefined))
+      .toEqual({ outcome: 'none' });
+    expect(decideAudience(['openid', 'agent:operate', 'workdef:submit', 'agent:provision', 'agent:revoke'], undefined))
+      .toEqual({ outcome: 'none' });
+  });
+
+  it('still refuses to address two operation scopes to one named audience', () => {
+    expect(decideAudience(['openid', 'workdef:submit', 'agent:provision'], ['agent-provisioner']))
       .toEqual({ outcome: 'error', error: 'invalid_scope' });
   });
 

@@ -2,10 +2,14 @@
  * The moving part of a replay.
  *
  * A step is a circle travelling along the path between two boxes. The duration is a
- * custom property the script sets from REPLAY_STEP_MS, so the picture is paced by the
+ * custom property the script sets from REPLAY_MOTION_MS, so the picture is paced by the
  * same constant the sequencing uses and the two cannot drift apart; nothing here knows
  * how long the step really took, because a replay shows the order of what happened,
  * not its duration (REQ-11-025).
+ *
+ * The motion is shorter than the step, so every step ends with the picture standing
+ * still for a moment. That pause is where a person reads the caption; without it the
+ * next step wiped the frame at the instant the dot landed on it.
  *
  * `animation-fill-mode: forwards` with a single iteration is what leaves the result
  * standing at the end. A replay that looped would make a viewer doubt whether what they
@@ -17,13 +21,17 @@
   margin: 1rem 0;
 }
 
+/*
+ * Capped rather than stretched. The boxes sit at fixed coordinates so two replays of
+ * the same system line up (DEC-APP-06), which means a task that only involves the
+ * lower row leaves the upper half of the frame empty. Letting the picture fill the
+ * column turned that gap into the largest thing on the page.
+ */
 .replay-canvas {
-  width: 100%;
-  /* The boxes are placed at written-down coordinates (see `nodes.ts`), so past the
-     diagram's own width the picture gains empty space rather than detail. */
-  max-width: 720px;
-  height: auto;
   display: block;
+  width: 100%;
+  max-width: 38rem;
+  height: auto;
 }
 
 .replay-node rect {
@@ -51,10 +59,19 @@
   stroke-dasharray: 4 3;
 }
 
+/*
+ * The line itself: edge to edge, and around anything in between.
+ *
+ * `stroke-linejoin: round` is for the one shape a straight line cannot make — a hop
+ * whose two boxes have a third between them leaves its row, runs along the empty band
+ * and comes back, and a square corner on that detour reads as two separate arrows.
+ */
 .replay-arrow {
   fill: none;
   stroke: #97a6b2;
   stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
 .replay-dot {
@@ -62,7 +79,7 @@
   offset-distance: 0%;
   offset-rotate: 0deg;
   animation-name: replay-travel;
-  animation-duration: var(--step-ms, 1s);
+  animation-duration: var(--motion-ms, 1.2s);
   animation-timing-function: ease-in-out;
   animation-iteration-count: 1;
   animation-fill-mode: forwards;
@@ -113,14 +130,380 @@
   fill: #6d1111;
 }
 
-.replay-messages {
-  margin: 0.5rem 0 0;
-  padding-left: 1.2rem;
-  font-size: 0.9rem;
-}
-
 .simulated-canvas {
   position: absolute;
   top: 0.25rem;
   right: 0.25rem;
+}
+
+/*
+ * The controls, the captions inside each box, and the legend.
+ *
+ * A replay that could only be watched once, at one speed, was a film. The step a person
+ * wants is the one that says something surprising, and they want to stop on it and read
+ * the record underneath.
+ */
+.replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.replay-controls button {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.replay-progress {
+  color: #5b5b66;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-node .node-label {
+  font-size: 13px;
+  fill: #24313b;
+}
+
+/* What the box is for. Smaller and lighter: it is a caption, not the name. */
+.replay-node .node-role {
+  font-size: 10.5px;
+  fill: #5f7080;
+}
+
+.replay-legend {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.replay-legend > summary {
+  cursor: pointer;
+  color: #5b5b66;
+}
+
+.replay-legend ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+  color: #5b5b66;
+}
+
+/*
+ * Which written entry the picture is on.
+ *
+ * Three states, because a person who paused halfway needs to see the boundary between
+ * what has been shown and what has not. The current one is moved and brightened rather
+ * than merely tinted, so it is findable on a long list without scanning colours.
+ */
+.event-entry[data-entry-state="current"] {
+  background: #f2f7fd;
+  box-shadow: 0 0 0 2px #2f6fb5;
+}
+
+.event-entry[data-entry-state="waiting"] {
+  opacity: 0.55;
+}
+
+/* Nothing has played yet, so nothing is dimmed: the log reads on its own. */
+.event-log[data-log-state="idle"] .event-entry[data-entry-state="waiting"] {
+  opacity: 1;
+}
+
+/*
+ * The words on the picture.
+ *
+ * A dot on its own says "something went from here to there". The name beside the arrow
+ * says which exchange it was, the lit boxes say who was involved, and the caption
+ * under the picture carries the publisher's own sentence for the step. All of it is
+ * placed here and written nowhere here: every string comes from a hop, an event, or
+ * the boxes' fixed captions.
+ *
+ * The name is drawn in the empty bands above, below and between the rows, never over a
+ * box. The white halo is still worth keeping: a name in the band between the rows can
+ * sit across the line it belongs to, and a word broken by its own arrow is unreadable.
+ */
+.replay-arrow-label {
+  font-size: 10.5px;
+  fill: #35506a;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.replay-arrow-label[data-label-emphasis="ev-blocked-tool"] { fill: #6b4a06; }
+.replay-arrow-label[data-label-emphasis="ev-blocked-security"] { fill: #6d1111; font-weight: 700; }
+
+.replay-node[data-active="from"] rect,
+.replay-node[data-active="to"] rect,
+.replay-node[data-active="self"] rect {
+  fill: #eef5ff;
+  stroke: #2f6fb5;
+  stroke-width: 2.5;
+}
+
+.replay-node[data-active="to"] rect { fill: #e3efff; }
+
+/* A step that stayed inside one box: a ring that swells around it and fades. */
+.replay-pulse {
+  fill: none;
+  stroke: #2f6fb5;
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: replay-pulse;
+  animation-duration: var(--motion-ms, 1.2s);
+  animation-timing-function: ease-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+.replay-pulse[data-pulse-emphasis="ev-success"] { stroke: #1d5c33; }
+.replay-pulse[data-pulse-emphasis="ev-blocked-tool"] { stroke: #d8a94f; }
+.replay-pulse[data-pulse-emphasis="ev-blocked-security"] { stroke: #a32020; stroke-width: 3; }
+
+@keyframes replay-pulse {
+  from { opacity: 1; transform: scale(0.96); }
+  70% { opacity: 0.6; transform: scale(1.06); }
+  to { opacity: 0.25; transform: scale(1.06); }
+}
+
+.replay-caption {
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid #d5d5dd;
+  border-left: 4px solid #97a6b2;
+  border-radius: 6px;
+  background: #ffffff;
+  max-width: 38rem;
+  box-sizing: border-box;
+}
+
+.replay-caption[data-caption-state="idle"] { color: #5b5b66; }
+.replay-caption[data-caption-state="playing"] { border-left-color: #2f6fb5; }
+.replay-caption[data-caption-emphasis="ev-success"] { border-left-color: #1d5c33; }
+.replay-caption[data-caption-emphasis="ev-blocked-tool"] { border-left-color: #d8a94f; background: #fdf8ee; }
+.replay-caption[data-caption-emphasis="ev-blocked-security"] { border-left-color: #a32020; background: #fdf6f5; }
+
+.caption-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #5b5b66;
+}
+
+.caption-step { font-variant-numeric: tabular-nums; }
+.caption-route { font-weight: 700; color: #24313b; }
+.caption-label { color: #35506a; }
+
+.caption-message {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+}
+
+.replay[data-replay-state="idle"] .caption-head { display: none; }
+
+/*
+ * The picture and the reasoning, side by side.
+ *
+ * They are one step's two halves — what moved, and why it moved — so they are read
+ * together or not at all. On a narrow screen they stack, picture first, because the
+ * picture is what a person pressed play for.
+ */
+.replay-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 39rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 68rem) {
+  .replay-stage { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* How far through the steps the replay is, as a bar rather than only as a count. */
+.replay-track {
+  flex: 1 1 6rem;
+  min-width: 4rem;
+  height: 4px;
+  border-radius: 2px;
+  background: #e3e6ea;
+  overflow: hidden;
+}
+
+.replay-track-fill {
+  display: block;
+  height: 100%;
+  background: #2f6fb5;
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* A box can be pressed for the longer description of what it is. */
+.replay-node { cursor: pointer; }
+.replay-node:focus-visible rect { stroke: #1a4f9c; stroke-width: 3; }
+
+.replay-role-open {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.replay-role-open button {
+  padding: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+/*
+ * What the agent was thinking on the step the picture is on.
+ *
+ * The diagram answers "what went where"; this answers "why". Every word in it is a
+ * label, a message, a quotation or a value the publisher wrote — the panel supplies the
+ * four headings and the marks beside the verdicts, and nothing else (RULE-54).
+ */
+.thinking {
+  padding: 0.75rem 1rem;
+  border: 1px solid #d5d5dd;
+  border-radius: 8px;
+  background: #fbfcfe;
+  font-size: 0.9rem;
+  min-height: 12rem;
+  box-sizing: border-box;
+}
+
+.thinking-caption {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #5b5b66;
+  letter-spacing: 0.02em;
+}
+
+.thinking-idle,
+.thinking-none {
+  margin: 0;
+  color: #5b5b66;
+}
+
+.thinking-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.25rem;
+}
+
+.thinking-actor {
+  font-weight: 700;
+  color: #24313b;
+}
+
+.thinking-actor-role,
+.thinking-step {
+  font-size: 0.8rem;
+  color: #5f7080;
+}
+
+.thinking-step {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.thinking-headline {
+  margin: 0 0 0.6rem;
+  font-weight: 700;
+  color: #1b1b1f;
+}
+
+.thinking-beat {
+  margin: 0.6rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e7e9ee;
+}
+
+.thinking-beat-heading {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  color: #5b5b66;
+  font-weight: 700;
+}
+
+/* The four beats read as a sequence, so each carries its own mark down the left. */
+.thinking-beat[data-beat="read"] { border-left: 3px solid #9db4c8; padding-left: 0.6rem; }
+.thinking-beat[data-beat="thought"] { border-left: 3px solid #7c6bb5; padding-left: 0.6rem; }
+.thinking-beat[data-beat="decided"] { border-left: 3px solid #2f6fb5; padding-left: 0.6rem; }
+.thinking-beat[data-beat="checks"] { border-left: 3px solid #1d5c33; padding-left: 0.6rem; }
+
+.thinking-label {
+  margin: 0.35rem 0 0.1rem;
+  font-weight: 700;
+  color: #24313b;
+}
+
+.thinking-message {
+  margin: 0 0 0.25rem;
+  color: #4a5560;
+}
+
+/* The model's own words, set as a quotation so they are not read as the screen's. */
+.thinking-quote {
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.7rem;
+  border-left: 3px solid #7c6bb5;
+  background: #f7f5fc;
+  white-space: pre-wrap;
+}
+
+.thinking-text {
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.6rem;
+  background: #f4f5f7;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thinking-fields {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.thinking-fields th {
+  width: 9rem;
+  padding: 0.15rem 0.4rem 0.15rem 0;
+  text-align: left;
+  color: #5b5b66;
+  font-weight: 400;
+  vertical-align: top;
+}
+
+.thinking-fields td {
+  padding: 0.15rem 0;
+  word-break: break-word;
+}
+
+.thinking-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thinking-checks li {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr;
+  gap: 0.15rem 0.5rem;
+  margin: 0.3rem 0;
+}
+
+.thinking-checks .check-message {
+  grid-column: 2;
+  color: #4a5560;
+  font-size: 0.85rem;
 }

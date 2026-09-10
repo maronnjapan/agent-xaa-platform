@@ -8,6 +8,18 @@
  */
 export const TASK_ID_PATTERN = /^(provisioning|lifecycle|task-[1-9][0-9]*|demo-[a-z-]+)$/;
 
+/**
+ * The task id an agent's first Execution runs under.
+ *
+ * It exists because the caller has to pass *something*, and the only ids the timeline
+ * can group by are the four shapes above. A work definition id was passed here for a
+ * while: `wd_<uuid>` fails `TASK_ID_PATTERN`, so `classifyTaskId` answered null and
+ * `readTimeline` dropped every event the agent produced — silently, since a task with
+ * no kind has nothing to be filed under. Nothing was broken, nothing was logged, and
+ * the timeline simply showed no agent activity at all.
+ */
+export const INITIAL_TASK_ID = 'task-1';
+
 export type TaskKind = 'provisioning' | 'task' | 'lifecycle' | 'demo';
 
 export const TERMINAL_EVENTS = {

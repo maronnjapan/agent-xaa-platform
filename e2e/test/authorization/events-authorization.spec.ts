@@ -24,7 +24,7 @@ async function decide(options: { humanPermissions?: string[]; failActivityPublis
   const response = await submitWorkRequest({
     authz,
     grant: await controlPlaneGrant(),
-    body: { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_hours: 8 },
+    body: { purpose: '書類整理', description: '書類を読んで整理する', requested_lifetime_minutes: 480 },
   });
   return { authz, response, body: await response.clone().json() as { decision_id: string } };
 }

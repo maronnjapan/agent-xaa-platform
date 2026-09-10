@@ -43,7 +43,7 @@
 | REQ-02-004 | 承認レコードと Capability ハッシュ照合を実装する | [02.](./02-automation-design.md) | T-APP-10 | planned |
 | REQ-02-005 | Work Definition のデータモデルと DRAFT / CONFIRMED 遷移を実装する | [02.](./02-automation-design.md) | T-APP-07 | planned |
 | REQ-02-006 | 権限とResourceとIsolationの語彙を持ち込まない検査を作る | [02.](./02-automation-design.md) | T-APP-11 | planned |
-| REQ-02-007 | requested_lifetime_hours の範囲検証と UI 初期値を実装する | [02.](./02-automation-design.md) | T-APP-08 | planned |
+| REQ-02-007 | requested_lifetime_minutes の範囲検証と UI 初期値を実装する | [02.](./02-automation-design.md) | T-APP-08 | planned |
 | REQ-02-008 | Business Work Request の送信を実装する | [02.](./02-automation-design.md) | T-APP-09 | planned |
 | REQ-02-009 | Business Work Request の受信側スキーマ検証を実装する | [02.](./02-automation-design.md) | T-AUTHZ-09 | planned |
 | REQ-02-010 | human_subject 照合ミドルウェアを実装する | [02.](./02-automation-design.md) | T-AUTHZ-07 | planned |
@@ -430,3 +430,11 @@
 | REQ-11-039 | デモ専用画面と UI 側の判断ロジックを排除する | [11.](./11-activity-timeline.md) | T-APP-34 | planned |
 | REQ-11-040 | 横断閲覧と記録スイッチを作らないことを固定する | [11.](./11-activity-timeline.md) | T-APP-25 | planned |
 | REQ-11-041 | Firestore データベースと activity の TTL を作る | [11.](./11-activity-timeline.md) | T-IAC-23 | planned |
+| REQ-11-042 | Activity Record を定義し、発行元が人間向けの内訳を書けるようにする | [11.](./11-activity-timeline.md) | T-APP-19 | planned |
+| REQ-11-043 | Tool 呼び出しごとに、要求と応答と実行前の検証を記録する | [11.](./11-activity-timeline.md) | T-RUN-25 | planned |
+| REQ-11-044 | Agent 自身が書いた文章を記録し、そのまま表示する | [11.](./11-activity-timeline.md) | T-RUN-25 | planned |
+| REQ-11-045 | Tool 呼び出しの経路を hop として記録し、再生で1本ずつ動かす | [11.](./11-activity-timeline.md) | T-APP-29 | planned |
+| REQ-11-046 | 再生に再生・一時停止・次へ・最初からの操作を付ける | [11.](./11-activity-timeline.md) | T-APP-30 | planned |
+| REQ-11-047 | 完了した Task の内訳をサーバー側で文章として描画する | [11.](./11-activity-timeline.md) | T-APP-26 | planned |
+| REQ-11-048 | Agent 画面に、実行中でも読める実行ログを出す | [11.](./11-activity-timeline.md) | T-APP-24 | planned |
+| REQ-11-049 | Agent の Execution が使う task_id を、再生の単位に合わせる | [11.](./11-activity-timeline.md) | T-APP-20 | planned |

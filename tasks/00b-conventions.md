@@ -177,6 +177,7 @@
 | `APP_NAME` | T-IAC-08（共通 env に追加） | T-IAC-25 の `firestore-guard.ts` | `access-matrix.json` のキーと一致するアプリ名 |
 | `ENABLE_GOOGLE_BRIDGE` | T-IAC-26（seed Job） | T-IAC-26 の `apps/seed/src/index.ts` | `true` または `false` |
 | `ALLOWED_CALLER_SAS` | T-IAC-08 | T-LIFE-01 の `internal-oidc.ts` | 許可 SA email の CSV |
+| `ADMIN_PRINCIPALS` | T-IAC-08（`authorization` と `provisioner` の service_specific_env） | `apps/authorization/src/config.ts` と `apps/provisioner/src/runtime.ts` | 管理コンソールを操作できる Google アカウント email の CSV。未設定は空で、だれも操作できない |
 | `DPOP_IAT_SKEW_SECONDS` | T-IAC-08 | T-AUTHZ-01 | 既定 60 |
 | `DPOP_JTI_TTL_SECONDS` | T-IAC-08 | T-AUTHZ-01 / T-IDP-18 | 既定 120 |
 
@@ -187,7 +188,7 @@
 | `agents/{agent_id}` | サブドキュメントの親のみ。フィールドを持たせない | なし | なし |
 | `agents/{agent_id}/meta` | Agent Registration の17キー。`agent_id` `human_subject` `client_auth` `idp_connection_id` `allowed_audiences` `resources` `scopes` `created_at` `expires_at` `status` `dedicated_op` `isolation_level` `registration_id` `kms_key_name` `job_execution_name` `bridge_binding_ids` `cleanup_step_results`。`additionalProperties: false`。`issuer` `subject` `api_base_url` `api_method` `api_path` `tool_id` を持たせない | T-PROV-19 の `registration-writer.ts`（`createRegistration` と `deleteRegistration` の2関数）と T-LIFE-02 の `status-writer.ts`（`status` と `cleanup_step_results` のみ） | T-OP-02 / T-OP-19 / T-RUN-04 / T-APP-12 / T-APP-13 / T-LIFE-03 |
 | `agents/{agent_id}/state` | Agent の作業状態 | T-RUN | T-APP-12（read のみ） |
-| `agents/{agent_id}/instructions` | 追加指示 | T-APP-12 | T-RUN |
+| `agents/{agent_id}/instructions` | 追加指示。物理コレクションは `agent_instructions`。`instruction_id` `agent_id` `text` `created_at` `created_by` `applied_at` の6キー。本文のキーは `text` であり `body` ではない（読む側が `body` を読んでいたため、指示は本文の無い1ターンとして Agent へ届いていた）。Agent 作成直後の1件目には、確定した Work Definition の本文を T-APP-12 が書く。Runtime へ作業内容を渡す経路はこれだけである | T-APP-12 | T-RUN |
 | `agents/{agent_id}/manifest` | Tool Manifest の写し | T-PROV-06 | T-RUN-06 |
 | `idp_connections/{idp_connection_id}` | Refresh Token の封筒暗号値と `status` と `expires_at` | T-OP-27 / T-OP-28 | T-OP-26 / T-PROV-17 / T-LIFE-06 |
 | `consents/{consent_id}` | Human の同意記録 | T-IDP | T-IDP |
@@ -198,7 +199,7 @@
 | `provisioning_transactions/{transaction_id}` | 8値の `status` と許可遷移表 | T-PROV-13 | T-PROV-16 / T-OP-25 |
 | `catalog_connectors/{connector_id}` | `resource_type` `authorization_audience` `authorization_resource` `bridge_audience` `status` `risk_level` `tools` | T-IAC-26 の seed のみ | T-PROV-03 / T-BRIDGE-03 |
 | `catalog_tools/{tool_id}` | `tool_id` `connector_id` `description` `required_capability` `authorization`（map、キーは `type` `audience` `resource` `scope`）`token_provider` `api`（map、キーは `base_url` `method` `path`）`parameters` `constraints` `response_schema` `risk_level` の11キーの入れ子形 | T-IAC-26 の seed のみ | T-PROV-03 / T-PROV-05 / T-AUTHZ-17 |
-| `connector_definitions/{connector_id}` | Bridge が読む接続先の12キー（`connector_id` `display_name` `authorization_endpoint` `token_endpoint` `revocation_endpoint` `userinfo_endpoint` `client_id` `secret_name` `default_scopes` `subject_claim` `connection_max_age_seconds` `resource_uris`）。`client_secret` を持たず `secret_name` で Secret Manager を指す。`enable_google_bridge=true` のときだけ行があり、`saas_connector_mode` に応じて `stub-saas-calendar` か `google-workspace` の1件 | T-IAC-26 の seed のみ | T-BRIDGE-02 |
+| `connector_definitions/{connector_id}` | Bridge が読む接続先の必須12キー（`connector_id` `display_name` `authorization_endpoint` `token_endpoint` `revocation_endpoint` `userinfo_endpoint` `client_id` `secret_name` `default_scopes` `subject_claim` `connection_max_age_seconds` `resource_uris`）と、任意の `scope_map`（この platform の scope 名から SaaS 自身の名前への写像。SaaS が同じ名前を使う場合は持たない）。`client_secret` を持たず `secret_name` で Secret Manager を指す。`enable_google_bridge=true` のときだけ行があり、`saas_connector_mode` によらず catalog が名指す `stub-saas-calendar` の1件（Provisioner はその id で Bridge に尋ね、Bridge は id で定義を引くため、別の id で書いた行は誰も参照しない） | T-IAC-26 の seed のみ | T-BRIDGE-02 |
 | `capability_taxonomy/{capability_id}` | `resource` `object` `action` `description` `default_characteristics` | T-IAC-26 の seed のみ | T-AUTHZ |
 | `human_permissions/{human_subject}__{capability_id}` | `human_subject` `capability_id` `granted_at` の1行1ドキュメント | T-IAC-26 の seed | T-PROV-12 が `where('human_subject','==',humanSubject)` で引く、T-AUTHZ-03 |
 | `delegatable_permissions/{capability_id}` | 委譲可能 Capability | T-IAC-26 の seed | T-AUTHZ |

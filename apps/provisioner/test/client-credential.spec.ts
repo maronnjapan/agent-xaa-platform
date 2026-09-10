@@ -29,7 +29,7 @@ function keysOf(value: unknown, found: string[] = []): string[] {
 
 async function provisioned(target: ProvisionerHarness): Promise<{ agentId: string; body: Record<string, unknown> }> {
   const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-  const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+  const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
   expect(response.status).toBe(201);
   const body = await response.json() as Record<string, unknown>;
   return { agentId: body.agent_id as string, body };
@@ -80,8 +80,11 @@ describe('the Agent Client Credential', () => {
   it('says nothing about the key in what it answers, and nothing in what it logs', async () => {
     const target = await createProvisionerHarness({ idpPublicJwk: issuer.publicJwk });
     const { body } = await provisioned(target);
+    // The whole key set, pinned: what this answer must not gain is a field carrying
+    // anything about the agent's private key. `task_id` is the caller's own id echoed
+    // back, which is how the Automation App pairs the agent with the work it asked for.
     expect(Object.keys(body).sort()).toEqual([
-      'agent_id', 'allowed_tools', 'expires_at', 'isolation_level', 'status', 'transaction_id',
+      'agent_id', 'allowed_tools', 'expires_at', 'isolation_level', 'status', 'task_id', 'transaction_id',
     ]);
     expect(keysOf(body)).not.toContain('d');
     const secret = JSON.parse(

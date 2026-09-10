@@ -3,24 +3,32 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ID_JAG_TOKEN_TYPE, drainActivityQueueForTesting, resetActivityPublisherForTesting } from '@xaa/contracts';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
-import { MAX_REASONING_STEPS, runReasoningLoop } from '../src/reasoning/loop.js';
+import { createVertexClient, vertexResponseSchemaProblems } from '@xaa/vertex';
+import { MAX_REASONING_STEPS, REASONING_SCHEMA, runReasoningLoop } from '../src/reasoning/loop.js';
+import { decideTaskOutcome } from '../src/telemetry/task-outcome.js';
 import { readPendingInstructions } from '../src/instructions/read-pending.js';
 import { createRuntimeStore } from '../src/store/runtime-store.js';
 import { createExecutionContext } from '../src/context/execution-context.js';
-import { AGENT_ID, AGENT_OP, DOCS_AS, fakeIdToken, json, logContext, runtimeEnv, silentLogger, testHttp } from './helpers.js';
+import {
+  AGENT_ID, AGENT_OP, DOCS_AS, json, logContext, runtimeEnv, silentLogger, subjectTokenResponse, testHttp,
+} from './helpers.js';
 
 function happy(url: string): Response {
-  if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json({ id_token: fakeIdToken() });
+  if (url.startsWith(`${AGENT_OP}/xaa/subject-token`)) return json(subjectTokenResponse());
   if (url.startsWith(`${AGENT_OP}/xaa/token`)) return json({ access_token: 'i.j.k', issued_token_type: ID_JAG_TOKEN_TYPE, expires_in: 300 });
   if (url.startsWith(`${DOCS_AS}/token`)) return json({ access_token: 'a.t', token_type: 'DPoP', expires_in: 300 });
   return json({ documents: [{ document_id: 'd1', title: 'T' }] });
 }
 
-async function harness(input: { steps: Array<Record<string, unknown>>; agentId?: string } ) {
+async function harness(input: {
+  steps: Array<Record<string, unknown>>;
+  agentId?: string;
+  transport?: (url: string) => Response;
+}) {
   const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
   const store = createRuntimeStore({ documents, agentId: input.agentId ?? AGENT_ID });
   const context = await createExecutionContext({ env: await runtimeEnv(), store, processEnv: {} });
-  const { http, calls } = testHttp(context, happy);
+  const { http, calls } = testHttp(context, input.transport ?? happy);
   let index = 0;
   const vertex = { generateJson: async <T>() => (input.steps[index++] ?? { done: true }) as T };
   return { context, http, calls, vertex, documents, store };
@@ -65,9 +73,81 @@ describe('the reasoning loop', () => {
   // that proves nothing was widened live in instruction-guard.spec.ts (T-RUN-23).
 
   it('treats an unusable model answer as invalid_tool_call', async () => {
-    const { context, http, vertex } = await harness({ steps: [{ done: false, tool_call: { tool_id: 42 } }, { done: true }] });
+    // `{}` is the second case on purpose: it is exactly what a `tool_call` declared as a
+    // bare `type: 'object'` could produce, and reading it as a failed call is right —
+    // what was wrong was asking a question only answerable that way.
+    for (const toolCall of [{ tool_id: 42 }, {}]) {
+      const { context, http, vertex } = await harness({ steps: [{ done: false, tool_call: toolCall }, { done: true }] });
+      const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+      expect(result.results[0]).toMatchObject({ tool_id: 'unknown', outcome: 'failed', error_code: 'invalid_tool_call' });
+    }
+  });
+
+  /**
+   * The bug that made every execution useless, from both ends.
+   *
+   * `tool_call` was declared as a bare `type: 'object'`. Vertex's `responseSchema` is an
+   * OpenAPI subset in which an object *is* its `properties`, so the model had no field
+   * it was allowed to fill and could only answer `{}` — which passes the schema, so the
+   * loop received a decision, read no `tool_id` in it, and wrote
+   * `unknown / failed / invalid_tool_call` eight times before stopping at the step
+   * limit. Every agent, every task, every time.
+   *
+   * The first case pins the schema itself. The second runs the loop against a client
+   * that validates its answer the way the live one does, so an answer shaped like the
+   * one the deployed model gives has to reach `executeTool`.
+   */
+  /**
+   * A model that never answered, told apart from one that said it was finished.
+   *
+   * `generateJson` answers `null` for every way a generation can fail, and this loop
+   * used to read that as `done`. The execution then reported TASK_COMPLETED having
+   * called nothing — the same thing it reports for work that genuinely needed no tool.
+   */
+  it('does not call a silent model a finished task', async () => {
+    const { context, http } = await harness({ steps: [] });
+    const vertex = { generateJson: async () => null };
     const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
-    expect(result.results[0]).toMatchObject({ error_code: 'invalid_tool_call' });
+    expect(result.stoppedBy).toBe('no_decision');
+    expect(result.results).toEqual([]);
+  });
+
+  it('declares a tool_call the model can actually fill in', () => {
+    expect(vertexResponseSchemaProblems(REASONING_SCHEMA)).toEqual([]);
+  });
+
+  it('executes a tool call that came back through structured output', async () => {
+    const { context, http } = await harness({ steps: [] });
+    let step = 0;
+    // What the live client does with a model's answer: validate it against this exact
+    // schema, and hand back `null` for anything that does not fit.
+    const vertex = createVertexClient({
+      mode: 'fake', project: 'p', location: 'l', model: 'm',
+      fakeResponder: () => (step++ === 0
+        ? { done: false, tool_call: { tool_id: 'internal.document.list', parameters_json: '{}' } }
+        : { done: true }),
+    });
+
+    const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results).toEqual([expect.objectContaining({ outcome: 'success', tool_id: 'internal.document.list' })]);
+  });
+
+  it('carries the model\'s arguments through to the request', async () => {
+    const { context, http, calls } = await harness({ steps: [] });
+    let step = 0;
+    const vertex = createVertexClient({
+      mode: 'fake', project: 'p', location: 'l', model: 'm',
+      fakeResponder: () => (step++ === 0
+        ? { done: false, tool_call: { tool_id: 'internal.document.get', parameters_json: '{"id":"d1"}' } }
+        : { done: true }),
+    });
+
+    const result = await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+
+    expect(result.results[0]).toMatchObject({ outcome: 'success' });
+    expect(calls.some((call) => call.url.endsWith('/documents/d1'))).toBe(true);
   });
 });
 
@@ -75,10 +155,10 @@ describe('pending instructions', () => {
   it('same instruction is not applied twice', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: '請求書を確認して', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: '請求書を確認して', created_at: '2026-01-01T00:00:00Z', applied_at: null });
 
     expect(await readPendingInstructions(store, '2026-01-02T00:00:00Z')).toEqual([
-      { role: 'user', source: 'instruction', instruction_id: 'i1', body: '請求書を確認して' },
+      { role: 'user', source: 'instruction', instruction_id: 'i1', text: '請求書を確認して' },
     ]);
     expect(await readPendingInstructions(store, '2026-01-02T00:00:01Z')).toEqual([]);
   });
@@ -86,15 +166,15 @@ describe('pending instructions', () => {
   it('orders by created_at', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'later', { agent_id: AGENT_ID, body: 'b', created_at: '2026-01-02T00:00:00Z', applied_at: null });
-    await documents.set('agent_instructions', 'earlier', { agent_id: AGENT_ID, body: 'a', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'later', { agent_id: AGENT_ID, text: 'b', created_at: '2026-01-02T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'earlier', { agent_id: AGENT_ID, text: 'a', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     expect((await readPendingInstructions(store, 'now')).map((entry) => entry.instruction_id)).toEqual(['earlier', 'later']);
   });
 
   it('concurrent readers do not double-apply', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     const [first, second] = await Promise.all([
       readPendingInstructions(store, 'now'),
       readPendingInstructions(store, 'now'),
@@ -105,14 +185,14 @@ describe('pending instructions', () => {
   it('reads only its own agent', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'other', { agent_id: 'agent-zzzzzzzzzzzzzzzzzzzzzzzzzz', body: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'other', { agent_id: 'agent-zzzzzzzzzzzzzzzzzzzzzzzzzz', text: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     expect(await readPendingInstructions(store, 'now')).toEqual([]);
   });
 
   it('takes them into the conversation once per execution', async () => {
     const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
     const store = createRuntimeStore({ documents, agentId: AGENT_ID });
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: '追加の指示', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: '追加の指示', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     const context = await createExecutionContext({ env: await runtimeEnv(), store, processEnv: {} });
     const { http } = testHttp(context, happy);
     let index = 0;
@@ -175,7 +255,7 @@ describe('pending instructions', () => {
         return documents.set(collection, id, value);
       },
     } as typeof documents;
-    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, body: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
+    await documents.set('agent_instructions', 'i1', { agent_id: AGENT_ID, text: 'x', created_at: '2026-01-01T00:00:00Z', applied_at: null });
     seeded = true;
 
     const store = createRuntimeStore({ documents: counted, agentId: AGENT_ID });
@@ -217,7 +297,7 @@ describe('runtime failure exercises', () => {
     expect(await h.documents.get('agents', `${AGENT_ID}__state`)).toMatchObject({
       agent_status: 'ACTIVE',
       task_context: { agent_id: AGENT_ID },
-      execution_state: { failure: 'injected_runtime_crash' },
+      execution_state: { failure: 'injected_runtime_crash', fault_instruction_id: 'fault-1' },
     });
     const state = await h.documents.get<{ task_context: Record<string, unknown> }>('agents', `${AGENT_ID}__state`);
     expect(state!.task_context).not.toHaveProperty('task_id');
@@ -237,5 +317,125 @@ describe('runtime failure exercises', () => {
     expect((await runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex })).stoppedBy).toBe('done');
     expect(prompt).toContain('runtime_crash');
     expect(prompt).not.toContain('different-task');
+  });
+
+  it('leaves the model unasked for one step and ends the run as unanswered', async () => {
+    const h = await harness({ steps: [] });
+    await h.documents.set('agent_instructions', 'fault-2', {
+      agent_id: AGENT_ID, text: 'failure exercise', created_at: new Date().toISOString(), applied_at: null,
+      fault: { kind: 'model_unavailable', task_id: h.context.taskId },
+    });
+    let called = false;
+    const vertex = { generateJson: async <T>() => { called = true; return { done: true } as T; } };
+    const result = await runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex });
+    // The path a model outage takes: no answer, one record saying so, the loop over.
+    expect(called).toBe(false);
+    expect(result.stoppedBy).toBe('no_decision');
+    expect(result.results).toEqual([]);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]!.headline).toContain('異常系試験');
+    expect(await h.documents.get('agents', `${AGENT_ID}__state`)).toMatchObject({
+      agent_status: 'ACTIVE',
+      execution_state: { failure: 'injected_model_unavailable', fault_instruction_id: 'fault-2' },
+    });
+    expect(h.calls).toEqual([]);
+  });
+
+  it('fails the next tool call in place and lets the loop decide what to do next', async () => {
+    const h = await harness({ steps: [
+      { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+      { done: true, note: '一覧が取れなかったので、ここで終えます。' },
+    ] });
+    await h.documents.set('agent_instructions', 'fault-3', {
+      agent_id: AGENT_ID, text: 'failure exercise', created_at: new Date().toISOString(), applied_at: null,
+      fault: { kind: 'tool_failure', task_id: h.context.taskId },
+    });
+    const result = await runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex: h.vertex });
+    // The call never left the process, the model was told it failed, and the run went
+    // on to the model's own decision to stop — which is the point of the exercise.
+    expect(h.calls).toEqual([]);
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results).toEqual([expect.objectContaining({ outcome: 'failed', error_code: 'injected_fault', tool_id: 'internal.document.list', stage: 'tool_selection' })]);
+    expect(result.records[0]).toMatchObject({ headline: 'internal.document.list を異常系試験で失敗させました' });
+    expect(result.records[0]!.sections.some((section) => section.id === 'failure')).toBe(true);
+    expect(decideTaskOutcome(result.results)).toBe('TASK_FAILED');
+    const state = await h.documents.get<{ execution_state: Record<string, unknown> }>('agents', `${AGENT_ID}__state`);
+    expect(state!.execution_state).toMatchObject({ fault_instruction_id: 'fault-3', fault_kind: 'tool_failure' });
+    // A survived fault leaves no execution failure: the execution did not end because of it.
+    expect(state!.execution_state).not.toHaveProperty('failure');
+    expect(await h.store.readPendingInstructions(new Date().toISOString())).toEqual([]);
+  });
+});
+
+/**
+ * A tool call that fails is one step of the run, not the end of it.
+ *
+ * The Runtime used to let `fetchSubjectToken` throw all the way to `main`, so a single
+ * unusable tool ended the Job Execution with `execution_failed` and the model was
+ * never told. The loop is what decides whether to keep going, and it can only decide
+ * about a failure it is handed.
+ */
+describe('a tool that does not work', () => {
+  beforeEach(() => resetActivityPublisherForTesting());
+
+  it('is reported to the model and the loop keeps running', async () => {
+    // The Agent OP cannot mint the subject token, so no tool call can reach a resource.
+    const { context, http, vertex } = await harness({
+      steps: [
+        { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+        { done: false, tool_call: { tool_id: 'internal.document.get', parameters: { id: 'd1' } } },
+        { done: true },
+      ],
+      transport: (url) => (url.startsWith(`${AGENT_OP}/xaa/subject-token`) ? json({ error: 'invalid_grant' }, 400) : happy(url)),
+    });
+
+    const result = await runReasoningLoop({
+      context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {},
+    });
+
+    // Both calls were attempted and both came back as results; the run ended because
+    // the model said so, not because the first failure took the process down.
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results).toHaveLength(2);
+    for (const entry of result.results) {
+      expect(entry).toMatchObject({ outcome: 'failed', error_code: 'unexpected_subject_response' });
+    }
+    // The run ends with a verdict on the task. Before, the first failure left `main`
+    // logging `execution_failed` with no results, no checkpoint of the second step,
+    // and nothing said about which tool could not be used.
+    expect(decideTaskOutcome(result.results)).toBe('TASK_FAILED');
+  });
+
+  it('puts the failure in front of the model, so the next step can differ', async () => {
+    const { context, http, vertex, documents } = await harness({
+      steps: [
+        { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+        { done: true },
+      ],
+      transport: (url) => (url.startsWith(`${AGENT_OP}/xaa/subject-token`) ? json({ error: 'invalid_grant' }, 400) : happy(url)),
+    });
+
+    await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
+
+    // The checkpoint is the model's view of the run: the failed call is in it, named.
+    const state = await documents.get<{ conversation_context: unknown[] }>('agents', `${AGENT_ID}__state`);
+    expect(JSON.stringify(state!.conversation_context)).toContain('unexpected_subject_response');
+  });
+
+  it('survives a transport that throws on every hop', async () => {
+    const { context, http, vertex } = await harness({
+      steps: [
+        { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+        { done: true },
+      ],
+      transport: () => { throw new Error('ECONNREFUSED'); },
+    });
+
+    const result = await runReasoningLoop({
+      context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {},
+    });
+
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results[0]).toMatchObject({ outcome: 'failed', error_code: 'tool_execution_error' });
   });
 });

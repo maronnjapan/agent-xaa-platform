@@ -12,6 +12,17 @@ import type { DpopKey } from '../context/execution-context.js';
  */
 export type ResourceAccessToken = string & { readonly __brand: 'resource-access-token' };
 
+/**
+ * How an Access Token is presented on the next hop.
+ *
+ * A Resource AS issues a DPoP-bound token and checks the proof; a SaaS reached over
+ * the Bridge issued its own Bearer token and knows nothing of this platform's keys
+ * (DEC-ID-13). The redemption settles which of the two builders below a call uses, and
+ * the answer travels with the token — a later call that reuses the token reads the
+ * binding its issuer chose rather than forming a second opinion from the manifest.
+ */
+export type AccessTokenBinding = 'dpop' | 'bearer';
+
 /** Called only by redeem-id-jag and redeem-via-bridge, on a value they just received. */
 export function asResourceAccessToken(value: string, source: 'resource-as' | 'bridge'): ResourceAccessToken {
   if (source !== 'resource-as' && source !== 'bridge') throw new Error('unknown access token source');

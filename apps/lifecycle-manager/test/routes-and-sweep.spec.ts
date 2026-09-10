@@ -103,6 +103,27 @@ describe('the sweep', () => {
     expect((await harness.documents.get<{ status: string }>('provisioning_transactions', 'tx-2'))!.status).toBe('WAITING_IDP_CONSENT');
   });
 
+  /**
+   * A resume that died partway leaves the transaction at `RESUMABLE`. Nothing else
+   * advances one — the one-time code that would have driven it is already spent — so
+   * the sweep has to be what ends it, or the agent it half-built is never cleaned up.
+   */
+  it('abandons a resume that never finished', async () => {
+    const now = Date.parse('2026-01-01T12:00:00.000Z');
+    const harness = createLifecycleHarness({ now: () => now });
+    await harness.documents.set('provisioning_transactions', 'tx-1', {
+      status: 'RESUMABLE', created_at: new Date(now - 2 * HOUR).toISOString(),
+      human_subject: 'testuser', agent_id: 'agent-abcdefghijklmnopqrstuvwxyz',
+    });
+
+    const counters = await sweep({
+      documents: harness.documents, expiringWindowSeconds: 60, now: () => now, cleanup: cleanupFor(harness),
+    });
+
+    expect(counters.abandoned).toBe(1);
+    expect((await harness.documents.get<{ status: string }>('provisioning_transactions', 'tx-1'))!.status).toBe('ABANDONED');
+  });
+
   it('deletes a labelled resource whose agent no longer exists', async () => {
     const harness = createLifecycleHarness({
       labelled: [

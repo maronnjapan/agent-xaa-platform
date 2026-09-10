@@ -27,7 +27,7 @@ describe('binding the provisioning to the caller', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
     const response = await issuer.provision(target, {
-      decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8, human_subject: 'user-b',
+      decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480, human_subject: 'user-b',
     }, { token: await issuer.accessToken({ sub: 'user-a' }) });
 
     expect(response.status).toBe(403);
@@ -38,7 +38,7 @@ describe('binding the provisioning to the caller', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
     await issuer.provision(target, {
-      decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8, human_subject: 'user-b',
+      decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480, human_subject: 'user-b',
     }, { token: await issuer.accessToken({ sub: 'user-a' }) });
 
     expect(await target.documents.listAll('provisioning_transactions')).toHaveLength(0);
@@ -50,7 +50,7 @@ describe('binding the provisioning to the caller', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'], humanSubject: 'user-a' });
     const response = await issuer.provision(target, {
-      decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8, human_subject: 'user-a',
+      decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480, human_subject: 'user-a',
     }, { token: await issuer.accessToken({ sub: 'user-a' }) });
 
     expect(response.status).toBe(201);
@@ -63,7 +63,7 @@ describe('binding the provisioning to the caller', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'], humanSubject: 'user-a' });
     const response = await issuer.provision(target, {
-      decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8, human_subject: 'user-a',
+      decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480, human_subject: 'user-a',
     }, { token: await issuer.accessToken({ sub: 'user-a' }) });
     // A body carrying `human_subject` reaches the schema without it. If the field
     // survived, the closed schema would refuse the whole request as an unknown key —

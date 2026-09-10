@@ -5,11 +5,42 @@ import type { ActivityEvent } from '@xaa/contracts';
 import createApp, { type LifecycleDeps } from '../index.js';
 import type { CleanupClients } from '../clients/types.js';
 import type { LifecycleConfig } from '../config.js';
+import { resolveEndpoints } from '../endpoints.js';
 import type { LabelledResource } from '../sweep.js';
 
 export const LIFECYCLE_BASE = 'https://lifecycle.test';
 export const ISSUER = 'https://human-idp.test';
 export const AGENT_OP_URL = 'https://shared-agent-op.test';
+export const JWKS_URL = 'https://storage.test/xaa-jwks/jwks.json';
+
+/**
+ * endpoints.json as Terraform writes it, resolved the way `server.ts` resolves it.
+ *
+ * The harness reads the JWK Set location from here rather than composing its own,
+ * because a harness that composes its own cannot fail when production composes a
+ * different one — which is how `${issuer}/jwks.json` reached a deployment with every
+ * test green.
+ */
+export const TEST_ENDPOINTS = resolveEndpoints({
+  issuer: ISSUER,
+  jwks_url: JWKS_URL,
+  xaa_token_url: `${AGENT_OP_URL}/xaa/token`,
+  xaa_callback_url: 'https://agent-op-callback.test',
+  subject_token_url: `${AGENT_OP_URL}/xaa/subject-token`,
+  authorization_url: 'https://authorization.test',
+  provisioner_url: 'https://provisioner.test',
+  lifecycle_url: LIFECYCLE_BASE,
+  resource_docs_as_issuer: 'https://resource-docs-as.test',
+  resource_docs_api_url: 'https://resource-docs-api.test',
+  resource_finance_as_issuer: 'https://resource-finance-as.test',
+  resource_finance_api_url: 'https://resource-finance-api.test',
+  bridge_internal_url: 'https://disabled.invalid',
+  stub_saas_op_issuer: 'https://disabled.invalid',
+  agent_max_lifetime_seconds: 86_400,
+  vertex_model: 'gemini-test',
+  vertex_location: 'us-central1',
+  enable_google_bridge: false,
+});
 
 export const testConfig: LifecycleConfig = {
   projectId: 'xaa-test', region: 'asia-northeast1', firestoreDatabaseId: 'xaa-db',
@@ -89,6 +120,8 @@ export interface LifecycleHarness {
   logs: string[];
   provisionerCalls: Array<Record<string, unknown>>;
   deletedResources: LabelledResource[];
+  /** Every URL the Access Token guard asked for a JWK Set at. */
+  jwksRequests: string[];
   deps: LifecycleDeps;
 }
 
@@ -111,6 +144,7 @@ export function createLifecycleHarness(options: {
   const logs: string[] = [];
   const provisionerCalls: Array<Record<string, unknown>> = [];
   const deletedResources: LabelledResource[] = [];
+  const jwksRequests: string[] = [];
 
   const deps: LifecycleDeps = {
     config: testConfig,
@@ -124,14 +158,21 @@ export function createLifecycleHarness(options: {
     },
     provisionerUrl: 'https://provisioner.test',
     accessToken: {
-      issuer: ISSUER, jwksUrl: `${ISSUER}/jwks.json`, audience: 'lifecycle-manager',
+      issuer: ISSUER, jwksUrl: TEST_ENDPOINTS.jwksUrl, audience: 'lifecycle-manager',
       requiredScope: 'agent:revoke', iatSkewSeconds: 300, jtiStore: new InMemoryJtiStore(),
       expectedHtu: (request: Request) => `${LIFECYCLE_BASE}${new URL(request.url).pathname}`,
     } as LifecycleDeps['accessToken'],
-    // The Access Token is signed by the Human IdP's key, so the guard's JWK Set is that.
-    fetchImpl: (async () => Response.json({
-      keys: [{ ...(options.idpPublicJwk ?? {}), kid: 'idp-testkey', alg: 'ES256', use: 'sig' }],
-    })) as unknown as typeof fetch,
+    // The Access Token is signed by the Human IdP's key, so the guard's JWK Set is that
+    // — served at one URL and 404 at every other, the way a real key server behaves. A
+    // double that answered keys to any request would accept a guard pointed anywhere.
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      jwksRequests.push(url);
+      if (url !== TEST_ENDPOINTS.jwksUrl) return new Response('not found', { status: 404 });
+      return Response.json({
+        keys: [{ ...(options.idpPublicJwk ?? {}), kid: 'idp-testkey', alg: 'ES256', use: 'sig' }],
+      });
+    }) as unknown as typeof fetch,
     internalAuth: {
       audience: LIFECYCLE_BASE,
       // Full emails, as Terraform injects them: the check is membership, not a prefix.
@@ -158,7 +199,8 @@ export function createLifecycleHarness(options: {
 
   const app = createApp(deps);
   return {
-    documents, provisionerStore, clients, activity, auditLines, logs, provisionerCalls, deletedResources, deps,
+    documents, provisionerStore, clients, activity, auditLines, logs, provisionerCalls, deletedResources,
+    jwksRequests, deps,
     fetch: async (path, init) => app.fetch(new Request(new URL(path, LIFECYCLE_BASE), init)),
   };
 }

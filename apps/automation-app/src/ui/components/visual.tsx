@@ -2,7 +2,7 @@ import type { Element } from '../element.js';
 
 export function Metric(props: { label: string; value: string | number; tone?: string }): Element {
   return (
-    <div class={`metric ${props.tone ?? ''}`}>
+    <div className={`metric ${props.tone ?? ''}`}>
       <span>{props.label}</span>
       <strong>{props.value}</strong>
     </div>
@@ -24,8 +24,40 @@ export function formatTime(value: string): string {
 export function ResultMark(props: { outcome: string }): Element {
   const marks: Record<string, string> = { success: '✓', blocked: '!', failed: '×', running: '◷' };
   return (
-    <span class="result-mark" data-outcome={props.outcome} aria-hidden="true">
+    <span className="result-mark" data-outcome={props.outcome} aria-hidden="true">
       {marks[props.outcome] ?? '•'}
     </span>
+  );
+}
+
+export function formatDuration(millis: number): string {
+  if (!Number.isFinite(millis)) return '—';
+  const seconds = Math.max(0, millis) / 1000;
+  if (seconds < 1) return `${Math.round(Math.max(0, millis))} ms`;
+  if (seconds < 60) return `${seconds.toFixed(1)} 秒`;
+  return `${Math.floor(seconds / 60)} 分 ${Math.floor(seconds % 60)} 秒`;
+}
+
+export function phaseLabel(phase: string): string {
+  const labels: Record<string, string> = { login: 'ログイン', work_definition: '作業定義', authorization: '権限確認',
+    provisioning: 'Agent準備', tool_call: 'ツール実行', security: 'セキュリティ', lifecycle: 'ライフサイクル' };
+  return labels[phase] ?? phase;
+}
+
+/** The four marks, spelled out once so a person learns them before the rows use them. */
+export const MARK_LEGEND: ReadonlyArray<{ outcome: string; label: string }> = [
+  { outcome: 'success', label: '成功' },
+  { outcome: 'blocked', label: '遮断' },
+  { outcome: 'failed', label: '失敗' },
+  { outcome: 'running', label: '実行中' },
+];
+
+export function MarkLegend(): Element {
+  return (
+    <ul className="mark-legend" data-mark-legend="true" aria-label="記号の意味">
+      {MARK_LEGEND.map((item) => (
+        <li key={item.outcome}><ResultMark outcome={item.outcome} />{item.label}</li>
+      ))}
+    </ul>
   );
 }

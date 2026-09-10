@@ -26,6 +26,16 @@ describe('the capability guard', () => {
     expect(CAPABILITIES).toContain('document.read');
   });
 
+  /**
+   * An administrator can add a capability to the taxonomy, and this app never reads
+   * that table. Matching against the shipped eight would call a permission the person
+   * genuinely holds missing, and refuse an agent the re-evaluation should keep.
+   */
+  it('accepts a capability the platform does not ship with', () => {
+    expect(CAPABILITIES).not.toContain('contract.review');
+    expect(() => assertCapabilitiesSufficient(['contract.review'], ['contract.review'])).not.toThrow();
+  });
+
   it('reports every missing capability', () => {
     try {
       assertCapabilitiesSufficient(['document.read', 'document.write', 'finance.payment.read'], ['document.read']);
@@ -61,7 +71,7 @@ describe('reprovisioning', () => {
     expect(Object.keys(body).sort()).toEqual([...REPROVISION_BODY_KEYS].sort());
     expect(body.inherited_expires_at).toBe(expiresAt);
     // Nothing recomputes the lifetime: a permission change must not extend an agent.
-    expect(body).not.toHaveProperty('requested_lifetime_hours');
+    expect(body).not.toHaveProperty('requested_lifetime_minutes');
     expect(body).not.toHaveProperty('expires_at');
   });
 

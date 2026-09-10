@@ -23,7 +23,29 @@ export function assertLogEntry(value: unknown): asserts value is LogEntry {
   if (!validate(value)) throw new Error('invalid structured log entry');
 }
 
-export function createLogger(app: AppName, source: LogEntry['log_source'], write: (line: string) => void = (line) => process.stdout.write(line)): Logger {
+let sink: ((line: string) => void) | undefined;
+
+/**
+ * Where lines go when the process is not a Cloud Run container.
+ *
+ * On GCP a line written to stdout is picked up by Cloud Logging, and the Log Sink is
+ * what carries it to Security Detection. Off GCP there is no such pipe, so a host that
+ * runs the platform itself installs one here: every logger that was not handed an
+ * explicit sink writes through it, which is what lets the local runner feed the
+ * detector the same stream the deployment feeds it. Clearing it restores stdout.
+ *
+ * A logger built with an explicit `write` — every test in this repository — is
+ * unaffected either way.
+ */
+export function setLogSink(next: ((line: string) => void) | undefined): void { sink = next; }
+
+/** Read at write time, not at construction, so a sink installed later still takes effect. */
+function writeToSinkOrStdout(line: string): void {
+  if (sink) sink(line);
+  else process.stdout.write(line);
+}
+
+export function createLogger(app: AppName, source: LogEntry['log_source'], write: (line: string) => void = writeToSinkOrStdout): Logger {
   const log = (severity: LogSeverity, event: string, ctx: LogContext, fields: Record<string, unknown> = {}): void => {
     const entry: LogEntry = { severity, app, log_source: source, event, ...ctx, timestamp: new Date().toISOString(), fields: attachCorrelationKeys(fields) };
     if (process.env.NODE_ENV !== 'production') assertLogEntry(entry);

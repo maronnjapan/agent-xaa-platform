@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { DocumentStore } from '@xaa/gcp';
-import { assertWorkDefinition, type WorkDefinition } from './model.js';
+import { assertWorkDefinition, compareTodos, type WorkDefinition } from './model.js';
 
 export interface WorkDefinitionStore {
-  create(input: Omit<WorkDefinition, 'work_definition_id' | 'created_at' | 'updated_at' | 'status'>, now?: number): Promise<WorkDefinition>;
+  create(
+    input: Omit<WorkDefinition, 'work_definition_id' | 'created_at' | 'updated_at' | 'completed_at' | 'status' | 'agent_id'>,
+    now?: number,
+  ): Promise<WorkDefinition>;
   find(id: string): Promise<WorkDefinition | undefined>;
   /** Everything one person has written, newest first. */
   listByHuman(humanSubject: string): Promise<WorkDefinition[]>;
@@ -17,8 +20,8 @@ export interface WorkDefinitionStore {
  * grants it to the Authorization Platform as well, which writes its own Work Definition
  * there: the structured one it derives, carrying `target_resources` and `constraints`
  * and no `status`. Both rows name the same person, so a query by `human_subject` returns
- * both, and rendering the other shape as a draft crashed the home screen on
- * `user_confirmations.map` — a 500 on the page a person lands on after logging in.
+ * both, and rendering the other shape as a ToDo crashed the home screen on the first
+ * list it mapped — a 500 on the page a person lands on after logging in.
  *
  * The whole schema is the discriminator rather than a probe for one missing field,
  * because it is already what `create` and `save` hold this app's rows to. "A row this
@@ -42,8 +45,10 @@ export function createWorkDefinitionStore(documents: DocumentStore): WorkDefinit
         work_definition_id: `wd_${randomUUID()}`,
         status: 'DRAFT',
         ...input,
+        agent_id: null,
         created_at: timestamp,
         updated_at: timestamp,
+        completed_at: null,
       };
       assertWorkDefinition(definition);
       await documents.set('work_definitions', definition.work_definition_id, definition as unknown as Record<string, unknown>);
@@ -70,11 +75,11 @@ export function createWorkDefinitionStore(documents: DocumentStore): WorkDefinit
         .map((row) => row.data)
         .filter(isOwnDefinition)
         .filter((definition) => definition.human_subject === humanSubject)
-        .sort((left, right) => right.created_at.localeCompare(left.created_at));
+        .sort(compareTodos);
     },
     /**
-     * A whole-document write. `arrayUnion` would reorder `operations` into a set, and
-     * the order is the sequence of steps a person read and agreed to.
+     * A whole-document write. `arrayUnion` would reorder `steps` into a set, and the
+     * order is the sequence a person read and agreed to.
      */
     async save(definition) {
       assertWorkDefinition(definition);

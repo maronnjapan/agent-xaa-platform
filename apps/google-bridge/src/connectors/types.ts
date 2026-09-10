@@ -11,6 +11,12 @@ export interface ConnectorDefinition {
   subject_claim: string;
   connection_max_age_seconds: number;
   resource_uris: string[];
+  /**
+   * This platform's scope names to the SaaS's own, for a connector whose vocabulary
+   * differs. Absent for one that speaks these names already, which is why it is
+   * optional rather than an identity map every row would have to carry.
+   */
+  scope_map?: Record<string, string>;
 }
 
 /**
@@ -49,5 +55,9 @@ export const connectorDefinitionSchema = {
     subject_claim: { type: 'string', minLength: 1 },
     connection_max_age_seconds: { type: 'integer', minimum: 60 },
     resource_uris: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+    // Optional, and the only optional field: a connector that already speaks this
+    // platform's scope names needs no map, and a row written before this existed is
+    // still a valid row.
+    scope_map: { type: 'object', additionalProperties: { type: 'string', minLength: 1 } },
   },
 } as const;

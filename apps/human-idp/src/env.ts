@@ -2,15 +2,16 @@ import schema from '../env.schema.json' with { type: 'json' };
 import { compile } from '@xaa/contracts';
 
 /**
- * The 16 variables Terraform injects. Nothing here carries a default: a value the
+ * The 18 variables Terraform injects. Nothing here carries a default: a value the
  * deployment did not set must fail at startup, not be invented by the app
  * (constraint 1 — the GCP configuration is owned by IaC).
  */
 export const ENV_KEYS = [
   'PORT', 'ISSUER', 'ISSUER_PROFILE', 'JWKS_BUCKET', 'JWKS_PUBLIC_BASE_URL', 'KEY_BUCKET',
   'KMS_SSO_KEY_NAME', 'SIGNER_MODE', 'STORE_MODE', 'FIRESTORE_DATABASE', 'DPOP_REQUIRED',
-  'CLIENT_SECRET_AUTOMATION_APP', 'CLIENT_SECRET_AGENT_PLATFORM', 'AUTOMATION_APP_REDIRECT_URI',
-  'AGENT_OP_CALLBACK_URI', 'ACCESS_TOKEN_EXPIRES_IN',
+  'CLIENT_SECRET_AUTOMATION_APP', 'CLIENT_SECRET_AGENT_PLATFORM', 'CLIENT_SECRET_ANALYSIS_CONSOLE',
+  'AUTOMATION_APP_REDIRECT_URI', 'AGENT_OP_CALLBACK_URI', 'ANALYSIS_CONSOLE_REDIRECT_URI',
+  'ACCESS_TOKEN_EXPIRES_IN',
 ] as const;
 
 export type EnvKey = (typeof ENV_KEYS)[number];
@@ -29,8 +30,10 @@ export interface HumanIdpEnv {
   dpopRequired: boolean;
   clientSecretAutomationApp: string;
   clientSecretAgentPlatform: string;
+  clientSecretAnalysisConsole: string;
   automationAppRedirectUri: string;
   agentOpCallbackUri: string;
+  analysisConsoleRedirectUri: string;
   accessTokenExpiresIn: number;
 }
 
@@ -77,8 +80,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): HumanIdpEnv {
     dpopRequired: value.DPOP_REQUIRED === 'true',
     clientSecretAutomationApp: value.CLIENT_SECRET_AUTOMATION_APP,
     clientSecretAgentPlatform: value.CLIENT_SECRET_AGENT_PLATFORM,
+    clientSecretAnalysisConsole: value.CLIENT_SECRET_ANALYSIS_CONSOLE,
     automationAppRedirectUri: value.AUTOMATION_APP_REDIRECT_URI,
     agentOpCallbackUri: value.AGENT_OP_CALLBACK_URI,
+    analysisConsoleRedirectUri: value.ANALYSIS_CONSOLE_REDIRECT_URI,
     accessTokenExpiresIn: Number(value.ACCESS_TOKEN_EXPIRES_IN),
   };
 }

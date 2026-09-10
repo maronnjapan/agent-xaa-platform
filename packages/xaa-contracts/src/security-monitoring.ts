@@ -4,7 +4,20 @@ export type AnalysisStage = typeof ANALYSIS_STAGES[number];
 export const LEVEL_BOUNDARIES = { medium: 30, high: 60, critical: 80 } as const;
 export const REVIEW_CONFIDENCE_FLOOR = 0.7;
 export const REVIEW_REQUIRED_RESPONSES = ['QUARANTINED', 'REVOKED', 'DESTROYED'] as const;
+export interface ScoreContribution {
+  factor: string;
+  count: number;
+  per_event: number;
+  cap: number;
+  points: number;
+}
+export interface ScoreBreakdown {
+  contributions: ScoreContribution[];
+  critical_override: boolean;
+  unmapped_count: number;
+}
 export interface AnalysisDecision {
+  score_breakdown?: ScoreBreakdown;
   finding_id: string;
   agent_id: string | null;
   codes: string[];
@@ -24,6 +37,8 @@ export interface AnalysisRun {
   status: 'running' | 'completed' | 'failed';
   stage: AnalysisStage;
   completed_stages: AnalysisStage[];
+  stage_started_at?: string;
+  stage_durations_ms?: Partial<Record<AnalysisStage, number>>;
   input_count: number;
   normalized_count: number;
   unmapped_count: number;

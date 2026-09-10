@@ -51,6 +51,8 @@ export async function startAuthorization(options: {
     dpopIatSkewSeconds: 60, dpopJtiTtlSeconds: 120,
     lifecycleManagerUrl: 'https://lifecycle.test', activityTopic: 'agent-activity-stream',
     taxonomyVersion: 'v1', agentMaxLifetimeSeconds: 86_400,
+    // No console in the end-to-end world: these specs exercise the decision path.
+    adminPrincipals: [],
   };
 
   const app = createAuthorization({

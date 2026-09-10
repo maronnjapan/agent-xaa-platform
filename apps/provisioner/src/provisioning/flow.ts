@@ -30,12 +30,55 @@ export interface FlowDeps extends ProvisionerDeps {
 export interface ProvisionRequest {
   humanSubject: string;
   taskId: string;
+  /**
+   * The decision this agent is made from, named on the first event so the timeline
+   * can join the agent to the decision and to the work that led to it. A
+   * re-provisioning has none of its own; it names the agent it replaces instead.
+   */
+  decisionId?: string;
   effectiveCapabilities: string[];
   isolationLevel: IsolationLevel;
   constraints: Record<string, Record<string, unknown>>;
-  /** A fresh request names hours; a re-provisioning inherits the expiry it replaces. */
-  lifetime: { kind: 'requested'; hours: number } | { kind: 'inherited'; expiresAt: string };
+  /** A fresh request names minutes; a re-provisioning inherits the expiry it replaces. */
+  lifetime: { kind: 'requested'; minutes: number } | { kind: 'inherited'; expiresAt: string };
   previousAgentId?: string | null;
+}
+
+/**
+ * The transaction a paused provisioning is picked back up on (T-PROV-17).
+ *
+ * Its presence is what tells the flow that the steps up to the consent already ran:
+ * the transaction exists, the isolation slot is reserved and the IdP connection was
+ * created, so re-running them would reserve a second slot and start a second consent.
+ */
+export interface ResumeContext {
+  transactionId: string;
+  agentId: string;
+}
+
+/**
+ * What a resume runs, and nothing before it.
+ *
+ * `verify_idp_connection` is where the pause left off, and every step after it is
+ * still undone. The steps before it are not repeated — see `ResumeContext` — with the
+ * single exception of the agent's key pair, which is minted below rather than here:
+ * the first request's private key never left its memory (RULE-20), so there is nothing
+ * to recover and nothing persisted to contradict a fresh one.
+ */
+const RESUMED_STEPS: readonly ProvisioningStep[] = [
+  'verify_idp_connection', 'create_dedicated_resources', 'external_consent', 'create_agent_binding',
+  'register_agent', 'start_job_execution', 'activate',
+];
+
+/**
+ * A provisioning may pause twice: once for the person to let the agent act as them, and
+ * once for them to let it reach a SaaS. Both consents come back through the same route,
+ * so `external_consent` is in the resumed list as well — on the way back from the IdP
+ * consent it is the step that asks for the second one, and on the way back from that it
+ * finds the connection ready and goes on.
+ */
+export class BridgeUnavailable extends Error {
+  constructor(readonly connectorIds: string[]) { super('bridge_unavailable'); }
 }
 
 export interface ProvisionResponse {
@@ -60,7 +103,9 @@ class CapacityExhausted extends Error {
  * and the tool resolution are therefore done before the first step runs: a request that
  * will be refused leaves no transaction, no reservation and nothing to clean up.
  */
-export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest): Promise<ProvisionResponse> {
+export async function provisionAgent(
+  deps: FlowDeps, request: ProvisionRequest, resume?: ResumeContext,
+): Promise<ProvisionResponse> {
   // RULE-11 at the moment of provisioning: permissions may have been revoked since the
   // decision, and a re-provisioning is asked for precisely because they changed.
   const held = new Set((await deps.documents.queryEqual<{ capability_id: string }>(
@@ -76,7 +121,7 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
 
   const expiry = request.lifetime.kind === 'requested'
     ? computeExpiresAt({
-        requestedLifetimeHours: request.lifetime.hours,
+        requestedLifetimeMinutes: request.lifetime.minutes,
         agentMaxLifetimeSeconds: deps.config.agentMaxLifetimeSeconds,
         now: deps.clock.now(),
       })
@@ -91,10 +136,14 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     ...(deps.publishActivity ? { publish: deps.publishActivity } : {}),
   });
 
-  const agentId = newAgentId();
+  // A resume keeps the agent the consent was given for: the IdP connection the Agent
+  // OP wrote is named after it, and a new id would look for a connection nobody made.
+  const agentId = resume?.agentId ?? newAgentId();
   const idpConnectionId = `idpconn-${agentId}`;
   const xaaConfig = buildXaaConfig(resolved.tools);
-  const context: StepContext = { agentId, isolationLevel: request.isolationLevel, transactionId: '' };
+  const context: StepContext = {
+    agentId, isolationLevel: request.isolationLevel, transactionId: resume?.transactionId ?? '',
+  };
 
   const state: {
     credential?: AgentClientCredential;
@@ -103,6 +152,7 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     dedicatedOpUrl: string | null;
     jobName: string;
     consent?: ConsentRequired;
+    bridgeConnectionId?: string;
   } = { idpStatus: 'UNKNOWN', idpReady: false, dedicatedOpUrl: null, jobName: deps.config.standardJobName };
 
   /**
@@ -118,7 +168,36 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     await ledger.markFailed(agentId, message);
   };
 
+  /**
+   * RULE-51's undo. A connection that outlives the run it was created for is a refresh
+   * token for an agent that does not exist, and nothing else in the system is watching
+   * for one.
+   */
+  const revokeConnection = async (): Promise<void> => { await deps.agentOp.revokeIdpConnection?.(idpConnectionId); };
+
   const connectors = await deps.catalogue.connectors();
+  /**
+   * The connectors this agent needs that the platform does not itself authorize.
+   *
+   * `resource_type` is the catalogue's own answer, so nothing here has to know which
+   * SaaS is behind a connector — adding one is a seeded row (docs 06 §1), and it becomes
+   * a consent step by saying `oauth_bridge` in that row.
+   *
+   * The scopes are the ones the bridged tools declare and nothing wider: an agent that
+   * also reads documents must not have those scopes carried to a SaaS as if it were
+   * asking that SaaS for them.
+   */
+  const bridged = [...new Set(resolved.tools
+    .filter((tool) => connectors.find((connector) => connector.connector_id === tool.connector_id)?.resource_type === 'oauth_bridge')
+    .map((tool) => tool.connector_id))]
+    .sort()
+    .map((connectorId) => ({
+      connectorId,
+      scopes: [...new Set(resolved.tools
+        .filter((tool) => tool.connector_id === connectorId)
+        .map((tool) => tool.authorization.scope))].sort(),
+    }));
+
   let cachedManifest: ToolManifest | undefined;
   // Built once and used twice: the copy in Firestore and the copy in the job's
   // environment have to be the same bytes, or the Runtime's digest check fails.
@@ -155,6 +234,12 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
           isolation_level: request.isolationLevel,
           pending_step: 'resolve_tools',
           dedicated_short_id: request.isolationLevel === 'full_isolation' ? dedicatedNames(agentId).short : null,
+          // Written now because a consent may be about to take this request away: what
+          // comes back is a different process, and these three are what it needs to
+          // finish the agent this one started (T-PROV-17).
+          task_id: request.taskId,
+          constraints: request.constraints,
+          agent_expires_at: expiry.expiresAt,
         });
         context.transactionId = transaction.transaction_id;
         await emit({
@@ -168,6 +253,7 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
           detail: {
             isolation_level: request.isolationLevel,
             capabilities: request.effectiveCapabilities,
+            ...(request.decisionId ? { decision_id: request.decisionId } : {}),
             // Present only for a replacement, so a timeline can join the new agent to
             // the one it took over from (RULE-29).
             ...(request.previousAgentId ? { replaces_agent_id: request.previousAgentId } : {}),
@@ -225,7 +311,7 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
         }
         await deps.transactions.markStep(context.transactionId, 'verify_idp_connection');
       },
-      compensate: async () => { await deps.agentOp.revokeIdpConnection?.(idpConnectionId); },
+      compensate: revokeConnection,
     },
     {
       id: 'verify_idp_connection',
@@ -237,7 +323,16 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
         state.idpReady = status === 'READY';
         state.idpStatus = status;
         if (!state.idpReady) throw new PreconditionFailed('verify_idp_connection', 'register_agent');
-        await deps.transactions.advance(context.transactionId, 'PROVISIONING', { pending_step: 'register_agent' });
+        // PROVISIONING is where a transaction stops being interruptible: docs 07 §3.2
+        // lets it reach only COMPLETED, FAILED or ABANDONED. A run that still has a
+        // SaaS consent ahead of it therefore stays where it is, and `external_consent`
+        // moves it — either to WAITING_EXTERNAL_CONSENT, which both CREATED and
+        // RESUMABLE allow, or to PROVISIONING once every connection is in hand.
+        if (bridged.length === 0) {
+          await deps.transactions.advance(context.transactionId, 'PROVISIONING', { pending_step: 'register_agent' });
+        } else {
+          await deps.transactions.markStep(context.transactionId, 'external_consent');
+        }
         await emit({
           eventType: 'provisioning.idp_connection_created',
           transactionId: context.transactionId,
@@ -269,6 +364,97 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
         }
       },
       compensate: async () => failLedger('provisioning failed after the dedicated resources were built', false),
+    }] : []),
+    ...(bridged.length > 0 ? [{
+      id: 'external_consent' as const,
+      /**
+       * RULE-24. The agent may reach a SaaS only through a connection the person gave,
+       * narrowed to a binding of its own — and this is where the person is asked.
+       *
+       * Asked once per bridged connector and halting on the first that needs consent,
+       * because a browser can only be sent to one place at a time. The resume comes back
+       * here, finds that one ready, and asks for the next.
+       *
+       * A second agent for the same person usually needs no browser at all: the
+       * connection is the person's, not the agent's, so the Bridge answers READY and
+       * this step is one call (REQ-06-018).
+       */
+      async run() {
+        requireIdpReady('external_consent');
+        if (!deps.bridge) throw new BridgeUnavailable(bridged.map((entry) => entry.connectorId));
+        for (const entry of bridged) {
+          const checked = await deps.bridge.checkConnection({
+            connectorId: entry.connectorId,
+            humanSubject: request.humanSubject,
+            requiredScopes: entry.scopes,
+            transactionId: context.transactionId,
+          });
+          if (checked.status === 'READY') {
+            state.bridgeConnectionId = checked.connection_id;
+            continue;
+          }
+          await deps.transactions.advance(context.transactionId, 'WAITING_EXTERNAL_CONSENT', { pending_step: 'external_consent' });
+          state.consent = buildConsentResponse({
+            status: 'CONSENT_REQUIRED',
+            transactionId: context.transactionId,
+            consentUrl: checked.consent_url,
+            connectorId: entry.connectorId,
+            provisionerHost: new URL(deps.config.publicBaseUrl).host,
+          });
+          await emit({
+            eventType: 'provisioning.external_consent_required',
+            transactionId: context.transactionId,
+            humanSubject: request.humanSubject,
+            agentId,
+            message: `Agent が ${entry.connectorId} を利用するために、利用者の同意が必要です。`,
+            detail: { connector_id: entry.connectorId, missing_scopes: checked.missing_scopes },
+          });
+          throw new ProvisioningHalted('external_consent');
+        }
+        // Every connection is in hand, so nothing can interrupt this run again.
+        await deps.transactions.advance(context.transactionId, 'PROVISIONING', { pending_step: 'create_agent_binding' });
+      },
+      // The connection belongs to the person and survives this agent by design, so
+      // there is nothing here to take back: a run that fails after the consent leaves
+      // the person with a connection they can use for the next agent, which is the
+      // point of holding it outside the agent (docs 06 §3).
+      compensate: 'noop' as const,
+    },
+    {
+      id: 'create_agent_binding' as const,
+      /**
+       * The agent's own slice of the person's connection, and what `/token` reads. An
+       * agent with an ID-JAG and no binding is refused at the Bridge with
+       * `invalid_bridge_binding`, which is the shape this whole step exists to avoid.
+       */
+      async run() {
+        requireIdpReady('create_agent_binding');
+        if (!deps.bridge) throw new BridgeUnavailable(bridged.map((entry) => entry.connectorId));
+        for (const entry of bridged) {
+          const bound = await deps.bridge.createBinding({
+            agentId,
+            connectorId: entry.connectorId,
+            connectionId: state.bridgeConnectionId!,
+            humanSubject: request.humanSubject,
+            scopes: entry.scopes,
+            // The agent's own expiry, so a binding never outlives what it is for.
+            expiresAt: expiry.expiresAt,
+          });
+          await emit({
+            eventType: 'provisioning.binding_created',
+            transactionId: context.transactionId,
+            humanSubject: request.humanSubject,
+            agentId,
+            message: `${entry.connectorId} を ${entry.scopes.join(' ')} の範囲で使えるようにしました。`,
+            detail: { connector_id: entry.connectorId, scopes: entry.scopes, expires_at: bound.expires_at },
+          });
+        }
+        await deps.transactions.markStep(context.transactionId, 'register_agent');
+      },
+      // Deleting a binding is Lifecycle's (00b §4), and this service holds no client
+      // for the routes that do it. What keeps a binding from outliving a failed run is
+      // the expiry above: it is the agent's, and the agent is never registered.
+      compensate: 'noop' as const,
     }] : []),
     {
       id: 'register_agent',
@@ -371,7 +557,19 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     },
   ];
 
-  const result = await runProvisioning(steps, context, deps.logger);
+  // Minted outside the step list because `generate_agent_identity` is not one of the
+  // steps a resume repeats: the step's only lasting effect is this credential, and the
+  // half that gets written down is registered further along, by `register_agent`.
+  if (resume) state.credential = await createAgentClientCredential(agentId);
+
+  // A resume runs the tail of the list, and takes the consent's own undo with it:
+  // `idp_consent` created the connection back in the request that paused, and that
+  // request is long over, so if this half fails there is no one else left to revoke it.
+  const plan = resume === undefined ? steps : steps
+    .filter((step) => RESUMED_STEPS.includes(step.id))
+    .map((step) => (step.id === 'verify_idp_connection' ? { ...step, compensate: revokeConnection } : step));
+
+  const result = await runProvisioning(plan, context, deps.logger);
 
   if (result.haltedAt !== undefined) return { status: 200, body: state.consent! };
 
@@ -393,6 +591,16 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     if (context.transactionId !== '') {
       await deps.transactions.advance(context.transactionId, 'FAILED', { pending_step: result.failedAt })
         .catch(() => undefined);
+    }
+    // The catalogue offers a bridged tool that this deployment has no Bridge for. It is
+    // a configuration fact rather than anything the caller did, and it is named rather
+    // than let through: an agent registered without a binding fails at its first SaaS
+    // call, hours later, with `invalid_bridge_binding` and nothing pointing here.
+    if (error instanceof BridgeUnavailable) {
+      deps.logger.error('provisioner.bridge_unavailable', {
+        request_id: '', trace_id: context.transactionId, agent_id: agentId, human_subject: request.humanSubject,
+      }, { event: 'bridge_unavailable', connector_ids: error.connectorIds });
+      return { status: 500, body: { error: 'bridge_unavailable', connector_ids: error.connectorIds } };
     }
     if (error instanceof ExecutionAlreadyRunning) return { status: 409, body: { error: 'execution_already_running' } };
     if (error instanceof PreconditionFailed) {
@@ -432,6 +640,11 @@ export async function provisionAgent(deps: FlowDeps, request: ProvisionRequest):
     body: {
       status: 'PROVISIONED',
       agent_id: agentId,
+      // Echoed so the caller can pair the agent with the work it asked for. On the
+      // resume path the request was made by a browser coming back from a consent
+      // screen, and the transaction is all it carries: without this the Automation App
+      // cannot tell which of a person's work definitions this agent belongs to.
+      task_id: request.taskId,
       transaction_id: context.transactionId,
       expires_at: expiry.expiresAt,
       allowed_tools: resolved.tools.map((tool) => tool.tool_id),

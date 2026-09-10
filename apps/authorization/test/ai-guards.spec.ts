@@ -147,3 +147,25 @@ describe('what the Policy Engine is given', () => {
     expect(computeEffectiveCapabilities(input).securityProfile.isolation_level).toBe('standard');
   });
 });
+
+/**
+ * The note is prose for the person who asked, and nothing else. It is kept when the
+ * model wrote one, absent when it did not, and dropped whole — with a warning — when
+ * it names where or how to call something (RULE-09).
+ */
+describe('the model\'s note', () => {
+  it('is kept when clean and absent when not written', () => {
+    const { result } = sanitizeAiOutput({ capabilities: ['a'], characteristics: {}, confidence: 0.5, note: '  読むだけで足ります。 ' });
+    expect(result.note).toBe('読むだけで足ります。');
+    expect(sanitizeAiOutput({ capabilities: ['a'], characteristics: {}, confidence: 0.5 }).result).not.toHaveProperty('note');
+    expect(sanitizeAiOutput({ capabilities: ['a'], characteristics: {}, confidence: 0.5, note: '   ' }).result).not.toHaveProperty('note');
+  });
+
+  it('drops a note that names an endpoint, and says so', () => {
+    const { result, warnings } = sanitizeAiOutput({
+      capabilities: ['a'], characteristics: {}, confidence: 0.5, note: 'https://api.example.test/v1 を呼べば足ります。',
+    });
+    expect(result).not.toHaveProperty('note');
+    expect(warnings).toContainEqual({ code: 'ai_output_contains_technical_field', field: 'note' });
+  });
+});

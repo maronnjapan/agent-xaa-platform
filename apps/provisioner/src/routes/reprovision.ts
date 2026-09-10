@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { compile, SchemaValidationError, type IsolationLevel } from '@xaa/contracts';
+import { compile, INITIAL_TASK_ID, SchemaValidationError, type IsolationLevel } from '@xaa/contracts';
 import type { Logger } from '@xaa/logging';
 import type { CatalogRepository } from '../catalog/repository.js';
 import { requireInternalCaller } from '../middleware/internal-caller.js';
@@ -76,9 +76,11 @@ export function createReprovisionRoute(
 
     const outcome = await provisionAgent(deps, {
       humanSubject: body.human_subject,
-      // The work definition is what the replacement continues, so it is the task the
-      // new execution reports under.
-      taskId: body.work_definition_id,
+      // The replacement is a fresh Execution, so it reports under the same id a first
+      // Execution does. The work definition id was used here, and it is not one of the
+      // four shapes the timeline groups by (docs 11 §3.3) — the events reached the
+      // store and were then dropped on the way to the screen.
+      taskId: INITIAL_TASK_ID,
       effectiveCapabilities: body.effective_capabilities,
       isolationLevel: body.isolation_level,
       constraints: {},

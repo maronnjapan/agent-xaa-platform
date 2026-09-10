@@ -11,13 +11,15 @@ resource "google_secret_manager_secret" "google_oauth_client_secret" {
   depends_on = [google_project_service.required]
 }
 
-# The Human IdP has two stable confidential clients. Terraform owns the Secret
-# containers, while the deployment guide creates the first versions without ever
-# putting their plaintext in a tfvars file or Terraform state.
+# The Human IdP has one stable confidential client per application that a person logs
+# in to, plus the Agent OP's back-channel client. Terraform owns the Secret containers,
+# while the deployment guide creates the first versions without ever putting their
+# plaintext in a tfvars file or Terraform state.
 locals {
   human_idp_client_secrets = {
-    automation_app = "human-idp-automation-client-secret"
-    agent_platform = "human-idp-agent-platform-client-secret"
+    automation_app   = "human-idp-automation-client-secret"
+    agent_platform   = "human-idp-agent-platform-client-secret"
+    analysis_console = "human-idp-analysis-console-client-secret"
   }
 }
 

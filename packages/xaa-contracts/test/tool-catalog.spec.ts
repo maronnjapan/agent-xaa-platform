@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { assertValidCapabilityId, CAPABILITIES, RESOURCE_SCOPES, TOOL_BINDINGS, TOOL_IDS } from '../src/identifiers.js';
+import { DOCUMENT_TYPES, documentCreateSchema, documentPatchSchema } from '../src/document.js';
 
 const seedRoot = new URL('../../../infra/seed/', import.meta.url).pathname;
 const tools = readdirSync(`${seedRoot}tools`).map((file) => parse(readFileSync(`${seedRoot}tools/${file}`, 'utf8')) as Record<string, unknown>);
@@ -60,9 +61,62 @@ describe('seeded Tool Catalog', () => {
   it('lists exactly the documented keys for the document tools', () => {
     const allow = (id: string) => (tools.find((tool) => tool.tool_id === id)!.response_schema as { allowlist: string[] }).allowlist;
     expect(allow('internal.document.list')).toEqual(['document_id', 'type', 'title', 'occurred_at']);
-    expect(allow('internal.document.get')).toEqual(['document_id', 'type', 'title', 'occurred_at', 'body']);
+    expect(allow('internal.document.get')).toEqual(['document_id', 'type', 'title', 'occurred_at', 'body', 'version']);
     expect(allow('internal.document.create')).toEqual(['document_id', 'type', 'title']);
     expect(allow('internal.document.update')).toEqual(['document_id', 'version', 'updated_at']);
+  });
+
+  /**
+   * The catalogue is where a Tool's request schema is written down (docs 04 §1), and
+   * `buildApiRequest` drops every argument the catalogue did not declare. A tool that
+   * declares fewer parameters than its resource requires therefore cannot be called at
+   * all, and the way it fails says nothing: `internal.document.create` declared only
+   * `title` and `body`, so the `type` the model sent was dropped on the way out and the
+   * Document API answered 400 to every create an agent ever attempted;
+   * `internal.document.update` declared no `version`, so every update lost its
+   * optimistic lock on the way out and was refused the same way.
+   *
+   * Read off both sides rather than written out, so the check keeps holding when either
+   * the API's schema or the catalogue changes.
+   */
+  it('declares on each write tool the path segments and the fields the Document API requires', () => {
+    for (const [id, schema] of [
+      ['internal.document.create', documentCreateSchema],
+      ['internal.document.update', documentPatchSchema],
+    ] as const) {
+      const tool = tools.find((entry) => entry.tool_id === id)!;
+      const parameters = tool.parameters as Record<string, { required?: boolean }>;
+      const path = [...(tool.api as { path: string }).path.matchAll(/\{([a-z_]+)\}/g)].map((match) => match[1]!);
+
+      // Nothing is declared that the resource would not read: an argument the API has
+      // no field for is one the model was invited to compose for nobody.
+      const known = new Set<string>([...path, ...Object.keys(schema.properties)]);
+      for (const name of Object.keys(parameters)) expect(known.has(name), `${id} declares ${name}`).toBe(true);
+
+      // And everything the resource insists on is declared as required, so a call
+      // missing one is stopped by name before it is sent rather than coming back as an
+      // opaque 400 that names no field.
+      for (const name of [...path, ...schema.required]) {
+        expect(parameters[name]?.required, `${id} must require ${name}`).toBe(true);
+      }
+    }
+  });
+
+  /** The closed set of `type`, in the one place the model gets to read it. */
+  it('shows the model which document types exist', () => {
+    const create = tools.find((tool) => tool.tool_id === 'internal.document.create')!;
+    expect(((create.parameters as Record<string, { enum?: string[] }>).type).enum).toEqual([...DOCUMENT_TYPES]);
+  });
+
+  /**
+   * An update needs the version it is updating from, and the only way an agent can
+   * learn one is to read the document. Leaving `version` out of what a read returns
+   * made the write tool unusable however well it was declared.
+   */
+  it('returns from a read the version a write has to quote', () => {
+    const allowed = (id: string) => (tools.find((tool) => tool.tool_id === id)!.response_schema as { allowlist: string[] }).allowlist;
+    expect(allowed('internal.document.get')).toContain('version');
+    expect(Object.keys(documentPatchSchema.properties)).toContain('version');
   });
 
   it('gives the approve tool a max_amount constraint slot', () => {

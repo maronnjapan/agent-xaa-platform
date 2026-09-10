@@ -5,6 +5,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# The bundle is build output and is not committed. Scanning a directory that has not
+# been built would pass without having read the code this rule is about.
+[ -f apps/automation-app/public/app.js ] || {
+  echo 'apps/automation-app/public/app.js is missing; run pnpm build before this check' >&2
+  exit 1
+}
+
 for target in apps/automation-app/public apps/automation-app/client/src; do
   [ -e "$target" ] || continue
   if ! node scripts/checks/code-grep.mjs 'new WebSocket|EventSource|onSnapshot|setInterval' "$target" >&2; then

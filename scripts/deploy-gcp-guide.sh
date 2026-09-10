@@ -113,11 +113,13 @@ Options:
   GOOGLE_OAUTH_CLIENT_SECRET Google OAuth secret を直接渡す。FILE の代わりに使う
   ROTATE_INTERNAL_SECRETS    1 のとき Human IdP client secret を追加する
   ROTATE_GOOGLE_OAUTH_SECRET 1 のとき Google OAuth secret を追加する
-  GOOGLE_CONNECTOR_ID        OAuth client の redirect URI に使う connector id。既定値は google-workspace
+  GOOGLE_CONNECTOR_ID        OAuth client の redirect URI に使う connector id。既定値は stub-saas-calendar
   ALLOW_DIRTY                1 のとき dirty worktree のイメージ作成を許可する
   CONFIRM_PROJECT_ID         指定した場合だけ PROJECT_ID との一致を検査する誤操作防止
   DEMO_LOGIN_USER            権限を付与するログインユーザー。testuser または otheruser
   GRANT_DEMO_PERMISSIONS     0 のときデモ用 Human Permission の付与を省く
+  REACHABILITY_SETTLE_SECONDS 到達性検証で、一致しない辺を測り直し続ける秒数。
+                             既定値は 420。IAM の反映は数分かかるため 0 にはしない
   SKIP_ORG_POLICY_CHECK      1 のとき組織ポリシーの事前確認を省く
   AUTO_FIX_ORG_POLICY        既定は1。ドメイン制限共有の例外をプロジェクトへ自動で追加する
   DEMO_TFVARS                demo state の変数ファイル。既定値は infra/tfvars/deploy.tfvars
@@ -316,7 +318,11 @@ validate_settings() {
   CREATE_PROJECT=${CREATE_PROJECT:-auto}
   DEMO_LOGIN_USER=${DEMO_LOGIN_USER:-testuser}
   GRANT_DEMO_PERMISSIONS=${GRANT_DEMO_PERMISSIONS:-1}
-  GOOGLE_CONNECTOR_ID=${GOOGLE_CONNECTOR_ID:-google-workspace}
+  # redirect URI の途中に入る connector id は、Bridge が connector_definitions を
+  # 引く id と同じでなければならない。catalog が名指すのは1件だけなので、既定値は
+  # その id である（apps/seed/src/connector-definitions.ts の BRIDGED_CONNECTOR_ID）。
+  # 別の名前を入れると Google から戻った callback が invalid_target で止まる。
+  GOOGLE_CONNECTOR_ID=${GOOGLE_CONNECTOR_ID:-stub-saas-calendar}
 
   [[ "$GCP_AUTH_MODE" =~ ^(auto|existing|browser|workforce)$ ]] || die 'GCP_AUTH_MODE は auto、existing、browser、workforce のいずれかです。'
   [[ "$ENABLE_GOOGLE_BRIDGE" =~ ^(true|false)$ ]] || die 'ENABLE_GOOGLE_BRIDGE は true または false です。'
@@ -429,6 +435,9 @@ quality_gate() {
   run "${pnpm_command[@]}" test:integration
   run "${pnpm_command[@]}" test:e2e
   run "${pnpm_command[@]}" check:docs
+  # static-all.sh の no-firestore-sdk-in-frontend はブラウザ束ねを読む。束ねは生成物で
+  # コミットしていないため、無ければ「読まずに成功」ではなく失敗する。先に作る。
+  run "${pnpm_command[@]}" build:client
   run bash infra/tests/static-all.sh
   run "${tf_command[@]}" fmt -check -recursive infra
 
@@ -815,7 +824,10 @@ guide_google_oauth_client() {
     '       この2つは GOOGLE_OAUTH_CLIENT_ID と GOOGLE_OAUTH_CLIENT_SECRET_FILE で渡します。' \
     '' \
     "  redirect URI の connector id を変える場合は GOOGLE_CONNECTOR_ID=<id> を指定して実行し直してください。" \
-    "  作成済みの client は https://console.cloud.google.com/auth/clients?project=$PROJECT_ID で見られます。"
+    "  作成済みの client は https://console.cloud.google.com/auth/clients?project=$PROJECT_ID で見られます。" \
+    '' \
+    '  この4ページだけを案内し、設定できたかを項目ごとに確かめるスクリプトがあります。' \
+    "    PROJECT_ID=$PROJECT_ID scripts/google-bridge-guide.sh all"
 }
 
 add_google_oauth_secret_version() {
@@ -870,8 +882,14 @@ require_google_oauth_client_id() {
 
 provision_secret_values() {
   phase 'アプリの Secret version を用意します。'
-  add_generated_secret_version human-idp-automation-client-secret
-  add_generated_secret_version human-idp-agent-platform-client-secret
+  # 名前はここに書き写さず、Terraform が宣言した一覧を読む
+  # （scripts/human-idp-client-secrets.sh）。書き写せばクライアントが増えた日から
+  # ずれ始め、ずれたことは version の無い Secret を mount した revision が
+  # 起動しないところでしか分からない。
+  local secret_name
+  while read -r secret_name; do
+    add_generated_secret_version "$secret_name"
+  done < <(bash scripts/human-idp-client-secrets.sh)
   if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
     if [[ "$SAAS_CONNECTOR_MODE" == google ]]; then
       add_google_oauth_secret_version
@@ -905,7 +923,7 @@ apply_demo() {
 
 wait_for_services() {
   phase 'Cloud Run Service の Ready 状態を待ちます。'
-  local -a services=(human-idp automation-app authorization provisioner lifecycle shared-agent-op agent-op-callback security-detection resource-finance-as resource-finance-api resource-docs-as resource-docs-api)
+  local -a services=(human-idp automation-app analysis-console authorization provisioner lifecycle shared-agent-op agent-op-callback security-detection resource-finance-as resource-finance-api resource-docs-as resource-docs-api)
   if [[ "$ENABLE_GOOGLE_BRIDGE" == true ]]; then
     services+=(google-bridge google-bridge-callback)
     [[ "$SAAS_CONNECTOR_MODE" != stub ]] || services+=(stub-saas-op stub-saas-api)
@@ -1026,7 +1044,18 @@ verify_deployment() {
   phase 'IAM 到達性と権限を検証します。'
   verify_automation_login_registration
   prepare_verify_impersonation
+  # apply 直後の binding は、書かれていてもまだ効いていない。効くまでの間、許可した
+  # 呼び出しは 403 で返り、配備が壊れているのと区別がつかない。reachability は
+  # 一致しない辺だけを測り直し、既定で最大 REACHABILITY_SETTLE_SECONDS 秒待つ。
+  say 'IAM の反映待ちのため、一致しない辺は反映されるまで測り直します。残り時間は測り直すたびに表示されます。'
   run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" bash infra/tests/verify-all.sh
+  # 上は「誰が誰を呼べるか」を測る。ここから先は「Finance の処理が実際に動くか」を訊く。
+  # Resource AS が署名鍵を持って応答するか、Resource API が Access Token 無しの呼び出しを
+  # 401 で断るか、そして Catalog・Taxonomy・Risk Policy・Human Permission の行が
+  # 揃っているかである。どれが欠けても画面には「Agent は作られたが何もしない」としか出ない。
+  say 'Finance の Resource AS と API が応答するか、権限の行が揃っているかを確認します。'
+  run env PROJECT_ID="$PROJECT_ID" REGION="$REGION" TF="${tf_command[*]}" DEMO_LOGIN_USER="$DEMO_LOGIN_USER" \
+    bash infra/tests/finance-api.sh
   cleanup_verify_bindings
   if ((dry_run)); then
     print_command "${tf_command[@]}" -chdir=infra/envs/demo output -json platform_endpoints
@@ -1063,11 +1092,12 @@ grant_demo_permissions() {
 
 print_next_steps() {
   phase 'デプロイ後の使い方を表示します。'
-  local automation_app_url issuer_url
+  local automation_app_url issuer_url analysis_console_url
   if ((dry_run)); then
     print_command "${tf_command[@]}" -chdir=infra/envs/demo output -json service_urls
     automation_app_url="https://automation-app-<project-number>.$REGION.run.app"
     issuer_url="https://human-idp-<project-number>.$REGION.run.app"
+    analysis_console_url="https://analysis-console-<project-number>.$REGION.run.app"
   else
     # 案内の表示で全体を落とさない。output が読めなければ既定のホスト名の形を見せる。
     local urls
@@ -1076,6 +1106,8 @@ print_next_steps() {
       '."automation-app" // $fallback' <<<"$urls")
     issuer_url=$(jq -r --arg fallback "https://human-idp-<project-number>.$REGION.run.app" \
       '."human-idp" // $fallback' <<<"$urls")
+    analysis_console_url=$(jq -r --arg fallback "https://analysis-console-<project-number>.$REGION.run.app" \
+      '."analysis-console" // $fallback' <<<"$urls")
   fi
 
   local -a bridge_lines=()
@@ -1109,6 +1141,10 @@ print_next_steps() {
     '  4. 「必要な権限を調べる」で提示された Agent Definition を承認し、「この内容で Agent を作る」を押す。' \
     '  5. 実行の様子は同じ画面の「タイムライン」で追えます。' \
     '' \
+    "  Agent の挙動を見ているログ分析エージェントの判断: $analysis_console_url" \
+    '    別のサイトなので、初回はもう一度同じ ID とパスワードでログインします。' \
+    '    読むだけの画面です。Agent を止めるのは Automation App 側です。' \
+    '' \
     "  画面ごとの操作:  $automation_app_url/guide" \
     '                  docs/user-guide.md に同じ内容と、うまくいかないときの対処があります。' \
     '' \
@@ -1122,7 +1158,7 @@ print_next_steps() {
     '  破棄:' \
     "    PROJECT_ID=$PROJECT_ID REGION=$REGION DEMO_TFVARS=$DEMO_TFVARS TF='${tf_command[*]}' make demo-destroy"
 
-  warn 'Automation App と Human IdP はインターネットへ公開され、ログイン情報は固定です。検証が終わったら demo-destroy してください。'
+  warn 'Automation App、Analysis Console と Human IdP はインターネットへ公開され、ログイン情報は固定です。検証が終わったら demo-destroy してください。'
 }
 
 prepare_verify_impersonation() {

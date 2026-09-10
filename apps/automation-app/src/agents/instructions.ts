@@ -49,14 +49,18 @@ export async function addInstruction(input: {
     const state = await transaction.get<{ agent_status?: string; task_context?: { task_id?: string } }>('agents', `${input.agentId}__state`);
     const meta = await transaction.get<{ status?: string; expires_at?: string }>('agents', `${input.agentId}__meta`);
     const status = meta?.status && meta.status !== 'ACTIVE' ? meta.status : state?.agent_status ?? meta?.status;
-    if (status !== 'ACTIVE' || (meta?.expires_at && Date.parse(meta.expires_at) <= Date.parse(now))) throw new AgentNotActive();
+    if (status !== 'ACTIVE') throw new AgentNotActive();
     if (input.fault) {
+      // The exercise needs an execution that is still running: an agent past its
+      // lifetime has nothing left to interrupt, and the task named by the checkpoint
+      // is the one the person was looking at when they pressed the button.
+      if (meta?.expires_at && Date.parse(meta.expires_at) <= Date.parse(now)) throw new AgentNotActive();
       const taskId = state?.task_context?.task_id;
       if (!taskId) throw new AgentNotActive();
       const pending = await transaction.queryEqual<StoredInstruction>('agent_instructions', [
         ['agent_id', input.agentId], ['applied_at', null],
       ]);
-      if (pending.some((row) => row.data.fault)) throw new FaultAlreadyPending();
+      if (pending.some((row) => row.data.fault?.task_id === taskId)) throw new FaultAlreadyPending();
       instruction.fault = { kind: input.fault, task_id: taskId };
     }
     transaction.set('agent_instructions', instruction.instruction_id, instruction as unknown as Record<string, unknown>);

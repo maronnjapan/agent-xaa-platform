@@ -1,0 +1,154 @@
+import { randomUUID } from 'node:crypto';
+import { RUNTIME_EXIT_CODES, readModes } from '@xaa/contracts';
+import { createFirestoreDocumentStore, getFirestore, type DocumentStore } from '@xaa/gcp';
+import { createLogger, type LogContext } from '@xaa/logging';
+import { createExecutionContext } from './context/execution-context.js';
+import { loadEnv, ForbiddenEnvKey, MissingEnvKey } from './env.js';
+import { buildAllowedHosts, buildInternalOrigins } from './http/allowed-hosts.js';
+import { createRuntimeHttpClient } from './http/http-client.js';
+import { createInvokerTokenProvider, type InvokerIdToken } from './http/internal-invoker-token.js';
+import { manifestSha256 } from './manifest/load.js';
+import { runReasoningLoop } from './reasoning/loop.js';
+import { createRuntimeStore } from './store/runtime-store.js';
+import { publishTaskOutcome } from './telemetry/activity.js';
+import { taskSummaryRecord } from './telemetry/execution-record.js';
+import { createTerminalEmitter, decideTaskOutcome } from './telemetry/task-outcome.js';
+
+export interface RunAgentOptions {
+  /**
+   * The Execution's own environment. Cloud Run puts it in `process.env`, which is the
+   * default; a runner that hosts several Executions in one process passes each its own
+   * map so one agent's credentials are never visible in another's lookup.
+   */
+  env?: NodeJS.ProcessEnv;
+  /** Overrides the Firestore-backed store, for a deployment whose store is not GCP's. */
+  documents?: DocumentStore;
+  /** Overrides the Cloud Run invoker token, which only exists on GCP. */
+  invokerToken?: (audience: string) => Promise<InvokerIdToken | undefined>;
+}
+
+/** The one line at the top of the summary, matched to the verdict it describes. */
+const TERMINAL_HEADLINES: Readonly<Record<'TASK_COMPLETED' | 'TASK_BLOCKED' | 'TASK_FAILED', string>> = {
+  TASK_COMPLETED: '指示された作業を最後まで行いました',
+  TASK_BLOCKED: '権限の範囲外の操作があったため、そこで止めました',
+  TASK_FAILED: '途中で問題が起きたため、作業を完了できませんでした',
+};
+
+/**
+ * DEC-APP-02: the only app in the platform that is not an HTTP service.
+ *
+ * An Agent Runtime is one Cloud Run Job Execution running one agent. It listens on
+ * nothing — no port, no route, and no HTTP server started anywhere in this package —
+ * because an agent that accepted requests would be a place to send instructions that
+ * bypassed the Automation App, and with it the record of who asked for what.
+ *
+ * The return value is the exit code, which is the Job's only channel back: 0 completed,
+ * 10 the agent's lifetime ran out, 20 completed with something refused, 30 failed, 78
+ * started with bad input. `main.ts` turns it into `process.exit`; a runner that hosts
+ * the Execution rather than being it reads it as a value.
+ */
+export async function runAgent(options: RunAgentOptions = {}): Promise<number> {
+  const processEnv = options.env ?? process.env;
+  const logger = createLogger('agent-runtime', 'agent_runtime');
+  let logContext: LogContext = { request_id: randomUUID(), trace_id: randomUUID(), agent_id: null, human_subject: null };
+
+  let env;
+  try {
+    env = loadEnv(processEnv);
+  } catch (error) {
+    if (error instanceof ForbiddenEnvKey) {
+      logger.critical('forbidden_env_key', logContext, { key: error.key });
+      return RUNTIME_EXIT_CODES.invalidStartup;
+    }
+    if (error instanceof MissingEnvKey) {
+      logger.critical('missing_env_key', logContext, { key: error.key });
+      return RUNTIME_EXIT_CODES.invalidStartup;
+    }
+    throw error;
+  }
+  logContext = { ...logContext, agent_id: env.AGENT_ID, human_subject: env.HUMAN_SUBJECT };
+
+  const manifestRaw = env.TOOL_MANIFEST;
+  const store = createRuntimeStore({
+    documents: options.documents
+      ?? createFirestoreDocumentStore(getFirestore(readModes(processEnv), processEnv), 'agent-runtime'),
+    agentId: env.AGENT_ID,
+  });
+
+  let context;
+  try {
+    context = await createExecutionContext({ env, store, processEnv });
+  } catch (error) {
+    logger.critical('startup_failed', logContext, { message: (error as Error).message });
+    return RUNTIME_EXIT_CODES.failed;
+  }
+
+  // Every platform service this Execution calls sits behind Cloud Run's IAM check, so
+  // each call needs this Execution's own `run.invoker` token beside the agent's
+  // credentials; `buildInternalOrigins` says which destinations those are. On GCP
+  // only: there is no metadata server anywhere else, and asking for one would turn
+  // every local run into a timeout.
+  const http = createRuntimeHttpClient({
+    allowedHosts: buildAllowedHosts(env, context.manifest),
+    internalOrigins: buildInternalOrigins(env, context.manifest),
+    invokerToken: options.invokerToken ?? createInvokerTokenProvider({ enabled: processEnv.STORE_MODE === 'gcp' }),
+  });
+  const activityContext = {
+    humanSubject: context.humanSubject, agentId: context.agentId, taskId: context.taskId,
+    traceId: logContext.trace_id, manifest: context.manifest,
+  };
+  // Filled in once the loop has run. The terminal event is emitted from three places
+  // — the normal path, the catch and the `finally` — and only one of them has a loop
+  // result to describe, so the summary is held here rather than passed to each.
+  let summary: ReturnType<typeof taskSummaryRecord> | undefined;
+  const terminal = createTerminalEmitter(async (outcome) => {
+    await publishTaskOutcome({
+      context: activityContext, eventType: outcome, logger, ctx: logContext,
+      ...(summary ? { record: summary } : {}),
+    });
+  });
+
+  try {
+    const loop = await runReasoningLoop({ context, http, logger, logContext, activity: activityContext });
+    // Two ways of stopping that the tool results cannot show. Running out of steps is
+    // the loop's own bound; `no_decision` is the model never answering, which without
+    // this reads as a task that finished with nothing to do.
+    if (loop.stoppedBy === 'no_decision') logger.error('reasoning_no_decision', logContext, { steps: loop.results.length });
+    const outcome = loop.stoppedBy === 'reasoning_step_limit' || loop.stoppedBy === 'no_decision'
+      ? 'TASK_FAILED'
+      : decideTaskOutcome(loop.results);
+    summary = taskSummaryRecord({
+      headline: TERMINAL_HEADLINES[outcome],
+      stoppedBy: loop.stoppedBy,
+      steps: loop.records,
+      toolCalls: {
+        succeeded: loop.results.filter((result) => result.outcome === 'success').length,
+        blocked: loop.results.filter((result) => result.outcome === 'blocked').length,
+        failed: loop.results.filter((result) => result.outcome === 'failed').length,
+      },
+      ...(loop.finalNote ? { finalNote: loop.finalNote } : {}),
+    });
+    await terminal.emitTerminalOnce(outcome);
+
+    // RULE-13 again, from the other end: the manifest that governed this execution is
+    // the one it started with. A mismatch would mean something mutated it in memory.
+    if (manifestSha256(manifestRaw) !== env.TOOL_MANIFEST_SHA256) {
+      logger.critical('manifest_hash_changed', logContext, {});
+      return RUNTIME_EXIT_CODES.failed;
+    }
+    logger.info('manifest_hash_stable', logContext, { sha256: env.TOOL_MANIFEST_SHA256 });
+
+    if (loop.stoppedBy === 'agent_expired') return RUNTIME_EXIT_CODES.agentExpired;
+    if (outcome === 'TASK_BLOCKED') return RUNTIME_EXIT_CODES.completedWithBlock;
+    if (outcome === 'TASK_FAILED') return RUNTIME_EXIT_CODES.failed;
+    return RUNTIME_EXIT_CODES.completed;
+  } catch (error) {
+    logger.error('execution_failed', logContext, { message: (error as Error).message });
+    await terminal.emitTerminalOnce('TASK_FAILED');
+    return RUNTIME_EXIT_CODES.failed;
+  } finally {
+    // Whatever happened, the tokens die with the process — and are gone before it ends.
+    context.tokens.clear();
+    await terminal.emitTerminalOnce('TASK_FAILED');
+  }
+}

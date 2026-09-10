@@ -57,7 +57,7 @@ describe('the keys an agent registration carries', () => {
   it('matches the snapshot, in the document Firestore actually holds', async () => {
     const target = await createProvisionerHarness({ idpPublicJwk: issuer.publicJwk });
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-    const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+    const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
     const { agent_id: agentId } = await response.json() as { agent_id: string };
 
     const stored = await target.documents.get<Record<string, unknown>>('agents', `${agentId}__meta`);

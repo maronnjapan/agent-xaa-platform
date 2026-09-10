@@ -35,7 +35,11 @@ const deps: LifecycleDeps = {
   provisionerUrl: endpoints.provisionerUrl,
   accessToken: {
     issuer: config.issuer,
-    jwksUrl: `${config.issuer}/jwks.json`,
+    // From endpoints.json like every other URL this service uses, and for the same
+    // reason: the one it used to build here, `${issuer}/jwks.json`, is a path the Human
+    // IdP does not serve, so the key was never found and every revoke answered 401
+    // `invalid_token` (see ResolvedEndpoints.jwksUrl).
+    jwksUrl: endpoints.jwksUrl,
     audience: config.selfAudience,
     requiredScope: 'agent:revoke',
     iatSkewSeconds: 300,

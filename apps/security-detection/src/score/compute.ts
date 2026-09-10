@@ -1,5 +1,5 @@
 import scoring from '../../../../security-rules/scoring.json' with { type: 'json' };
-import { compile } from '@xaa/contracts';
+import { compile, type ScoreBreakdown } from '@xaa/contracts';
 import { CRITICAL_SINGLETON_FACTORS, SCORE_FACTORS, factorFor, type ScoreFactor } from './factors.js';
 import type { SecurityFinding } from '../correlate/finding.js';
 
@@ -37,34 +37,44 @@ export interface ScoreCounters { unmapped_code_total: number }
  * the config for documentation, but the answer does not depend on them: an operator who
  * lowers `delegation_mismatch` to 1 has not made a forged delegation less serious.
  */
-export function computeScore(input: {
+interface ScoreInput {
   finding: SecurityFinding;
   financeResourceUrl?: string;
   resources?: readonly string[];
   counters?: ScoreCounters;
-}): number {
+}
+
+export function computeScore(input: ScoreInput): number {
+  return explainScore(input).score;
+}
+
+/** The same calculation supplies the score and its recorded explanation. */
+export function explainScore(input: ScoreInput): ScoreBreakdown & { score: number } {
+  let unmappedCount = 0;
   const counts = new Map<ScoreFactor, number>();
   for (const code of input.finding.contributing_codes) {
     const factor = factorFor(code);
     if (!factor) {
+      unmappedCount += 1;
       if (input.counters) input.counters.unmapped_code_total += 1;
       continue;
     }
     counts.set(factor, (counts.get(factor) ?? 0) + 1);
   }
 
-  if (CRITICAL_SINGLETON_FACTORS.some((factor) => counts.has(factor))) return 100;
+  const criticalOverride = CRITICAL_SINGLETON_FACTORS.some((factor) => counts.has(factor));
 
   // Only the finance resource carries a sensitivity premium: it is the one whose misuse
   // moves money.
-  if (input.financeResourceUrl && input.resources?.includes(input.financeResourceUrl)) {
+  if (!criticalOverride && input.financeResourceUrl && input.resources?.includes(input.financeResourceUrl)) {
     counts.set('resource_sensitivity', (counts.get('resource_sensitivity') ?? 0) + 1);
   }
 
-  let total = 0;
-  for (const [factor, count] of counts) {
+  const contributions = [...counts].map(([factor, count]) => {
     const weight = SCORING[factor];
-    total += Math.min(count * weight.per_event, weight.cap);
-  }
-  return Math.min(100, total);
+    return { factor, count, per_event: weight.per_event, cap: weight.cap,
+      points: Math.min(count * weight.per_event, weight.cap) };
+  });
+  return { score: criticalOverride ? 100 : Math.min(100, contributions.reduce((sum, item) => sum + item.points, 0)),
+    contributions, critical_override: criticalOverride, unmapped_count: unmappedCount };
 }

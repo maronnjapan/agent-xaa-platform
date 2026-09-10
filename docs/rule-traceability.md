@@ -13,7 +13,7 @@
 | RULE-06 | Human Control PlaneのAccess Tok（DEV-01） | REQ-05-013 | `packages/xaa-crypto/src/dpop.ts` | `packages/xaa-crypto/test/dpop.spec.ts::rejects htm mismatch` | 実装 |
 | RULE-43 | Control Plane APIの `human_subj | REQ-05-054 | `packages/xaa-control-plane-auth/src/human-subject.ts` | `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts::ignores human_subject in the body` | 実装 |
 | RULE-44 | DPoP検証では、Access Tokenの `cnf.jk（DEV-11） | REQ-05-034 | `packages/xaa-resource-guard/src/redeem.ts` | `apps/google-bridge/test/bridge.spec.ts::tells a missing proof apart from a bad one` | 実装 |
-| RULE-07 | Automation Design AIはWork Defi | REQ-02-001 | `apps/automation-app/src/work-definition/submit.ts` | `apps/automation-app/test/work-and-approval.spec.ts::names no capability, scope, audience or tool` | 実装 |
+| RULE-07 | Automation Design AIはWork Defi | REQ-02-001 | `apps/automation-app/src/work-definition/submit.ts`、`packages/xaa-control-plane-auth/src/admin-console.ts` | `apps/authorization/test/admin-permissions.spec.ts::keeps the taxonomy out of reach of a caller who is not on the list` | 実装 |
 | RULE-08 | ユーザーとの対話と承認なしに、Automation Desi | REQ-02-004 | `apps/automation-app/src/work-definition/model.ts` | `apps/automation-app/test/work-and-approval.spec.ts::stays DRAFT despite an LLM confirmation phrase` | 実装 |
 | RULE-09 | Authorization AI AgentはWork De | REQ-03-004 | `apps/authorization/src/ai/taxonomy-filter.ts` | `apps/authorization/test/ai-guards.spec.ts` | 実装 |
 | RULE-10 | Authorization AI Agentの出力は提案であ | REQ-03-005 | `apps/authorization/src/pipeline/decide.ts` | `apps/authorization/test/decide-pipeline.spec.ts` | 実装 |
@@ -22,7 +22,7 @@
 | RULE-13 | 既存Agentの権限昇格は行わない。より広い権限が必要なら、 | - | `apps/automation-app/src/agents/instructions.ts` | `apps/automation-app/test/agent-operations.spec.ts::rejects a body that names a capability` | 実装 |
 | RULE-14 | Human Permissionが縮小したら既存Agentを | - | `apps/lifecycle-manager/src/reprovision.ts` | `apps/lifecycle-manager/test/revoke-and-reprovision.spec.ts::keeps expires_at from the old agent and asks for a new id` | 実装 |
 | RULE-15 | CapabilityとToolを分離する。Capabilit | - | `apps/authorization/src/policy/invariant.ts` | `apps/authorization/test/invariant.property.spec.ts` | 実装 |
-| RULE-16 | Toolの認証方式、接続先、API Endpointは To | - | `packages/xaa-contracts/src/catalog-types.ts` | `apps/provisioner/test/catalog.spec.ts` | 実装 |
+| RULE-16 | Toolの認証方式、接続先、API Endpointは To | - | `packages/xaa-contracts/src/catalog-types.ts`、`apps/provisioner/src/admin/mapping-store.ts` | `apps/provisioner/test/catalog.spec.ts` | 実装 |
 | RULE-17 | AgentはProvisioning済みのToolだけを選択 | - | `apps/agent-runtime/src/manifest/load.ts` | `apps/agent-runtime/test/manifest.spec.ts::manifest is deeply frozen` | 実装 |
 | RULE-18 | AI（LLM）はToolを選び、認証とAPI実行はDeter | - | `apps/agent-runtime/src/reasoning/parse-tool-call.ts` | `apps/agent-runtime/test/tool-executor.spec.ts::ignores api_base_url and scope in llm output` | 実装 |
 | RULE-19 | XAA設定（audience、resource、scope） | - | `apps/agent-runtime/src/tool-executor/steps/allowed-tools.ts` | `apps/agent-runtime/test/tool-executor.spec.ts::does not match by prefix or case` | 実装 |

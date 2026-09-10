@@ -15,12 +15,17 @@ const REGISTRATION: AgentRegistrationView = {
   resources: [DOCS_RESOURCE],
 };
 
-function context(entries: readonly Parameters<typeof logEntry>[0][]): RuleContext {
+function context(
+  entries: readonly Parameters<typeof logEntry>[0][],
+  options: { registration?: AgentRegistrationView; capabilities?: string[] } = {},
+): RuleContext {
   return {
     events: normalizeEntries(entries.map((overrides) => logEntry(overrides))).events,
     violations: [],
-    baselines: new Map([[AGENT_ID, baselineFor()]]),
-    registrations: new Map([[AGENT_ID, REGISTRATION]]),
+    baselines: new Map([[AGENT_ID, options.capabilities
+      ? { ...baselineFor(), effective_capabilities: options.capabilities }
+      : baselineFor()]]),
+    registrations: new Map([[AGENT_ID, options.registration ?? REGISTRATION]]),
     maxLifetimeSeconds: null,
   };
 }
@@ -71,6 +76,26 @@ describe('the authorization classification', () => {
     expect(hit!.detail).toEqual({ observed: ['finance.tx.write'], expected: ['docs.read'] });
     // One event, one hit: no count threshold stands between the request and the finding.
     expect(hits.filter((candidate) => candidate.rule_id === 'authorization.scope_out_of_range')).toHaveLength(1);
+  });
+
+  /**
+   * An administrator can define a capability of their own and map a resource to it, and
+   * `CAPABILITY_TO_SCOPE` — a table of the eight the platform ships with — knows nothing
+   * about it. Reading the scopes the Provisioner actually injected is what keeps the
+   * detector from reporting every request such an agent makes as out of range.
+   */
+  it('measures against the scopes the agent was issued, not a table of the shipped eight', () => {
+    const registration: AgentRegistrationView = { ...REGISTRATION, scopes: ['docs.read'] };
+
+    const issued = detectAuthorizationHits(context([{ fields: { requested_scope: 'docs.read' } }],
+      { registration, capabilities: ['contract.review'] }));
+    const beyond = detectAuthorizationHits(context([{ fields: { requested_scope: 'finance.tx.write' } }],
+      { registration, capabilities: ['contract.review'] }));
+
+    expect(CAPABILITY_TO_SCOPE['contract.review' as never]).toBeUndefined();
+    expect(issued.filter((hit) => hit.rule_id === 'authorization.scope_out_of_range')).toHaveLength(0);
+    // A scope outside the registration is still a finding: the yardstick moved, not the rule.
+    expect(beyond.filter((hit) => hit.rule_id === 'authorization.scope_out_of_range')).toHaveLength(1);
   });
 
   it('unknown audience hits medium with a single event', () => {

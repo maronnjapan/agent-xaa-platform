@@ -4,6 +4,12 @@
 内容は各文書（[01](./01-overview.md)〜[10](./10-design-rules.md)）にあり、本ファイルには要約と構成だけを置く。
 
 設計ではなく、デプロイしたサイトを画面から操作する手順は[サイトの使い方](./user-guide.md)にある。
+GCP へ配備せず手元のパソコン1台で基盤全体を動かす手順は[ローカルで動かす](./local-development.md)にある。
+既定では配備しない Google Bridge を有効にして通すまでの手順は[Google Bridge を試す](./google-bridge-setup.md)にある。
+review-markdown-cli で決めたタスクを ToDo として取り込む手順は[review-markdown-cli から ToDo を取り込む](./review-markdown-import.md)にある。
+
+構成図は [diagrams/](./diagrams/README.md) にまとめてある。
+全体構成に加えて、Isolation Level が `STANDARD` のときと `FULL_ISOLATION` のときの構成を1枚ずつ置き、同じ内容を Mermaid でも書いてある。
 
 ## 要約
 
@@ -83,3 +89,6 @@ draw.ioで直接編集した場合は、PNGとSVGが古いままになる点に�
 - 2026-08-30：制約（単一 GCP Project、IaC 管理）に合わせて RULE-06 / 32 / 33 / 34 / 42 / 44 / 47 / 49 / 53 / 57 を見直し、うち8件を改訂した。改訂前の文面は `docs/rules.json` の `revised_from` に残る。
 - 2026-08-30：docs 08 と docs 09 を単一 GCP Project 構成へ書き換えた。監査ログの分離は Project ではなく BigQuery dataset と IAM で行い、`enable_deny_policy=false` のとき Owner による削除を防げないことを本文へ明記した。
 - 2026-08-30：docs の検査を CI 必須にした。`pnpm check:docs` は要件索引・逸脱・用語・リンク・旧プロジェクト名の5検査を連結し、図は `pnpm gen:diagrams` の再生成差分で検査する。
+- 2026-09-05：権限（Capability）の管理画面を Authorization Platform に、権限とリソースの対応付け画面を Agent Provisioner に追加した（[03. §2.1](./03-authorization.md#21-権限の管理画面)、[04. §5.1](./04-tool-catalog.md#51-権限とリソースのマッピング画面)）。どちらも Internet へは公開せず、`ADMIN_PRINCIPALS` に挙げた Google アカウントだけが `gcloud run services proxy` 経由で到達する。Capability が8件固定でなくなったため、Tool Manifest の検査と再評価ガードを id の形で行うよう改めた。
+- 2026-09-06：Automation App を、AI に実行してもらう ToDo を書く画面に改めた（[02. §2.1](./02-automation-design.md#21-todoの項目)、[02. §2.2](./02-automation-design.md#22-todoの状態)）。1件の ToDo が Work Definition であることは変わらず、タイトル・説明に加えて、実行時のコンテキスト、完了条件、優先度、期限を持ち、Agent が実行したあとに人が完了か取り下げで閉じる。外部のツールから ToDo を登録する API を `/external/todos` に公開した。Human IdP が発行した `aud=automation-app` の Access Token を `Bearer` で受け付け、登録できるのは下書きまでである（[02. §6](./02-automation-design.md#6-todo登録api)）。
+- 2026-09-06：権限を人へ渡す画面を Authorization Platform に、ドキュメントの管理画面を Document Resource API に追加した（[03. §2.1](./03-authorization.md#21-権限の管理画面)、[04. §2.1](./04-tool-catalog.md#21-ドキュメントの管理画面)）。`human_permissions` の変更は `pnpm perm:set` だけの経路ではなくなり、画面からの変更もその場で再評価を起こす（RULE-14）。管理画面はサーバ側で React を描画した HTML だけを返し、ブラウザへスクリプトを送らない。

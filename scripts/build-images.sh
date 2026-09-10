@@ -7,16 +7,16 @@ set -euo pipefail
 # produces an arm64 image by default, which Cloud Run accepts at push time and refuses
 # at start time, so the platform is pinned here rather than left to the host.
 platform=${DOCKER_PLATFORM:-linux/amd64}
-apps=(human-idp automation-app authorization provisioner lifecycle-manager agent-op security-detection resource-docs-as resource-docs-api resource-finance-as resource-finance-api agent-runtime jwks-publish seed google-bridge stub-saas-op stub-saas-api)
+apps=(human-idp automation-app analysis-console authorization provisioner lifecycle-manager agent-op security-detection resource-docs-as resource-docs-api resource-finance-as resource-finance-api agent-runtime jwks-publish seed google-bridge stub-saas-op stub-saas-api)
 total=${#apps[@]}
 dry_run=0
 [[ "${DRY_RUN:-0}" == 1 ]] && dry_run=1
 
-# The 17 images differ only in which app `pnpm deploy` cuts out of the workspace; the
+# The 18 images differ only in which app `pnpm deploy` cuts out of the workspace; the
 # install and the `pnpm build` above it are one stage they all share. Building that stage
 # by itself first makes it a cache hit for every image that follows, so the workspace is
-# compiled once instead of 17 times, and a compile error is reported here as a single
-# readable failure instead of as the first of 17 identical ones.
+# compiled once instead of 18 times, and a compile error is reported here as a single
+# readable failure instead of as the first of 18 identical ones.
 warm_shared_stage() {
   printf '\n[build-images] compiling the shared stage once, before the %d images\n' "$total"
   # A fixed local tag keeps this at one named image instead of a new dangling one per run.
@@ -41,7 +41,7 @@ resolve_jobs() {
 
 # Parallel builds interleave their output, so each app writes to its own file and reports
 # a single line when it is done. A failing app prints its log, because the reason a build
-# failed is the only thing worth reading out of 17 of them.
+# failed is the only thing worth reading out of 18 of them.
 build_and_push_app() {
   local app=$1
   # `local x=$1 y=$x` cannot work: the shell expands every word before the builtin

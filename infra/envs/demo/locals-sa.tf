@@ -3,6 +3,7 @@ locals {
   service_accounts = {
     human_idp            = "sa-human-idp"
     automation_app       = "sa-automation-app"
+    analysis_console     = "sa-analysis-console"
     authorization        = "sa-authorization"
     provisioner          = "sa-provisioner"
     lifecycle            = "sa-lifecycle"

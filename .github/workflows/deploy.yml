@@ -70,10 +70,24 @@ jobs:
       # stop matching the invoker matrix. The impersonation the measurement needs is
       # granted and removed by scripts/verify-impersonation.sh, which asks the deploy
       # service account for iam.serviceAccounts.setIamPolicy on the callers.
+      #
+      # A deploy that follows infra-destroy writes every service and every invoker binding
+      # in this one apply, and a Cloud Run IAM change reaches the front end minutes after
+      # the API accepts it. Measuring in between answers 403 on every allowed edge at once,
+      # which reads like a broken deployment and is not one. reachability.sh re-measures
+      # the edges that do not match for up to REACHABILITY_SETTLE_SECONDS, so this step
+      # waits the propagation out instead of failing the deploy on it.
       - name: Demo apply and IAM verification
         run: make demo-apply TF=terraform
       - name: Publish the aggregate JWKS and the definition data
         run: make seed
+      # The IAM verification above says who may call the Finance services. This asks
+      # whether they answer and whether the catalogue, taxonomy, policy and permission
+      # rows the seed just wrote are the ones a finance Agent needs — the difference
+      # between an Agent that is created and one that can do the work it was created
+      # for. It runs after the seed because that is what it reads.
+      - name: Check the Finance path answers
+        run: make verify-finance TF=terraform
       # A failed Cloud Run job answers `gcloud run jobs execute` with nothing but the name
       # of its execution, so a failure here used to be readable only from inside the
       # project. These are the lines the container wrote.

@@ -1,5 +1,6 @@
 import { createFirestoreDocumentStore, FirestoreJtiStore, getFirestore } from '@xaa/gcp';
 import { verifyGoogleServiceIdentity } from '@xaa/crypto';
+import { parseAdminPrincipals } from '@xaa/control-plane-auth';
 import type { DocsApiDeps } from './app.js';
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -31,5 +32,11 @@ export async function createRuntimeDeps(env: NodeJS.ProcessEnv = process.env): P
     },
     lifecycleServiceAccount: required(env, 'LIFECYCLE_SA_EMAIL'),
     automationAppServiceAccount: required(env, 'AUTOMATION_APP_SA_EMAIL'),
+    // The console. `PUBLIC_BASE_URL` is the audience an administrator's proxy-attached
+    // token names, so without it there is nothing to check a token against and the
+    // console is not mounted at all. With it and an empty `ADMIN_PRINCIPALS`, it is
+    // mounted and reachable by nobody, which is what an unconfigured deployment should be.
+    ...(env.PUBLIC_BASE_URL ? { publicBaseUrl: env.PUBLIC_BASE_URL } : {}),
+    adminPrincipals: parseAdminPrincipals(env.ADMIN_PRINCIPALS),
   };
 }

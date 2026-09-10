@@ -1,6 +1,6 @@
 locals {
   required_service_names = toset([
-    "human-idp", "automation-app", "authorization", "provisioner", "lifecycle",
+    "human-idp", "automation-app", "analysis-console", "authorization", "provisioner", "lifecycle",
     "shared-agent-op", "agent-op-callback", "security-detection",
     "resource-finance-as", "resource-finance-api", "resource-docs-as", "resource-docs-api",
   ])
@@ -16,8 +16,12 @@ locals {
     local.bridge_service_names,
     local.stub_service_names,
   )
+  # The screens a person opens, plus the two OAuth callbacks a browser is redirected to.
+  # `analysis-console` is the second screen: it has its own Human IdP client and its own
+  # login, so a person reaching it arrives with no credential this project has issued
+  # yet — which is exactly what a public endpoint is for (docs 08 §8, RULE-37).
   public_services = setunion(
-    toset(["automation-app", "human-idp", "agent-op-callback"]),
+    toset(["automation-app", "analysis-console", "human-idp", "agent-op-callback"]),
     var.enable_google_bridge ? setunion(
       toset(["google-bridge-callback"]),
       var.saas_connector_mode == "stub" ? toset(["stub-saas-op"]) : toset([]),
@@ -49,6 +53,7 @@ locals {
   ingress_all_services = setunion(local.public_services, local.run_called_services)
   image_app = {
     human-idp           = "human-idp", automation-app = "automation-app", authorization = "authorization",
+    analysis-console    = "analysis-console",
     provisioner         = "provisioner", lifecycle = "lifecycle-manager", shared-agent-op = "agent-op",
     agent-op-callback   = "agent-op", security-detection = "security-detection",
     resource-finance-as = "resource-finance-as", resource-finance-api = "resource-finance-api",
@@ -58,6 +63,7 @@ locals {
   }
   service_sa_key = {
     human-idp           = "human_idp", automation-app = "automation_app", authorization = "authorization",
+    analysis-console    = "analysis_console",
     provisioner         = "provisioner", lifecycle = "lifecycle", shared-agent-op = "shared_agent_op",
     agent-op-callback   = "shared_agent_op", security-detection = "security",
     resource-finance-as = "resource_finance_as", resource-finance-api = "resource_finance_api",

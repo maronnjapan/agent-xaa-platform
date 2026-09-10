@@ -1,3 +1,4 @@
+import { isJobExecutionName } from '@xaa/contracts';
 import type { CleanupContext } from '../../clients/types.js';
 
 /**
@@ -13,8 +14,12 @@ import type { CleanupContext } from '../../clients/types.js';
  */
 export async function runtimeCancel(context: CleanupContext): Promise<'succeeded' | 'skipped'> {
   const name = context.domain.job_execution_name;
-  // Cleanup can start before the execution was ever launched.
-  if (!name) return 'skipped';
+  // Cleanup can start before the execution was ever launched, and the field has held a
+  // name that was never an execution's: the Provisioner wrote `runJob`'s operation name
+  // there. A record like that has nothing to cancel, and the Executions API says so
+  // with a refusal rather than a 404 — which would take the whole cleanup down with it,
+  // every sweep, on a step whose only job is to stop something already stopping.
+  if (!isJobExecutionName(name)) return 'skipped';
   const outcome = await context.clients.cloudRun.cancelExecution(name);
   return outcome === 'not_found' ? 'skipped' : 'succeeded';
 }

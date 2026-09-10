@@ -102,7 +102,7 @@ describe('starting the execution that is the agent', () => {
     const target = await createProvisionerHarness({ idpPublicJwk: issuer.publicJwk });
     for (const [capability, isolationLevel] of [['document.read', 'standard'], ['finance.payment.approve', 'full_isolation']] as const) {
       const decisionId = await seedDecision(target, { capabilities: [capability], isolationLevel });
-      const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 });
+      const response = await issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 });
       expect(response.status).toBe(201);
     }
     expect(target.jobRuns[0]!.jobName).toMatch(/\/jobs\/agent-runtime-standard$/);
@@ -115,7 +115,7 @@ describe('starting the execution that is the agent', () => {
     const target = await createProvisionerHarness({ idpPublicJwk: issuer.publicJwk });
     for (const task of ['a', 'b', 'c']) {
       const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-      const response = await issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_hours: 8 });
+      const response = await issuer.provision(target, { decision_id: decisionId, task_id: task, requested_lifetime_minutes: 480 });
       expect(response.status).toBe(201);
     }
     expect(target.jobRuns).toHaveLength(3);

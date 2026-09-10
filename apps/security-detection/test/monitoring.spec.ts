@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnalysisRun } from '@xaa/contracts';
 import { createFirestoreDocumentStore, createFirestoreDouble } from '@xaa/gcp';
+import { createAnalysisMonitor } from '../src/monitoring.js';
 import { createSecurityDetection } from '../src/index.js';
 import { AGENT_ID, baselineFor, createSecurityHarness, logEntry } from '../src/testing/harness.js';
 
@@ -27,7 +28,7 @@ describe('observable production analysis', () => {
   it('explains missing baselines and AI fallback without claiming a quarantine occurred', async () => {
     const h = createSecurityHarness();
     await h.runOnce([criticalLog()]);
-    expect((await read(h.documents))[0]?.decisions[0]).toMatchObject({ state: 'skipped', reason: 'baseline_missing', score: 100 });
+    expect((await read(h.documents))[0]?.decisions[0]).toMatchObject({ state: 'skipped', reason: 'baseline_missing', score: 100, score_breakdown: { critical_override: true } });
     await h.seedStore.set('agents', `${AGENT_ID}__baseline`, baselineFor() as unknown as Record<string, unknown>);
     await h.runOnce([criticalLog()]);
     const fallback = (await read(h.documents)).find((run) => run.decisions[0]?.reason === 'ai_fallback');
@@ -65,5 +66,28 @@ describe('observable production analysis', () => {
     await review.runOnce([criticalLog()]);
     expect((await read(review.documents))[0]?.decisions[0]).toMatchObject({ state: 'review', reason: 'disruptive_response' });
     expect(review.transitions).toHaveLength(0);
+  });
+});
+
+
+describe('analysis stage timing', () => {
+  it('keeps the stage start stable through decision updates and closes a failed stage', async () => {
+    const h = createSecurityHarness();
+    let at = Date.parse('2026-09-09T00:00:00Z');
+    const monitor = createAnalysisMonitor(h.documents, [logEntry()], () => at);
+    await monitor.stage('collect');
+    at += 125;
+    await monitor.stage('normalize');
+    at += 875;
+    await monitor.stage('analyze');
+    at += 2000;
+    await monitor.decision('testuser', { finding_id: 'one', agent_id: AGENT_ID, codes: [], score: 50,
+      level: 'MEDIUM', state: 'analyzing', reason: 'score_requires_ai', response: null, confidence: null, transition: null });
+    expect((await read(h.documents))[0]).toMatchObject({ stage_started_at: '2026-09-09T00:00:01.000Z',
+      stage_durations_ms: { collect: 125, normalize: 875 } });
+    at += 3000;
+    await monitor.finish(true);
+    expect((await read(h.documents))[0]).toMatchObject({ status: 'failed',
+      stage_durations_ms: { collect: 125, normalize: 875, analyze: 5000 } });
   });
 });

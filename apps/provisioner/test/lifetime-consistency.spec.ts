@@ -31,7 +31,7 @@ async function run(target: ProvisionerHarness, options: {
       : {}),
   }, {
     humanSubject: 'testuser', taskId: 't', effectiveCapabilities: ['document.read'],
-    isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', hours: 8 },
+    isolationLevel: 'standard', constraints: {}, lifetime: { kind: 'requested', minutes: 480 },
   });
 }
 

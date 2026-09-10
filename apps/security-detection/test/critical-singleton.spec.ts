@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { CRITICAL_SINGLETON_FACTORS, SCORE_FACTORS, factorFor } from '../src/score/factors.js';
-import { SCORING, computeScore } from '../src/score/compute.js';
+import { SCORING, computeScore, explainScore } from '../src/score/compute.js';
 import { toLevel } from '../src/score/level.js';
 import type { SecurityFinding } from '../src/correlate/finding.js';
 import { AGENT_ID } from '../src/testing/harness.js';
@@ -58,5 +58,30 @@ describe('the single-event criticals', () => {
     expect(CRITICAL_SINGLETON_FACTORS).toHaveLength(2);
     expect([...CRITICAL_SINGLETON_FACTORS]).toEqual(['delegation_mismatch', 'signing_key_misuse']);
     for (const factor of CRITICAL_SINGLETON_FACTORS) expect(SCORE_FACTORS).toContain(factor);
+  });
+});
+
+
+describe('recorded score explanations', () => {
+  it('records per-factor caps, sensitivity and unmapped codes in the actual calculation', () => {
+    const counters = { unmapped_code_total: 0 };
+    const result = explainScore({ finding: finding([
+      ...Array<string>(4).fill('invalid_scope'), 'invalid_dpop_proof', 'unknown-code',
+    ]), financeResourceUrl: 'https://finance.test', resources: ['https://finance.test'], counters });
+    expect(result).toEqual({ score: 80, critical_override: false, unmapped_count: 1, contributions: [
+      { factor: 'authorization_violation', count: 4, per_event: 15, cap: 45, points: 45 },
+      { factor: 'dpop_failure', count: 1, per_event: 15, cap: 45, points: 15 },
+      { factor: 'resource_sensitivity', count: 1, per_event: 20, cap: 40, points: 20 },
+    ] });
+    expect(counters.unmapped_code_total).toBe(1);
+  });
+  it('explains the critical override even when configured weights are lowered', () => {
+    const original = SCORING.delegation_mismatch;
+    try {
+      SCORING.delegation_mismatch = { per_event: 1, cap: 1 };
+      expect(explainScore({ finding: finding(['delegation_mismatch']) })).toMatchObject({
+        score: 100, critical_override: true, contributions: [{ points: 1 }],
+      });
+    } finally { SCORING.delegation_mismatch = original; }
   });
 });

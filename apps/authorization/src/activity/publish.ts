@@ -7,6 +7,7 @@ import {
   ACTIVITY_TITLES, capabilityDecidedMessage, isolationDecidedMessage, permissionChangeIgnoredMessage,
   type DeniedCapability,
 } from './messages.js';
+import { capabilityDecidedRecord, isolationDecidedRecord, type DecisionRecordInput } from './record.js';
 
 export type ActivityPublisher = (event: ActivityEvent) => Promise<void>;
 
@@ -32,8 +33,7 @@ async function emit(event: ActivityEvent, deps: ActivityDeps): Promise<void> {
   }
 }
 
-export interface DecisionActivityInput {
-  decisionId: string;
+export interface DecisionActivityInput extends DecisionRecordInput {
   humanSubject: string;
   effective: string[];
   decisions: CapabilityDecision[];
@@ -48,7 +48,12 @@ export interface DecisionActivityInput {
  *
  * CAPABILITY_DECIDED is emitted even when nothing was rejected. "Nothing was refused"
  * is information; leaving the event out would make an unrestricted decision
- * indistinguishable from one that was never made.
+ * indistinguishable from one that was never made. It is emitted when nothing survived
+ * the taxonomy filter, too: a decision that granted nothing is the one a person most
+ * needs to see explained, and it used to leave no trace at all. The isolation event is
+ * skipped in that case, because no profile was computed and none is being claimed.
+ *
+ * Each event carries the record (`record.ts`) that says how it was reached.
  */
 export async function publishDecisionActivity(input: DecisionActivityInput, deps: ActivityDeps): Promise<void> {
   const denied: DeniedCapability[] = input.decisions
@@ -81,11 +86,16 @@ export async function publishDecisionActivity(input: DecisionActivityInput, deps
     detail: {
       event_type: 'CAPABILITY_DECIDED',
       decision_id: input.decisionId,
+      status: input.status,
+      proposed: [...input.proposal.capabilities],
       allowed: input.effective,
       denied,
       policy_ids: policyIds,
     },
+    record: capabilityDecidedRecord(input),
   }, deps);
+
+  if (input.status !== 'decided') return;
 
   await emit({
     ...base,
@@ -99,6 +109,7 @@ export async function publishDecisionActivity(input: DecisionActivityInput, deps
       risk_score: input.securityProfile.risk_score,
       reasons: input.securityProfile.reasons,
     },
+    record: isolationDecidedRecord(input),
   }, deps);
 }
 

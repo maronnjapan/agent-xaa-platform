@@ -5,16 +5,16 @@ export const BLOCKED_GUIDANCE_TEXT = 'この Agent の権限は変更できま�
 /**
  * What a person sees when their agent refused an instruction.
  *
- * There is one link, and it goes to a blank work definition. No "add this permission"
+ * There is one link, and it goes to a blank ToDo. No "add this permission"
  * button, no query parameter carrying the old agent forward — RULE-13 says an agent's
- * permissions are fixed for its life, so the only honest next step is to describe the
- * work again and let the Authorization Platform decide afresh.
+ * permissions are fixed for its life, so the only honest next step is to write the
+ * ToDo again and let the Authorization Platform decide afresh.
  */
 export function BlockedGuidance(): Element {
   return (
-    <aside class="card blocked-guidance" data-section="blocked-guidance">
+    <aside className="blocked-guidance" data-section="blocked-guidance">
       <p>{BLOCKED_GUIDANCE_TEXT}</p>
-      <a href="/work-definitions/new" data-action="new-work-definition">新しい作業を定義する</a>
+      <a href="/todos/new" data-action="new-todo">新しい ToDo を書く</a>
     </aside>
   );
 }

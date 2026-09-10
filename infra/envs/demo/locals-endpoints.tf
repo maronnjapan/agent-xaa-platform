@@ -17,7 +17,20 @@ locals {
     resource_finance_as_issuer = local.resource_servers.finance.issuer
     resource_finance_api_url   = local.resource_servers.finance.resource
     bridge_internal_url        = var.enable_google_bridge ? local.run_url["google-bridge"] : "https://disabled.invalid"
-    stub_saas_op_issuer        = var.enable_google_bridge && var.saas_connector_mode == "stub" ? local.run_url["stub-saas-op"] : "https://disabled.invalid"
+    # The bridged SaaS this deployment is pointed at. The key names the stub because the
+    # stub is the default and the key set is fixed at eighteen (00b), but the value
+    # follows `saas_connector_mode`: the seed resolves `${issuer:stub_saas}` from it, and
+    # what that becomes is the calendar Tool's `authorization.resource` — the claim the
+    # Bridge matches a connector definition against, whole-string, at `/token`.
+    #
+    # In `google` mode it is Google's API host, so that claim names something real — and
+    # it is also the base URL the Tool calls. 00b fixes the eight Tool ids, so `google`
+    # mode brings no Tool of its own; the seed writes the same one in the shape Google
+    # serves, which is a different path under this host and one more name on the response
+    # allow list (apps/seed/src/bridged-tool.ts, docs/google-bridge-setup.md §4).
+    stub_saas_op_issuer = var.enable_google_bridge ? (
+      var.saas_connector_mode == "stub" ? local.run_url["stub-saas-op"] : "https://www.googleapis.com"
+    ) : "https://disabled.invalid"
     agent_max_lifetime_seconds = var.agent_max_lifetime_seconds
     vertex_model               = var.vertex_model
     vertex_location            = var.vertex_location

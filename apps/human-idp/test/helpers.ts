@@ -19,8 +19,10 @@ export const testEnv: HumanIdpEnv = {
   dpopRequired: true,
   clientSecretAutomationApp: 'automation-secret',
   clientSecretAgentPlatform: 'agent-platform-secret',
+  clientSecretAnalysisConsole: 'analysis-console-secret',
   automationAppRedirectUri: 'https://automation-app.test/callback',
   agentOpCallbackUri: 'https://agent-op-callback.test/xaa/callback',
+  analysisConsoleRedirectUri: 'https://analysis-console.test/callback',
   accessTokenExpiresIn: 3600,
 };
 

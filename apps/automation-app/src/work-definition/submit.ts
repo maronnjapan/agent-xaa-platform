@@ -8,7 +8,7 @@ export interface BusinessWorkRequest {
   purpose: string;
   description: string;
   constraints: Record<string, boolean>;
-  requested_lifetime_hours: number;
+  requested_lifetime_minutes: number;
 }
 
 const assertRequest: (value: unknown) => asserts value is BusinessWorkRequest =
@@ -32,13 +32,19 @@ export function buildBusinessWorkRequest(definition: WorkDefinition): BusinessWo
   if (definition.status !== 'CONFIRMED') throw new WorkDefinitionNotConfirmed();
   return {
     human_subject: definition.human_subject,
-    purpose: definition.purpose,
+    // The ToDo's title is the work's purpose, in the person's words.
+    purpose: definition.title,
     description: definition.description,
     // Declared by the person, in their own terms. `external_message_send` is always
     // present so its absence never reads as "not considered".
-    constraints: { external_message_send: definition.operations.some((operation) => operation.includes('送信')) },
-    requested_lifetime_hours: definition.requested_lifetime_hours,
+    constraints: { external_message_send: mentionsSending(definition) },
+    requested_lifetime_minutes: definition.requested_lifetime_minutes,
   };
+}
+
+/** Whether the person's own words say something is to be sent out. */
+function mentionsSending(definition: WorkDefinition): boolean {
+  return [definition.title, definition.description, ...definition.steps].some((line) => line.includes('送信'));
 }
 
 export async function submitBusinessWorkRequest(input: {
@@ -80,4 +86,30 @@ export interface UpstreamRefusal {
 export function upstreamRefusal(status: number, body: { error?: unknown }): UpstreamRefusal {
   if (status === 400 && typeof body.error === 'string') return { status: 400, body: { error: body.error } };
   return { status: 502, body: { error: 'authorization_platform_unreachable' } };
+}
+
+/**
+ * What the Authorization Platform actually answered, kept where a person can read it.
+ *
+ * One name on the screen is right — the person cannot act on `invalid_token` any more
+ * than on `insufficient_scope`, and both mean the same thing to them: the decision they
+ * asked for was not made. But one name is not enough for whoever has to fix it, and
+ * until now nothing anywhere recorded the difference. A stale aggregate JWKS (401), a
+ * missing `roles/run.invoker` (403 at the Google front end), an ingress that drops the
+ * call (404) and a decision that threw (500) all reached the screen as the same
+ * sentence, with nothing behind it to tell them apart.
+ *
+ * The status and the upstream code are enough to tell them apart, and neither is a
+ * credential. The Access Token is not a field here and must not become one.
+ */
+export function logUpstreamRefusal(
+  failure: { work_definition_id: string; human_subject: string; status: number; error: string },
+  write: (line: string) => void = (line) => process.stdout.write(line),
+): void {
+  write(`${JSON.stringify({
+    severity: 'ERROR',
+    logType: 'xaa.authorization_platform_refused',
+    ...failure,
+    occurred_at: new Date().toISOString(),
+  })}\n`);
 }

@@ -39,7 +39,16 @@ export function createDocumentRepository(store: DocumentStore, now: () => number
       return document && document.owner_subject === ownerSubject ? document : undefined;
     },
 
-    async create(input: { ownerSubject: string; type: string; title: string; body: string; occurredAt: string; metadata?: Record<string, unknown> }): Promise<string> {
+    /**
+     * `occurredAt` is optional and falls back to the moment of writing.
+     *
+     * A caller restating something that already happened — the seed Job, an importer —
+     * knows the instant and passes it. An agent creating a document as it works does
+     * not: it has no clock, so anything it put in the field would be invented. The
+     * creation timestamp is the true answer for that caller, and it is taken from the
+     * same `now` the row's `created_at` uses so the two cannot disagree.
+     */
+    async create(input: { ownerSubject: string; type: string; title: string; body: string; occurredAt?: string; metadata?: Record<string, unknown> }): Promise<string> {
       const timestamp = new Date(now()).toISOString();
       const document = {
         document_id: `doc_${randomUUID()}`,
@@ -49,7 +58,7 @@ export function createDocumentRepository(store: DocumentStore, now: () => number
         type: input.type,
         title: input.title,
         body: input.body,
-        occurred_at: input.occurredAt,
+        occurred_at: input.occurredAt ?? timestamp,
         metadata: input.metadata ?? {},
         created_at: timestamp,
         updated_at: timestamp,
@@ -58,6 +67,25 @@ export function createDocumentRepository(store: DocumentStore, now: () => number
       assertDocument(document);
       await store.set('documents', document.document_id, { ...document });
       return document.document_id;
+    },
+
+    /**
+     * Removes one of an owner's documents, and reports whether there was one.
+     *
+     * Nothing an agent can reach calls this: the API exposes no DELETE, because a
+     * delegated permission to write is not a permission to make a record stop having
+     * existed. It is here for the console (docs 04 §2.1), where a person clears out
+     * their own documents, and it is scoped by owner for the same reason `get` is —
+     * another owner's document is not this caller's to delete, and answering that it
+     * was missing rather than forbidden is what keeps its existence unconfirmed.
+     */
+    async remove(documentId: string, ownerSubject: string): Promise<boolean> {
+      return store.transaction(async (tx) => {
+        const current = await tx.get<StoredDocument>('documents', documentId);
+        if (!current || current.owner_subject !== ownerSubject) return false;
+        tx.delete('documents', documentId);
+        return true;
+      });
     },
 
     /**

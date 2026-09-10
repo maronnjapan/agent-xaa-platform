@@ -13,6 +13,16 @@ export interface AgentDefinition {
   approved_by: string | null;
   approved_at: string | null;
   created_at: string;
+  /**
+   * The Provisioner transaction a consent screen paused, when one did.
+   *
+   * The browser comes back from consent with the transaction id and nothing else, and
+   * the Provisioner's answer names the agent but not the work it was for. This is the
+   * one link from that return trip to the work definition, whose text is the agent's
+   * first instruction — without it, an agent created through a consent screen was never
+   * told what it was for.
+   */
+  provisioning_transaction_id?: string;
 }
 
 export class ApprovalRequired extends Error { readonly code = 'approval_required'; }
@@ -43,6 +53,10 @@ export interface AgentDefinitionStore {
   /** What one person has been shown, newest first. */
   listByHuman(humanSubject: string): Promise<AgentDefinition[]>;
   approve(id: string, humanSubject: string, now?: number): Promise<AgentDefinition>;
+  /** Records which Provisioner transaction this definition is waiting on. */
+  rememberTransaction(id: string, transactionId: string): Promise<void>;
+  /** The definition a consent return trip belongs to, scoped to the person it was shown to. */
+  findByTransaction(humanSubject: string, transactionId: string): Promise<AgentDefinition | undefined>;
 }
 
 export function createAgentDefinitionStore(documents: DocumentStore): AgentDefinitionStore {
@@ -92,6 +106,15 @@ export function createAgentDefinitionStore(documents: DocumentStore): AgentDefin
       };
       await documents.set('agent_definitions', id, approved as unknown as Record<string, unknown>);
       return approved;
+    },
+    async rememberTransaction(id, transactionId) {
+      await documents.update('agent_definitions', id, { provisioning_transaction_id: transactionId });
+    },
+    async findByTransaction(humanSubject, transactionId) {
+      const rows = await documents.queryEqual<AgentDefinition>('agent_definitions', [
+        ['human_subject', humanSubject], ['provisioning_transaction_id', transactionId],
+      ]);
+      return rows.map((row) => row.data).find((definition) => definition.human_subject === humanSubject);
     },
   };
 }

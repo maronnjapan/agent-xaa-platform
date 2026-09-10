@@ -18,7 +18,7 @@
 | Risk Policy | リスクに応じて Isolation Level と制約を決める規則 | `risk_policies` | 01. §3.3 |
 | Authorization AI Proposed Capability | Authorization AI が Work Definition から推論した Capability の候補 | `ai_proposals` / `proposed_capabilities` | 01. §3.3 |
 | Effective Agent Permission | 5つの集合の積として決まる、Agent が実際に持つ権限 | `effective_capabilities` / `computeEffectiveCapabilities` | 01. §3.3 |
-| Work Definition | 自動化したい作業を業務の言葉で書いたもの | `WorkDefinition` / `work_definitions` | 01. §3.4 |
+| Work Definition | AI に任せたい作業（画面では ToDo と呼ぶ）を業務の言葉で書いたもの | `WorkDefinition` / `work_definitions` | 01. §3.4 |
 | Capability | 権限の抽象単位で、`<resource>.<object>.<action>` の形を取る | `Capability` / `CAPABILITIES` | 01. §3.4 |
 | Capability Taxonomy | 使用できる Capability の全集合 | `capability_taxonomy` | 01. §3.4 |
 | Tool | Agent が呼べる具体的な API 操作 | `CatalogTool` / `catalog_tools` / `tool_id` | 01. §3.4 |

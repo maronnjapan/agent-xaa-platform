@@ -1,14 +1,18 @@
 import { Hono } from 'hono';
-import { controlPlaneAuth, createProtocolValidationEmitter, type ControlPlaneVariables } from '@xaa/control-plane-auth';
+import {
+  adminConsoleAuth, controlPlaneAuth, createProtocolValidationEmitter,
+  type AdminConsoleVariables, type ControlPlaneVariables,
+} from '@xaa/control-plane-auth';
 import { InMemoryJtiStore, type JtiStore } from '@xaa/crypto';
 import { createLogger } from '@xaa/logging';
 import { createCatalogRepository } from './catalog/repository.js';
+import { createAdminMappingRoutes } from './routes/admin-mappings.js';
 import { createProvisioningRoute } from './routes/provisioning.js';
 import { createReprovisionRoute } from './routes/reprovision.js';
 import { createResumeRoute } from './routes/resume.js';
 import type { ProvisionerDeps } from './deps.js';
 
-type Env = { Variables: ControlPlaneVariables };
+type Env = { Variables: ControlPlaneVariables & AdminConsoleVariables['Variables'] };
 
 export interface ProvisionerAppDeps extends ProvisionerDeps {
   jtiStore?: JtiStore;
@@ -54,6 +58,23 @@ function createApp(deps: ProvisionerAppDeps): Hono {
   const routed = { ...deps, logger, catalogue: createCatalogRepository(deps.documents) };
   app.route('/provisioning', createProvisioningRoute(routed));
   app.route('/provisioning', createResumeRoute(routed));
+
+  /**
+   * The mapping console (docs 04 §1). The catalogue is this app's data, so this is the
+   * app whose screen edits it; an administrator reaches it with a Google-signed token
+   * for an account in `ADMIN_PRINCIPALS`, never with an agent's or a person's Access
+   * Token, and never from Automation App (RULE-07).
+   */
+  app.use('/admin/*', adminConsoleAuth({
+    audience: deps.config.publicBaseUrl,
+    allowedPrincipals: deps.config.adminPrincipals,
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    ...(deps.verifyAdmin ? { verify: deps.verifyAdmin } : {}),
+    onRefusal: (reason) => logger.warning('admin.refused', {
+      request_id: '', trace_id: '', agent_id: null, human_subject: null,
+    }, { reason }),
+  }));
+  app.route('/admin', createAdminMappingRoutes({ documents: deps.documents, logger }));
 
   // Not under `/provisioning`, and deliberately so: this caller holds no Access Token
   // and no proof, and letting it past the middleware above would mean weakening that

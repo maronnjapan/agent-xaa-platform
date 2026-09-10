@@ -32,7 +32,7 @@ Effective Capabilityの決定に関わる権限とポリシーは以下の6つ�
 | 用語 | 定義 | 誰が決める、どこにあるか | 例 |
 |---|---|---|---|
 | **Human Permission** | 人間ユーザー本人が各Resourceに対して持つ権限 | Human IdPのグループやロール、社内の権限管理から同期し、Authorization DBにCapability単位で保持 | user-123 は `calendar.event.read` `calendar.event.write` `mail.message.read` `mail.message.send` を持つ |
-| **Delegatable Permission** | Human Permissionのうち、Agentへ委譲してよいと組織が定めた範囲 | 管理者がAuthorization DBに定義 | `calendar.event.write` は本人には許可するがAgentへは委譲不可 |
+| **Delegatable Permission** | Human Permissionのうち、Agentへ委譲してよいと組織が定めた範囲 | 管理者がAuthorization DBに定義（§2.1の画面） | `calendar.event.write` は本人には許可するがAgentへは委譲不可 |
 | **Organization Policy** | 組織全体に適用する制約。ユーザーや作業内容によらず常に適用 | 管理者が定義 | Agentからの社外宛メール送信は禁止。利用可能ConnectorはGoogle Workspaceと社内APIのみ |
 | **Risk Policy** | Capabilityの性質（write、financial、sensitive、外部通信）からリスクを評価し、追加制約と最低Isolation Levelを決めるルール | 管理者が定義 | `financial_operation = true` なら `full_isolation` 必須 |
 | **Authorization AI Proposed Capability** | Authorization AI AgentがWork Definitionから推論した権限候補。あくまで提案であり、最終決定ではない | Authorization AI Agentが出力 | 「Calendarを読んで整理する」→ `calendar.event.read` |
@@ -65,6 +65,68 @@ Effective Agent Permission ⊆ Human Permission
 | Organization Policy | `mail.message.send` は社内ドメイン宛のみ |
 | Risk Policy | 外部通信を含むためrisk_scoreは上がるが、`standard` で許容 |
 | **Effective Capability** | `calendar.event.read`, `mail.message.send`（制約：社内宛のみ） |
+
+### 2.1 権限の管理画面
+
+Human Permission以外の5つは、いずれもCapability Taxonomy上のCapabilityを単位に持つ。
+そのCapabilityそのものを作り、直し、消す画面をAuthorization Platformが持つ。
+
+| 画面 | パス | 何をするか |
+|---|---|---|
+| 権限一覧 | `GET /admin/permissions` | Capability、リスクと特性、委譲可否、マッピング先リソース、保有者数を一覧する |
+| 権限の作成 | `GET /admin/permissions/new` と `POST /admin/permissions` | `capability_id` と説明、`capability_risk`、Taxonomyが持つ特性、委譲可否を決める |
+| 権限の編集 | `GET /admin/permissions/{capability_id}` と `POST /admin/permissions/{capability_id}` | 同上。`capability_id` は変えられない |
+| 権限の削除 | `GET /admin/permissions/{capability_id}/delete` と `POST /admin/permissions/{capability_id}/delete` | 何を失うかを見せてから消す。誰も保有せず、どのリソースにもマッピングされていない場合だけ消せる |
+| 保有者の一覧 | `GET /admin/holders?human_subject={human_subject}` | 1人を指定し、Taxonomyの全Capabilityについてその人が持っているかを並べる |
+| 保有者の変更 | `POST /admin/holders` | `human_subject` と `capability_id` を指定して与える／取り上げる |
+
+1件の権限は2つのレコードでできており、画面はこの2つを1トランザクションで書く。
+
+- `capability_taxonomy/{capability_id}`：そのCapabilityが何か（`resource` / `object` / `action` / `description` / `default_characteristics`）
+- `delegatable_permissions/{capability_id}`：Agentへ委譲してよいか（Delegatable Permission）
+
+`resource` / `object` / `action` は `capability_id` の各節から決める。
+入力させないのは、`finance.payment.approve` をcalendarのResourceとして登録できてしまう余地を残さないためである。
+
+画面が編集できる `default_characteristics` は、Taxonomyが持つ4つ（`capability_risk`、`sensitive_resource`、`admin_permission`、`personal_data_access`）と `financial_operation` である。
+`write_operation` と `external_communication` は含めない。
+この2つは「その作業が何をするか」であり、Authorization AI Agentが提案してよい範囲だからである（§7）。
+`financial_operation` を含めるのは、これが `full_isolation` を強制する唯一の入力であり、AIに覆させないためである。
+
+誰がその権限を持つか（Human Permission）は、保有者の画面で変える。
+`human_permissions/{human_subject}__{capability_id}` は1人1Capabilityで1行であり、取り上げるとは行を消すことである。
+権限を持たないことをフラグで表さないので、読む側が確かめ忘れる余地がない。
+
+行を書いただけでは権限変更は半分しか終わっていない。
+もう半分は、すでに動いているAgentへそれが届くことである（RULE-14）。
+そのため画面は、行を書いたあとに再評価をその場で走らせる。
+`pnpm perm:set <human_subject> <capability_id> grant` はPub/Sub経由で同じ再評価に着く。
+どちらの経路も冪等キーは `(human_subject, changed_at)` の組であり、同じ変更で二重に再評価されることはない。
+何も動かなかった変更（すでに持っている権限を与える、持っていない権限を取り上げる）は再評価を起こさない。
+
+この画面が触らないものが1つある。
+
+- **どのリソースがその権限で動くか**：Tool / Connector Catalogを持つのはAgent Provisionerであり、Authorization PlatformはAPIの接続先を持たない（RULE-16）。マッピングは [04. §5.1](./04-tool-catalog.md#51-権限とリソースのマッピング画面) で行う。
+
+作ったばかりでどのリソースにもマッピングされていないCapabilityは、Organization Policyの `connector_not_in` に一致して拒否される（`org_policy_denied`）。
+一覧の「マッピング先リソース」が空である状態は、権限を作る作業がまだ半分だということを意味する。
+
+seedのJobは `capability_taxonomy`、`delegatable_permissions`、`human_permissions` を一度空にしてからYAMLを書き直す（[infra/README.md](../infra/README.md)）。
+画面での変更を残すなら、`infra/seed/capabilities.yaml`、`infra/seed/policies/delegatable.yaml`、`infra/seed/human-permissions.yaml` にも同じ内容を入れる。
+
+画面へ到達できるのは、`ADMIN_PRINCIPALS` に挙げたGoogleアカウントだけである。
+Authorization PlatformはInternetへ公開しない（RULE-37）ため、管理者は `gcloud run services proxy` 経由で開く。
+Automation AppのService Accountはこの一覧に載せない。
+載せないことが、Automation Appに権限情報を持たせない（RULE-07）ということである。
+
+画面はサーバ側でReactを描画したHTMLだけを返し、ブラウザへスクリプトを送らない。
+どの操作もブラウザが送信するフォームであり、`gcloud run services proxy` が管理者のID Tokenを付けるのは、その送信に対してである。
+スクリプトから呼ぶ画面であれば、そのTokenをブラウザ自身が用意しなければならず、ブラウザの中に安全に置ける場所は無い。
+送るスクリプトが無いということは、フロントにデータストアのSDKを入れる場所も無いということである（RULE-57）。
+
+管理者本人が誰であるかと、画面が扱う `human_subject` は別である。
+画面は `ADMIN_PRINCIPALS` に載っているかだけを見て、操作対象の人物が操作者自身かどうかは見ない。
+本人以外の権限を触れる状態を細かく分けるのは、この platform がまだ持っていない権限モデルの話である（docs 11 §8）。
 
 ## 3. Agent Work Definition
 

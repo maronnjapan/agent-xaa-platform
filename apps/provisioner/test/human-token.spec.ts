@@ -24,7 +24,7 @@ async function harness(): Promise<ProvisionerHarness> {
 
 async function request(target: ProvisionerHarness, token: string): Promise<Response> {
   const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
-  return issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 }, { token });
+  return issuer.provision(target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 }, { token });
 }
 
 describe('the Human Access Token a provisioning request carries', () => {
@@ -80,7 +80,7 @@ describe('the Human Access Token a provisioning request carries', () => {
     const target = await harness();
     const decisionId = await seedDecision(target, { capabilities: ['document.read'] });
     const response = await issuer.provision(
-      target, { decision_id: decisionId, task_id: 't', requested_lifetime_hours: 8 }, { omitProof: true },
+      target, { decision_id: decisionId, task_id: 't', requested_lifetime_minutes: 480 }, { omitProof: true },
     );
     expect(response.status).toBe(401);
     expect(target.jobRuns).toHaveLength(0);
