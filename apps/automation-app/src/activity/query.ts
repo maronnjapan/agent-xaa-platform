@@ -201,7 +201,7 @@ export async function readTimeline(input: {
       }
       own.push({
         ...base, status: 'completed',
-        terminal_outcome: terminal.outcome, completed_at: terminal.occurred_at, events: ordered,
+        terminal_outcome: eventType(terminal) === 'TASK_FAILED' ? 'failed' : terminal.outcome, completed_at: terminal.occurred_at, events: ordered,
       });
     }
     tasks.push(...sortWithinRun(own));

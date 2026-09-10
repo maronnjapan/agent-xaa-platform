@@ -81,6 +81,8 @@ export async function startAutomationAppHarness(options: {
   signals?: WorkSignalSource;
   /** Stands in for Vertex AI, the way `apps/automation-app/test/helpers.ts` does. */
   generate?: Generate;
+  /** The deployment opt-in that puts the failure exercise on the agent page. */
+  faultInjection?: boolean;
 } = {}): Promise<AutomationHarness> {
   const humanSubject = options.humanSubject ?? 'testuser';
   const firestore = options.shared ?? createFirestoreDouble();
@@ -115,6 +117,7 @@ export async function startAutomationAppHarness(options: {
     analysisConsoleUrl: 'https://analysis-console.test',
     activityTopic: 'agent-activity-stream', defaultAgentLifetimeMinutes: 60,
     vertexModel: 'test-model', vertexMode: 'fake', storeMode: 'emulator',
+    faultInjectionEnabled: options.faultInjection === true,
   };
 
   const upstream: Array<{ url: string; init: RequestInit }> = [];

@@ -72,6 +72,7 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   invalid_tool_call: 'エージェントの指定を読み取れませんでした。',
   unexpected_token_type: '受け取った Token の種類が想定と違いました。',
   unexpected_subject_response: 'Agent OP の応答が想定と違いました。',
+  injected_fault: '異常系試験の要求により、Tool Executor がこの呼び出しを失敗として扱いました。外部へは何も送っていません。',
   tool_execution_error: '想定していない失敗が起きました。',
 };
 
@@ -331,7 +332,9 @@ export function createExecutionRecorder(input: { step: number; toolId: string; i
     },
 
     stopped({ stage, errorCode, status }) {
-      headline = `${input.toolId} は ${stageLabel(stage)} で止まりました`;
+      headline = errorCode === 'injected_fault'
+        ? `${input.toolId} を異常系試験で失敗させました`
+        : `${input.toolId} は ${stageLabel(stage)} で止まりました`;
       sections.push({
         id: 'failure',
         label: '止まったところ',

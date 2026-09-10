@@ -1,15 +1,20 @@
+import { renderToStaticMarkup } from 'react-dom/server';
 import { Hono } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
-import { compile, INITIAL_TASK_ID, TASK_ID_PATTERN } from '@xaa/contracts';
+import { compile, isFaultKind, INITIAL_TASK_ID, TASK_ID_PATTERN, type FaultKind } from '@xaa/contracts';
 import type { AutomationAppConfig } from './config.js';
 import { createSessionStore, type SessionStore } from './auth/session-store.js';
 import { requireUser, type UserVariables } from './auth/require-user.js';
 import { createControlPlaneClient } from './http/control-plane-client.js';
 import { logConsentResumeFailure } from './http/resume-log.js';
 import { requireAgentOwner, type AgentOwnerVariables } from './agents/require-owner.js';
+import { readAnalysisRuns } from './security/query.js';
+import { AnalysisResults } from './ui/pages/security.js';
+import { StatusPanel } from './ui/components/status-panel.js';
+import { readFaultTrials } from './agents/faults.js';
 import { readAgentStatus } from './agents/status.js';
 import { stopAgent } from './agents/stop.js';
-import { addInstruction, AgentNotActive } from './agents/instructions.js';
+import { addInstruction, AgentNotActive, FaultAlreadyPending } from './agents/instructions.js';
 import { seedInitialInstruction } from './agents/initial-instruction.js';
 import { agentPagePath } from './agents/page-link.js';
 import { logAgentOperation } from './audit/logger.js';
@@ -100,6 +105,17 @@ const assertTimeline: (value: unknown) => asserts value is unknown = compile(tim
  * from a Human IdP Access Token the caller presents rather than from a session. The
  * push endpoint is the one exception, authenticated by Pub/Sub's own OIDC token.
  */
+/**
+ * What a fault request says as an instruction. The Runtime never shows the model these
+ * words — a fault is consumed before the conversation is built — but an instruction
+ * row with no text would read as a bug to anyone looking at the store.
+ */
+const FAULT_REQUEST_TEXT: Readonly<Record<FaultKind, string>> = {
+  runtime_crash: '異常系試験: Runtime の実行を失敗させる',
+  model_unavailable: '異常系試験: モデルの応答なしを起こす',
+  tool_failure: '異常系試験: 次のツール呼び出しを失敗させる',
+};
+
 function createApp(deps: AutomationAppDeps): Hono<Env> {
   const app = new Hono<Env>();
   const sessions = deps.sessions ?? createSessionStore(deps.documents);
@@ -590,10 +606,45 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
     documents: deps.documents, ...(deps.auditWrite ? { write: deps.auditWrite } : {}), now,
   }));
 
+  app.get('/api/agents/:agent_id/status-view', async (context) => {
+    const status = await readAgentStatus({ documents: deps.documents, agentId: context.get('agentId'), now: now() });
+    audit('status_read', context.get('agentId'), context.get('humanSubject'));
+    return context.html(renderToStaticMarkup(StatusPanel({ status, faultTrials: deps.config.faultInjectionEnabled
+      ? await readFaultTrials(deps.documents, context.get('agentId'), now()) : [] })));
+  });
+
+  app.get('/api/agents/:agent_id/monitor', async (context) => context.json({
+    status: await readAgentStatus({ documents: deps.documents, agentId: context.get('agentId'), now: now() }),
+    faultTrials: deps.config.faultInjectionEnabled ? await readFaultTrials(deps.documents, context.get('agentId'), now()) : [],
+  }));
+
   app.get('/api/agents/:agent_id/status', async (context) => {
     const status = await readAgentStatus({ documents: deps.documents, agentId: context.get('agentId'), now: now() });
     audit('status_read', context.get('agentId'), context.get('humanSubject'));
     return context.json(status, 200);
+  });
+
+  app.post('/api/agents/:agent_id/faults', async (context) => {
+    if (!deps.config.faultInjectionEnabled) return context.json({ error: 'fault_injection_disabled' }, 404);
+    const body = await context.req.json().catch(() => null) as Record<string, unknown> | null;
+    // Exactly one key, from the one list. A `task_id` alongside it would be a caller
+    // choosing which execution to break; the task comes from the checkpoint instead.
+    if (!body || Object.keys(body).length !== 1 || !isFaultKind(body.kind)) {
+      return context.json({ error: 'invalid_request' }, 400);
+    }
+    try {
+      const instruction = await addInstruction({
+        documents: deps.documents, agentId: context.get('agentId'), createdBy: context.get('humanSubject'),
+        text: FAULT_REQUEST_TEXT[body.kind], fault: body.kind, now: now(),
+      });
+      logAgentOperation({ operation: 'fault_injection', agent_id: context.get('agentId'), actor_type: 'human',
+        actor_id: context.get('humanSubject'), on_behalf_of: context.get('humanSubject'),
+        occurred_at: new Date(now()).toISOString(), result: 'success' }, deps.auditWrite);
+      return context.json({ status: 'queued', instruction_id: instruction.instruction_id }, 202);
+    } catch (error) {
+      if (error instanceof AgentNotActive || error instanceof FaultAlreadyPending) return context.json({ error: error.code }, 409);
+      throw error;
+    }
   });
 
   app.post('/api/agents/:agent_id/stop', async (context) => {
@@ -645,6 +696,14 @@ function createApp(deps: AutomationAppDeps): Hono<Env> {
       throw error;
     }
   });
+
+  app.get('/api/security/analysis', async (context) => context.json({
+    now: now(),
+    runs: await readAnalysisRuns(deps.documents, context.get('humanSubject')),
+  }));
+  app.get('/api/security/analysis-view', async (context) => context.html(renderToStaticMarkup(AnalysisResults({
+    runs: await readAnalysisRuns(deps.documents, context.get('humanSubject')), now: now(),
+  }))));
 
   app.get('/api/activity/tasks', async (context) => {
     // A `?human_subject=` in the query is read by nothing here. It is not an error

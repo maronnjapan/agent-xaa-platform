@@ -15,7 +15,15 @@
       "import": "./dist/testing/index.js"
     },
     "./schema/connector.json": "./schema/connector.schema.json",
-    "./schema/tool.json": "./schema/tool.schema.json"
+    "./schema/tool.json": "./schema/tool.schema.json",
+    "./security-monitoring": {
+      "types": "./dist/security-monitoring.d.ts",
+      "import": "./dist/security-monitoring.js"
+    },
+    "./fault-injection": {
+      "types": "./dist/fault-injection.d.ts",
+      "import": "./dist/fault-injection.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

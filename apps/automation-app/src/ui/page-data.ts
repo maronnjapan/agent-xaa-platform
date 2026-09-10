@@ -1,3 +1,5 @@
+import type { AnalysisRun } from '@xaa/contracts';
+import type { FaultTrial } from '../agents/faults.js';
 import type { AgentStatusResponse } from '../agents/status.js';
 import type { TimelineTask } from '../activity/query.js';
 import type { HomeAgent, HomeTodoItem } from './pages/home.js';
@@ -25,7 +27,8 @@ export type PageData =
     defaultFrom: string; defaultTo: string; today: string;
   }
   | { page: 'timeline'; tasks: TimelineTask[]; agentId: string | null }
-  | { page: 'agent-detail'; agentId: string; status: AgentStatusResponse }
+  | { page: 'agent-detail'; agentId: string; status: AgentStatusResponse; faultInjectionEnabled?: boolean; faultTrials?: FaultTrial[] }
+  | { page: 'security'; runs: AnalysisRun[]; now: number }
   | { page: 'todo-new'; defaultMinutes: number }
   | { page: 'guide' };
 

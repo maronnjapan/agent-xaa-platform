@@ -1,3 +1,5 @@
+import { readAnalysisRuns } from '../security/query.js';
+import { readFaultTrials } from '../agents/faults.js';
 import { Hono, type MiddlewareHandler } from 'hono';
 import type { DocumentStore } from '@xaa/gcp';
 import type { AutomationAppConfig } from '../config.js';
@@ -127,6 +129,11 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
   app.get('/guide', asUser, (context) =>
     context.html(renderPage({ analysisConsoleUrl: deps.config.analysisConsoleUrl, title: '使い方', styles: STYLES, script: SCRIPT, data: { page: 'guide' } })));
 
+  app.get('/security', asUser, async (context) => context.html(renderPage({
+    title: 'ログ分析モニター', analysisConsoleUrl: deps.config.analysisConsoleUrl, styles: STYLES, script: SCRIPT,
+    data: { page: 'security', runs: await readAnalysisRuns(deps.documents, context.get('humanSubject')), now: now() },
+  })));
+
   app.get('/activity', asUser, async (context) => {
     const agentId = context.req.query('agent_id');
     const tasks = await readTimeline({ documents: deps.documents, humanSubject: context.get('humanSubject') });
@@ -146,7 +153,8 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     const status = await readAgentStatus({ documents: deps.documents, agentId, now: now() });
     return context.html(renderPage({
       analysisConsoleUrl: deps.config.analysisConsoleUrl,
-      title: 'Agent の状況', styles: STYLES, script: SCRIPT, data: { page: 'agent-detail', agentId, status },
+      title: 'Agent の状況', styles: STYLES, script: SCRIPT, data: { page: 'agent-detail', agentId, status, faultInjectionEnabled: deps.config.faultInjectionEnabled === true,
+        faultTrials: deps.config.faultInjectionEnabled ? await readFaultTrials(deps.documents, agentId, now()) : [] },
     }));
   });
 

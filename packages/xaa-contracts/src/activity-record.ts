@@ -19,11 +19,11 @@ import { compile } from './schema/validator.js';
  */
 
 /**
- * The same three values as an Activity Event's own `outcome`, restated rather than
+ * The same four values as an Activity Event's own `outcome`, restated rather than
  * imported: `activity-event.ts` embeds this schema, and importing back the other way
  * would be a cycle. `activity-record.spec.ts` pins the two lists equal.
  */
-export const ACTIVITY_RECORD_OUTCOMES = ['info', 'success', 'blocked'] as const;
+export const ACTIVITY_RECORD_OUTCOMES = ['info', 'success', 'blocked', 'failed'] as const;
 
 /**
  * How a check ended. `skipped` is not a filler: a call refused at step 2 never reached

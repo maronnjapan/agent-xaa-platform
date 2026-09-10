@@ -6,7 +6,10 @@ import { labelOf, nameOf, roleTextOf } from '../roles.js';
 import { DetailDisclosure } from './detail-disclosure.js';
 import { LocalTime } from './local-time.js';
 import { OutcomeBadge } from './outcome-badge.js';
+import { PhaseIcon } from './phase-icon.js';
 import { RecordView } from './record-view.js';
+import { RouteStrip } from './route-strip.js';
+import { formatDuration as formatElapsed } from './visual.js';
 import type { Element } from '../element.js';
 
 export interface LogEvent {
@@ -23,7 +26,7 @@ export interface LogEvent {
   simulated?: boolean;
 }
 
-export const EVENT_LOG_NO_BLOCKED = 'この区切りに、遮断されたできごとはありません。';
+export const EVENT_LOG_NO_ISSUES = 'この区切りに、遮断や失敗はありません。';
 
 /**
  * The whole of a finished task, in words, as a list down the page.
@@ -40,6 +43,13 @@ export const EVENT_LOG_NO_BLOCKED = 'この区切りに、遮断されたでき�
  * said about it. The name and the phrase both come from the one role dictionary the
  * diagram draws its boxes from, so the picture and the text cannot call the same part
  * two things. The title and the sentence under them are the publisher's own.
+ *
+ * Down the left runs a rail with a mark per row — the phase's glyph, on a disc in the
+ * colour of how the row ended — so a long account can be scanned for the one amber
+ * mark without reading. Beside each time is how long after the previous row it
+ * happened: the recorded instants, subtracted, and nothing else. A row whose record
+ * lists the exchanges it made shows them as a route, standing still, so the path the
+ * picture animates is on the page for a person who never presses play.
  *
  * Which row the replay has reached is a prop rather than an attribute the browser
  * pokes in afterwards: one state, held by the task's picture, rendered by both halves.
@@ -67,37 +77,47 @@ export function EventLog(props: {
     >
       <FollowCurrentRow logKey={logKey} current={current} />
       <ol className="event-list">
-        {props.events.map((event, index) => (
-          <li
-            key={event.event_id}
-            className="event-entry"
-            data-event-id={event.event_id}
-            data-entry-index={String(index)}
-            data-source={event.source}
-            data-phase={event.phase}
-            data-emphasis={emphasisClass(event.outcome, event.phase)}
-            data-entry-state={entryState(index, currentIndex)}
-          >
-            <div className="event-rail" aria-hidden="true">
-              <span className="event-order">{String(index + 1)}</span>
-            </div>
-            <div className="event-body">
-              <p className="event-head">
-                <span className="event-actor" data-field="event-actor" title={labelOf(event.source)}>{nameOf(event.source)}</span>
-                <span className="event-source-role" data-field="event-source-role">{roleTextOf(event.source)}</span>
-                <span className="event-phase" data-field="event-phase">{phaseLabelOf(event.phase)}</span>
-                <LocalTime className="event-time" at={event.occurred_at} format="short" />
-                <OutcomeBadge outcome={event.outcome} phase={event.phase} />
-              </p>
-              <p className="event-title">{event.title}</p>
-              <p className="event-message">{event.message}</p>
-              <RecordView {...(event.record ? { record: event.record } : {})} />
-              <DetailDisclosure {...(event.detail ? { detail: event.detail } : {})} simulated={event.simulated === true} />
-            </div>
-          </li>
-        ))}
+        {props.events.map((event, index) => {
+          const previous = index > 0 ? props.events[index - 1] : undefined;
+          const elapsed = previous ? Date.parse(event.occurred_at) - Date.parse(previous.occurred_at) : null;
+          const hops = event.record?.hops ?? [];
+          return (
+            <li
+              key={event.event_id}
+              className="event-entry"
+              data-event-id={event.event_id}
+              data-entry-index={String(index)}
+              data-source={event.source}
+              data-phase={event.phase}
+              data-emphasis={emphasisClass(event.outcome, event.phase)}
+              data-entry-state={entryState(index, currentIndex)}
+            >
+              <span className="event-rail" data-outcome={event.outcome} aria-hidden="true">
+                <PhaseIcon phase={event.phase} />
+              </span>
+              <div className="event-body">
+                <p className="event-head">
+                  <span className="event-order">{String(index + 1)}</span>
+                  <span className="event-actor" data-field="event-actor" title={labelOf(event.source)}>{nameOf(event.source)}</span>
+                  <span className="event-source-role" data-field="event-source-role">{roleTextOf(event.source)}</span>
+                  <span className="event-phase" data-field="event-phase">{phaseLabelOf(event.phase)}</span>
+                  <LocalTime className="event-time" at={event.occurred_at} format="short" />
+                  {elapsed !== null && Number.isFinite(elapsed)
+                    ? <span className="event-elapsed" data-field="event-elapsed" title="前の行からの経過">{`+${formatElapsed(elapsed)}`}</span>
+                    : null}
+                  <OutcomeBadge outcome={event.outcome} phase={event.phase} />
+                </p>
+                <p className="event-title">{event.title}</p>
+                <p className="event-message">{event.message}</p>
+                {hops.length > 0 ? <RouteStrip hops={hops} compact /> : null}
+                <RecordView {...(event.record ? { record: event.record } : {})} />
+                <DetailDisclosure {...(event.detail ? { detail: event.detail } : {})} simulated={event.simulated === true} />
+              </div>
+            </li>
+          );
+        })}
       </ol>
-      <p className="event-log-none" data-field="event-log-none">{EVENT_LOG_NO_BLOCKED}</p>
+      <p className="event-log-none" data-field="event-log-none">{EVENT_LOG_NO_ISSUES}</p>
     </section>
   );
 }

@@ -177,20 +177,21 @@ describe('emphasis', () => {
     expect(emphasisClass('blocked', 'security')).toBe('ev-blocked-security');
     expect(emphasisClass('blocked', 'tool_call')).toBe('ev-blocked-tool');
     expect(emphasisClass('blocked', 'security')).not.toBe(emphasisClass('blocked', 'tool_call'));
-    expect(new Set(EMPHASIS_CLASSES).size).toBe(4);
+    expect(new Set(EMPHASIS_CLASSES).size).toBe(5);
   });
 
-  it('gives all four a text label, not only a colour', () => {
+  it('gives every kind a text label, not only a colour', () => {
     const rendered = [
       render(OutcomeBadge({ outcome: 'info', phase: 'login' })),
       render(OutcomeBadge({ outcome: 'success', phase: 'tool_call' })),
       render(OutcomeBadge({ outcome: 'blocked', phase: 'tool_call' })),
       render(OutcomeBadge({ outcome: 'blocked', phase: 'security' })),
+      render(OutcomeBadge({ outcome: 'failed', phase: 'tool_call' })),
     ];
     for (const [index, html] of rendered.entries()) {
       expect(html).toContain(EMPHASIS_LABELS[EMPHASIS_CLASSES[index]!]);
     }
-    expect(new Set(rendered.map((html) => /data-emphasis="([^"]+)"/.exec(html)![1]))).toHaveLength(4);
+    expect(new Set(rendered.map((html) => /data-emphasis="([^"]+)"/.exec(html)![1]))).toHaveLength(5);
   });
 
   it('puts the warning icon on the security badge only', () => {
@@ -250,6 +251,9 @@ describe('the task rail', () => {
     expect(html).toMatch(/data-field="stage-title">Agent が使えるようになりました</);
     expect(html).toContain('2 件のできごと');
     expect(html).toContain('所要 3 分');
+    // One dot per event, coloured by how it ended, in the head.
+    expect(html.match(/class="shape-dot"/g)).toHaveLength(2);
+    expect(html).toContain('data-outcome="success" data-phase="provisioning"');
     expect(html).toMatch(/datetime="2026-01-01T00:03:00\.000Z"/i);
     // Not `provisioning`, not `task_id`, anywhere a person reads.
     expect(html.replace(/data-[a-z-]+="[^"]*"/g, '')).not.toContain('provisioning');
@@ -305,21 +309,21 @@ describe('the agent detail page', () => {
   };
 
   it('separates the status panel from the timeline link', () => {
-    const html = render(AgentDetailPage({ agentId: 'agent-a', status }));
+    const html = render(createElement(AgentDetailPage, { agentId: 'agent-a', status }));
     expect(html).toContain('data-section="status"');
     expect(html).toContain('data-section="timeline-link"');
     expect(html.indexOf('data-section="status"')).toBeLessThan(html.indexOf('data-section="timeline-link"'));
   });
 
   it('always shows the note about what the timeline replays', () => {
-    const html = render(AgentDetailPage({ agentId: 'agent-a', status }));
+    const html = render(createElement(AgentDetailPage, { agentId: 'agent-a', status }));
     expect(html).toContain(TIMELINE_NOTE);
     // Outside any <details>: the caveat must be readable without opening anything.
     expect(html.split(/<details[\s\S]*?<\/details>/g).join('')).toContain(TIMELINE_NOTE);
   });
 
   it('offers one link, to a new ToDo, when something was blocked', () => {
-    const html = render(AgentDetailPage({ agentId: 'agent-a', status }));
+    const html = render(createElement(AgentDetailPage, { agentId: 'agent-a', status }));
     expect(html).toContain(BLOCKED_GUIDANCE_TEXT);
     expect(html.match(/\/todos\/new/g)).toHaveLength(1);
     expect(html).not.toContain('権限を追加');
@@ -328,7 +332,7 @@ describe('the agent detail page', () => {
   });
 
   it('shows no guidance when nothing was blocked', () => {
-    const html = render(AgentDetailPage({
+    const html = render(createElement(AgentDetailPage, {
       agentId: 'agent-a',
       status: { ...status, tool_invocations: [{ tool_id: 'internal.document.list', outcome: 'success', summary: '' }] },
     }));
@@ -393,21 +397,21 @@ describe('the view switch', () => {
    * stand open — exactly the ones with a refusal in them — and marks the page so the
    * stylesheet can hide the rest. A person without script sees everything.
    */
-  it('opens exactly the cards with a refusal, and keeps every row in the document', async () => {
+  it('opens exactly the cards with a refusal or a failure, and keeps every row in the document', async () => {
     const view = await mount(createElement(TimelinePage, { tasks }));
     const opened = () => view.all('[data-stage-card]').map((card) => [card.getAttribute('data-stage-card'), card.hasAttribute('open')]);
     // The newest agent's cards start opened.
     expect(opened()).toEqual([['agent-a:task-1', true], ['agent-a:task-2', true]]);
     expect(view.find('main')!.getAttribute('data-view')).toBe('all');
 
-    await view.click('[data-action="view-blocked"]');
-    expect(view.find('main')!.getAttribute('data-view')).toBe('blocked');
+    await view.click('[data-action="view-issues"]');
+    expect(view.find('main')!.getAttribute('data-view')).toBe('issues');
     expect(opened()).toEqual([['agent-a:task-1', false], ['agent-a:task-2', true]]);
     expect(view.all('[data-event-id]')).toHaveLength(3);
-    expect(view.find('[data-action="view-blocked"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(view.find('[data-action="view-issues"]')!.getAttribute('aria-pressed')).toBe('true');
     // The card with no refusal says so, once, in the place its rows would be.
-    expect(view.find('[data-stage="agent-a:task-1"]')!.getAttribute('data-blocked-count')).toBe('0');
-    expect(view.find('[data-stage="agent-a:task-2"]')!.getAttribute('data-blocked-count')).toBe('1');
+    expect(view.find('[data-stage="agent-a:task-1"]')!.getAttribute('data-issue-count')).toBe('0');
+    expect(view.find('[data-stage="agent-a:task-2"]')!.getAttribute('data-issue-count')).toBe('1');
 
     await view.click('[data-action="view-all"]');
     expect(view.find('main')!.getAttribute('data-view')).toBe('all');

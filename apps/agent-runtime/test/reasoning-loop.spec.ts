@@ -63,6 +63,7 @@ describe('the reasoning loop', () => {
     await runReasoningLoop({ context, http, logger: silentLogger, logContext, vertex, stageWrite: () => {} });
     const state = await documents.get('agents', `${AGENT_ID}__state`);
     expect(state).toMatchObject({ agent_status: 'ACTIVE' });
+    expect((state?.task_context as Record<string, unknown>).task_id).toBeUndefined();
     expect(JSON.stringify(state)).not.toMatch(/eyJ[A-Za-z0-9_-]{4,}\./);
     // Only the projection reaches the conversation, never the raw body.
     expect(JSON.stringify(state)).not.toContain('"secret"');
@@ -275,6 +276,94 @@ describe('the drained activity queue', () => {
   it('starts empty for each spec', () => {
     resetActivityPublisherForTesting();
     expect(drainActivityQueueForTesting()).toEqual([]);
+  });
+});
+
+describe('runtime failure exercises', () => {
+  it('consumes a typed fault once, ends the execution, and throws before calling the model', async () => {
+    const h = await harness({ steps: [] });
+    await h.documents.set('agent_instructions', 'fault-1', {
+      agent_id: AGENT_ID, text: 'failure exercise', created_at: new Date().toISOString(), applied_at: null,
+      fault: { kind: 'runtime_crash', task_id: h.context.taskId },
+    });
+    let called = false;
+    const vertex = { generateJson: async <T>() => { called = true; return { done: true } as T; } };
+    await expect(runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex }))
+      .rejects.toThrow('injected_runtime_crash');
+    expect(called).toBe(false);
+    // The execution is over and says why. `agent_status` stays the Lifecycle state
+    // (docs 07 §2), which the Runtime does not own and a crash does not change; the
+    // status endpoint reads the failure out of `execution_state` instead.
+    expect(await h.documents.get('agents', `${AGENT_ID}__state`)).toMatchObject({
+      agent_status: 'ACTIVE',
+      task_context: { agent_id: AGENT_ID },
+      execution_state: { failure: 'injected_runtime_crash', fault_instruction_id: 'fault-1' },
+    });
+    const state = await h.documents.get<{ task_context: Record<string, unknown> }>('agents', `${AGENT_ID}__state`);
+    expect(state!.task_context).not.toHaveProperty('task_id');
+    expect(await h.store.readPendingInstructions(new Date().toISOString())).toEqual([]);
+  });
+  it('does not apply a stale fault to a different task or interpret instruction text as a fault', async () => {
+    const h = await harness({ steps: [] });
+    await h.documents.set('agent_instructions', 'stale', {
+      agent_id: AGENT_ID, body: 'test', created_at: '2026-01-01T00:00:00Z', applied_at: null,
+      fault: { kind: 'runtime_crash', task_id: 'different-task' },
+    });
+    await h.documents.set('agent_instructions', 'normal', {
+      agent_id: AGENT_ID, text: 'runtime_crash', created_at: '2026-01-01T00:00:01Z', applied_at: null,
+    });
+    let prompt = '';
+    const vertex = { generateJson: async <T>(input: { prompt: string }) => { prompt = input.prompt; return { done: true } as T; } };
+    expect((await runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex })).stoppedBy).toBe('done');
+    expect(prompt).toContain('runtime_crash');
+    expect(prompt).not.toContain('different-task');
+  });
+
+  it('leaves the model unasked for one step and ends the run as unanswered', async () => {
+    const h = await harness({ steps: [] });
+    await h.documents.set('agent_instructions', 'fault-2', {
+      agent_id: AGENT_ID, text: 'failure exercise', created_at: new Date().toISOString(), applied_at: null,
+      fault: { kind: 'model_unavailable', task_id: h.context.taskId },
+    });
+    let called = false;
+    const vertex = { generateJson: async <T>() => { called = true; return { done: true } as T; } };
+    const result = await runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex });
+    // The path a model outage takes: no answer, one record saying so, the loop over.
+    expect(called).toBe(false);
+    expect(result.stoppedBy).toBe('no_decision');
+    expect(result.results).toEqual([]);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]!.headline).toContain('異常系試験');
+    expect(await h.documents.get('agents', `${AGENT_ID}__state`)).toMatchObject({
+      agent_status: 'ACTIVE',
+      execution_state: { failure: 'injected_model_unavailable', fault_instruction_id: 'fault-2' },
+    });
+    expect(h.calls).toEqual([]);
+  });
+
+  it('fails the next tool call in place and lets the loop decide what to do next', async () => {
+    const h = await harness({ steps: [
+      { done: false, tool_call: { tool_id: 'internal.document.list', parameters: {} } },
+      { done: true, note: '一覧が取れなかったので、ここで終えます。' },
+    ] });
+    await h.documents.set('agent_instructions', 'fault-3', {
+      agent_id: AGENT_ID, text: 'failure exercise', created_at: new Date().toISOString(), applied_at: null,
+      fault: { kind: 'tool_failure', task_id: h.context.taskId },
+    });
+    const result = await runReasoningLoop({ context: h.context, http: h.http, logger: silentLogger, logContext, vertex: h.vertex });
+    // The call never left the process, the model was told it failed, and the run went
+    // on to the model's own decision to stop — which is the point of the exercise.
+    expect(h.calls).toEqual([]);
+    expect(result.stoppedBy).toBe('done');
+    expect(result.results).toEqual([expect.objectContaining({ outcome: 'failed', error_code: 'injected_fault', tool_id: 'internal.document.list', stage: 'tool_selection' })]);
+    expect(result.records[0]).toMatchObject({ headline: 'internal.document.list を異常系試験で失敗させました' });
+    expect(result.records[0]!.sections.some((section) => section.id === 'failure')).toBe(true);
+    expect(decideTaskOutcome(result.results)).toBe('TASK_FAILED');
+    const state = await h.documents.get<{ execution_state: Record<string, unknown> }>('agents', `${AGENT_ID}__state`);
+    expect(state!.execution_state).toMatchObject({ fault_instruction_id: 'fault-3', fault_kind: 'tool_failure' });
+    // A survived fault leaves no execution failure: the execution did not end because of it.
+    expect(state!.execution_state).not.toHaveProperty('failure');
+    expect(await h.store.readPendingInstructions(new Date().toISOString())).toEqual([]);
   });
 });
 

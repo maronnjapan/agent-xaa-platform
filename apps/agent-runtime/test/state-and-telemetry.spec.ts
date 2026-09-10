@@ -45,6 +45,25 @@ describe('the checkpoint sanitiser', () => {
     expect(output).toEqual({ execution_state: { note: 'fine' } });
   });
 
+  it('keeps a dotted identifier, which is punctuation rather than a token', () => {
+    const removed: string[][] = [];
+    // Three segments made `internal.document.list` look like a JWS, and dropping it
+    // left the person's own execution log with a blank where the tool name goes.
+    const output = sanitizeCheckpoint(
+      { pending_tool_calls: [{ tool_id: 'internal.document.list', outcome: 'success' }] },
+      (event) => removed.push(event.removed_keys),
+    );
+    expect(output).toEqual({ pending_tool_calls: [{ tool_id: 'internal.document.list', outcome: 'success' }] });
+    expect(removed).toEqual([]);
+    // A JWS whose signature is the only unreadable part is still dropped, so the
+    // narrower rule did not open a hole for a real token.
+    sanitizeCheckpoint(
+      { execution_state: { leaked: 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ4In0.not-base64-json' } },
+      (event) => removed.push(event.removed_keys),
+    );
+    expect(removed).toEqual([['leaked']]);
+  });
+
   it('drops a denied key even when its value looks harmless', () => {
     const removed: string[][] = [];
     sanitizeCheckpoint({ access_token: 'short', id_jag: 'x' }, (event) => removed.push(event.removed_keys));

@@ -33,6 +33,8 @@ export interface StartRuntimeOptions {
   taskId?: string;
   expiresAt?: string;
   agentClientPrivateJwk: string;
+  /** One Firestore across several apps, for a test that spans them. */
+  shared?: ReturnType<typeof createFirestoreDouble>;
 }
 
 /**
@@ -65,7 +67,7 @@ function cloudRunIamCheck(init: RequestInit): Response | undefined {
  * `globalThis.fetch` is never reached.
  */
 export async function startAgentRuntime(options: StartRuntimeOptions): Promise<RuntimeHarness> {
-  const documents = createFirestoreDocumentStore(createFirestoreDouble(), 'agent-runtime');
+  const documents = createFirestoreDocumentStore(options.shared ?? createFirestoreDouble(), 'agent-runtime');
   const store = createRuntimeStore({ documents, agentId: options.agentOp.agentId });
   const raw = JSON.stringify(options.manifest);
   const context = await createExecutionContext({

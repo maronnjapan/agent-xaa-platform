@@ -40,6 +40,7 @@ export function Layout(props: {
           <span className="app-brand">Agent XAA</span>
           <a href="/">ToDo</a>
           <a href="/activity">アクティビティ</a>
+          <a href="/security">ログ分析モニター</a>
           <a href={props.analysisConsoleUrl}>分析エージェントの判断</a>
           <a href="/guide">使い方</a>
         </nav>

@@ -60,7 +60,8 @@
       "agents/*/state",
       "agent_instructions/**",
       "user_activity/**",
-      "authorization_decisions/**"
+      "authorization_decisions/**",
+      "security_analysis/**"
     ],
     "write": [
       "sessions/**",
@@ -76,6 +77,7 @@
       "console_sessions/**",
       "console_login_transactions/**",
       "security_findings/**",
+      "security_inspections/**",
       "agents/*/meta"
     ],
     "write": [
@@ -277,11 +279,15 @@
       "agents/*/baseline",
       "agents/*/meta",
       "security_findings/**",
-      "batch_state/**"
+      "security_inspections/**",
+      "batch_state/**",
+      "security_analysis/**"
     ],
     "write": [
       "security_findings/**",
-      "batch_state/**"
+      "security_inspections/**",
+      "batch_state/**",
+      "security_analysis/**"
     ]
   }
 }

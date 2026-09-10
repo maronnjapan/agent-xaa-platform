@@ -1,3 +1,4 @@
+import type { ScoreBreakdown } from '@xaa/contracts';
 import { createHash } from 'node:crypto';
 import type { Deviation } from '../baseline/deviation.js';
 
@@ -11,6 +12,7 @@ export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ReviewStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
 export interface SecurityFinding {
+  score_breakdown?: ScoreBreakdown;
   finding_id: string;
   finding_type: FindingType;
   agent_id: string | null;

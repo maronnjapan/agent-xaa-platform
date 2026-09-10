@@ -27,25 +27,32 @@ const finding = (codes: string[]): SecurityFinding => ({
 });
 
 /**
- * REQ-09-044. LOW is observed and nothing more.
+ * REQ-09-044. LOW is 「保存と観測」 — stored and watched, and escalated no further.
  *
  * The point is not that a low score is uninteresting — it is that escalation costs
- * something. A model call and a `findings` row for every mildly unusual window would
- * bury the windows that matter, so the boundary at 30 is enforced where the decision is
- * made rather than in whatever reads the table afterwards.
+ * something. A model call and a state change for every mildly unusual window would bury
+ * the windows that matter, so the boundary at 30 is enforced where the decision is made
+ * rather than in whatever reads the table afterwards.
+ *
+ * Not escalating is not the same as not recording, and this used to conflate the two:
+ * the row was dropped as well, which meant a lone refused request (10) or a lone unknown
+ * tool (25) left no trace at all and the Analysis Console had nothing to show for a
+ * window the rules really had read (docs 09 §5.5, §7).
  */
 describe('a LOW finding is not escalated', () => {
-  it('score 20 creates no finding and no ai call', async () => {
+  it('score 20 is kept as the mechanical result and asks no model', async () => {
     // The score this batch produces, spelled out: one lifetime hit, worth twenty.
     expect(computeScore({ finding: finding(['lifetime.age_exceeded']) })).toBe(20);
     expect(toLevel(20)).toBe('LOW');
 
     const harness = createSecurityHarness({ maxLifetimeSeconds: MAX_LIFETIME_SECONDS });
-    const before = await harness.documents.listAll('security_findings');
-
     await harness.runOnce([runtimeEntry(AGED)]);
 
-    expect(await harness.documents.listAll('security_findings')).toHaveLength(before.length);
+    const rows = await harness.documents.listAll<{ risk_level: string; analysis_source: string }>('security_findings');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.data.risk_level).toBe('LOW');
+    // Marked as what it is: the passes ran, and nothing was asked of the model.
+    expect(rows[0]!.data.analysis_source).toBe('rules');
     expect(harness.aiCalls).toBe(0);
     expect(harness.transitions).toHaveLength(0);
   });

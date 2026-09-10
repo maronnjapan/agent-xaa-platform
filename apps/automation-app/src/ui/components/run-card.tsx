@@ -1,6 +1,6 @@
 import type { TimelineTask } from '../../activity/query.js';
 import { agentPagePath } from '../../agents/page-link.js';
-import { blockedCountOf, isSimulated, StageCard } from './stage-card.js';
+import { blockedCountOf, failedCountOf, isSimulated, issueCountOf, StageCard } from './stage-card.js';
 import { LocalTime } from './local-time.js';
 import type { Element } from '../element.js';
 
@@ -23,6 +23,8 @@ export interface RunSummary {
   running: number;
   /** Tasks whose events include a refusal, counted by the publishers' own `outcome`. */
   blocked: number;
+  /** Tasks whose events, or whose end, say something failed. */
+  failed: number;
   /** The agent's `lifecycle` task has ended: the story is over. */
   ended: boolean;
   /** Some task is a scripted one (RULE-58). */
@@ -51,6 +53,7 @@ export function summariseRun(tasks: readonly TimelineTask[]): RunSummary {
   return {
     running: tasks.filter((task) => task.status === 'running').length,
     blocked: tasks.filter((task) => blockedCountOf(task) > 0).length,
+    failed: tasks.filter((task) => failedCountOf(task) > 0).length,
     ended: tasks.some((task) => task.task_id === 'lifecycle' && task.status === 'completed'),
     simulated: tasks.some(isSimulated),
     startedAt: instants[0] ?? null,
@@ -75,11 +78,11 @@ export function summariseRun(tasks: readonly TimelineTask[]): RunSummary {
 export function RunCard(props: {
   run: Run;
   /**
-   * Which finished tasks stand opened: all of them, none, or the ones with a refusal in
-   * them. The newest agent's all do; the rest fold; the blocked view opens exactly the
-   * cards a person switched to that view to find.
+   * Which finished tasks stand opened: all of them, none, or the ones with a refusal or
+   * a failure in them. The newest agent's all do; the rest fold; the issues view opens
+   * exactly the cards a person switched to that view to find.
    */
-  open: boolean | 'blocked';
+  open: boolean | 'issues';
   /** Offer the link that narrows the page to this agent. Off when it already is. */
   offerFilter: boolean;
 }): Element {
@@ -93,6 +96,7 @@ export function RunCard(props: {
           <p className="run-chips" data-field="run-chips">
             {summary.running > 0 ? <span className="chip chip-running" data-chip="running">{`実行中 ${summary.running} 件`}</span> : null}
             {summary.blocked > 0 ? <span className="chip chip-blocked" data-chip="blocked">{`遮断あり ${summary.blocked} 件`}</span> : null}
+            {summary.failed > 0 ? <span className="chip chip-failed" data-chip="failed">{`失敗 ${summary.failed} 件`}</span> : null}
             {summary.ended ? <span className="chip chip-ended" data-chip="ended">終了</span> : null}
             {summary.simulated ? <span className="chip chip-demo" data-chip="demo">デモ実行（模擬）</span> : null}
             {run.agentId === null ? <span className="chip chip-pending" data-field="agent-missing">{NO_AGENT_YET}</span> : null}
@@ -141,7 +145,7 @@ export function RunCard(props: {
           <StageCard
             key={task.task_id}
             task={task}
-            open={props.open === 'blocked' ? blockedCountOf(task) > 0 : props.open}
+            open={props.open === 'issues' ? issueCountOf(task) > 0 : props.open}
           />
         ))}
       </ol>

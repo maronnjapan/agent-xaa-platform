@@ -25,3 +25,12 @@ export function agentInstructionsPath(agentId: string): string {
 export function agentStopPath(agentId: string): string {
   return `/api${agentPagePath(agentId)}/stop`;
 }
+
+/** The failure exercise, and the snapshot the agent screen polls while it runs. */
+export function agentFaultsPath(agentId: string): string {
+  return `/api${agentPagePath(agentId)}/faults`;
+}
+
+export function agentMonitorPath(agentId: string): string {
+  return `/api${agentPagePath(agentId)}/monitor`;
+}

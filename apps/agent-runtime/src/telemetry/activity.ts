@@ -143,7 +143,7 @@ export async function publishTaskOutcome(input: {
     TASK_BLOCKED: { outcome: 'blocked' as const, title: '作業を途中で止めました', message: '権限の範囲外の操作が含まれていたため、その操作を実行せずに終了しました。' },
     // `outcome` has three values by design (docs 11 §3.1); a failure is not a block,
     // so it carries the neutral tone and states the difference in the message.
-    TASK_FAILED: { outcome: 'info' as const, title: '作業を完了できませんでした', message: '処理中にエラーが発生したため、作業を完了できませんでした。' },
+    TASK_FAILED: { outcome: 'failed' as const, title: '作業を完了できませんでした', message: '処理中にエラーが発生したため、作業を完了できませんでした。' },
   }[input.eventType];
   await publish({
     ...base(input.context, occurredAt),

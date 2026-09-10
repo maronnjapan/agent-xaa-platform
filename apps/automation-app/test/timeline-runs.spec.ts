@@ -199,7 +199,7 @@ describe('one agent, one story', () => {
     // The blocked task says how many of its events were refusals.
     const blocked = html.slice(html.indexOf(`data-stage-card="${AGENT_ID}:task-2"`), html.indexOf(`data-stage-card="${AGENT_ID}:task-3"`));
     expect(blocked).toContain('遮断 2 件');
-    expect(html).toContain(`data-task-key="${AGENT_ID}:task-3" data-task-id="task-3" data-task-kind="task" data-status="running"`);
+    expect(html).toContain(`data-task-key="${AGENT_ID}:task-3" data-task-id="task-3" data-task-kind="task" data-status="running" data-issue-count="0"`);
   });
 
   it('keys each canvas and log by agent and task together', async () => {

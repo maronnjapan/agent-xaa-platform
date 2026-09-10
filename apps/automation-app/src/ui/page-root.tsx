@@ -1,3 +1,4 @@
+import { SecurityPage } from './pages/security.js';
 import { AgentDetailPage } from './pages/agent-detail.js';
 import { GuidePage } from './pages/guide.js';
 import { HomePage } from './pages/home.js';
@@ -32,7 +33,9 @@ export function PageRoot(props: { data: PageData }): Element {
     case 'timeline':
       return <TimelinePage tasks={data.tasks} agentId={data.agentId} />;
     case 'agent-detail':
-      return <AgentDetailPage agentId={data.agentId} status={data.status} />;
+      return <AgentDetailPage {...data} />;
+    case 'security':
+      return <SecurityPage runs={data.runs} now={data.now} />;
     case 'todo-new':
       return <TodoNewPage defaultMinutes={data.defaultMinutes} />;
     case 'guide':

@@ -14,6 +14,8 @@ export interface AutomationAppConfig {
   vertexModel: string;
   vertexMode: string;
   storeMode: string;
+  /** Whether the agent screen offers the failure exercise. Off unless a deployment opts in. */
+  faultInjectionEnabled?: boolean;
 }
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -23,13 +25,16 @@ function required(env: NodeJS.ProcessEnv, key: string): string {
 }
 
 /**
- * Fifteen variables and no more.
+ * Sixteen variables and no more.
  *
  * Twelve are the original list; `CLIENT_SECRET_AUTOMATION_APP` and `PUBLIC_BASE_URL`
  * joined them when the login flow became real, because the OIDC code exchange cannot be
  * made without a client secret and a redirect URI that matches the one the Human IdP was
  * given. `ANALYSIS_CONSOLE_URL` is the fifteenth, and it is a href in the navigation:
  * no request from this app ever goes to it, and nothing here reads anything it holds.
+ * `ENABLE_FAULT_INJECTION` is the sixteenth, and it is an opt-in rather than a URL: a
+ * deployment that does not set it to `true` has no failure exercise on its agent screen
+ * and no API that accepts one, so the button cannot exist by accident.
  *
  * The list stays short because of what is missing from it: there is no Capability
  * Taxonomy URL, no resource list and no isolation threshold. Automation App is the
@@ -37,8 +42,9 @@ function required(env: NodeJS.ProcessEnv, key: string): string {
  * and giving this app a way to read the vocabulary is how that boundary erodes.
  *
  * There is no Security Detection URL either, and that absence is load-bearing rather
- * than an oversight: T-SEC-08 makes the detector a one-way feed, and what it decided is
- * shown by the Analysis Console, which reads those rows itself.
+ * than an oversight: T-SEC-08 makes the detector a one-way feed. What it decided is
+ * shown by the Analysis Console, which reads those rows itself, and how far each
+ * analysis got is read off the projection the detector writes for that purpose.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AutomationAppConfig {
   return {
@@ -57,5 +63,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AutomationAppC
     vertexModel: required(env, 'VERTEX_MODEL'),
     vertexMode: env.VERTEX_MODE ?? 'fake',
     storeMode: env.STORE_MODE ?? 'emulator',
+    faultInjectionEnabled: env.ENABLE_FAULT_INJECTION === 'true',
   };
 }

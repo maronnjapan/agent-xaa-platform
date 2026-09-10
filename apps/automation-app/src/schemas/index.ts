@@ -1,6 +1,7 @@
 import { activityRecordSchema } from '@xaa/contracts';
 
 /** JSON Schemas the Automation App validates against, kept together (DEC-APP-05). */
+import { EXECUTION_FAILURES } from '@xaa/contracts';
 
 export const suggestionSchema = {
   $id: 'automation-suggestion',
@@ -163,7 +164,7 @@ export const AGENT_STATUS_VALUES = [
 ] as const;
 
 export const AGENT_STATUS_RESPONSE_KEYS = [
-  'agent_status', 'remaining_seconds', 'current_task', 'tool_invocations', 'execution_log',
+  'agent_status', 'remaining_seconds', 'current_task', 'execution_failure', 'tool_invocations', 'execution_log',
 ] as const;
 
 export const agentStatusResponseSchema = {
@@ -175,6 +176,10 @@ export const agentStatusResponseSchema = {
     agent_status: { enum: AGENT_STATUS_VALUES },
     remaining_seconds: { type: 'integer', minimum: 0 },
     current_task: { type: ['string', 'null'] },
+    // How the last execution ended when it did not end by itself. `agent_status` above
+    // is the Lifecycle state and stays the nine values of docs 07 §2; a crashed
+    // execution is not a tenth one, so it is reported here instead.
+    execution_failure: { enum: [...EXECUTION_FAILURES, null] },
     tool_invocations: {
       type: 'array',
       items: {

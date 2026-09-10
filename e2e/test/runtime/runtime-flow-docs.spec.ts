@@ -1,3 +1,4 @@
+import type { createFirestoreDouble } from '@xaa/gcp';
 import { describe, expect, it } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { jwkThumbprint } from '@xaa/crypto';
@@ -14,13 +15,14 @@ import { humanIdToken } from './native-xaa-path.spec.js';
  * Executor: the ten steps happen because the code runs them, not because the spec
  * calls them in order.
  */
-export async function docsRuntime(options: { humanSubject?: string } = {}): Promise<{
+export async function docsRuntime(options: { humanSubject?: string; shared?: ReturnType<typeof createFirestoreDouble> } = {}): Promise<{
   runtime: RuntimeHarness; agentOp: AgentOpHarness; docs: ResourceHarness; subjectToken: string;
 }> {
   const humanSubject = options.humanSubject ?? 'testuser';
   const subjectToken = await humanIdToken();
   const agentOp = await startAgentOp({
     idpPublicJwk: await idpPublicJwk(), humanSubject,
+    ...(options.shared ? { shared: options.shared } : {}),
     // Human IdP's answer to the refresh grant Agent OP sends on /xaa/subject-token,
     // so a Runtime that fetches its own subject token gets a real ID Token back.
     humanIdpFetch: (async () => Response.json({
@@ -31,6 +33,7 @@ export async function docsRuntime(options: { humanSubject?: string } = {}): Prom
     kind: 'docs', agentOpPublicJwk: agentOp.opPublicJwk, trustedIdpIssuer: HUMAN_IDP_ISSUER,
   });
   const runtime = await startAgentRuntime({
+    ...(options.shared ? { shared: options.shared } : {}),
     agentOp, agentOpBaseUrl: AGENT_OP_BASE, resources: [docs], humanSubject,
     manifest: nativeManifest({ agentId: agentOp.agentId, resource: docs, kind: 'docs' }),
     agentClientPrivateJwk: JSON.stringify(await webcrypto.subtle.exportKey('jwk', agentOp.agentKeyPair.privateKey)),

@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react';
 import type { TimelineTask } from '../../activity/query.js';
+import { taskLabelOf } from '../labels.js';
 import { CastPanel } from '../components/cast-panel.js';
+import { OutcomeBar, type OutcomeCounts } from '../components/outcome-bar.js';
 import { RunCard, summariseRun, type Run } from '../components/run-card.js';
 import { partiesIn } from '../roles.js';
 import type { Element } from '../element.js';
@@ -8,14 +10,18 @@ import type { Element } from '../element.js';
 export const TIMELINE_TITLE = 'アクティビティ';
 export const TIMELINE_LEAD = 'ログインから、権限の決定、Agent の作成、作業、終了までを Agent ごとにまとめています。新しい Agent が上です。';
 export const TIMELINE_EMPTY = 'まだ記録がありません。ToDo を書いて Agent を作ると、ここに並びます。';
+export const TIMELINE_NO_MATCH = '検索に一致する Agent はありません。';
 export const TIMELINE_FILTERED_NOTE = 'この Agent の記録だけを表示しています。';
 export const SHOW_ALL_AGENTS = 'すべての Agent を表示';
 export const REFRESH_LABEL = '最新の状態に更新';
+export const REFRESH_FAILED = '更新できませんでした。表示は前回の内容のままです。';
+export const SEARCH_LABEL = '検索';
+export const SEARCH_PLACEHOLDER = '目的、Agent ID、作業の名前';
 export const VIEW_ALL = 'すべて';
-export const VIEW_BLOCKED = '遮断されたものだけ';
+export const VIEW_ISSUES = '問題があったものだけ';
 
-/** What the person is looking at: everything, or only the rows where something was refused. */
-export type TimelineView = 'all' | 'blocked';
+/** What the person is looking at: everything, or only the rows where something was refused or failed. */
+export type TimelineView = 'all' | 'issues';
 
 /**
  * Tasks grouped into agents, in the order `readTimeline` handed them over.
@@ -36,13 +42,42 @@ export function groupRuns(tasks: readonly TimelineTask[]): Run[] {
 }
 
 /**
+ * How the tasks ended, counted for the bar under the numbers.
+ *
+ * Each task counts once, by the outcome its terminal event carried — or as running,
+ * when it has no terminal event yet. These are the schema's own values; the screen
+ * adds no fourth verdict of its own (RULE-54).
+ */
+export function outcomeCountsOf(tasks: readonly TimelineTask[]): OutcomeCounts {
+  const counts: OutcomeCounts = { success: 0, blocked: 0, failed: 0, running: 0, info: 0 };
+  for (const task of tasks) {
+    if (task.status === 'running') counts.running = (counts.running ?? 0) + 1;
+    else if (task.terminal_outcome === 'success') counts.success += 1;
+    else if (task.terminal_outcome === 'blocked') counts.blocked += 1;
+    else if (task.terminal_outcome === 'failed') counts.failed += 1;
+    else counts.info = (counts.info ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** Whether an agent's card matches what a person typed: its purpose, its id, or a task's name. */
+export function matchesSearch(run: Run, search: string): boolean {
+  const needle = search.trim().toLocaleLowerCase();
+  if (needle === '') return true;
+  const haystack = [run.purpose, run.agentId ?? '', ...run.tasks.flatMap((task) => [task.task_id, taskLabelOf(task.task_id).label])]
+    .join(' ').toLocaleLowerCase();
+  return haystack.includes(needle);
+}
+
+/**
  * The person's activity, as one page.
  *
  * It opens with the numbers a person wants before reading anything: how many agents,
- * how many still running, how many ran into a refusal. Then one card per agent, newest
- * first, each headed by the work it was made for and followed by its tasks on a rail.
- * The newest agent's tasks start opened, because that is the one a person came to look
- * at; the rest fold to a line each, so ten agents are ten lines rather than ten screens.
+ * how many still running, how many ran into a refusal or a failure, and one bar for
+ * how the tasks ended. Then one card per agent, newest first, each headed by the work
+ * it was made for and followed by its tasks on a rail. The newest agent's tasks start
+ * opened, because that is the one a person came to look at; the rest fold to a line
+ * each, so ten agents are ten lines rather than ten screens.
  *
  * Nothing on the page is a sentence about what an event meant. The chips count the
  * publishers' own `outcome`, the heads print the publishers' own titles, and the words
@@ -55,17 +90,20 @@ export function groupRuns(tasks: readonly TimelineTask[]): Run[] {
  * agent stays narrowed when it refreshes — the subject still comes from the session,
  * and the narrowing is a filter over the person's own timeline, never a widening of it.
  *
- * The view switch hides nothing from the markup: every row is served, and 「遮断され
- * たものだけ」 is a stylesheet rule keyed on the page's `data-view`, so a person
+ * The view switch hides nothing from the markup: every row is served, and 「問題が
+ * あったものだけ」 is a stylesheet rule keyed on the page's `data-view`, so a person
  * without script sees everything and a person with it sees what they asked for. What
- * the switch does change is which cards stand open: the ones with a refusal in them,
- * and only those, so the page becomes the list of where things were stopped.
+ * the switch does change is which cards stand open: the ones with a refusal or a
+ * failure in them, and only those, so the page becomes the list of where things went
+ * wrong. The search narrows the cards the same way — by hiding, never by dropping.
  */
 export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: string | null }): Element {
   const [tasks, setTasks] = useState<readonly TimelineTask[]>(props.tasks);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [view, setView] = useState<TimelineView>('all');
+  const [search, setSearch] = useState('');
   const agentId = props.agentId ?? null;
 
   const refresh = useCallback(() => {
@@ -73,10 +111,13 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: 
     void (async () => {
       try {
         const response = await fetch('/api/activity/tasks', { credentials: 'same-origin' });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(String(response.status));
         const body = await response.json() as { tasks: TimelineTask[] };
         setTasks(agentId === null ? body.tasks : body.tasks.filter((task) => task.agent_id === agentId));
         setUpdatedAt(new Date().toLocaleTimeString('ja-JP', { hour12: false }));
+        setRefreshFailed(false);
+      } catch {
+        setRefreshFailed(true);
       } finally {
         setRefreshing(false);
       }
@@ -87,6 +128,8 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: 
   const summaries = runs.map((run) => summariseRun(run.tasks));
   const running = summaries.reduce((sum, summary) => sum + summary.running, 0);
   const blocked = summaries.reduce((sum, summary) => sum + summary.blocked, 0);
+  const failed = summaries.reduce((sum, summary) => sum + summary.failed, 0);
+  const shown = runs.filter((run) => matchesSearch(run, search));
   const sources = partiesIn(tasks.flatMap((task) => (task.status === 'completed' ? task.events : [])));
 
   return (
@@ -98,7 +141,9 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: 
         </div>
         <div className="page-tools">
           <button type="button" className="secondary" data-action="refresh" onClick={refresh} disabled={refreshing}>{REFRESH_LABEL}</button>
-          <span className="updated-at" data-field="updated-at">{updatedAt === null ? '' : `${updatedAt} に更新`}</span>
+          <span className="updated-at" data-field="updated-at" role="status">
+            {refreshFailed ? REFRESH_FAILED : updatedAt === null ? '' : `${updatedAt} に更新`}
+          </span>
         </div>
       </header>
 
@@ -114,39 +159,55 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: 
           <span className="chip" data-summary="agent-count">{`Agent ${runs.length} 体`}</span>
           <span className="chip chip-running" data-summary="running">{`実行中 ${running} 件`}</span>
           <span className="chip chip-blocked" data-summary="blocked">{`遮断あり ${blocked} 件`}</span>
+          <span className="chip chip-failed" data-summary="failed">{`失敗 ${failed} 件`}</span>
         </p>
-        <div className="view-switch" role="group" aria-label="表示する内容">
-          <button
-            type="button"
-            className={view === 'all' ? 'is-selected' : ''}
-            data-action="view-all"
-            aria-pressed={view === 'all'}
-            onClick={() => setView('all')}
-          >
-            {VIEW_ALL}
-          </button>
-          <button
-            type="button"
-            className={view === 'blocked' ? 'is-selected' : ''}
-            data-action="view-blocked"
-            aria-pressed={view === 'blocked'}
-            onClick={() => setView('blocked')}
-          >
-            {VIEW_BLOCKED}
-          </button>
+        <div className="summary-tools">
+          <label className="activity-search">
+            <span>{SEARCH_LABEL}</span>
+            <input
+              type="search"
+              data-filter="search"
+              placeholder={SEARCH_PLACEHOLDER}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <div className="view-switch" role="group" aria-label="表示する内容">
+            <button
+              type="button"
+              className={view === 'all' ? 'is-selected' : ''}
+              data-action="view-all"
+              aria-pressed={view === 'all'}
+              onClick={() => setView('all')}
+            >
+              {VIEW_ALL}
+            </button>
+            <button
+              type="button"
+              className={view === 'issues' ? 'is-selected' : ''}
+              data-action="view-issues"
+              aria-pressed={view === 'issues'}
+              onClick={() => setView('issues')}
+            >
+              {VIEW_ISSUES}
+            </button>
+          </div>
         </div>
       </div>
+      <OutcomeBar label="作業の結果" counts={outcomeCountsOf(tasks)} />
 
       <CastPanel sources={sources} />
 
       {runs.length === 0 ? <p className="timeline-empty" data-field="timeline-empty">{TIMELINE_EMPTY}</p> : null}
+      {runs.length > 0 && shown.length === 0 ? <p className="timeline-empty" data-field="timeline-no-match">{TIMELINE_NO_MATCH}</p> : null}
       {runs.map((run, index) => (
-        <RunCard
-          key={run.runId}
-          run={run}
-          open={view === 'blocked' ? 'blocked' : (index === 0 || agentId !== null)}
-          offerFilter={agentId === null}
-        />
+        <div key={run.runId} data-run-shown={String(shown.includes(run))} {...(shown.includes(run) ? {} : { hidden: true })}>
+          <RunCard
+            run={run}
+            open={view === 'issues' ? 'issues' : (index === 0 || agentId !== null)}
+            offerFilter={agentId === null}
+          />
+        </div>
       ))}
     </main>
   );

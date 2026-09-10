@@ -12,7 +12,7 @@ resource "google_firestore_database" "xaa" {
 }
 
 resource "google_firestore_field" "ttl" {
-  for_each   = toset(["activity", "dpop_jti", "assertion_jti"])
+  for_each   = toset(["activity", "dpop_jti", "assertion_jti", "security_analysis"])
   provider   = google-beta
   project    = var.project_id
   database   = google_firestore_database.xaa.name

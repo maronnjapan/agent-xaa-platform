@@ -27,8 +27,9 @@ describe('the Activity Event schema', () => {
     expect(() => validateActivityEvent({ ...example, phase: 'completed' })).toThrow();
   });
 
-  it('rejects a fourth outcome', () => {
-    expect(ACTIVITY_EVENT_OUTCOMES).toHaveLength(3);
+  it('rejects unknown outcomes', () => {
+    expect(ACTIVITY_EVENT_OUTCOMES).toHaveLength(4);
+    expect(ACTIVITY_EVENT_OUTCOMES).toContain('failed');
     for (const outcome of ['denied', 'rejected', 'error']) {
       expect(() => validateActivityEvent({ ...example, outcome })).toThrow();
     }

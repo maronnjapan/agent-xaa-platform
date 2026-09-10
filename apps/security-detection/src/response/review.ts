@@ -1,7 +1,8 @@
 import type { ResponseState } from '../ai/output.js';
 
-export const REVIEW_CONFIDENCE_FLOOR = 0.7;
-export const REVIEW_REQUIRED_RESPONSES: readonly ResponseState[] = ['QUARANTINED', 'REVOKED', 'DESTROYED'];
+import { REVIEW_CONFIDENCE_FLOOR, REVIEW_REQUIRED_RESPONSES as RESPONSES } from '@xaa/contracts';
+export { REVIEW_CONFIDENCE_FLOOR };
+export const REVIEW_REQUIRED_RESPONSES: readonly ResponseState[] = RESPONSES;
 
 /**
  * Which recommendations a person has to approve first.

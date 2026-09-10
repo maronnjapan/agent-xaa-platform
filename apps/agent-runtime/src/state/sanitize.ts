@@ -25,6 +25,27 @@ const DENY_KEYS = new Set([
 const JWT_SHAPE = /^eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 
 /**
+ * Three dot-separated segments are not enough to call something a token.
+ *
+ * `internal.document.list` has that shape, and dropping it cost the person the tool
+ * name in their own execution log — a silent redaction of the very thing the log is
+ * for. A JWS is narrower than its punctuation: its first segment is base64url of a
+ * JSON object. Requiring that keeps every real token out while letting a dotted
+ * identifier through, and it cannot be satisfied by an accident of naming.
+ */
+function looksLikeJws(value: string): boolean {
+  if (!JWT_SHAPE.test(value)) return false;
+  try {
+    const header: unknown = JSON.parse(
+      Buffer.from(value.slice(0, value.indexOf('.')), 'base64url').toString('utf8'),
+    );
+    return typeof header === 'object' && header !== null && !Array.isArray(header);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Two different failures, kept apart on purpose (REQ-07-019, REQ-05-092).
  *
  * A key object or a private JWK in the checkpoint is a programming error: something
@@ -62,7 +83,7 @@ export function sanitizeCheckpoint(value: unknown, warn: (event: { removed_keys:
         const itemKind = secretKind(item);
         if (itemKind) throw new CheckpointSecretError(itemKind);
         if (DENY_KEYS.has(key.toLowerCase())) { removed.push(key); continue; }
-        if (typeof item === 'string' && JWT_SHAPE.test(item)) { removed.push(key); continue; }
+        if (typeof item === 'string' && looksLikeJws(item)) { removed.push(key); continue; }
         output[key] = walk(item, depth + 1);
       }
       return output;

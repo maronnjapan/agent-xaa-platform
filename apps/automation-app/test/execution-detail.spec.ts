@@ -106,7 +106,7 @@ describe('the execution log on the agent screen', () => {
   });
 
   it('sits on the agent page without becoming a timeline', () => {
-    const html = render(AgentDetailPage({
+    const html = render(createElement(AgentDetailPage, {
       agentId: 'agent-a',
       status: {
         agent_status: 'ACTIVE', remaining_seconds: 100, current_task: 'task-1',

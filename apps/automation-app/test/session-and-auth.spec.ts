@@ -225,7 +225,7 @@ describe('the app shell', () => {
     expect(await response.json()).toEqual({ status: 'ok', app: 'automation-app' });
   });
 
-  it('loads exactly the fifteen documented variables', () => {
+  it('loads exactly the sixteen documented variables, with the failure exercise off', () => {
     const loaded = loadConfig({
       ISSUER: config.issuer,
       CLIENT_SECRET_AUTOMATION_APP: config.clientSecret,
@@ -238,7 +238,8 @@ describe('the app shell', () => {
       ACTIVITY_TOPIC: config.activityTopic,
       VERTEX_MODEL: config.vertexModel,
     });
-    expect(Object.keys(loaded)).toHaveLength(15);
+    expect(Object.keys(loaded)).toHaveLength(16);
+    expect(loaded.faultInjectionEnabled).toBe(false);
     expect(loaded.clientId).toBe('automation-app');
     expect(loaded.defaultAgentLifetimeMinutes).toBe(60);
     expect(() => loadConfig({})).toThrow(/ISSUER is required/);

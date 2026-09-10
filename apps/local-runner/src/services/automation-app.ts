@@ -10,6 +10,7 @@ import { TOPICS, type LocalPlatform } from '../platform.js';
 export function automationAppEnvironment(platform: LocalPlatform): Record<string, string> {
   const { url, endpoints } = platform.config.topology;
   return {
+    ENABLE_FAULT_INJECTION: 'true',
     ISSUER: endpoints.issuer,
     PUBLIC_BASE_URL: url['automation-app'],
     AUTHORIZATION_PLATFORM_URL: url.authorization,

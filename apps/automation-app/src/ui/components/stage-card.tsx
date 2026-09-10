@@ -8,6 +8,7 @@ import { EventLog, type LogEvent } from './event-log.js';
 import { LocalTime } from './local-time.js';
 import { OutcomeBadge } from './outcome-badge.js';
 import { SimulatedBadge } from './simulated-badge.js';
+import { TaskShape } from './task-shape.js';
 import { TaskStage } from './task-replay.js';
 import type { Element } from '../element.js';
 
@@ -22,6 +23,20 @@ type CompletedTask = Extract<TimelineTask, { status: 'completed' }>;
 /** The publisher's own word count: how many of this task's events were refusals. */
 export function blockedCountOf(task: TimelineTask): number {
   return task.status === 'completed' ? task.events.filter((event) => event.outcome === 'blocked').length : 0;
+}
+
+/** How many of this task's events say something failed, the task's own end included. */
+export function failedCountOf(task: TimelineTask): number {
+  if (task.status !== 'completed') return 0;
+  const failed = task.events.filter((event) => event.outcome === 'failed').length;
+  // An older `TASK_FAILED` was recorded as `info`; the reader already names the task's
+  // end `failed` for it, and the count says so once rather than not at all.
+  return failed > 0 || task.terminal_outcome !== 'failed' ? failed : 1;
+}
+
+/** Refusals and failures together: the rows a person switching to 「問題があったものだけ」 wants. */
+export function issueCountOf(task: TimelineTask): number {
+  return blockedCountOf(task) + failedCountOf(task);
 }
 
 export function isSimulated(task: TimelineTask): boolean {
@@ -56,9 +71,10 @@ export function toLogEvent(event: ActivityEvent): LogEvent {
  *
  * The head is what a person scans. It says 準備 / 作業 1 / 終了 rather than
  * `provisioning` / `task-1` / `lifecycle`, gives the publisher's own last word on the
- * task as its title (「作業が完了しました」, 「Agent を停止しました」), and counts the
- * events and the refusals among them. The counts are counts of the publishers' own
- * `outcome`; nothing here decides what a task amounted to (RULE-54).
+ * task as its title (「作業が完了しました」, 「Agent を停止しました」), draws one dot per
+ * event in the colour of how it ended, and counts the events and the refusals and
+ * failures among them. The counts are counts of the publishers' own `outcome`;
+ * nothing here decides what a task amounted to (RULE-54).
  *
  * The body is two things side by side, which are one step's two halves: the list of
  * what happened, in words, and the picture of it moving. The picture is a player the
@@ -86,7 +102,7 @@ export function StageCard(props: { task: TimelineTask; open?: boolean }): Elemen
         data-task-id={task.task_id}
         data-task-kind={kind.kind}
         data-status="running"
-        data-blocked-count="0"
+        data-issue-count="0"
       >
         <span className="stage-marker" aria-hidden="true" />
         <div className="stage-card is-running">
@@ -110,6 +126,7 @@ function CompletedStage(props: { task: CompletedTask; taskKey: string; open: boo
   const first = task.events[0];
   const terminal = task.events[task.events.length - 1];
   const blocked = blockedCountOf(task);
+  const failed = failedCountOf(task);
   const simulated = isSimulated(task);
   const phase = terminal?.phase ?? 'tool_call';
   const took = first ? durationBetween(first.occurred_at, task.completed_at) : '';
@@ -123,7 +140,7 @@ function CompletedStage(props: { task: CompletedTask; taskKey: string; open: boo
       data-status="completed"
       data-outcome={task.terminal_outcome}
       data-emphasis={emphasisClass(task.terminal_outcome, phase)}
-      data-blocked-count={String(blocked)}
+      data-issue-count={String(blocked + failed)}
       {...(simulated ? { 'data-simulated': 'true' } : {})}
     >
       <span className="stage-marker" aria-hidden="true" />
@@ -134,10 +151,12 @@ function CompletedStage(props: { task: CompletedTask; taskKey: string; open: boo
           {simulated ? <SimulatedBadge position="row" /> : null}
           <OutcomeBadge outcome={task.terminal_outcome} phase={phase} />
           <span className="stage-meta">
+            <TaskShape shape={task.events.map((event) => ({ phase: event.phase, outcome: event.outcome }))} />
             <LocalTime className="stage-when" at={task.completed_at} format="short" />
             {took === '' ? null : <span className="stage-took" data-field="stage-took">{`所要 ${took}`}</span>}
             <span className="stage-count" data-field="stage-count">{`${task.events.length} 件のできごと`}</span>
             {blocked > 0 ? <span className="stage-blocked" data-field="stage-blocked">{`遮断 ${blocked} 件`}</span> : null}
+            {failed > 0 ? <span className="stage-failed" data-field="stage-failed">{`失敗 ${failed} 件`}</span> : null}
           </span>
         </summary>
         <div className="stage-body">

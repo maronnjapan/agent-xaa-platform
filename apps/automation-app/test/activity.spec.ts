@@ -19,9 +19,10 @@ function event(overrides: Partial<ActivityEvent> = {}): ActivityEvent {
 }
 
 describe('the Activity Event schema', () => {
-  it('rejects an eighth phase and a fourth outcome', () => {
+  it('rejects an eighth phase and unknown outcomes', () => {
     expect(ACTIVITY_EVENT_PHASES).toHaveLength(7);
-    expect(ACTIVITY_EVENT_OUTCOMES).toHaveLength(3);
+    expect(ACTIVITY_EVENT_OUTCOMES).toHaveLength(4);
+    expect(ACTIVITY_EVENT_OUTCOMES).toContain('failed');
     expect(() => event({ phase: 'provisioning_extra' as never })).toThrow();
     expect(() => event({ outcome: 'denied' as never })).toThrow();
   });
@@ -346,4 +347,19 @@ describe('reading the timeline', () => {
     // task-2 finished before task-1, so it comes first: the order is what happened.
     expect(tasks.map((task) => task.task_id)).toEqual(['provisioning', 'task-2', 'task-1', 'lifecycle']);
   });
+});
+
+it('keeps identical task IDs from different agents separate', async () => {
+  const h = await startAutomationApp();
+  for (const [index, agentId] of [AGENT_ID, 'agent-second'].entries()) {
+    const entry = event({ event_id: `separate-${index}`, agent_id: agentId, task_id: 'task-1',
+      outcome: index === 0 ? 'success' : 'failed', detail: { event_type: index === 0 ? 'TASK_COMPLETED' : 'TASK_FAILED' } });
+    await h.documents.set('user_activity', entry.event_id, entry);
+  }
+  const body = await (await h.fetch('/api/activity/tasks')).json() as { tasks: Array<{ agent_id: string; events: ActivityEvent[] }> };
+  expect(body.tasks).toHaveLength(2);
+  for (const task of body.tasks) {
+    expect(task.events).toHaveLength(1);
+    expect(task.events[0]?.agent_id).toBe(task.agent_id);
+  }
 });

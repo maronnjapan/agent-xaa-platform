@@ -6,6 +6,7 @@ export interface AppliedInstruction {
   instruction_id: string;
   /** The person's own words, under the name the Automation App stored them by. */
   text: string;
+  fault?: RuntimeInstruction['fault'];
 }
 
 /**
@@ -27,5 +28,6 @@ export async function readPendingInstructions(
     source: 'instruction',
     instruction_id: instruction.instruction_id,
     text: instruction.text,
+    ...(instruction.fault ? { fault: instruction.fault } : {}),
   }));
 }

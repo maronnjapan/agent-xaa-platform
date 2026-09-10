@@ -1,4 +1,5 @@
 import { assertAgentOwnership, type DocumentStore } from '@xaa/gcp';
+import type { InstructionFault } from '@xaa/contracts';
 
 export class FirestorePathDenied extends Error {
   readonly code = 'firestore_path_denied';
@@ -18,6 +19,7 @@ export class FirestorePathDenied extends Error {
 export interface RuntimeInstruction {
   instruction_id: string;
   text: string;
+  fault?: InstructionFault;
   created_at: string;
   applied_at: string | null;
 }
