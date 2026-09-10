@@ -10,9 +10,9 @@ import { TaskShape } from './task-shape.js';
 import type { Element } from '../element.js';
 
 export const TASK_RUNNING_LABEL = '実行中';
-export const TASK_RUNNING_NOTE = '途中経過は Agent の画面の「実行ログ」で読めます。';
-export const TASK_REPLAY_LABEL = '動きを図で見る';
-export const TASK_LOG_LABEL = 'できごとを読む';
+export const TASK_RUNNING_NOTE = '途中経過は Agent の画面の「実行ログ」で確認できます。';
+export const TASK_REPLAY_LABEL = 'アニメーションで見る';
+export const TASK_LOG_LABEL = 'ログを読む';
 
 type CompletedTask = Extract<TimelineTask, { status: 'completed' }>;
 

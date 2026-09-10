@@ -22,17 +22,23 @@
 }
 
 /*
- * The picture fills the column it is given and no more. The boxes sit at fixed
- * coordinates so two replays of the same system line up (DEC-APP-06); the viewer gives
- * the picture the wider of its two columns, and nothing else competes with it there.
+ * One frame: the picture, and under it the words about the step, the way subtitles sit
+ * inside a film. The boxes sit at fixed coordinates so two replays of the same system
+ * line up (DEC-APP-06), and nothing competes with the frame beside it.
  */
+.replay-frame {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #c9cdd8;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
 .replay-canvas {
   display: block;
   width: 100%;
   height: auto;
   background: #ffffff;
-  border: 1px solid #e3e5ec;
-  border-radius: 8px;
 }
 
 .replay-node rect {
@@ -149,7 +155,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-top: 0.6rem;
 }
 
 .replay-controls button {
@@ -261,18 +267,18 @@
 }
 
 .replay-caption {
-  margin: 0.5rem 0 0;
-  padding: 0.6rem 0.9rem;
-  border: 1px solid #d5d5dd;
+  margin: 0;
+  padding: 0.7rem 1rem 0.8rem;
+  border-top: 1px solid #e3e5ec;
   border-left: 4px solid #97a6b2;
-  border-radius: 6px;
-  background: #ffffff;
+  background: #fafbfd;
   box-sizing: border-box;
-  min-height: 4.5rem;
+  min-height: 5.5rem;
 }
 
 .replay-caption[data-caption-state="idle"] { color: #5b5b66; }
 .replay-caption[data-caption-state="playing"] { border-left-color: #2f6fb5; }
+.replay-caption[data-caption-state="role"] { border-left-color: #b98a2a; background: #fffdf5; }
 .replay-caption[data-caption-emphasis="ev-success"] { border-left-color: #1d5c33; }
 .replay-caption[data-caption-emphasis="ev-blocked-tool"] { border-left-color: #d8a94f; background: #fdf8ee; }
 .replay-caption[data-caption-emphasis="ev-blocked-security"] { border-left-color: #a32020; background: #fdf6f5; }
@@ -293,10 +299,43 @@
 
 .caption-message {
   margin: 0.25rem 0 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .replay[data-replay-state="idle"] .caption-head { display: none; }
+
+/*
+ * What else the step says, under its sentence: the agent's own words as a quotation,
+ * and the checks with their verdicts. Every label is the publisher's, except the one
+ * over the checks.
+ */
+.caption-notes { margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px dashed #dfe4ec; }
+.caption-thought,
+.caption-checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.92rem;
+}
+
+.caption-note-label {
+  flex: none;
+  padding: 0 0.45rem;
+  border: 1px solid #c9cdd8;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: #6b7180;
+  white-space: nowrap;
+}
+
+.caption-quote { color: #35506a; }
+.caption-quote::before { content: "「"; }
+.caption-quote::after { content: "」"; }
+
+.caption-check { display: inline-flex; align-items: baseline; gap: 0.3rem; }
+.caption-check .check-mark { min-width: 2.6rem; font-size: 0.75rem; }
 
 /* How far through the steps the replay is, as a bar rather than only as a count. */
 .replay-track {
@@ -316,178 +355,22 @@
   transform: scaleX(0);
 }
 
-/* A box can be pressed for the longer description of what it is; it stands beside the picture, alone. */
+/* A box can be pressed for the longer description of what it is; it takes the caption's place. */
 .replay-node { cursor: pointer; }
 .replay-node:focus-visible rect { stroke: #1a4f9c; stroke-width: 3; }
 
 .replay-role-open {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: 0.5rem 1rem;
 }
 
-.replay-role-open .role-card { width: 100%; }
+.replay-role-open .role-card { flex: 1 1 24rem; background: transparent; border: 0; padding: 0; }
 
 .replay-role-open button {
+  flex: none;
   padding: 0.25rem 0.7rem;
-  font-size: 0.85rem;
-}
-
-/*
- * What the agent was thinking on the step the picture is on, in brief.
- *
- * The diagram answers "what went where"; this answers "why", in the agent's own words
- * and the checks it made — the panel supplies two headings and the marks beside the
- * verdicts, and nothing else (RULE-54). A new event slides in; the stylesheet does the
- * sliding, so the server renders the panel complete.
- */
-.thinking {
-  padding: 0.75rem 1rem;
-  border: 1px solid #d5d5dd;
-  border-radius: 8px;
-  background: #ffffff;
-  font-size: 0.9rem;
-  min-height: 6rem;
-  box-sizing: border-box;
-}
-
-.thinking-caption {
-  margin: 0 0 0.5rem;
-  font-size: 0.85rem;
-  color: #5b5b66;
-  letter-spacing: 0.02em;
-}
-
-.thinking-idle,
-.thinking-none {
-  margin: 0;
-  color: #5b5b66;
-}
-
-.thinking-body { animation: thinking-in 0.25s ease-out; }
-
-@keyframes thinking-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-
-.thinking-more { margin: 0.75rem 0 0; font-size: 0.88rem; }
-
-.thinking-who {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
-  margin: 0 0 0.25rem;
-}
-
-.thinking-actor {
-  font-weight: 700;
-  color: #24313b;
-}
-
-.thinking-actor-role,
-.thinking-step {
-  font-size: 0.8rem;
-  color: #5f7080;
-}
-
-.thinking-step {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-
-.thinking-headline {
-  margin: 0 0 0.6rem;
-  font-weight: 700;
-  color: #1b1b1f;
-}
-
-.thinking-beat {
-  margin: 0.6rem 0 0;
-  padding-top: 0.5rem;
-  border-top: 1px solid #e7e9ee;
-}
-
-.thinking-beat-heading {
-  margin: 0 0 0.3rem;
-  font-size: 0.78rem;
-  color: #5b5b66;
-  font-weight: 700;
-}
-
-/* The two beats read as a sequence, so each carries its own mark down the left. */
-.thinking-beat[data-beat="thought"] { border-left: 3px solid #7c6bb5; padding-left: 0.6rem; }
-.thinking-beat[data-beat="checks"] { border-left: 3px solid #1d5c33; padding-left: 0.6rem; }
-
-.thinking-label {
-  margin: 0.35rem 0 0.1rem;
-  font-weight: 700;
-  color: #24313b;
-}
-
-.thinking-message {
-  margin: 0 0 0.25rem;
-  color: #4a5560;
-}
-
-/* The model's own words, set as a quotation so they are not read as the screen's. */
-.thinking-quote {
-  margin: 0.25rem 0;
-  padding: 0.4rem 0.7rem;
-  border-left: 3px solid #7c6bb5;
-  background: #f7f5fc;
-  white-space: pre-wrap;
-}
-
-.thinking-text {
-  margin: 0.25rem 0;
-  padding: 0.4rem 0.6rem;
-  background: #f4f5f7;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-size: 0.82rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.thinking-fields {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-}
-
-.thinking-fields th {
-  width: 9rem;
-  padding: 0.15rem 0.4rem 0.15rem 0;
-  text-align: left;
-  color: #5b5b66;
-  font-weight: 400;
-  vertical-align: top;
-}
-
-.thinking-fields td {
-  padding: 0.15rem 0;
-  word-break: break-word;
-}
-
-.thinking-checks {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.thinking-checks li {
-  display: grid;
-  grid-template-columns: 3.2rem 1fr;
-  gap: 0.15rem 0.5rem;
-  margin: 0.3rem 0;
-}
-
-.thinking-checks .check-message {
-  grid-column: 2;
-  color: #4a5560;
   font-size: 0.85rem;
 }
 
@@ -573,26 +456,6 @@
   gap: 0.35rem 0.6rem;
   font-size: 0.8rem;
   color: #6b7180;
-}
-
-/* Which chapter the viewer is in, and how far through it — the seam, seen as well as counted. */
-.story-now {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.75rem;
-  margin: 0 0 0.75rem;
-  font-size: 1rem;
-  animation: story-now-in 0.25s ease-out;
-}
-
-.story-now-kind { font-weight: 700; color: #163f70; }
-.story-now-title { font-weight: 600; }
-.story-now-step { margin-left: auto; color: #6b7180; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-
-@keyframes story-now-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
 }
 
 .viewer-stage .replay { margin: 0; }
@@ -704,15 +567,7 @@
 .replay[data-replay-mode="cast"] .replay-pulse { stroke: #b98a2a; }
 
 .caption-does-not { margin-top: 0.35rem; color: #4a5560; }
-.caption-does-not-label {
-  display: inline-block;
-  margin-right: 0.5rem;
-  padding: 0 0.45rem;
-  border: 1px solid #c9cdd8;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  color: #6b7180;
-}
+.caption-does-not .caption-note-label { margin-right: 0.5rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .replay-arrow.is-live,
@@ -724,62 +579,6 @@
     animation-delay: 0ms;
   }
 }
-
-/*
- * The cast, beside the picture.
- *
- * Before the story plays, the roster: every part it involves, one line each. While the
- * introduction plays, the one part being introduced, as its card. Both stand where the
- * reasoning panel stands once the story is on.
- */
-.roster {
-  padding: 0.75rem 1rem;
-  border: 1px solid #d5d5dd;
-  border-radius: 8px;
-  background: #ffffff;
-  font-size: 0.88rem;
-  box-sizing: border-box;
-}
-
-.roster-caption {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin: 0 0 0.35rem;
-  font-size: 0.85rem;
-  color: #5b5b66;
-  letter-spacing: 0.02em;
-}
-
-.roster-position { font-variant-numeric: tabular-nums; font-weight: 400; }
-.roster-note { margin: 0 0 0.6rem; color: #6b7180; font-size: 0.85rem; }
-
-.roster-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.roster-list > li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.2rem 0.6rem;
-  padding: 0.4rem 0 0.4rem 0.7rem;
-  border-top: 1px solid #e7e9ee;
-  border-left: 3px solid #dfe4ec;
-}
-
-.roster-list > li[data-role-lane="person"] { border-left-color: #d8a94f; }
-.roster-list > li[data-role-lane="control"] { border-left-color: #2f6fb5; }
-.roster-list > li[data-role-lane="agent"] { border-left-color: #1d5c33; }
-.roster-list > li[data-role-lane="resource"] { border-left-color: #7c6bb5; }
-
-.roster-name { font-weight: 700; color: #24313b; }
-.roster-analogy { color: #163f70; }
-.roster-analogy::before { content: "＝ "; color: #9aa3b1; }
-.roster-role { margin-left: auto; font-size: 0.82rem; color: #35506a; }
 
 /* The likeness beside a part's name, wherever its card is shown. */
 .role-card-analogy { color: #163f70; }

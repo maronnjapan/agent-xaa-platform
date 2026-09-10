@@ -7,7 +7,7 @@ import { RunCard, summariseRun, type Run } from '../components/run-card.js';
 import type { Element } from '../element.js';
 
 export const TIMELINE_TITLE = 'アクティビティ';
-export const TIMELINE_LEAD = 'ログインから、権限の決定、Agent の作成、作業、終了までを Agent ごとにまとめています。新しい Agent が上です。区切りを選ぶと、その動きの図か、できごとの記録が1つずつ開きます。';
+export const TIMELINE_LEAD = 'ログインから Agent の終了までの記録を、Agent ごとにまとめています。新しい Agent が上です。';
 export const TIMELINE_EMPTY = 'まだ記録がありません。ToDo を書いて Agent を作ると、ここに並びます。';
 export const TIMELINE_NO_MATCH = '検索に一致する Agent はありません。';
 export const TIMELINE_FILTERED_NOTE = 'この Agent の記録だけを表示しています。';

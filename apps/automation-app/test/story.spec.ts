@@ -8,7 +8,7 @@ import { REPLAY_MOTION_MS, REPLAY_STEP_MS } from '../src/ui/replay/config.js';
 import { buildStoryPlan, CAST_CHAPTER_LABEL, chapterAt, chapterOfTask, chapterState, stepOfEvent, stepsOf } from '../src/ui/replay/story.js';
 import { RunCard, STORY_OPEN_LABEL } from '../src/ui/components/run-card.js';
 import { VIEW_LOG_LABEL, VIEW_REPLAY_LABEL, VIEWER_BACK_LABEL, VIEWER_NOTHING_FINISHED } from '../src/ui/components/activity-viewer.js';
-import { ROSTER_CAPTION, SPOTLIGHT_CAPTION } from '../src/ui/components/cast-panel.js';
+import { REPLAY_CAPTION_IDLE } from '../src/ui/components/replay-canvas.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { html as render, mount, type Mounted } from './render.js';
 
@@ -192,15 +192,15 @@ describe('the story as it is served', () => {
     expect(picture).toContain('data-viewer-mode="replay"');
     expect(picture).toContain('data-story-state="idle"');
     expect(picture).toMatch(/data-chapter-task="task-1"[^>]*data-chapter-state="current"/);
-    expect(picture).toContain('data-cast-roster');
+    expect(picture).toContain(REPLAY_CAPTION_IDLE);
     expect(picture).not.toContain('data-event-log');
-    expect(picture).not.toContain('data-thinking');
+    expect(picture).not.toContain('data-caption-notes');
 
     const step = render(createElement(TimelinePage, { tasks, focus: { runId: AGENT, taskId: 'task-1', view: 'replay', eventId: 't2' } }));
     expect(step).toContain('data-story-state="paused"');
     expect(step).toContain('data-replay-state="paused"');
+    expect(step).toContain('data-caption-state="blocked"');
     expect(step).toMatch(/data-field="caption-message"[^>]*>許可された Tool に含まれない</);
-    expect(step).toContain('data-thinking-state="playing"');
 
     const account = render(createElement(TimelinePage, { tasks, focus: { runId: AGENT, taskId: 'task-1', view: 'log', eventId: 't2' } }));
     expect(account).toContain('data-viewer-mode="log"');
@@ -247,9 +247,10 @@ describe('the story as it plays', () => {
   };
 
   /**
-   * Who is who, before anyone moves. The viewer opens on the roster; pressing 再生 plays
-   * the roster — each box lit alone, named and likened under itself on the picture,
-   * its card beside the picture. Every string is the dictionary's (RULE-54).
+   * Who is who, before anyone moves. Pressing 再生 introduces the cast — each box lit
+   * alone, named and likened under itself on the picture, its part and what it does
+   * not do written under the picture inside the frame. Every string is the
+   * dictionary's (RULE-54).
    */
   it('opens on the cast, introduces each part in turn, and only then starts the story', async () => {
     vi.useFakeTimers();
@@ -259,13 +260,9 @@ describe('the story as it plays', () => {
       // The chapter the viewer opened on is the one marked, before anything plays.
       expect(view.all('[data-chapter]').map((li) => [li.getAttribute('data-chapter-task'), li.getAttribute('data-chapter-state')]))
         .toEqual([['cast', 'current'], ['provisioning', 'waiting'], ['task-1', 'waiting'], ['lifecycle', 'waiting'], ['task-2', 'running']]);
-      // The roster stands where the reasoning will: the six parts, in story order, one
-      // line each, and no reasoning panel yet.
-      expect(view.text('[data-cast-roster] .roster-caption')).toBe(ROSTER_CAPTION);
-      expect(view.all('[data-roster-actor]').map((item) => item.getAttribute('data-roster-actor'))).toEqual(CAST);
-      expect(view.find('[data-roster-actor="authorization-platform"]')!.textContent).toContain('審査係');
-      expect(view.find('[data-roster-actor="authorization-platform"]')!.textContent).not.toContain('決めた権限を自分では使わない');
-      expect(view.find('[data-story-player] [data-thinking]')).toBeNull();
+      // Before anything plays, the frame says only what pressing 再生 does.
+      expect(view.text('[data-field="caption-message"]')).toBe(REPLAY_CAPTION_IDLE);
+      expect(view.all('[data-caption]')).toHaveLength(1);
       // The introduction chapter is a chapter with no outcome: nothing happened in it.
       expect(view.find('[data-chapter-task="cast"] .badge')).toBeNull();
       // Nothing plays on its own.
@@ -274,8 +271,6 @@ describe('the story as it plays', () => {
 
       await view.click('[data-story-player] [data-action="replay-play"]');
       expect(count(view)).toBe('1 / 6');
-      expect(view.text('[data-field="story-now-kind"]')).toBe(CAST_CHAPTER_LABEL);
-      expect(view.text('[data-field="story-now-step"]')).toBe('1 / 6 手目');
       expect(chapters(view)).toEqual(['current', 'waiting', 'waiting', 'waiting', 'running']);
       // The picture: the one box lit alone, named and likened under itself.
       expect(canvas(view).getAttribute('data-replay-mode')).toBe('cast');
@@ -283,32 +278,30 @@ describe('the story as it plays', () => {
       expect(view.text('[data-story-player] [data-callout="automation-app"]')).toContain('ToDo の画面（受付）');
       expect(view.text('[data-story-player] [data-callout="automation-app"]')).toContain('画面と記録');
       expect(view.all('[data-story-player] [data-arrows] path')).toHaveLength(0);
-      // The words under the picture: the part's name, its phrase, what it does and does not do.
+      // The words under the picture, inside its frame: the part's name, its phrase,
+      // what it does and what it does not do — and nothing anywhere else.
       expect(view.text('[data-story-player] [data-field="caption-route"]')).toBe('ToDo の画面');
       expect(view.text('[data-story-player] [data-field="caption-label"]')).toBe('画面と記録');
       expect(view.text('[data-story-player] [data-field="caption-message"]')).toContain('いま見ているこの画面');
       expect(view.text('[data-story-player] [data-field="caption-does-not"]')).toContain('権限を決めない');
-      // Beside the picture: the card, and which introduction this is — and nothing else.
-      expect(view.text('[data-cast-spot="automation-app"] .roster-caption')).toContain(SPOTLIGHT_CAPTION);
-      expect(view.text('[data-field="roster-position"]')).toBe('1 / 6');
-      expect(view.find('[data-cast-roster]')).toBeNull();
-      expect(view.find('[data-thinking]')).toBeNull();
+      expect(view.find('[data-replay-frame] [data-caption]')).not.toBeNull();
+      expect(view.all('[data-caption]')).toHaveLength(1);
+      expect(view.find('[data-caption-notes]')).toBeNull();
 
       await advance(view, 1);
       expect(view.text('[data-story-player] [data-callout="authorization-platform"]')).toContain('権限決定（審査係）');
-      expect(view.find('[data-cast-spot="authorization-platform"]')).not.toBeNull();
+      expect(view.text('[data-story-player] [data-field="caption-route"]')).toBe('権限決定');
 
       // Five more, and the story proper begins, counted from the chapter's own first step.
       await advance(view, 5);
       expect(count(view)).toBe('1 / 3');
-      expect(view.text('[data-field="story-now-kind"]')).toBe('準備');
       expect(chapters(view)).toEqual(['played', 'current', 'waiting', 'waiting', 'running']);
       expect(canvas(view).getAttribute('data-replay-mode')).toBe('story');
       expect(view.find('[data-story-player] [data-callout]')).toBeNull();
-      expect(view.find('[data-cast-spot]')).toBeNull();
-      const thinking = `[data-thinking-key="story:${AGENT}"]`;
-      expect(view.find(thinking)!.getAttribute('data-thinking-state')).toBe('playing');
-      expect(view.text(`${thinking} [data-field="thinking-headline"]`)).toBe('ログインを受け付けました');
+      expect(view.find('[data-field="caption-does-not"]')).toBeNull();
+      // A login says only its own sentence: its record holds no words of the agent's and no checks.
+      expect(view.text('[data-story-player] [data-field="caption-message"]')).toBe('ログイン');
+      expect(view.find('[data-caption-notes]')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -335,14 +328,11 @@ describe('the story as it plays', () => {
       await view.click('[data-chapter-task="provisioning"] [data-action="story-chapter"]');
       expect(panel(view).getAttribute('data-story-state')).toBe('playing');
       expect(count(view)).toBe('1 / 3');
-      expect(view.text('[data-field="story-now-title"]')).toBe('Agent が使えるようになりました');
-      expect(view.text('[data-field="story-now-step"]')).toBe('1 / 3 手目');
+      expect(view.text('[data-field="replay-progress"]')).toBe('1 / 3');
 
       // Three steps later the story has crossed into the work, by itself.
       await advance(view, 3);
       expect(count(view)).toBe('1 / 3');
-      expect(view.text('[data-field="story-now-kind"]')).toBe('作業 1');
-      expect(view.text('[data-field="story-now-step"]')).toBe('1 / 3 手目');
       expect(chapters(view)).toEqual(['played', 'played', 'current', 'waiting', 'running']);
       expect(canvas(view).getAttribute('data-task-id')).toBe('task-1');
       expect(view.text('[data-story-player] [data-field="caption-label"]')).toBe('ID-JAG を要求');
@@ -370,7 +360,6 @@ describe('the story as it plays', () => {
       await advance(view, 1);
       expect(panel(view).getAttribute('data-story-state')).toBe('finished');
       expect(count(view)).toBe('1 / 1');
-      expect(view.text('[data-field="story-now-kind"]')).toBe('終了');
       expect(chapters(view)).toEqual(['played', 'played', 'played', 'current', 'running']);
       await advance(view, 3);
       expect(count(view)).toBe('1 / 1');
@@ -421,7 +410,7 @@ describe('the story as it plays', () => {
       await view.click('[data-chapter-task="provisioning"] [data-action="story-chapter"]');
       expect(panel(view).getAttribute('data-story-state')).toBe('paused');
       expect(count(view)).toBe('1 / 3');
-      expect(view.text('[data-field="story-now-kind"]')).toBe('準備');
+      expect(view.text('[data-story-player] [data-field="caption-message"]')).toBe('ログイン');
       await advance(view, 2);
       expect(count(view)).toBe('1 / 3');
       expect(view.find('[data-chapter-task="provisioning"] [data-action="story-chapter"]')!.getAttribute('aria-current')).toBe('step');

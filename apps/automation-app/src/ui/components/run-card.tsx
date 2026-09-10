@@ -10,8 +10,8 @@ export const NO_PURPOSE = '（目的の記録がありません）';
 export const OPEN_AGENT_PAGE = 'Agent の画面を開く';
 export const ONLY_THIS_AGENT = 'この Agent だけ表示';
 export const RUN_IDS_CAPTION = 'ID を表示';
-export const STORY_OPEN_LABEL = '流れを通しで見る';
-export const RUN_NO_ISSUES = 'この Agent に、遮断や失敗はありません。';
+export const STORY_OPEN_LABEL = '最初から通して見る';
+export const RUN_NO_ISSUES = 'この Agent には、遮断も失敗もありません。';
 
 /** One agent's story, as the page groups it: the tasks `readTimeline` filed under one run. */
 export interface Run {
@@ -79,7 +79,7 @@ export function summariseRun(tasks: readonly TimelineTask[]): RunSummary {
  * which is the order the work actually happened in. This only lays them out. Nothing
  * on the card moves and nothing on it unfolds: the picture of the story and the
  * account of each task are screens of their own, and the card only leads to them.
- * 「流れを通しで見る」 leads to the picture of the whole story, from the login to the end;
+ * 「最初から通して見る」 leads to the picture of the whole story, from the login to the end;
  * each line leads to its own picture and its own account.
  */
 export function RunCard(props: {

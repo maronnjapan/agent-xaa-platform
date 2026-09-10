@@ -77,7 +77,7 @@ export function ExecutionLog(props: { records: readonly ActivityRecord[] }): Ele
                       </span>
                     </header>
                     {record.hops && record.hops.length > 0 ? <RouteStrip hops={record.hops} /> : null}
-                    <RecordView record={record} open={index === 0} />
+                    <RecordView record={record} open={index === 0} hops={false} />
                   </li>
                 );
               })}

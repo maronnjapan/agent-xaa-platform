@@ -14,7 +14,7 @@ import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
 import { ReplayCanvas } from '../src/ui/components/replay-canvas.js';
 import { TASK_LOG_LABEL, TASK_REPLAY_LABEL, TASK_RUNNING_LABEL, TaskRow } from '../src/ui/components/task-row.js';
-import { THINKING_READ_MORE } from '../src/ui/components/thinking-panel.js';
+import { NOTES_CHECKS_LABEL } from '../src/ui/components/activity-viewer.js';
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { BLOCKED_GUIDANCE_TEXT } from '../src/ui/components/blocked-guidance.js';
@@ -610,9 +610,11 @@ describe('the replay as it is drawn', () => {
     expect(view.all('[data-arrows] path')).toHaveLength(1);
     expect(view.all('[data-arrow-label]')).toHaveLength(1);
     expect(view.all('.replay-dot')).toHaveLength(1);
-    // One picture on the screen, and nothing written under or beside it but the step's own words.
+    // One picture on the screen, and nothing written anywhere but inside its frame.
     expect(view.all('.replay')).toHaveLength(1);
     expect(view.find('[data-event-log]')).toBeNull();
+    expect(view.find('[data-replay-frame] [data-caption]')).not.toBeNull();
+    expect(view.all('[data-caption]')).toHaveLength(1);
     await view.unmount();
   });
 
@@ -655,12 +657,12 @@ describe('the replay as it is drawn', () => {
   });
 
   /**
-   * The question the picture cannot answer on its own, answered briefly beside it: the
-   * agent's own words and what it checked, every string the publisher's (RULE-54). The
-   * rest of the record — what the step was handed, the values it chose — is one link
-   * away, on the account, standing on this very event.
+   * The question the picture cannot answer on its own, answered under it inside the
+   * same frame: the agent's own words and what it checked, every string the
+   * publisher's (RULE-54). The rest of the record — what the step was handed, the
+   * values it chose — is the account's, on the viewer's other face.
    */
-  it('shows what the agent thought and checked on the step it is on, and offers the rest', async () => {
+  it('writes what the agent thought and checked under the picture, and nothing more', async () => {
     const view = await play([event({
       record: {
         headline: 'internal.document.list を実行しました',
@@ -673,25 +675,29 @@ describe('the replay as it is drawn', () => {
         ],
       },
     })]);
-    const panel = view.find('[data-thinking]')!;
-    expect(panel.getAttribute('data-thinking-state')).toBe('playing');
-    // Who was thinking, named the way the diagram names the same box.
-    expect(view.text('[data-field="thinking-who"]')).toContain('Agent 実行環境');
-    expect(view.text('[data-field="thinking-headline"]')).toBe('internal.document.list を実行しました');
-    // The model's own words are a quotation, so they are not read as the screen's.
-    expect(view.all('[data-field="thinking-quote"]').map((quote) => quote.textContent)).toEqual(['日報をまとめて', 'まず一覧を見る。']);
-    expect(view.find('[data-beat="checks"]')!.textContent).toContain('含まれていました。');
-    // Beside a moving picture, no tables: the values chosen are the account's.
-    expect(panel.textContent).not.toContain('document.read');
-    expect(panel.textContent).not.toContain('必要な Capability');
+    const caption = view.find('[data-replay-frame] [data-caption]')!;
+    const notes = view.find('[data-caption-notes="a"]')!;
+    expect(caption.contains(notes)).toBe(true);
+    // The model's own words are a quotation, under its publisher's own label; what the
+    // agent was handed is not among them.
+    expect(view.all('[data-field="caption-quote"]').map((quote) => quote.textContent)).toEqual(['まず一覧を見る。']);
+    expect(view.text('[data-field="caption-thought"] .caption-note-label')).toBe('エージェントが決めたこと');
+    expect(notes.textContent).not.toContain('日報をまとめて');
+    // The checks, each with its verdict, under one fixed label.
+    expect(view.text('[data-field="caption-checks"]')).toContain(NOTES_CHECKS_LABEL);
+    expect(view.find('[data-caption-checks] [data-check-id="allowed_tools"], [data-field="caption-checks"] [data-check-id="allowed_tools"]')!.textContent).toContain('通過');
+    expect(view.text('[data-field="caption-checks"]')).toContain('許可されたツールに入っているか');
+    // Nothing else: no tables, no bodies, and no second place for words.
+    expect(caption.textContent).not.toContain('document.read');
+    expect(caption.textContent).not.toContain('必要な Capability');
+    expect(view.find('[data-thinking]')).toBeNull();
+    expect(view.all('[data-caption]')).toHaveLength(1);
 
-    // The one link at the foot opens the account on this event, where the rest is.
-    expect(view.text('[data-action="thinking-read-more"]')).toBe(THINKING_READ_MORE);
-    await view.click('[data-action="thinking-read-more"]');
-    expect(view.find('main')!.getAttribute('data-viewer-mode')).toBe('log');
+    // The rest is on the account, standing on this very event.
+    await view.click('[data-action="viewer-mode"][data-mode="log"]');
     expect(view.find('[data-event-detail="a"]')).not.toBeNull();
     expect(view.find('[data-event-detail="a"]')!.textContent).toContain('document.read');
-    expect(view.find('[data-thinking]')).toBeNull();
+    expect(view.find('[data-event-detail="a"]')!.textContent).toContain('日報をまとめて');
     await view.unmount();
   });
 
@@ -1024,22 +1030,23 @@ describe('the replay as a thing a person can stop', () => {
     await view.unmount();
   });
 
-  /** A box can be pressed for what it is, which is the question the names raise; its card takes the panel beside the picture. */
+  /** A box can be pressed for what it is, which is the question the names raise; its card takes the caption's place inside the frame. */
   it('opens the description of a box when it is pressed', async () => {
     const view = await open();
     expect(view.find('[data-role-open]')).toBeNull();
-    expect(view.find('[data-cast-roster]')).not.toBeNull();
+    expect(view.text('[data-field="caption-message"]')).toBe(REPLAY_CAPTION_IDLE);
     await view.click('[data-node="agent-runtime"]');
-    const opened = view.find('[data-role-open="agent-runtime"]')!;
+    const opened = view.find('[data-replay-frame] [data-caption] [data-role-open="agent-runtime"]')!;
     expect(opened.textContent).toContain('Agent 実行環境');
     expect(opened.textContent).toContain('Agent Runtime');
     expect(opened.textContent).toContain('Agent が動く場所');
     expect(opened.querySelector('[data-field="role-does-not"]')!.textContent).not.toBe('');
-    // One thing beside the picture: the card stands where the roster stood.
-    expect(view.find('[data-cast-roster]')).toBeNull();
+    expect(view.find('[data-caption]')!.getAttribute('data-caption-state')).toBe('role');
+    // The card takes the caption's place; nothing appears anywhere else.
+    expect(view.find('[data-field="caption-message"]')).toBeNull();
     await view.click('[data-action="close-role"]');
     expect(view.find('[data-role-open]')).toBeNull();
-    expect(view.find('[data-cast-roster]')).not.toBeNull();
+    expect(view.text('[data-field="caption-message"]')).toBe(REPLAY_CAPTION_IDLE);
     await view.unmount();
   });
 });

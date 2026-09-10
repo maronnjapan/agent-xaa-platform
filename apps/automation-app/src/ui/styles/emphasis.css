@@ -89,7 +89,7 @@
 }
 
 .stage[data-simulated="true"] > .stage-card > .stage-head,
-.replay:has(.simulated-canvas) {
+.replay-frame:has(.simulated-canvas) {
   background-image: repeating-linear-gradient(
     45deg,
     rgba(122, 90, 168, 0.14) 0,

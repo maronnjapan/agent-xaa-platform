@@ -45,21 +45,20 @@ export function toLogEvent(event: ActivityEvent): LogEvent {
   };
 }
 
-export const EVENT_LOG_NO_ISSUES = 'この区切りに、遮断や失敗はありません。';
-
 /**
  * The whole of a finished task, in words, as a list down the page — one line per event.
  *
  * It is rendered by the server and always present, which is the point: someone who
  * never presses play, or who cannot watch an animation at all, loses nothing but the
  * motion. Each row is one event's own title, headed by who did it in the words the
- * screen uses for that part (the formal name a hover away), which stage of the story it
- * belongs to, when, how long after the row before, and how it ended. What the part is
- * for is said once, in the record beside the rows, rather than on every row. Down the left runs
- * a rail with a mark per row — the phase's glyph, on a disc in the colour of how the row
- * ended — so a long account can be scanned for the one amber mark without reading. The
- * name and the phrase both come from the one role dictionary the diagram draws its
- * boxes from, so the picture and the text cannot call the same part two things.
+ * screen uses for that part (the formal name a hover away), when, how long after the
+ * row before, and how it ended. What the part is for, and which stage of the story the
+ * row belongs to, are said once, in the record beside the rows, rather than on every
+ * row. Down the left runs a rail with a mark per row — the phase's glyph, on a disc in
+ * the colour of how the row ended, the phase's name behind it for a screen reader — so a
+ * long account can be scanned for the one amber mark without reading. The name comes
+ * from the one role dictionary the diagram draws its boxes from, so the picture and
+ * the text cannot call the same part two things.
  *
  * A row is a line and no more. What the event said, the checks it made, the route it
  * took and the bodies it sent are the account of that one event, shown beside the list
@@ -106,7 +105,6 @@ export function EventLog(props: {
                 <span className="event-title">{event.title}</span>
                 <span className="event-head">
                   <span className="event-actor" data-field="event-actor" title={labelOf(event.source)}>{nameOf(event.source)}</span>
-                  <span className="event-phase" data-field="event-phase">{phaseLabelOf(event.phase)}</span>
                   <LocalTime className="event-time" at={event.occurred_at} format="time" />
                   {elapsed !== null && Number.isFinite(elapsed)
                     ? <span className="event-elapsed" data-field="event-elapsed" title="前の行からの経過">{`+${formatElapsed(elapsed)}`}</span>
@@ -127,8 +125,9 @@ export function EventLog(props: {
               data-emphasis={emphasisClass(event.outcome, event.phase)}
               data-entry-state={state}
             >
-              <span className="event-rail" data-outcome={event.outcome} aria-hidden="true">
+              <span className="event-rail" data-outcome={event.outcome} title={phaseLabelOf(event.phase)}>
                 <PhaseIcon phase={event.phase} />
+                <span className="sr-only">{phaseLabelOf(event.phase)}</span>
               </span>
               {props.hrefFor
                 ? (
@@ -149,7 +148,6 @@ export function EventLog(props: {
           );
         })}
       </ol>
-      <p className="event-log-none" data-field="event-log-none">{EVENT_LOG_NO_ISSUES}</p>
     </section>
   );
 }

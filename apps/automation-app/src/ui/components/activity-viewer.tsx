@@ -11,27 +11,28 @@ import {
 } from '../replay/story.js';
 import { thinkingByEvent, type ThinkingFrame } from '../replay/thinking.js';
 import { roleOf, type ActorRole } from '../roles.js';
-import { CastRoster, CastSpotlight, RoleCard } from './cast-panel.js';
+import { RoleCard } from './cast-panel.js';
 import { EventDetail } from './event-detail.js';
 import { EventLog, toLogEvent } from './event-log.js';
 import { OutcomeBadge } from './outcome-badge.js';
+import { CHECK_MARKS } from './record-view.js';
 import { ReplayCanvas, type ReplayControls } from './replay-canvas.js';
 import { NO_PURPOSE, type Run } from './run-card.js';
 import { SimulatedBadge } from './simulated-badge.js';
 import { TASK_RUNNING_LABEL } from './task-row.js';
-import { ThinkingPanel } from './thinking-panel.js';
 import type { Element } from '../element.js';
 
 /** Screen furniture: what the viewer and its controls are called. None of it is about an event (RULE-54). */
-export const VIEWER_BACK_LABEL = 'アクティビティの一覧へ戻る';
-export const VIEW_REPLAY_LABEL = '動きを図で見る';
-export const VIEW_LOG_LABEL = 'できごとを読む';
-export const VIEWER_NOTHING_FINISHED = '終わった区切りがまだありません。区切りが終わると、ここで再生できます。';
+export const VIEWER_BACK_LABEL = '一覧に戻る';
+export const VIEW_REPLAY_LABEL = 'アニメーション';
+export const VIEW_LOG_LABEL = 'ログ';
+export const VIEWER_NOTHING_FINISHED = 'まだ終わった区切りがありません。区切りが終わると、ここで見られます。';
 export const STORY_SPEED_LABEL = '速さ';
-export const STORY_FULLSCREEN_LABEL = '全画面で見る';
+export const STORY_FULLSCREEN_LABEL = '全画面';
 export const STORY_FULLSCREEN_EXIT_LABEL = '全画面をやめる';
 export const STORY_CHAPTERS_LABEL = '区切り';
-export const CAST_LOG_NOTE = '図に出てくるものです。名前を押すと、その説明が出ます。';
+export const CAST_LOG_NOTE = '図に出てくる登場人物です。名前を押すと説明が出ます。';
+export const NOTES_CHECKS_LABEL = '実行前の確認';
 
 /**
  * How fast the story goes, as a factor over the ordinary pace.
@@ -89,11 +90,11 @@ function openingPosition(plan: StoryPlan, focus: ActivityFocus): Position {
  * The list showed an agent's tasks each opened into a picture and a written account,
  * side by side, task after task, with the whole story's player above them all — and a
  * person looking at it could not tell what to follow. This is the other way round: the
- * viewer takes the screen for one agent, and shows one of two faces at a time. 動きを図
- * で見る is the picture: the diagram, its controls, the sentence for the step, and
- * beside it who is who or what the agent was thinking — briefly. できごとを読む is the
- * account: one task's events as lines down the left, and the whole record of the one
- * line that is chosen on the right. Nothing else is on the screen.
+ * viewer takes the screen for one agent, and shows one of two faces at a time.
+ * アニメーション is the picture: the diagram with everything there is to say about the
+ * step written inside its own frame, and the controls under it. ログ is the account:
+ * one task's events as lines down the left, and the whole record of the one line that
+ * is chosen on the right. Nothing else is on the screen.
  *
  * The two faces share one state — where the story stands — so switching between them
  * keeps the place. The step the picture is on is the event the account has chosen;
@@ -300,24 +301,6 @@ export function ActivityViewer(props: { run: Run; focus: ActivityFocus; agentId?
               ))}
             </ol>
 
-            {/*
-              * Which chapter the viewer is in, and — on the picture — how far through it.
-              * Keyed by the chapter, so a new chapter is a new line and the stylesheet can
-              * slide it in: the seam between two tasks is seen as well as counted. Both
-              * strings are the chapter's fixed name and its publisher's title.
-              */}
-            {chapter
-              ? (
-                <p key={chapter.taskKey} className="story-now" data-field="story-now">
-                  <span className="story-now-kind" data-field="story-now-kind">{chapter.label}</span>
-                  <span className="story-now-title" data-field="story-now-title">{chapter.title}</span>
-                  {mode === 'replay' && step
-                    ? <span className="story-now-step" data-field="story-now-step">{`${index - chapter.from + 1} / ${chapter.count} 手目`}</span>
-                    : null}
-                </p>
-              )
-              : null}
-
             {mode === 'replay' && chapter
               ? (
                 <ReplayFace
@@ -335,8 +318,6 @@ export function ActivityViewer(props: { run: Run; focus: ActivityFocus; agentId?
                   onOpenNode={setOpenNode}
                   onSpeed={setSpeed}
                   onFullscreen={toggleFullscreen}
-                  readMoreHref={currentEventId === null ? null : hrefOf('log', chapterTaskId, currentEventId)}
-                  onReadMore={() => switchTo('log')}
                 />
               )
               : null}
@@ -361,10 +342,11 @@ export function ActivityViewer(props: { run: Run; focus: ActivityFocus; agentId?
 }
 
 /**
- * The picture: the diagram with its controls and its caption, and beside it one of
- * three things — the cast before anything plays, the part being introduced while the
- * introduction plays, what the agent was thinking once the story proper is on — or the
- * description of a box the person pressed. One place, one answer at a time.
+ * The picture: the diagram, and under it, inside the same frame, everything the step
+ * has to say. For a step of the story proper that is the exchange and the publisher's
+ * sentence, then the agent's own words and the checks it made, each with its verdict.
+ * For an introduction it is who the part is and what it does not do. A pressed box
+ * puts its description in the same place. There is no second place for words.
  */
 function ReplayFace(props: {
   plan: StoryPlan;
@@ -381,8 +363,6 @@ function ReplayFace(props: {
   onOpenNode: (id: string | null) => void;
   onSpeed: (speed: StorySpeed) => void;
   onFullscreen: () => void;
-  readMoreHref: string | null;
-  onReadMore: () => void;
 }): Element {
   const { plan, chapter, step, index, state } = props;
   const frame = step ? buildFrame(step, plan.visible) : null;
@@ -391,7 +371,7 @@ function ReplayFace(props: {
     [plan, index],
   );
   const opened: ActorRole | null = props.openNode === null ? null : roleOf(props.openNode);
-  const currentEventId = step && !step.cast ? step.eventId : null;
+  const thinking = step && !step.cast ? props.thinkingOf(step.eventId) : null;
 
   const tools = (
     <>
@@ -433,29 +413,46 @@ function ReplayFace(props: {
         motionMs={REPLAY_MOTION_MS / props.speed}
         openNode={props.openNode}
         onOpenNode={props.onOpenNode}
+        openRole={opened}
         tools={tools}
+        notes={thinking ? <StepNotes frame={thinking} /> : null}
       />
-      <div className="viewer-aside">
-        {opened
-          ? (
-            <div className="replay-role-open" data-role-open={opened.id}>
-              <RoleCard actor={opened} />
-              <button type="button" className="secondary" data-action="close-role" onClick={() => props.onOpenNode(null)}>閉じる</button>
-            </div>
-          )
-          : step?.cast
-            ? <CastSpotlight actor={step.cast} position={`${index - chapter.from + 1} / ${chapter.count}`} />
-            : state === 'idle' && plan.cast.length > 0
-              ? <CastRoster actors={plan.cast} />
-              : (
-                <ThinkingPanel
-                  taskKey={props.storyKey}
-                  frame={currentEventId === null ? null : props.thinkingOf(currentEventId)}
-                  {...(props.readMoreHref ? { readMoreHref: props.readMoreHref } : {})}
-                  onReadMore={props.onReadMore}
-                />
-              )}
-      </div>
+    </div>
+  );
+}
+
+/**
+ * What the caption adds for a step of the story proper: the agent's own words, set as
+ * a quotation, and the checks it made with their verdicts. Both are the publisher's —
+ * the caption supplies one label for the checks and the marks beside the verdicts,
+ * and not one sentence about what happened (RULE-54, REQ-11-002). The rest of the
+ * record — what the step was handed, the values it chose, the bodies it sent — is
+ * the account's; beside a moving picture it would be a second thing to read.
+ */
+function StepNotes(props: { frame: ThinkingFrame }): Element {
+  const frame = props.frame;
+  if (frame.thought.length === 0 && frame.checks.length === 0) return null;
+  return (
+    <div className="caption-notes" data-caption-notes={frame.eventId}>
+      {frame.thought.map((block) => (
+        <p key={block.id} className="caption-thought" data-field="caption-thought" data-block-id={block.id}>
+          <span className="caption-note-label">{block.label}</span>
+          <span className="caption-quote" data-field="caption-quote">{block.text}</span>
+        </p>
+      ))}
+      {frame.checks.length === 0
+        ? null
+        : (
+          <p className="caption-checks" data-field="caption-checks">
+            <span className="caption-note-label">{NOTES_CHECKS_LABEL}</span>
+            {frame.checks.map((check) => (
+              <span key={check.id} className="caption-check" data-check-id={check.id} data-check-result={check.result}>
+                <span className="check-mark" data-check-mark={check.result}>{CHECK_MARKS[check.result]}</span>
+                {check.label}
+              </span>
+            ))}
+          </p>
+        )}
     </div>
   );
 }
@@ -501,7 +498,7 @@ function LogFace(props: {
                   <span className="event-line">
                     <span className="event-title">{entry.cast?.name ?? entry.label}</span>
                     <span className="event-head">
-                      <span className="roster-analogy">{entry.cast?.analogy ?? ''}</span>
+                      <span className="role-card-analogy">{entry.cast?.analogy ?? ''}</span>
                       <span className="event-source-role">{entry.label}</span>
                     </span>
                   </span>

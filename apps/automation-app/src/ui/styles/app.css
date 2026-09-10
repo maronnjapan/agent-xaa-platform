@@ -490,7 +490,6 @@ summary { cursor: pointer; }
 .timeline[data-view="issues"] .stage[data-issue-count="0"] { display: none; }
 .timeline[data-view="issues"] .run[data-issue-count="0"] .stages { display: none; }
 .timeline[data-view="issues"] .run[data-issue-count="0"] .run-no-issues { display: block; }
-.event-log-none { display: none; margin: 0.5rem 0; color: var(--muted); font-size: 0.9rem; }
 
 /*
  * ────────────────────────────────────────────────────────────────────────────────
@@ -537,19 +536,10 @@ summary { cursor: pointer; }
 .view-switch a:hover { color: var(--accent-ink); background: var(--accent-soft); }
 .view-switch a.is-selected { color: #fff; background: var(--accent); }
 
-/* The picture, and the one panel beside it. */
+/* The picture, alone, at a width the boxes and their names stay readable at. */
 .viewer-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr);
-  gap: 1rem;
-  align-items: start;
-}
-
-.viewer-aside {
-  position: sticky;
-  top: 3.5rem;
-  max-height: calc(100vh - 4.25rem);
-  overflow: auto;
+  max-width: 66rem;
+  margin: 0 auto;
 }
 
 /* A task's lines on the left, the chosen record on the right. */
@@ -570,9 +560,7 @@ summary { cursor: pointer; }
 .event-log-note { margin: 0.35rem 0.5rem 0.5rem; color: var(--muted); font-size: 0.88rem; }
 
 @media (max-width: 68rem) {
-  .viewer-stage,
   .viewer-log { grid-template-columns: minmax(0, 1fr); }
-  .viewer-aside { position: static; max-height: none; }
 }
 
 @media (max-width: 48rem) {
@@ -705,19 +693,6 @@ a.event-row:hover { background: var(--paper-2); }
 .event-detail[data-emphasis="ev-blocked-tool"] { border-left-color: #d8a94f; }
 .event-detail[data-emphasis="ev-blocked-security"] { border-left-color: #a32020; }
 .event-detail[data-emphasis="ev-failed"] { border-left-color: #c13d4a; }
-
-.event-detail-caption {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin: 0 0 0.35rem;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-
-.event-detail-order { font-weight: 400; font-variant-numeric: tabular-nums; }
 
 .event-detail-head {
   display: flex;

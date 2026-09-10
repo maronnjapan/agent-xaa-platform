@@ -6,18 +6,22 @@ import { roleOf, type ActorRole } from '../roles.js';
  *
  * A replay used to answer "what moved where". The question people actually asked was
  * the other one: 「AI エージェントがどういうことを考えて、どうするかを決めたのか」. That
- * answer is in the record's sections, and the panel beside the picture says it with
- * the step it belongs to — briefly. Beside a moving picture there is room for two
+ * answer is in the record's sections, and the caption under the picture says it with
+ * the step it belongs to — briefly. Under a moving picture there is room for two
  * things: the agent's own words, and what it made sure of before anything left the
  * process. The rest of the record — what it was handed, the values it chose, the
  * bodies it sent — is the written account's, one press away (docs 11 §5.2).
  *
- * The sorting is by one thing the publisher stated and nothing else: whether it
- * marked a section's text as prose. Not one sentence is written here, and none is
- * rephrased — every word the panel shows is a `label`, a `message`, a `text` or a
- * `value` from the record (RULE-54, REQ-11-002). A file that summarised a note into
- * "エージェントは X を選びました" would be inventing the one thing a person came to read.
+ * The sorting is by two things the publisher stated and nothing else: the section's
+ * `id`, which says whether it is what the agent was handed, and whether it marked the
+ * section's text as prose. Not one sentence is written here, and none is rephrased —
+ * every word the caption shows is a `label` or a `text` from the record (RULE-54,
+ * REQ-11-002). A file that summarised a note into "エージェントは X を選びました" would be
+ * inventing the one thing a person came to read.
  */
+
+/** What the step was handed rather than what it thought. The publisher names these sections; this leaves them out. */
+const READ_SECTIONS: readonly string[] = ['received', 'work_definition'];
 
 export interface ThinkingBlock {
   id: string;
@@ -67,7 +71,7 @@ export function isProse(section: ActivityRecordSection): boolean {
 export function thinkingOf(event: ThinkingSource): ThinkingFrame {
   const record = event.record;
   const thought = (record?.sections ?? [])
-    .filter(isProse)
+    .filter((section) => isProse(section) && !READ_SECTIONS.includes(section.id))
     .map((section) => ({ id: section.id, label: section.label, message: section.message ?? '', text: section.text ?? '' }));
   return {
     eventId: event.event_id,

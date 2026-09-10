@@ -31,14 +31,19 @@ const CHECKS_CAPTION = 'エージェントが実行前に確かめたこと';
 export const HOPS_CAPTION = 'やり取りの経路';
 export const RECORD_EMPTY_CAPTION = 'この処理には内訳がありません。';
 
-const CHECK_MARKS: Readonly<Record<ActivityRecordCheck['result'], string>> = {
+export const CHECK_MARKS: Readonly<Record<ActivityRecordCheck['result'], string>> = {
   passed: '通過',
   blocked: '不可',
   failed: '失敗',
   skipped: '未実施',
 };
 
-export function RecordView(props: { record?: ActivityRecord; open?: boolean }): Element | null {
+export function RecordView(props: {
+  record?: ActivityRecord;
+  open?: boolean;
+  /** Whether to list the hops. Off where the caller already draws the route as boxes and arrows. */
+  hops?: boolean;
+}): Element | null {
   const record = props.record;
   if (!record) return null;
   return (
@@ -50,7 +55,7 @@ export function RecordView(props: { record?: ActivityRecord; open?: boolean }): 
           ? <ProseView key={section.id} section={section} />
           : <SectionView key={section.id} section={section} open={props.open === true} />
       ))}
-      {record.hops && record.hops.length > 0 ? <HopsList hops={record.hops} /> : null}
+      {props.hops !== false && record.hops && record.hops.length > 0 ? <HopsList hops={record.hops} /> : null}
     </div>
   );
 }

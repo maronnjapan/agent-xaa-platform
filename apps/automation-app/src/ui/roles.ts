@@ -39,7 +39,7 @@ export interface ActorRole {
   role: string;
   /**
    * What the part is like in everyday terms — a counter, a clerk, a vault. Said when a
-   * part is introduced and beside its name in the roster, never in the box itself.
+   * part is introduced and beside its name on its card, never in the box itself.
    */
   analogy: string;
   lane: RoleLane;
