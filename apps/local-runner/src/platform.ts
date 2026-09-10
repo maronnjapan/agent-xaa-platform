@@ -1,7 +1,8 @@
 import { setActivityTransport, ACTIVITY_TOPIC } from '@xaa/contracts';
 import { createFirestoreDouble, type Firestore } from '@xaa/gcp';
 import { assertLogEntry, setLogSink } from '@xaa/logging';
-import { createModelClient, setDefaultModelClient, type VertexClient } from '@xaa/vertex';
+import { createModelClient } from '@xaa/model';
+import { setDefaultModelClient, type VertexClient } from '@xaa/vertex';
 import type { LocalRunnerConfig } from './config.js';
 import { createLocalJwks, type LocalJwks } from './local/jwks.js';
 import { createLocalKms, type LocalKmsClient } from './local/kms.js';

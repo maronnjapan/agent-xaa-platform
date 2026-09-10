@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { extractJson, jsonOnlyPrompt, validateAnswer } from './json-answer.js';
-import type { GenerateJsonParams, VertexClient } from './index.js';
+import type { GenerateJsonParams, VertexClient } from '@xaa/vertex';
 
 /** The command-line agents this repository knows how to invoke without configuration. */
 export type CliPreset = 'claude-code' | 'codex' | 'custom';

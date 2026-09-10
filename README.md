@@ -25,9 +25,12 @@ Gemini に限らず、手元の Claude Code や Codex も使える。
 ```bash
 MODEL_PROVIDER=cli MODEL_CLI=claude-code pnpm local           # Claude Code
 MODEL_PROVIDER=cli MODEL_CLI=codex pnpm local                 # Codex
-MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=... pnpm local     # Anthropic API
-MODEL_PROVIDER=openai OPENAI_API_KEY=... pnpm local           # OpenAI 互換 API
+MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=... pnpm local     # Anthropic
+MODEL_PROVIDER=openai OPENAI_API_KEY=... pnpm local           # OpenAI と OpenAI 互換のサーバ
 ```
+
+API を呼ぶプロバイダは LangChain 経由の1つのクライアントにまとまっている（[packages/xaa-model](./packages/xaa-model)）。
+`OPENAI_BASE_URL` を向ければ Ollama や vLLM など手元で動かしているモデルもそのまま使える。
 
 止めても、書いた ToDo も決まった権限もログインも `.local/state` に残り、次に起動したときそのまま続きから使える。
 最初からやり直したいときは、そのディレクトリを消す。

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { readModelOptions, type ModelClientOptions } from '@xaa/vertex';
+import { readModelOptions, type ModelClientOptions } from '@xaa/model';
 import { createTopology, type LocalTopology } from './topology.js';
 
 /**

@@ -109,6 +109,25 @@ describe('vertex client', () => {
     });
   });
 
+  /**
+   * The generic providers live in `@xaa/model`, which no image installs. A deployed
+   * container that was handed `MODEL_PROVIDER=anthropic` therefore cannot answer it, and
+   * the one thing it must not do is answer it with Gemini — DEC-APP-10 exists so that a
+   * deployment never silently reaches a model other than the one it named.
+   */
+  it('refuses a provider it cannot reach rather than answering as Vertex', async () => {
+    resetDefaultVertexClientForTesting();
+    const previous = process.env.MODEL_PROVIDER;
+    process.env.MODEL_PROVIDER = 'anthropic';
+    try {
+      await expect(generateJson({ prompt: 'p', schema, maxOutputTokens: 10, temperature: 0 }))
+        .rejects.toThrow(/MODEL_PROVIDER=anthropic is not available here/);
+    } finally {
+      if (previous === undefined) delete process.env.MODEL_PROVIDER; else process.env.MODEL_PROVIDER = previous;
+      resetDefaultVertexClientForTesting();
+    }
+  });
+
   it('takes that model from VERTEX_MODEL and has no default for it', async () => {
     resetDefaultVertexClientForTesting();
     const previous = process.env.VERTEX_MODEL;

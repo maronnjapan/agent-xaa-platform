@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createAnthropicClient, createCliClient, createModelClient, createOpenAiClient,
-  extractJson, ModelConfigurationError, readModelOptions,
+  createCliClient, createModelClient, extractJson, LANGCHAIN_PROVIDER_NAMES,
+  ModelConfigurationError, readModelOptions,
 } from '../src/index.js';
 
 const schema = {
@@ -43,6 +43,20 @@ describe('choosing which model answers', () => {
     expect(options).toMatchObject({ provider: 'anthropic', model: 'claude-x', apiKey: 'k', baseUrl: 'https://gateway.test' });
   });
 
+  /**
+   * The credential's variable name comes from the provider table rather than from a
+   * branch per provider, which is what makes adding a provider one entry. A provider
+   * added there has to be readable and refusable without touching this file.
+   */
+  it('reads each provider in the table from the variables that provider declares', () => {
+    for (const provider of LANGCHAIN_PROVIDER_NAMES) {
+      const named = `${provider.toUpperCase()}_API_KEY`;
+      const options = readModelOptions({ MODEL_PROVIDER: provider, MODEL_NAME: 'm', [named]: 'k' });
+      expect(options).toMatchObject({ provider, model: 'm', apiKey: 'k' });
+      expect(() => createModelClient({ provider, model: 'm' })).toThrow(new RegExp(named));
+    }
+  });
+
   it('refuses a provider it does not have, rather than falling back to one it does', () => {
     expect(() => readModelOptions({ MODEL_PROVIDER: 'gpt5' })).toThrow(ModelConfigurationError);
     expect(() => createModelClient({ provider: 'anthropic', model: 'claude-x' })).toThrow(/ANTHROPIC_API_KEY/);
@@ -56,49 +70,11 @@ describe('choosing which model answers', () => {
     expect(() => readModelOptions({ MODEL_CLI_ARGS: '[1,2]' })).toThrow(ModelConfigurationError);
     expect(readModelOptions({ MODEL_CLI_ARGS: '["exec","-"]' }).cliArgs).toEqual(['exec', '-']);
   });
-});
 
-describe('Claude through the Messages API', () => {
-  it('asks for the caller schema as a forced tool call, and returns what it fills in', async () => {
-    let sent: Record<string, unknown> | undefined;
-    const client = createAnthropicClient({
-      model: 'claude-x', apiKey: 'k',
-      fetchImpl: (async (_url: string, init: RequestInit) => {
-        sent = JSON.parse(String(init.body)) as Record<string, unknown>;
-        return Response.json({ content: [{ type: 'tool_use', input: { value: 'ok' } }] });
-      }) as unknown as typeof fetch,
-    });
+  /** The fake is the only provider that needs nothing installed, so it must need nothing. */
+  it('builds the fake from the responder it is handed', async () => {
+    const client = createModelClient({ provider: 'fake', model: '', fakeResponder: () => ({ value: 'ok' }) });
     await expect(client.generateJson(params)).resolves.toEqual({ value: 'ok' });
-    expect(sent).toMatchObject({
-      model: 'claude-x',
-      tools: [{ name: 'answer', input_schema: schema }],
-      tool_choice: { type: 'tool', name: 'answer' },
-    });
-  });
-
-  it('answers null for a reply the schema does not accept, and for a refusal', async () => {
-    const answering = (body: unknown, status = 200) => createAnthropicClient({
-      model: 'claude-x', apiKey: 'k',
-      fetchImpl: (async () => Response.json(body, { status })) as unknown as typeof fetch,
-    });
-    await expect(answering({ content: [{ type: 'tool_use', input: { other: 1 } }] }).generateJson(params)).resolves.toBeNull();
-    await expect(answering({ error: 'overloaded' }, 529).generateJson(params)).resolves.toBeNull();
-  });
-});
-
-describe('an OpenAI-compatible endpoint', () => {
-  it('asks for the caller schema as the response format', async () => {
-    let sent: { response_format?: { json_schema?: { schema?: unknown } } } | undefined;
-    const client = createOpenAiClient({
-      model: 'gpt-x', apiKey: 'k', baseUrl: 'https://gateway.test',
-      fetchImpl: (async (url: string, init: RequestInit) => {
-        expect(url).toBe('https://gateway.test/v1/chat/completions');
-        sent = JSON.parse(String(init.body)) as typeof sent;
-        return Response.json({ choices: [{ message: { content: '{"value":"ok"}' } }] });
-      }) as unknown as typeof fetch,
-    });
-    await expect(client.generateJson(params)).resolves.toEqual({ value: 'ok' });
-    expect(sent?.response_format?.json_schema?.schema).toEqual(schema);
   });
 });
 

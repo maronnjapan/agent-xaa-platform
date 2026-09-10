@@ -73,9 +73,16 @@ Gemini に限定していない。
 |---|---|---|
 | `fake` | 何も呼ばない（既定） | なし |
 | `cli` | 手元にインストール済みのコーディングエージェント | `claude` か `codex` が PATH にあること |
-| `anthropic` | Anthropic の Messages API | `ANTHROPIC_API_KEY` |
-| `openai` | OpenAI 互換の Chat Completions | `OPENAI_API_KEY` |
+| `anthropic` | Anthropic（LangChain 経由） | `ANTHROPIC_API_KEY` |
+| `openai` | OpenAI と OpenAI 互換のサーバ（LangChain 経由） | `OPENAI_API_KEY` |
 | `vertex` | Vertex AI（配備時と同じ経路） | GCP の Application Default Credentials と `MODEL_NAME` |
+
+`anthropic` と `openai` は [packages/xaa-model](../packages/xaa-model) の1つのクライアントであり、
+プロバイダごとの差は「どの API を、どのキーで呼ぶか」の表1行だけである。
+スキーマの渡し方は LangChain の `withStructuredOutput` が各プロバイダの持つ経路へ振り分ける
+（Anthropic は Tool の `input_schema`、OpenAI は `response_format: json_schema`）。
+`openai` は OpenAI 自身に限らず、Ollama・vLLM・LM Studio やその前段のゲートウェイなど
+OpenAI 互換の口を持つものすべてに `OPENAI_BASE_URL` で向けられる。
 
 Claude Code を使う場合はこうである。
 
@@ -96,9 +103,24 @@ MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... MODEL_NAME=claude-sonnet-5
 MODEL_PROVIDER=openai OPENAI_API_KEY=sk-... MODEL_NAME=gpt-5 pnpm local
 ```
 
+手元で動かしているモデルへ向ける場合は、OpenAI 互換の口を `OPENAI_BASE_URL` で指す。
+`/v1` まで含めた URL を書く（OpenAI の SDK がそう読むためである）。
+キーを要求しないサーバでも `OPENAI_API_KEY` には何か置く。
+
+```bash
+MODEL_PROVIDER=openai OPENAI_API_KEY=dummy \
+  OPENAI_BASE_URL=http://127.0.0.1:11434/v1 MODEL_NAME=qwen3 pnpm local
+```
+
 どのプロバイダを選んでも、アプリケーション側は何も変わらない。
 基盤の4つのアプリはいずれも `generateJson`（[packages/xaa-vertex](../packages/xaa-vertex)）を通してモデルへ問い、返るのは呼び出し側が渡した JSON Schema を満たす値か `null` のどちらかである。
 `null` は「使える答えが返らなかった」を意味し、モデルが落ちても API キーが切れても文字化けしても同じ形になる。
+
+パッケージが2つに分かれているのは、配備するものと配備しないものの境目である。
+Vertex とフェイクは配備した基盤が呼ぶ経路なので [packages/xaa-vertex](../packages/xaa-vertex) にあり、コンテナに入る。
+それ以外（LangChain 経由のプロバイダと、手元のコーディングエージェント）は [packages/xaa-model](../packages/xaa-model) にあり、どのイメージにも入らない。
+選ぶのはローカル実行の合成点1か所で、`setDefaultModelClient` で全アプリに渡す。
+コンテナへ `MODEL_PROVIDER=anthropic` を渡しても、そのコンテナは Gemini で代わりに答えたりはせず、届かないと言って止まる。
 
 `cli` プロバイダについては、次の3点に注意する。
 
@@ -123,6 +145,10 @@ MODEL_PROVIDER=cli MODEL_CLI=custom \
 | `MODEL_CLI_COMMAND` | プリセット依存 | `custom` のときのコマンド |
 | `MODEL_CLI_ARGS` | プリセット依存 | JSON 配列で渡す引数 |
 | `MODEL_CLI_TIMEOUT_MS` | `180000` | 1回の問い合わせの制限時間 |
+| `ANTHROPIC_API_KEY` | なし | `MODEL_PROVIDER=anthropic` のときのキー |
+| `ANTHROPIC_BASE_URL` | Anthropic の API | ゲートウェイなどへ向けるとき |
+| `OPENAI_API_KEY` | なし | `MODEL_PROVIDER=openai` のときのキー |
+| `OPENAI_BASE_URL` | OpenAI の API | OpenAI 互換のサーバへ向けるとき。`/v1` まで書く |
 | `LOCAL_HOST` | `127.0.0.1` | 待ち受けるアドレス |
 | `LOCAL_PORT_OFFSET` | `0` | 全ポートをまとめてずらす |
 | `LOCAL_ENABLE_GOOGLE_BRIDGE` | `false` | OAuth Bridge と疑似 SaaS を起動する |

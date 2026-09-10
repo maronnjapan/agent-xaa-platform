@@ -23,6 +23,9 @@
       "path": "packages/xaa-vertex"
     },
     {
+      "path": "packages/xaa-model"
+    },
+    {
       "path": "packages/xaa-docs-check"
     },
     {

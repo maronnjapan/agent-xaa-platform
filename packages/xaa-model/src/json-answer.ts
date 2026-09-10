@@ -1,5 +1,5 @@
 import AjvModule from 'ajv';
-import type { GenerateJsonParams } from './index.js';
+import type { GenerateJsonParams } from '@xaa/vertex';
 
 const Ajv = (AjvModule as unknown as { default?: new (options?: object) => import('ajv').default }).default ?? AjvModule as unknown as new (options?: object) => import('ajv').default;
 
@@ -66,10 +66,12 @@ export function extractJson(text: string): unknown {
 /**
  * What a provider without a schema-constrained response format has to say out loud.
  *
- * The Vertex, Anthropic and OpenAI clients hand the schema to the API and get a shape
- * back that already satisfies it. A command-line agent has no such channel, so the
- * schema travels in the prompt — and the instruction has to be blunt, because anything
- * the model adds around the object is text `extractJson` then has to guess at.
+ * Vertex takes a `responseSchema` and LangChain's `withStructuredOutput` fills whatever
+ * the provider's API has in its place, so both get a shape back that already satisfies
+ * the schema. A command-line agent has no such channel, and neither has any provider
+ * asked for a schema whose root is not an object, so there the schema travels in the
+ * prompt — and the instruction has to be blunt, because anything the model adds around
+ * the object is text `extractJson` then has to guess at.
  */
 export function jsonOnlyPrompt(params: GenerateJsonParams): string {
   return [

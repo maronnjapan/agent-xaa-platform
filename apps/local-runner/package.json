@@ -26,6 +26,7 @@
     "@xaa/human-idp": "workspace:*",
     "@xaa/lifecycle-manager": "workspace:*",
     "@xaa/logging": "workspace:*",
+    "@xaa/model": "workspace:*",
     "@xaa/provisioner": "workspace:*",
     "@xaa/resource-docs-api": "workspace:*",
     "@xaa/resource-docs-as": "workspace:*",
