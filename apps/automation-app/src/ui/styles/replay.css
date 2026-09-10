@@ -207,7 +207,8 @@
  * sit across the line it belongs to, and a word broken by its own arrow is unreadable.
  */
 .replay-arrow-label {
-  font-size: 10.5px;
+  font-size: 12px;
+  font-weight: 600;
   fill: #35506a;
   paint-order: stroke;
   stroke: #ffffff;
@@ -662,3 +663,209 @@
 }
 
 .story:fullscreen .story-stage { grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr); }
+
+/*
+ * What the picture says on its own.
+ *
+ * The bands under the boxes name the sides — who decides, who acts, who holds the
+ * data — so the layout reads before anything moves. A movement is a line that grows
+ * with the dot and ends in a head when the dot lands; a refusal ends in the stop mark,
+ * with the rest of the way dotted. The same event's earlier legs stay as a faint trail.
+ * A box being introduced is lit alone, its name and likeness written under it, and the
+ * rest of the picture steps back. The sentence under the picture appears when the dot
+ * lands, not before — the words about an exchange come once the exchange has happened.
+ */
+.replay-lane rect {
+  fill: #f6f8fb;
+  stroke: #dfe4ec;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.replay-lane[data-lane="person"] rect { fill: #fbf7ef; stroke: #e6dbc3; }
+.replay-lane[data-lane="control"] rect { fill: #f2f6fb; stroke: #d3ddee; }
+.replay-lane[data-lane="agent"] rect { fill: #f1f8f4; stroke: #cbe1d4; }
+.replay-lane[data-lane="resource"] rect { fill: #f6f3fb; stroke: #dcd2ea; }
+
+.replay-lane .lane-caption {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  fill: #6b7180;
+}
+
+.replay-lane[hidden] { display: none; }
+
+/* The line grows with the dot: dashed to its own length, and the dash offset runs to nothing. */
+.replay-arrow.is-live {
+  stroke-dasharray: var(--path-length, 1000);
+  stroke-dashoffset: var(--path-length, 1000);
+  animation-name: replay-draw;
+  animation-duration: var(--motion-ms, 1.2s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+@keyframes replay-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Where a refused request was going and never went. */
+.replay-arrow.is-unreached {
+  stroke: #c9cdd8;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+}
+
+/* The same event's earlier legs: there, and plainly not the current one. */
+.replay-arrow.is-trail {
+  stroke: #c5d0da;
+  stroke-width: 1.5;
+  opacity: 0.8;
+}
+
+/* The head, and the stop mark: shown when the dot gets there. */
+.replay-arrowhead,
+.replay-stop {
+  opacity: 0;
+  animation-name: replay-appear;
+  animation-duration: 1ms;
+  animation-timing-function: linear;
+  animation-delay: var(--motion-ms, 1.2s);
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+.replay-arrowhead { fill: #97a6b2; }
+.replay-arrowhead[data-emphasis="ev-success"] { fill: #1d5c33; }
+.replay-arrowhead[data-emphasis="ev-info"] { fill: #2f6fb5; }
+
+@keyframes replay-appear {
+  to { opacity: 1; }
+}
+
+.caption-message[data-arrives="true"] {
+  opacity: 0;
+  animation-name: replay-appear;
+  animation-duration: 1ms;
+  animation-timing-function: linear;
+  animation-delay: var(--motion-ms, 1.2s);
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+/* A box being introduced: its name and likeness under it, everything else stepping back. */
+.replay-callout text {
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.replay-callout .callout-name { font-size: 12.5px; font-weight: 700; fill: #163f70; }
+.replay-callout .callout-role { font-size: 10.5px; fill: #35506a; }
+
+.replay[data-replay-mode="cast"] .replay-node:not([data-active="self"]) { opacity: 0.35; }
+.replay[data-replay-mode="cast"] .replay-node[data-active="self"] rect { fill: #fff8e6; stroke: #b98a2a; }
+.replay[data-replay-mode="cast"] .replay-pulse { stroke: #b98a2a; }
+
+.caption-does-not { margin-top: 0.35rem; color: #4a5560; }
+.caption-does-not-label {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0 0.45rem;
+  border: 1px solid #c9cdd8;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: #6b7180;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .replay-arrow.is-live,
+  .replay-arrowhead,
+  .replay-stop,
+  .replay-pulse,
+  .caption-message[data-arrives="true"] {
+    animation-duration: 0.01ms;
+    animation-delay: 0ms;
+  }
+}
+
+/*
+ * The cast, beside the picture.
+ *
+ * Before the story plays, the roster: every part it involves, with the same six lines
+ * its card carries. While the introduction plays, the one part being introduced, as
+ * its card. Both stand where the reasoning panel stands once the story is on.
+ */
+.roster {
+  padding: 0.75rem 1rem;
+  border: 1px solid #d5d5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 0.88rem;
+  box-sizing: border-box;
+}
+
+.roster-caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: #5b5b66;
+  letter-spacing: 0.02em;
+}
+
+.roster-position { font-variant-numeric: tabular-nums; font-weight: 400; }
+.roster-note { margin: 0 0 0.6rem; color: #6b7180; font-size: 0.85rem; }
+
+.roster-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roster-list > li {
+  padding: 0.5rem 0 0.5rem 0.7rem;
+  border-top: 1px solid #e7e9ee;
+  border-left: 3px solid #dfe4ec;
+}
+
+.roster-list > li[data-role-lane="person"] { border-left-color: #d8a94f; }
+.roster-list > li[data-role-lane="control"] { border-left-color: #2f6fb5; }
+.roster-list > li[data-role-lane="agent"] { border-left-color: #1d5c33; }
+.roster-list > li[data-role-lane="resource"] { border-left-color: #7c6bb5; }
+
+.roster-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  margin: 0;
+}
+
+.roster-name { font-weight: 700; color: #24313b; }
+.roster-analogy { color: #163f70; }
+.roster-analogy::before { content: "＝ "; color: #9aa3b1; }
+.roster-lane { margin-left: auto; font-size: 0.78rem; color: #6b7180; }
+
+.roster-role { margin: 0.1rem 0 0.25rem; color: #35506a; }
+.roster-label { margin-left: 0.5rem; font-size: 0.78rem; color: #8a93a2; }
+
+.roster-body {
+  display: grid;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  gap: 0.1rem 0.5rem;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.roster-body dt { color: #6b7180; }
+.roster-body dd { margin: 0; color: #4a5560; }
+
+/* The likeness beside a part's name, wherever its card is shown. */
+.role-card-analogy { color: #163f70; }
+.role-card-analogy::before { content: "＝ "; color: #9aa3b1; }

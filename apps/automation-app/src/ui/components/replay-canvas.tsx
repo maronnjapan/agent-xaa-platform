@@ -2,9 +2,10 @@ import type { CSSProperties } from 'react';
 import { motion } from 'motion/react';
 import { emphasisClass } from '../replay/emphasis.js';
 import { REPLAY_MOTION_MS } from '../replay/config.js';
-import type { ReplayFrame } from '../replay/geometry.js';
-import { NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_NODES, REPLAY_VIEWBOX } from '../replay/nodes.js';
+import { ARROWHEAD_HALF_WIDTH, ARROWHEAD_LENGTH, type ReplayFrame } from '../replay/geometry.js';
+import { NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_LANES, REPLAY_NODES, REPLAY_VIEWBOX } from '../replay/nodes.js';
 import { nameOf } from '../roles.js';
+import { CAST_DOES_NOT } from './cast-panel.js';
 import { SimulatedBadge } from './simulated-badge.js';
 import type { Element } from '../element.js';
 
@@ -18,14 +19,15 @@ export const REPLAY_LEGEND_CAPTION = 'この図の見方';
  * demonstration: a refusal is an arrow that stops, and nothing else on the canvas
  * looks like that.
  *
- * Five lines, one fact each. There were nine, and three of them described parts of the
- * screen a person can simply look at — the panel beside the picture, the account below
- * it, the name that appears on the arrow. A legend nobody finishes explains nothing.
+ * Six lines, one fact each: the bands, the moving line and its head, the refusal, the
+ * trail of a call, a step inside one box, and the boxes themselves. Each describes a
+ * thing the picture draws, and none of them describes an event.
  */
 export const REPLAY_LEGEND: readonly string[] = [
-  '上の段は人と権限を決める側、下の段は Agent とデータを持つ側です。',
-  '丸は1回のやり取りです。図に出るのは、いま動いている1回分だけです。',
-  '止められたやり取りは、相手に届く手前で止まります。',
+  '箱は4つの帯に分かれ、帯の左端にその側の名前があります。上の段が人と決める側、下の段が動く側とデータを持つ側です。',
+  '丸は1回のやり取りです。線は丸と一緒に伸び、矢の先が届いた側です。図に出るのは、いま動いている1回分だけです。',
+  '止められたやり取りは、相手に届く手前で止まり、届かなかった残りは点線になります。',
+  '同じできごとの中の前のやり取りは、薄い線で残ります。1回の Tool 呼び出しには往復が4つあります。',
   '箱の中だけで起きたことは、矢印を出さずにその箱が光ります。',
   '箱を押すと説明が出ます。出ていない箱は、この処理に関わっていません。',
 ];
@@ -49,6 +51,8 @@ export interface ReplayCanvasProps {
   state: 'idle' | 'playing' | 'paused' | 'finished';
   /** The current step, resolved into geometry. Absent before the first step. */
   frame?: ReplayFrame | null;
+  /** The earlier exchanges of the same event, drawn faintly under the current one. */
+  trail?: readonly ReplayFrame[];
   total: number;
   controls?: ReplayControls;
   /**
@@ -64,6 +68,7 @@ export interface ReplayCanvasProps {
 
 /** A CSS custom property, which React's style type does not name. */
 type MotionStyle = CSSProperties & Record<'--motion-ms' | '--stop-ratio', string>;
+type DrawStyle = MotionStyle & Record<'--path-length', string>;
 
 /**
  * The fixed diagram, with the boxes this task did not involve marked hidden rather
@@ -74,10 +79,19 @@ type MotionStyle = CSSProperties & Record<'--motion-ms' | '--stop-ratio', string
  * what lets a person compare two replays, and what makes `data-reached="false"` on a
  * particular box meaningful.
  *
+ * The picture is meant to be read on its own, by someone who is watching it rather
+ * than reading beside it. So the boxes sit in named bands — who decides, who acts, who
+ * holds the data — and a movement is drawn as a line that grows with the dot and ends
+ * in an arrowhead when the dot lands, or in a stop mark with the rest of the way
+ * dotted when it was refused. The earlier legs of the same event stay faintly in
+ * place, so a tool call's four exchanges read as one journey. A box being introduced
+ * is lit alone, with its name and what it is like written under it.
+ *
  * The caption under the picture is where the words go while it moves. A dot that
  * travels between two boxes says only that something went somewhere; the caption names
- * the two boxes, the exchange, and the publisher's own sentence about it. Every word in
- * it comes off the event, never composed (RULE-54).
+ * the two boxes, the exchange, and the publisher's own sentence about it — which
+ * appears when the dot lands, not before. Every word in it comes off the event, never
+ * composed (RULE-54).
  *
  * It holds the current step and only the current step, and so does the canvas. What
  * did happen, in order and in full, is the written list beside the picture — server-rendered
@@ -90,18 +104,21 @@ type MotionStyle = CSSProperties & Record<'--motion-ms' | '--stop-ratio', string
 export function ReplayCanvas(props: ReplayCanvasProps): Element {
   const frame = props.frame ?? null;
   const step = frame?.step ?? null;
+  const cast = step?.cast ?? null;
   const emphasis = step ? emphasisClass(step.outcome, step.phase) : '';
   const motionMs = props.motionMs ?? REPLAY_MOTION_MS;
   const motionStyle: MotionStyle = {
     '--motion-ms': `${motionMs}ms`,
     '--stop-ratio': String(frame?.stopRatio ?? 1),
   };
+  const drawStyle: DrawStyle = { ...motionStyle, '--path-length': String(Math.ceil(frame?.solidLength ?? 0)) };
   return (
     <div
       className="replay"
       data-task-id={props.taskId}
       data-replay-key={props.taskKey ?? props.taskId}
       data-replay-state={props.state}
+      data-replay-mode={cast ? 'cast' : 'story'}
     >
       {props.simulated ? <SimulatedBadge position="canvas" /> : null}
       <div className="replay-controls" data-replay-controls="true">
@@ -123,15 +140,60 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
       </div>
       <svg viewBox={REPLAY_VIEWBOX} className="replay-canvas" role="img" aria-label="処理の再生">
         {/*
+          * The bands first, under everything: each is the ground the boxes of one side
+          * stand on, named at its edge. A band none of whose boxes this task involved is
+          * hidden with them, so the picture of a tool call does not show an empty
+          * 「決める側」.
+          */}
+        <g className="replay-lanes" data-lanes="true">
+          {REPLAY_LANES.map((lane) => (
+            <g
+              key={lane.lane}
+              className="replay-lane"
+              data-lane={lane.lane}
+              {...(lane.nodes.some((id) => props.visible.has(id)) ? {} : { hidden: true })}
+            >
+              <rect x={String(lane.x)} y={String(lane.y)} width={String(lane.width)} height={String(lane.height)} rx="10" />
+              <text className="lane-caption" x={String(lane.captionAt.x)} y={String(lane.captionAt.y)}>{lane.label}</text>
+            </g>
+          ))}
+        </g>
+        {/*
           * The movement layer sits before the boxes, so the boxes paint over it. An
           * arrow runs edge to edge and detours around anything in between, so it should
           * not reach a box at all — this order is what keeps that true when a hidden box
           * is shown again, or a coordinate is changed, rather than leaving the picture
           * to depend on the routing being perfect.
+          *
+          * The trail is the same event's earlier legs, lines only: no name, no dot, no
+          * head. It is what makes four exchanges one call.
           */}
+        <g className="replay-trail" data-trail="true">
+          {(props.trail ?? []).map((earlier) => (earlier.solidPath === ''
+            ? null
+            : (
+              <path
+                key={earlier.step.index}
+                className="replay-arrow is-trail"
+                data-trail-step={String(earlier.step.index)}
+                d={earlier.solidPath}
+              />
+            )))}
+        </g>
         <g className="replay-arrows" data-arrows="true">
-          {frame && frame.path !== ''
-            ? <path key={frame.step.index} className="replay-arrow" data-step-index={String(frame.step.index)} d={frame.path} />
+          {frame && frame.solidPath !== ''
+            ? (
+              <path
+                key={frame.step.index}
+                className="replay-arrow is-live"
+                data-step-index={String(frame.step.index)}
+                d={frame.solidPath}
+                style={drawStyle}
+              />
+            )
+            : null}
+          {frame && frame.restPath !== ''
+            ? <path key={`rest-${frame.step.index}`} className="replay-arrow is-unreached" data-unreached-path="true" d={frame.restPath} />
             : null}
         </g>
         {REPLAY_NODES.map((node) => (
@@ -163,8 +225,8 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
           </g>
         ))}
         {/*
-          * The travelling dot, the arrow's name and the refusal's mark go in front, for
-          * the opposite reason: adjacent boxes are close enough that most of a
+          * The travelling dot, the arrow's name, its head and the refusal's mark go in
+          * front, for the opposite reason: adjacent boxes are close enough that most of a
           * centre-to-edge path lies under the box it starts from, and a dot behind the
           * boxes would be out of sight for most of its trip.
           */}
@@ -185,6 +247,19 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
               </text>
             )
             : null}
+          {frame?.calloutAt && cast
+            ? (
+              <g
+                key={`cast-${step?.index ?? ''}`}
+                className="replay-callout"
+                data-callout={cast.id}
+                transform={`translate(${frame.calloutAt.x},${frame.calloutAt.y})`}
+              >
+                <text className="callout-name" textAnchor="middle">{`${cast.name}（${cast.analogy}）`}</text>
+                <text className="callout-role" textAnchor="middle" dy="15">{cast.role}</text>
+              </g>
+            )
+            : null}
         </g>
         <g className="replay-dots" data-dots="true">
           {frame && step && frame.kind === 'move' && frame.path !== ''
@@ -199,6 +274,19 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
                 {...(step.blocked ? { 'data-blocked': 'true' } : {})}
                 r="6"
                 style={{ ...motionStyle, offsetPath: `path('${frame.path}')` }}
+              />
+            )
+            : null}
+          {frame?.headAt && step
+            ? (
+              <path
+                key={`head-${step.index}`}
+                className="replay-arrowhead"
+                data-arrowhead="true"
+                data-emphasis={emphasis}
+                d={`M ${-ARROWHEAD_LENGTH} ${-ARROWHEAD_HALF_WIDTH} L 0 0 L ${-ARROWHEAD_LENGTH} ${ARROWHEAD_HALF_WIDTH} Z`}
+                transform={`translate(${frame.headAt.x},${frame.headAt.y}) rotate(${frame.headAt.angle})`}
+                style={motionStyle}
               />
             )
             : null}
@@ -227,6 +315,7 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
                 data-stop="true"
                 data-emphasis={emphasis}
                 transform={`translate(${frame.stopAt.x},${frame.stopAt.y})`}
+                style={motionStyle}
               >
                 <circle r="9" />
                 <path d="M -6 -6 L 6 6" />
@@ -249,7 +338,28 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
           <span className="caption-route" data-field="caption-route">{step ? routeOf(step.from, step.to, step.kind) : ''}</span>
           <span className="caption-label" data-field="caption-label">{step?.label ?? ''}</span>
         </p>
-        <p className="caption-message" data-field="caption-message">{step ? step.message : REPLAY_CAPTION_IDLE}</p>
+        {/*
+          * Keyed by the step so the sentence is a new element each step and its
+          * appearance can be timed to the dot's arrival: the words about an exchange
+          * are shown when the exchange has happened (docs 11 §5.2).
+          */}
+        <p
+          key={step ? `message-${step.index}` : 'idle'}
+          className="caption-message"
+          data-field="caption-message"
+          {...(frame?.kind === 'move' ? { 'data-arrives': 'true' } : {})}
+          style={motionStyle}
+        >
+          {step ? step.message : REPLAY_CAPTION_IDLE}
+        </p>
+        {cast
+          ? (
+            <p className="caption-message caption-does-not" data-field="caption-does-not">
+              <span className="caption-does-not-label">{CAST_DOES_NOT}</span>
+              {cast.doesNot}
+            </p>
+          )
+          : null}
       </div>
       <details className="replay-legend" data-legend="true">
         <summary>{REPLAY_LEGEND_CAPTION}</summary>

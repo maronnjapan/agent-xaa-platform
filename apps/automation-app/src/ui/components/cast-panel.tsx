@@ -44,8 +44,8 @@ export function CastPanel(props: { sources?: Iterable<string>; open?: boolean })
 }
 
 /**
- * One part, in five lines: what the screen calls it, what the documents call it, what
- * it is for, what it does, and what it does not do.
+ * One part, in six lines: what the screen calls it, what it is like in everyday terms,
+ * what the documents call it, what it is for, what it does, and what it does not do.
  *
  * The same card is what a box on the diagram opens, so a person who clicks a box while
  * a replay is paused reads exactly what the list beside the picture would have told
@@ -57,6 +57,7 @@ export function RoleCard(props: { actor: ActorRole }): Element {
     <article className="role-card" data-role-id={actor.id} data-role-lane={actor.lane}>
       <p className="role-card-head">
         <span className="role-card-name" data-field="role-name">{actor.name}</span>
+        <span className="role-card-analogy" data-field="role-analogy">{actor.analogy}</span>
         <span className="role-card-lane">{LANE_LABELS[actor.lane]}</span>
       </p>
       {actor.label === actor.name ? null : <p className="role-card-label" data-field="role-label">{actor.label}</p>}
@@ -68,5 +69,65 @@ export function RoleCard(props: { actor: ActorRole }): Element {
         <dd data-field="role-does-not">{actor.doesNot}</dd>
       </dl>
     </article>
+  );
+}
+
+export const ROSTER_CAPTION = '登場人物';
+export const ROSTER_NOTE = 'この流れに出てくるものです。「再生」を押すと、まず1つずつ紹介してから、流れを再生します。';
+export const SPOTLIGHT_CAPTION = '登場人物の紹介';
+
+/**
+ * The cast of one story, before it plays.
+ *
+ * A person about to watch the whole story should know who is in it first: the same
+ * six lines each card carries, once per part the story involves, in the order the
+ * story meets them — the person, then the parts that decide, then the ones that act,
+ * then the ones that hold the data. It stands where the reasoning panel will stand
+ * once the story is playing, so the eye is already on the place the words will come.
+ */
+export function CastRoster(props: { actors: readonly ActorRole[]; note?: string }): Element {
+  return (
+    <aside className="roster" data-cast-roster="true">
+      <h4 className="roster-caption">{ROSTER_CAPTION}</h4>
+      <p className="roster-note">{props.note ?? ROSTER_NOTE}</p>
+      <ol className="roster-list">
+        {props.actors.map((actor) => (
+          <li key={actor.id} data-roster-actor={actor.id} data-role-lane={actor.lane}>
+            <p className="roster-head">
+              <span className="roster-name">{actor.name}</span>
+              <span className="roster-analogy">{actor.analogy}</span>
+              <span className="roster-lane">{LANE_LABELS[actor.lane]}</span>
+            </p>
+            <p className="roster-role">
+              {actor.role}
+              {actor.label === actor.name ? null : <span className="roster-label">{actor.label}</span>}
+            </p>
+            <dl className="roster-body">
+              <dt>{CAST_DOES}</dt>
+              <dd>{actor.does}</dd>
+              <dt>{CAST_DOES_NOT}</dt>
+              <dd>{actor.doesNot}</dd>
+            </dl>
+          </li>
+        ))}
+      </ol>
+    </aside>
+  );
+}
+
+/**
+ * One part, while the picture is introducing it: the card, beside the lit box, with
+ * which introduction this is. The same card a pressed box opens — the introduction is
+ * the picture pressing each box in turn.
+ */
+export function CastSpotlight(props: { actor: ActorRole; position: string }): Element {
+  return (
+    <aside className="roster roster-spot" data-cast-spot={props.actor.id} aria-live="polite">
+      <h4 className="roster-caption">
+        {SPOTLIGHT_CAPTION}
+        <span className="roster-position" data-field="roster-position">{props.position}</span>
+      </h4>
+      <RoleCard actor={props.actor} />
+    </aside>
   );
 }

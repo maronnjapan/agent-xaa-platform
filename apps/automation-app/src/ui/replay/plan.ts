@@ -1,4 +1,5 @@
 import { REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from './config.js';
+import type { ActorRole } from '../roles.js';
 
 export interface ReplayHop {
   from: string;
@@ -44,6 +45,12 @@ export interface ReplayStep {
   blocked: boolean;
   stopRatio: number;
   delayMs: number;
+  /**
+   * Set on a step that introduces a box rather than replaying an event: the part being
+   * introduced, from the role dictionary. Such a step is screen furniture — it lights
+   * the box and says what the part is — and belongs to no event (RULE-54).
+   */
+  cast?: ActorRole;
 }
 
 /**
@@ -135,4 +142,27 @@ function step(input: Omit<ReplayStep, 'stopRatio' | 'delayMs'>): ReplayStep {
 
 export function isFinished(plan: readonly ReplayStep[], playedIndex: number): boolean {
   return playedIndex >= plan.length - 1;
+}
+
+/**
+ * The steps before this one that belong to the same event: the earlier exchanges of
+ * the tool call the current exchange is part of.
+ *
+ * The picture holds the current step and only the current step (docs 11 §5.2), and a
+ * tool call is four of them. Watched one at a time, four movements read as four
+ * unrelated things; drawn with the earlier legs of the same call left faintly in place,
+ * they read as one journey out and back. The hops of one event are consecutive in the
+ * plan, so the trail is the run of steps just before this one with the same event id —
+ * and it ends, and the picture clears, the moment a new event begins.
+ */
+export function trailOf(plan: readonly ReplayStep[], index: number): ReplayStep[] {
+  const current = plan[index];
+  if (!current) return [];
+  const trail: ReplayStep[] = [];
+  for (let at = index - 1; at >= 0; at -= 1) {
+    const earlier = plan[at]!;
+    if (earlier.eventId !== current.eventId) break;
+    trail.unshift(earlier);
+  }
+  return trail;
 }

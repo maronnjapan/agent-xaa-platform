@@ -4,11 +4,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import {
-  NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_HEIGHT, REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds,
+  NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_HEIGHT, REPLAY_LANES, REPLAY_NODES, REPLAY_VIEWBOX, SOURCE_TO_NODE, nodeIdFor, visibleNodeIds,
 } from '../src/ui/replay/nodes.js';
 import { EMPHASIS_CLASSES, EMPHASIS_LABELS, emphasisClass } from '../src/ui/replay/emphasis.js';
-import { buildReplayPlan, isFinished } from '../src/ui/replay/plan.js';
-import { alongRoute, buildFrame } from '../src/ui/replay/geometry.js';
+import { buildReplayPlan, isFinished, trailOf } from '../src/ui/replay/plan.js';
+import { alongRoute, buildFrame, calloutPoint, headingAt, routeLength, splitRoute } from '../src/ui/replay/geometry.js';
 import { REPLAY_MOTION_MS, REPLAY_STEP_MS, BLOCKED_STOP_RATIO } from '../src/ui/replay/config.js';
 import { OutcomeBadge } from '../src/ui/components/outcome-badge.js';
 import { DetailDisclosure } from '../src/ui/components/detail-disclosure.js';
@@ -691,6 +691,126 @@ describe('the replay as it is drawn', () => {
       vi.useRealTimers();
       Element.prototype.scrollIntoView = original;
     }
+    await view.unmount();
+  });
+});
+
+/**
+ * What the picture says without its caption: which side each box is on, which way a
+ * movement went and whether it arrived, how many legs one call had, and — while a
+ * part is being introduced — what the part is. Each is drawn from a fixed dictionary
+ * or from the step's own values, and none of it is a sentence about an event.
+ */
+describe('what the picture says on its own', () => {
+  const event = (overrides: Record<string, unknown> = {}) => ({
+    event_id: 'a', trace_id: 'tr', human_subject: 'testuser', agent_id: null, task_id: 'task-1',
+    occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime',
+    phase: 'tool_call', outcome: 'success', title: 'やり取りの名前', message: '読みました',
+    detail: { target: 'resource-api' }, related_finding_id: null, is_simulated: false, ...overrides,
+  });
+
+  async function step(events: Array<Record<string, unknown>>, times = 1) {
+    const view = await mount(oneTask({ taskId: 'task-1', taskKey: 'run:task-1', events }));
+    for (let at = 0; at < times; at += 1) await view.click('[data-action="replay-step"]');
+    return view;
+  }
+
+  it('stands the boxes in four named bands, read off the boxes, that never reach the arrows\' names', () => {
+    expect(REPLAY_LANES.map((lane) => lane.lane)).toEqual(['person', 'control', 'agent', 'resource']);
+    expect(REPLAY_LANES.map((lane) => lane.label)).toEqual(['人', '決める側', '動く側', 'データを持つ側']);
+    expect(REPLAY_LANES.map((lane) => lane.nodes)).toEqual([
+      ['human-user'], ['automation-app', 'authorization-platform', 'agent-provisioner'], ['agent-op', 'agent-runtime'], ['resource-as', 'resource-api'],
+    ]);
+    for (const lane of REPLAY_LANES) {
+      // Every box of the band is inside it, and the band's name is inside it too.
+      for (const id of lane.nodes) {
+        const node = REPLAY_NODES.find((candidate) => candidate.id === id)!;
+        expect(node.x - NODE_HALF_WIDTH).toBeGreaterThan(lane.x);
+        expect(node.x + NODE_HALF_WIDTH).toBeLessThan(lane.x + lane.width);
+        expect(node.y - NODE_HALF_HEIGHT).toBeGreaterThan(lane.y);
+        expect(node.y + NODE_HALF_HEIGHT).toBeLessThan(lane.y + lane.height);
+      }
+      expect(lane.captionAt.y).toBeGreaterThan(lane.y);
+      expect(lane.captionAt.y).toBeLessThan(lane.y + lane.height);
+      // The name sits in the strip the arrows' names never use: outside the boxes'
+      // own rows and clear of the band between the rows where the detours run.
+      for (const node of REPLAY_NODES) expect(Math.abs(lane.captionAt.y - node.y)).toBeGreaterThan(NODE_HALF_HEIGHT);
+      expect(lane.captionAt.y < 110 || lane.captionAt.y > 170).toBe(true);
+    }
+  });
+
+  it('shows a band with its boxes, and hides one none of whose boxes is showing', () => {
+    const html = render(ReplayCanvas({
+      taskId: 'task-1', visible: visibleNodeIds([{ source: 'agent-runtime', detail: { target: 'resource-api' } }]), state: 'idle', total: 1,
+    }));
+    expect(html).toMatch(/data-lane="agent"(?![^>]*hidden)/);
+    expect(html).toMatch(/data-lane="resource"(?![^>]*hidden)/);
+    expect(html).toMatch(/data-lane="control"[^>]*hidden/);
+    expect(html).toMatch(/data-lane="person"[^>]*hidden/);
+    for (const label of ['人', '決める側', '動く側', 'データを持つ側']) expect(html).toContain(`>${label}<`);
+  });
+
+  it('cuts a route where the dot stops, and knows which way its last piece points', () => {
+    const route = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }];
+    expect(routeLength(route)).toBe(150);
+    expect(splitRoute(route, 0.4)).toEqual({ travelled: [{ x: 0, y: 0 }, { x: 60, y: 0 }], rest: [{ x: 60, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }] });
+    expect(splitRoute(route, 1)).toEqual({ travelled: route, rest: [] });
+    expect(headingAt(route)).toBe(90);
+    expect(headingAt([{ x: 100, y: 0 }, { x: 0, y: 0 }])).toBe(180);
+    // An introduction is written under a box of the upper row and over one of the lower.
+    expect(calloutPoint({ x: 80, y: 60 })).toEqual({ x: 110, y: 118 });
+    expect(calloutPoint({ x: 620, y: 220 })).toEqual({ x: 610, y: 152 });
+  });
+
+  it('draws the line as long as the dot travels, with a head where it lands and the words once it has', async () => {
+    const view = await step([event()]);
+    const line = view.find('[data-arrows] .is-live')!;
+    expect(Number(line.style.getPropertyValue('--path-length'))).toBeGreaterThan(0);
+    expect(line.style.getPropertyValue('--motion-ms')).toBe(`${REPLAY_MOTION_MS}ms`);
+    expect(view.find('[data-arrowhead]')).not.toBeNull();
+    expect(view.find('[data-unreached-path]')).toBeNull();
+    expect(view.find('[data-field="caption-message"]')!.getAttribute('data-arrives')).toBe('true');
+    expect(view.find('[data-field="caption-message"]')!.style.getPropertyValue('--motion-ms')).toBe(`${REPLAY_MOTION_MS}ms`);
+    await view.unmount();
+  });
+
+  it('dots the way a refused request never went, and puts no head on it', async () => {
+    const view = await step([event({ outcome: 'blocked', message: '許可された Tool に含まれない' })]);
+    expect(view.find('[data-arrowhead]')).toBeNull();
+    expect(view.find('[data-unreached-path]')).not.toBeNull();
+    expect(view.find('[data-stop="true"]')).not.toBeNull();
+    const solid = view.find('[data-arrows] .is-live')!;
+    const frame = buildFrame(buildReplayPlan([event({ outcome: 'blocked' })] as never, (source) => SOURCE_TO_NODE[source] ?? null)[0]!, new Set(['agent-runtime', 'resource-api']));
+    expect(Number(solid.style.getPropertyValue('--path-length'))).toBe(Math.ceil(frame.solidLength));
+    expect(frame.solidLength).toBeLessThan(routeLength(frame.route));
+    await view.unmount();
+  });
+
+  it('keeps the earlier legs of one call on the picture, and clears them for the next event', async () => {
+    const call = event({
+      event_id: 'call',
+      record: { headline: 'h', sections: [], hops: [
+        { from: 'agent-runtime', to: 'agent-op', label: '一', outcome: 'info', message: 'm' },
+        { from: 'agent-op', to: 'agent-runtime', label: '二', outcome: 'success', message: 'm' },
+        { from: 'agent-runtime', to: 'resource-api', label: '三', outcome: 'success', message: 'm' },
+      ] },
+    });
+    const next = event({ event_id: 'next', occurred_at: '2026-01-01T00:01:00.000Z', detail: { target: 'resource-as' } });
+    const plan = buildReplayPlan([call, next] as never, (source) => SOURCE_TO_NODE[source] ?? null);
+    expect(trailOf(plan, 0)).toEqual([]);
+    expect(trailOf(plan, 2).map((earlier) => earlier.label)).toEqual(['一', '二']);
+    expect(trailOf(plan, 3)).toEqual([]);
+
+    const view = await step([call, next], 3);
+    expect(view.text('[data-field="caption-label"]')).toBe('三');
+    expect(view.all('[data-trail] path')).toHaveLength(2);
+    // The trail is lines only: one name, one dot, one head, all the current leg's.
+    expect(view.all('[data-arrow-label]')).toHaveLength(1);
+    expect(view.all('.replay-dot')).toHaveLength(1);
+    expect(view.all('[data-arrowhead]')).toHaveLength(1);
+    await view.click('[data-action="replay-step"]');
+    expect(view.text('[data-field="caption-label"]')).toBe('やり取りの名前');
+    expect(view.all('[data-trail] path')).toHaveLength(0);
     await view.unmount();
   });
 });

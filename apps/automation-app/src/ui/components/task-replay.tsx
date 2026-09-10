@@ -3,7 +3,7 @@ import type { ActivityEvent } from '@xaa/contracts';
 import { REPLAY_STEP_MS } from '../replay/config.js';
 import { buildFrame } from '../replay/geometry.js';
 import { nodeIdFor, visibleNodeIds } from '../replay/nodes.js';
-import { buildReplayPlan, type ReplayEvent } from '../replay/plan.js';
+import { buildReplayPlan, trailOf, type ReplayEvent } from '../replay/plan.js';
 import { thinkingByEvent } from '../replay/thinking.js';
 import { roleOf } from '../roles.js';
 import { RoleCard } from './cast-panel.js';
@@ -72,6 +72,8 @@ export function TaskStage(props: {
 
   const step = index >= 0 ? plan[index] : undefined;
   const frame = step ? buildFrame(step, visible) : null;
+  // The same event's earlier exchanges, kept faintly on the picture under the current one.
+  const trail = useMemo(() => (index >= 0 ? trailOf(plan, index).map((earlier) => buildFrame(earlier, visible)) : []), [plan, index, visible]);
   const currentEventId = step?.eventId ?? null;
   const opened = openNode === null ? null : roleOf(openNode);
 
@@ -95,6 +97,7 @@ export function TaskStage(props: {
           simulated={props.simulated}
           state={state}
           frame={frame}
+          trail={trail}
           total={plan.length}
           controls={controls}
           openNode={openNode}

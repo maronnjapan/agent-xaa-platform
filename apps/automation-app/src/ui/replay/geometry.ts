@@ -32,6 +32,19 @@ export interface Point { x: number; y: number }
 const LANE_CLEARANCE = 60;
 const LABEL_CLEARANCE = 12;
 
+/**
+ * How far into the empty band between the rows a box's introduction is written: two
+ * lines under a box of the upper row, two lines over a box of the lower one. Both
+ * clear the strip the bands' own names sit in, and nothing else is drawn while a box
+ * is being introduced.
+ */
+const CALLOUT_BELOW = 28;
+const CALLOUT_ABOVE = 38;
+
+/** The arrow's head: how far back from the tip it starts, and how wide it is. */
+export const ARROWHEAD_LENGTH = 9;
+export const ARROWHEAD_HALF_WIDTH = 5;
+
 /** How far a name is kept from the left and right edges of the frame. */
 const LABEL_MARGIN = 110;
 
@@ -50,6 +63,19 @@ export interface ReplayFrame {
   path: string;
   /** How far along the path the dot travels: 1 for a step that arrived. */
   stopRatio: number;
+  /**
+   * The part of the path the dot actually travels — all of it for a step that arrived,
+   * up to the stop for one that was refused — as an SVG `d`, and its length in the
+   * picture's own units, which is what the line's drawing is paced by.
+   */
+  solidPath: string;
+  solidLength: number;
+  /** The rest of the path beyond the stop, for a refused step: where it was going and never went. */
+  restPath: string;
+  /** Where the arrow's head goes, for a step that arrived: at the tip, turned along the last piece of the path. */
+  headAt: { x: number; y: number; angle: number } | null;
+  /** Where a part's introduction is written, for a step that introduces a box. */
+  calloutAt: Point | null;
   /** Where the refusal's mark goes, for a blocked step. */
   stopAt: Point | null;
   /** Where the exchange's name goes, in one of the three bands with no box in it. */
@@ -248,6 +274,59 @@ export function alongRoute(route: readonly Point[], ratio: number): Point {
   return route[route.length - 1]!;
 }
 
+/** The whole route's length, by the same measure the dot's `offset-distance` uses. */
+export function routeLength(route: readonly Point[]): number {
+  return route.slice(1).reduce((sum, point, index) => sum + distance(route[index]!, point), 0);
+}
+
+/**
+ * The route cut at a fraction of its length: the part up to the cut, and the part
+ * beyond it, with the cut point on both. Cut at one or more, the second part is empty.
+ *
+ * For a refused movement this is the line as drawn: solid as far as the dot got, and
+ * dotted from there to the box it never reached — so the picture says both where the
+ * request stopped and where it was going.
+ */
+export function splitRoute(route: readonly Point[], ratio: number): { travelled: Point[]; rest: Point[] } {
+  if (route.length < 2) return { travelled: [...route], rest: [] };
+  if (ratio >= 1) return { travelled: [...route], rest: [] };
+  const cut = alongRoute(route, ratio);
+  const travelled: Point[] = [];
+  let remaining = clamp(ratio, 0, 1) * routeLength(route);
+  for (let index = 0; index < route.length - 1; index += 1) {
+    const length = distance(route[index]!, route[index + 1]!);
+    travelled.push(route[index]!);
+    if (remaining <= length) {
+      travelled.push(cut);
+      return { travelled, rest: [cut, ...route.slice(index + 1)] };
+    }
+    remaining -= length;
+  }
+  return { travelled: [...route], rest: [] };
+}
+
+/** Which way the last piece of a route points, in degrees, for turning an arrowhead. */
+export function headingAt(route: readonly Point[]): number {
+  for (let index = route.length - 1; index > 0; index -= 1) {
+    const from = route[index - 1]!;
+    const to = route[index]!;
+    if (from.x !== to.x || from.y !== to.y) return Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI;
+  }
+  return 0;
+}
+
+/**
+ * Where a box's introduction is written: in the empty band between the rows, under a
+ * box of the upper row and over a box of the lower one, kept away from the frame's
+ * edges the way an arrow's name is.
+ */
+export function calloutPoint(at: Point): Point {
+  const x = clamp(at.x, LABEL_MARGIN, REPLAY_WIDTH - LABEL_MARGIN);
+  return inwardFrom(at.y) > 0
+    ? { x, y: at.y + NODE_HALF_HEIGHT + CALLOUT_BELOW }
+    : { x, y: at.y - NODE_HALF_HEIGHT - CALLOUT_ABOVE };
+}
+
 export function pathOf(route: readonly Point[]): string {
   const [first, ...rest] = route;
   if (!first) return '';
@@ -270,6 +349,7 @@ export function buildFrame(step: ReplayStep, visible: ReadonlySet<string>): Repl
   const to = centreOf(step.to);
   const empty: ReplayFrame = {
     step, kind: step.kind, route: [], path: '', stopRatio: step.stopRatio,
+    solidPath: '', solidLength: 0, restPath: '', headAt: null, calloutAt: null,
     stopAt: null, labelAt: null, pulseAt: null, roles, reached: null, unreached: null,
   };
 
@@ -279,19 +359,32 @@ export function buildFrame(step: ReplayStep, visible: ReadonlySet<string>): Repl
     const at = from ?? to;
     const id = step.from ?? step.to;
     if (id !== null) roles[id] = 'self';
-    return { ...empty, kind: 'self', pulseAt: at, ...(step.from === null ? {} : { reached: step.from }) };
+    return {
+      ...empty,
+      kind: 'self',
+      pulseAt: at,
+      calloutAt: step.cast && at ? calloutPoint(at) : null,
+      ...(step.from === null ? {} : { reached: step.from }),
+    };
   }
 
   if (step.from !== null) roles[step.from] = 'from';
   if (step.to !== null) roles[step.to] = 'to';
   const route = routeAround(from, to, visible, [step.from, step.to]);
   const stopRatio = step.blocked ? clearStopRatio(route, step.stopRatio, visible, [step.from]) : step.stopRatio;
+  const { travelled, rest } = splitRoute(route, step.blocked ? stopRatio : 1);
+  const tip = route[route.length - 1]!;
   return {
     step,
     kind: 'move',
     route,
     path: pathOf(route),
     stopRatio,
+    solidPath: pathOf(travelled),
+    solidLength: routeLength(travelled),
+    restPath: step.blocked ? pathOf(rest) : '',
+    headAt: step.blocked ? null : { x: tip.x, y: tip.y, angle: headingAt(route) },
+    calloutAt: null,
     stopAt: step.blocked ? alongRoute(route, stopRatio) : null,
     labelAt: step.label === '' ? null : labelPoint(route, from, to, stopRatio),
     pulseAt: null,

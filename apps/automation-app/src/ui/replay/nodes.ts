@@ -1,4 +1,4 @@
-import { roleOf, type ActorRole } from '../roles.js';
+import { LANE_LABELS, roleOf, type ActorRole, type RoleLane } from '../roles.js';
 
 export interface ReplayNode {
   id: string;
@@ -72,6 +72,63 @@ export const REPLAY_VIEWBOX = `0 0 ${REPLAY_WIDTH} ${REPLAY_HEIGHT}`;
  */
 export const NODE_HALF_WIDTH = 70;
 export const NODE_HALF_HEIGHT = 30;
+
+export interface ReplayLane {
+  lane: RoleLane;
+  /** What the band is called: 人, 決める側, 動く側, データを持つ側. */
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Where the band's name is written: inside the band, on the side away from the other row. */
+  captionAt: { x: number; y: number };
+  /** The boxes that sit in the band, so a band with none of them showing can be hidden with them. */
+  nodes: readonly string[];
+}
+
+/** How far a band extends beyond the boxes it holds. */
+const LANE_PADDING = 6;
+/** The strip inside a band where its name is written. The boxes never reach into it. */
+const LANE_CAPTION_STRIP = 12;
+const LANE_CAPTION_INSET = 6;
+
+/**
+ * The four bands the boxes sit in, read off the boxes rather than written down.
+ *
+ * A person meeting the picture for the first time sees eight boxes and has to be told
+ * that the top row decides and the bottom row acts — the legend said it in words. The
+ * bands say it on the picture: each is the bounding box of the boxes of one lane, named
+ * by the lane's own word, so 「権限決定」 is seen to stand among the deciders and
+ * 「リソース API」 among the parts that hold data before a single dot has moved.
+ *
+ * The name is written inside the band, on the side facing away from the other row —
+ * below the top row, above the bottom row — which is the one strip of each band that
+ * the arrows' names never use (see `labelPoint`).
+ */
+export const REPLAY_LANES: readonly ReplayLane[] = (['person', 'control', 'agent', 'resource'] as const).map((lane) => {
+  const members = REPLAY_NODES.filter((node) => node.actor.lane === lane);
+  if (members.length === 0) throw new Error(`no replay node in lane: ${lane}`);
+  const left = Math.min(...members.map((node) => node.x)) - NODE_HALF_WIDTH - LANE_PADDING;
+  const right = Math.max(...members.map((node) => node.x)) + NODE_HALF_WIDTH + LANE_PADDING;
+  const boxTop = Math.min(...members.map((node) => node.y)) - NODE_HALF_HEIGHT - LANE_PADDING;
+  const boxBottom = Math.max(...members.map((node) => node.y)) + NODE_HALF_HEIGHT + LANE_PADDING;
+  // The strip for the name goes on the side away from the other row: under the boxes
+  // of the upper row, over the boxes of the lower one.
+  const upperRow = REPLAY_NODES.some((node) => node.y > members[0]!.y);
+  const top = upperRow ? boxTop : boxTop - LANE_CAPTION_STRIP;
+  const bottom = upperRow ? boxBottom + LANE_CAPTION_STRIP : boxBottom;
+  return {
+    lane,
+    label: LANE_LABELS[lane],
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+    captionAt: { x: left + LANE_CAPTION_INSET, y: upperRow ? boxBottom + LANE_CAPTION_STRIP - 2 : boxTop - 3 },
+    nodes: members.map((node) => node.id),
+  };
+});
 
 /**
  * `lifecycle-manager` and `security-detection` are deliberately absent.

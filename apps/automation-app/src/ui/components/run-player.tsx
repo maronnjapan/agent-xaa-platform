@@ -3,10 +3,11 @@ import { motion } from 'motion/react';
 import type { TimelineTask } from '../../activity/query.js';
 import { REPLAY_MOTION_MS, REPLAY_STEP_MS } from '../replay/config.js';
 import { buildFrame } from '../replay/geometry.js';
+import { trailOf } from '../replay/plan.js';
 import { buildStoryPlan, chapterAt, chapterState, type StoryChapter } from '../replay/story.js';
 import { thinkingByEvent } from '../replay/thinking.js';
 import { roleOf } from '../roles.js';
-import { RoleCard } from './cast-panel.js';
+import { CastRoster, CastSpotlight, RoleCard } from './cast-panel.js';
 import { OutcomeBadge } from './outcome-badge.js';
 import { ReplayCanvas, type ReplayControls } from './replay-canvas.js';
 import { SimulatedBadge } from './simulated-badge.js';
@@ -16,7 +17,7 @@ import type { Element } from '../element.js';
 /** Screen furniture: what the panel and its buttons are called. None of it is about an event (RULE-54). */
 export const STORY_OPEN_LABEL = '流れを通しで見る';
 export const STORY_CAPTION = '流れを通しで見る';
-export const STORY_NOTE = 'ログインから終了までを、区切りをまたいで1手ずつ再生します。「再生」で始まり、区切りが終わると次の区切りへそのまま進みます。区切りの名前を押すと、そこから見られます。';
+export const STORY_NOTE = 'まず図に出てくる登場人物を1つずつ紹介し、そのあとログインから終了までを、区切りをまたいで1手ずつ再生します。「再生」で始まり、区切りが終わると次の区切りへそのまま進みます。区切りの名前を押すと、そこから見られます。';
 export const STORY_CLOSE_LABEL = '閉じる';
 export const STORY_SPEED_LABEL = '速さ';
 export const STORY_FULLSCREEN_LABEL = '全画面で見る';
@@ -55,6 +56,12 @@ const NOTHING_PLAYED = -1;
  * same caption and the same panel of what the agent was thinking, and a strip of
  * chapters over the picture that says which part of the story is on.
  *
+ * It opens on the cast. Before anything plays, the panel beside the picture lists who
+ * is in the story — each part's name, what it is like, what it does and does not do —
+ * and the first chapter of the story is that same list, played: each box lit in turn
+ * with its card beside it. A viewer is told who is who before anyone moves, which is
+ * the question the boxes' names raise and the one a demonstration must answer first.
+ *
  * It is the same data as the cards below it, and it is not a demo screen: nothing
  * about it is different when the story is a demonstration, except that a scripted
  * chapter carries its label (RULE-58). Pressing a chapter starts from there. The step
@@ -77,7 +84,7 @@ export function RunPlayer(props: {
   onCurrentEvent?: (taskKey: string | null, eventId: string | null) => void;
   onClose?: () => void;
 }): Element {
-  const plan = useMemo(() => buildStoryPlan(props.tasks), [props.tasks]);
+  const plan = useMemo(() => buildStoryPlan(props.tasks, { introduce: true }), [props.tasks]);
   const thinking = useMemo(() => thinkingByEvent(plan.events), [plan]);
 
   const [index, setIndex] = useState(NOTHING_PLAYED);
@@ -123,8 +130,13 @@ export function RunPlayer(props: {
   const step = index >= 0 ? plan.steps[index] : undefined;
   const chapter = chapterAt(plan, index);
   const frame = step ? buildFrame(step, plan.visible) : null;
-  const currentTaskKey = step?.taskKey ?? null;
-  const currentEventId = step?.eventId ?? null;
+  const trail = useMemo(
+    () => (index >= 0 ? trailOf(plan.steps, index).map((earlier) => buildFrame(earlier, plan.visible)) : []),
+    [plan, index],
+  );
+  // An introduction belongs to no task, so it marks nothing on the rail below.
+  const currentTaskKey = step?.taskKey ? step.taskKey : null;
+  const currentEventId = step && !step.cast ? step.eventId : null;
   const opened = openNode === null ? null : roleOf(openNode);
 
   /*
@@ -211,6 +223,7 @@ export function RunPlayer(props: {
             key={entry.taskKey}
             data-chapter={entry.taskKey}
             data-chapter-task={entry.taskId}
+            data-chapter-kind={entry.kind}
             data-chapter-state={chapterState(entry, index)}
           >
             <button
@@ -223,7 +236,7 @@ export function RunPlayer(props: {
               <span className="chapter-title">{entry.title}</span>
               <span className="chapter-meta">
                 {entry.simulated ? <SimulatedBadge position="row" /> : null}
-                <OutcomeBadge outcome={entry.outcome} phase={entry.phase} />
+                {entry.kind === 'cast' ? null : <OutcomeBadge outcome={entry.outcome} phase={entry.phase} />}
                 <span className="chapter-count">{`${entry.count} 手`}</span>
               </span>
             </button>
@@ -260,19 +273,31 @@ export function RunPlayer(props: {
           taskId={chapter?.taskId ?? first?.taskId ?? ''}
           taskKey={storyKey}
           visible={plan.visible}
-          simulated={chapter?.simulated ?? first?.simulated ?? false}
+          simulated={chapter?.simulated ?? false}
           state={state}
           frame={frame}
+          trail={trail}
           total={plan.steps.length}
           controls={controls}
           motionMs={REPLAY_MOTION_MS / speed}
           openNode={openNode}
           onOpenNode={setOpenNode}
         />
-        <ThinkingPanel
-          taskKey={storyKey}
-          frame={currentEventId === null ? null : thinking.get(currentEventId) ?? null}
-        />
+        {/*
+          * Beside the picture: the cast before anything plays, the part being introduced
+          * while the introduction plays, and what the agent was thinking once the story
+          * proper is on. One place, three answers to "who is this and what is it doing".
+          */}
+        {step?.cast && chapter
+          ? <CastSpotlight actor={step.cast} position={`${index - chapter.from + 1} / ${chapter.count}`} />
+          : state === 'idle' && plan.cast.length > 0
+            ? <CastRoster actors={plan.cast} />
+            : (
+              <ThinkingPanel
+                taskKey={storyKey}
+                frame={currentEventId === null ? null : thinking.get(currentEventId) ?? null}
+              />
+            )}
       </div>
 
       {opened
