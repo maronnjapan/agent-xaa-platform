@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { emphasisClass } from '../replay/emphasis.js';
 import { REPLAY_MOTION_MS } from '../replay/config.js';
@@ -64,6 +64,13 @@ export interface ReplayCanvasProps {
   /** Which box's description the person opened, if any. */
   openNode?: string | null;
   onOpenNode?: (id: string | null) => void;
+  /**
+   * Where the step stands, as the count and the bar say it: within a chapter, when a
+   * story is being played chapter by chapter, and across every step otherwise.
+   */
+  position?: { at: number; of: number } | null;
+  /** More controls for the same bar: a story's pace, the whole-screen switch. */
+  tools?: ReactNode;
 }
 
 /** A CSS custom property, which React's style type does not name. */
@@ -94,8 +101,8 @@ type DrawStyle = MotionStyle & Record<'--path-length', string>;
  * composed (RULE-54).
  *
  * It holds the current step and only the current step, and so does the canvas. What
- * did happen, in order and in full, is the written list beside the picture — server-rendered
- * from the same events, complete, and never wiped by the picture.
+ * did happen, in order and in full, is the written account on the viewer's other face
+ * — server-rendered from the same events, complete, and never wiped by the picture.
  *
  * The controls exist because a replay that only ran once, start to finish, at a fixed
  * pace, is a thing you watch rather than a thing you read. A step that says something
@@ -112,6 +119,8 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
     '--stop-ratio': String(frame?.stopRatio ?? 1),
   };
   const drawStyle: DrawStyle = { ...motionStyle, '--path-length': String(Math.ceil(frame?.solidLength ?? 0)) };
+  const position = props.position ?? (step ? { at: step.index + 1, of: props.total } : null);
+  const count = position ? `${position.at} / ${position.of}` : '';
   return (
     <div
       className="replay"
@@ -126,17 +135,16 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
         <button type="button" data-action="replay-pause" onClick={props.controls?.pause}>一時停止</button>
         <button type="button" data-action="replay-step" onClick={props.controls?.next}>次へ</button>
         <button type="button" data-action="replay-restart" onClick={props.controls?.restart}>最初から</button>
-        <span className="replay-progress" data-field="replay-progress">
-          {step ? `${step.index + 1} / ${props.total}` : ''}
-        </span>
+        <span className="replay-progress" data-field="replay-progress">{count}</span>
         <span className="replay-track" aria-hidden="true">
           <motion.span
             className="replay-track-fill"
             initial={false}
-            animate={{ scaleX: step && props.total > 0 ? (step.index + 1) / props.total : 0 }}
+            animate={{ scaleX: position && position.of > 0 ? position.at / position.of : 0 }}
             transition={{ type: 'spring', stiffness: 160, damping: 24 }}
           />
         </span>
+        {props.tools ? <span className="replay-tools">{props.tools}</span> : null}
       </div>
       <svg viewBox={REPLAY_VIEWBOX} className="replay-canvas" role="img" aria-label="処理の再生">
         {/*
@@ -334,7 +342,7 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
         {...(emphasis ? { 'data-caption-emphasis': emphasis } : {})}
       >
         <p className="caption-head">
-          <span className="caption-step" data-field="caption-step">{step ? `${step.index + 1} / ${props.total}` : ''}</span>
+          <span className="caption-step" data-field="caption-step">{count}</span>
           <span className="caption-route" data-field="caption-route">{step ? routeOf(step.from, step.to, step.kind) : ''}</span>
           <span className="caption-label" data-field="caption-label">{step?.label ?? ''}</span>
         </p>

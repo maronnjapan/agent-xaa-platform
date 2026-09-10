@@ -1,14 +1,13 @@
 import { useCallback, useState } from 'react';
 import type { TimelineTask } from '../../activity/query.js';
+import type { ActivityFocus } from '../activity-links.js';
 import { taskLabelOf } from '../labels.js';
-import { CastPanel } from '../components/cast-panel.js';
-import { OutcomeBar, type OutcomeCounts } from '../components/outcome-bar.js';
+import { ActivityViewer } from '../components/activity-viewer.js';
 import { RunCard, summariseRun, type Run } from '../components/run-card.js';
-import { partiesIn } from '../roles.js';
 import type { Element } from '../element.js';
 
 export const TIMELINE_TITLE = 'アクティビティ';
-export const TIMELINE_LEAD = 'ログインから、権限の決定、Agent の作成、作業、終了までを Agent ごとにまとめています。新しい Agent が上です。';
+export const TIMELINE_LEAD = 'ログインから、権限の決定、Agent の作成、作業、終了までを Agent ごとにまとめています。新しい Agent が上です。区切りを選ぶと、その動きの図か、できごとの記録が1つずつ開きます。';
 export const TIMELINE_EMPTY = 'まだ記録がありません。ToDo を書いて Agent を作ると、ここに並びます。';
 export const TIMELINE_NO_MATCH = '検索に一致する Agent はありません。';
 export const TIMELINE_FILTERED_NOTE = 'この Agent の記録だけを表示しています。';
@@ -41,25 +40,6 @@ export function groupRuns(tasks: readonly TimelineTask[]): Run[] {
   return [...runs.values()];
 }
 
-/**
- * How the tasks ended, counted for the bar under the numbers.
- *
- * Each task counts once, by the outcome its terminal event carried — or as running,
- * when it has no terminal event yet. These are the schema's own values; the screen
- * adds no fourth verdict of its own (RULE-54).
- */
-export function outcomeCountsOf(tasks: readonly TimelineTask[]): OutcomeCounts {
-  const counts: OutcomeCounts = { success: 0, blocked: 0, failed: 0, running: 0, info: 0 };
-  for (const task of tasks) {
-    if (task.status === 'running') counts.running = (counts.running ?? 0) + 1;
-    else if (task.terminal_outcome === 'success') counts.success += 1;
-    else if (task.terminal_outcome === 'blocked') counts.blocked += 1;
-    else if (task.terminal_outcome === 'failed') counts.failed += 1;
-    else counts.info = (counts.info ?? 0) + 1;
-  }
-  return counts;
-}
-
 /** Whether an agent's card matches what a person typed: its purpose, its id, or a task's name. */
 export function matchesSearch(run: Run, search: string): boolean {
   const needle = search.trim().toLocaleLowerCase();
@@ -70,17 +50,34 @@ export function matchesSearch(run: Run, search: string): boolean {
 }
 
 /**
- * The person's activity, as one page.
+ * The activity screen: the list, or one agent in the viewer.
+ *
+ * The two are one page at one address, told apart by what the address names
+ * (`activity-links.ts`). The list is where a person finds an agent and a task; the
+ * viewer is where they look at one thing about it — the picture or the account — with
+ * nothing else on the screen. A `focus` that names a run the tasks do not contain is
+ * the list, not an error: the route already answered what this person may see.
+ */
+export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: string | null; focus?: ActivityFocus | null }): Element {
+  const focus = props.focus ?? null;
+  const agentId = props.agentId ?? null;
+  const focused = focus === null ? null : groupRuns(props.tasks).find((run) => run.runId === focus.runId) ?? null;
+  if (focus !== null && focused !== null) return <ActivityViewer run={focused} focus={focus} agentId={agentId} />;
+  return <TimelineList tasks={props.tasks} agentId={agentId} />;
+}
+
+/**
+ * The person's activity, as one list.
  *
  * It opens with the numbers a person wants before reading anything: how many agents,
- * how many still running, how many ran into a refusal or a failure, and one bar for
- * how the tasks ended. Then one card per agent, newest first, each headed by the work
- * it was made for and followed by its tasks on a rail. The newest agent's tasks start
- * opened, because that is the one a person came to look at; the rest fold to a line
- * each, so ten agents are ten lines rather than ten screens.
+ * how many still running, how many ran into a refusal or a failure. Then one card per
+ * agent, newest first, each headed by the work it was made for and followed by its
+ * tasks as one line each. Nothing on the list moves and nothing on it unfolds: a task's
+ * picture and a task's account are each a screen of their own (`ActivityViewer`), so
+ * ten agents are ten cards of lines rather than ten screens of pictures and logs.
  *
  * Nothing on the page is a sentence about what an event meant. The chips count the
- * publishers' own `outcome`, the heads print the publishers' own titles, and the words
+ * publishers' own `outcome`, the lines print the publishers' own titles, and the words
  * the screen adds are names for kinds of things — a phase, a task, a part of the
  * platform (RULE-54).
  *
@@ -90,21 +87,20 @@ export function matchesSearch(run: Run, search: string): boolean {
  * agent stays narrowed when it refreshes — the subject still comes from the session,
  * and the narrowing is a filter over the person's own timeline, never a widening of it.
  *
- * The view switch hides nothing from the markup: every row is served, and 「問題が
- * あったものだけ」 is a stylesheet rule keyed on the page's `data-view`, so a person
- * without script sees everything and a person with it sees what they asked for. What
- * the switch does change is which cards stand open: the ones with a refusal or a
- * failure in them, and only those, so the page becomes the list of where things went
- * wrong. The search narrows the cards the same way — by hiding, never by dropping.
+ * The view switch hides nothing from the markup: every line is served, and 「問題が
+ * あったものだけ」 is a stylesheet rule keyed on the page's `data-view` that hides the
+ * lines with no refusal and no failure in them, so a person without script sees
+ * everything and a person with it sees what they asked for. The search narrows the
+ * cards the same way — by hiding, never by dropping.
  */
-export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: string | null }): Element {
+function TimelineList(props: { tasks: readonly TimelineTask[]; agentId: string | null }): Element {
   const [tasks, setTasks] = useState<readonly TimelineTask[]>(props.tasks);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [view, setView] = useState<TimelineView>('all');
   const [search, setSearch] = useState('');
-  const agentId = props.agentId ?? null;
+  const agentId = props.agentId;
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -130,7 +126,6 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: 
   const blocked = summaries.reduce((sum, summary) => sum + summary.blocked, 0);
   const failed = summaries.reduce((sum, summary) => sum + summary.failed, 0);
   const shown = runs.filter((run) => matchesSearch(run, search));
-  const sources = partiesIn(tasks.flatMap((task) => (task.status === 'completed' ? task.events : [])));
 
   return (
     <main className="timeline" data-page="timeline" data-view={view}>
@@ -194,19 +189,12 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: 
           </div>
         </div>
       </div>
-      <OutcomeBar label="作業の結果" counts={outcomeCountsOf(tasks)} />
-
-      <CastPanel sources={sources} />
 
       {runs.length === 0 ? <p className="timeline-empty" data-field="timeline-empty">{TIMELINE_EMPTY}</p> : null}
       {runs.length > 0 && shown.length === 0 ? <p className="timeline-empty" data-field="timeline-no-match">{TIMELINE_NO_MATCH}</p> : null}
-      {runs.map((run, index) => (
+      {runs.map((run) => (
         <div key={run.runId} data-run-shown={String(shown.includes(run))} {...(shown.includes(run) ? {} : { hidden: true })}>
-          <RunCard
-            run={run}
-            open={view === 'issues' ? 'issues' : (index === 0 || agentId !== null)}
-            offerFilter={agentId === null}
-          />
+          <RunCard run={run} offerFilter={agentId === null} narrowedTo={agentId} />
         </div>
       ))}
     </main>

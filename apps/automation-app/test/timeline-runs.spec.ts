@@ -8,7 +8,7 @@ import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline, taskKeyOf } from '../src/activity/query.js';
 import { NO_AGENT_YET } from '../src/ui/components/run-card.js';
 import { RecordView, HOPS_CAPTION } from '../src/ui/components/record-view.js';
-import { STAGE_LOG_CAPTION, STAGE_PLAYER_CAPTION } from '../src/ui/components/stage-card.js';
+import { TASK_LOG_LABEL, TASK_REPLAY_LABEL } from '../src/ui/components/task-row.js';
 import { TimelinePage } from '../src/ui/pages/timeline.js';
 import { SOURCE_TO_NODE } from '../src/ui/replay/nodes.js';
 import { buildReplayPlan } from '../src/ui/replay/plan.js';
@@ -137,38 +137,30 @@ describe('one agent, one story', () => {
   });
 
   /**
-   * Each task carries its own list and its own picture, one after the other under one
-   * card, so a person reading a task has its picture beside it — and the next task's
-   * picture is one folded card down rather than a screenful of writing away.
+   * Each task is one line on the list, and each line leads to two screens of its own:
+   * the picture of it moving, and its written account. Nothing unfolds on the list
+   * itself, so ten tasks are ten lines rather than ten pictures beside ten logs.
    */
-  it('puts each task\'s list and picture together under one card', async () => {
+  it('lists each task as one line, and leads from it to its picture and its account', async () => {
     const harness = await startAutomationApp();
     await seed(harness, story({ agent: AGENT_ID, work: 'wd_a', decision: 'dec_a', from: 0, purpose: 'A' }));
     const tasks = await readTimeline({ documents: harness.documents, humanSubject: SUBJECT });
     expect(tasks).toHaveLength(2);
     const html = render(createElement(TimelinePage, { tasks }));
 
-    expect(html).toContain(STAGE_LOG_CAPTION);
-    expect(html).toContain(STAGE_PLAYER_CAPTION);
-    const cards = tasks.map((task) => html.indexOf(`data-stage-card="${taskKeyOf(task)}"`));
-    expect(cards.every((at) => at > -1)).toBe(true);
-    for (const [index, task] of tasks.entries()) {
-      const key = taskKeyOf(task);
-      const from = cards[index]!;
-      const to = cards[index + 1] ?? html.length;
-      // This task's list and picture both sit inside this task's card, list first.
-      const log = html.indexOf(`data-log-key="${key}"`);
-      const replay = html.indexOf(`data-replay-key="${key}"`);
-      expect(log).toBeGreaterThan(from);
-      expect(replay).toBeGreaterThan(log);
-      expect(replay).toBeLessThan(to);
+    expect(html).toContain(TASK_REPLAY_LABEL);
+    expect(html).toContain(TASK_LOG_LABEL);
+    for (const task of tasks) {
+      expect(html).toContain(`data-stage-card="${taskKeyOf(task)}"`);
+      expect(html).toContain(`href="/activity?run=${AGENT_ID}&amp;task=${task.task_id}&amp;view=replay" data-action="task-replay"`);
+      expect(html).toContain(`href="/activity?run=${AGENT_ID}&amp;task=${task.task_id}&amp;view=log" data-action="task-log"`);
     }
+    // No list and no picture on the list page: those are the viewer's, one at a time.
+    expect(html).not.toContain('data-event-log');
+    expect(html).not.toContain('data-replay-key');
     // The tasks are called what a person calls them, not by their ids.
     expect(html).toContain('>準備<');
     expect(html).toContain('>作業 1<');
-    // Nothing is playing, so no row of any list is dimmed.
-    expect(html).toContain('data-log-state="idle"');
-    expect(html).not.toContain('data-log-state="playing"');
   });
 
   /**
@@ -202,7 +194,7 @@ describe('one agent, one story', () => {
     expect(html).toContain(`data-task-key="${AGENT_ID}:task-3" data-task-id="task-3" data-task-kind="task" data-status="running" data-issue-count="0"`);
   });
 
-  it('keys each canvas and log by agent and task together', async () => {
+  it('keys each line by agent and task together, and the viewer by the agent it opened', async () => {
     const harness = await startAutomationApp();
     await seed(harness, [
       ...story({ agent: AGENT_ID, work: 'wd_a', decision: 'dec_a', from: 0, purpose: 'A' }),
@@ -210,15 +202,23 @@ describe('one agent, one story', () => {
     ]);
     const tasks = await readTimeline({ documents: harness.documents, humanSubject: SUBJECT });
     const html = render(createElement(TimelinePage, { tasks }));
-    for (const task of tasks) {
-      expect(html).toContain(`data-replay-key="${taskKeyOf(task)}"`);
-      expect(html).toContain(`data-log-key="${taskKeyOf(task)}"`);
-      expect(html).toContain(`data-task-key="${taskKeyOf(task)}"`);
-    }
+    for (const task of tasks) expect(html).toContain(`data-task-key="${taskKeyOf(task)}"`);
     // Two agents, two `task-1` rows, and the keys tell them apart.
     expect(html.match(new RegExp(`data-task-key="${AGENT_ID}:task-1"`, 'g'))).toHaveLength(1);
     expect(html.match(new RegExp(`data-task-key="${AGENT_B}:task-1"`, 'g'))).toHaveLength(1);
     expect(taskKeyOf({ run_id: AGENT_ID, task_id: 'task-1' })).not.toBe(taskKeyOf({ run_id: AGENT_B, task_id: 'task-1' }));
+
+    // The viewer holds one agent: its picture is keyed by the run, its account by the run and the task.
+    const viewer = render(createElement(TimelinePage, {
+      tasks: tasks.filter((task) => task.run_id === AGENT_B), focus: { runId: AGENT_B, taskId: 'task-1', view: 'log', eventId: null },
+    }));
+    expect(viewer).toContain(`data-viewer="${AGENT_B}"`);
+    expect(viewer).toContain(`data-log-key="${AGENT_B}:task-1"`);
+    expect(viewer).not.toContain(`data-log-key="${AGENT_ID}:task-1"`);
+    const picture = render(createElement(TimelinePage, {
+      tasks: tasks.filter((task) => task.run_id === AGENT_B), focus: { runId: AGENT_B, taskId: 'task-1', view: 'replay', eventId: null },
+    }));
+    expect(picture).toContain(`data-replay-key="story:${AGENT_B}"`);
 
     const body = await (await harness.fetch('/api/activity/tasks')).json() as { tasks: Array<{ run_id: string }> };
     expect(body.tasks.map((task) => task.run_id)).toEqual([AGENT_B, AGENT_B, AGENT_ID, AGENT_ID]);

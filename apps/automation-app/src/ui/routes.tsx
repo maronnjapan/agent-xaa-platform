@@ -11,6 +11,7 @@ import { readTimeline, type TimelineTask } from '../activity/query.js';
 import { createWorkDefinitionStore } from '../work-definition/store.js';
 import { createAgentDefinitionStore } from '../agent-definition/approval.js';
 import { readAsset, STATIC_ASSETS } from './assets.js';
+import { activityViewOf, AGENT_KEY, EVENT_KEY, RUN_KEY, TASK_KEY, VIEW_KEY, type ActivityFocus } from './activity-links.js';
 import { renderPage } from './layout.js';
 import type { HomeAgent, HomeTodoItem, TodoAgentView } from './pages/home.js';
 
@@ -134,15 +135,34 @@ export function createPageRoutes(deps: PageRouteDeps): Hono<Env> {
     data: { page: 'security', runs: await readAnalysisRuns(deps.documents, context.get('humanSubject')), now: now() },
   })));
 
+  /**
+   * The activity screen: the list, or one agent in the viewer.
+   *
+   * Which face is served is read off the address (`activity-links.ts`), so a link to
+   * the account of one task is a page the server renders in full — the viewer is not a
+   * panel the browser builds after the fact. Narrowing by agent, and opening one run,
+   * are both filters over the person's own timeline, never a widening of it: the
+   * subject still comes from the session and nowhere else. A `run` that names nothing
+   * of the person's is not an error and not someone else's; it is the list.
+   */
   app.get('/activity', asUser, async (context) => {
-    const agentId = context.req.query('agent_id');
+    const agentId = context.req.query(AGENT_KEY);
+    const runId = context.req.query(RUN_KEY);
     const tasks = await readTimeline({ documents: deps.documents, humanSubject: context.get('humanSubject') });
-    // Narrowing by agent is a filter over the person's own timeline, never a widening
-    // of it: the subject still comes from the session and nowhere else.
-    const shown = agentId ? tasks.filter((task) => task.agent_id === agentId) : tasks;
+    const narrowed = agentId ? tasks.filter((task) => task.agent_id === agentId) : tasks;
+    const focused = runId ? narrowed.filter((task) => task.run_id === runId) : [];
+    const focus: ActivityFocus | null = runId && focused.length > 0
+      ? {
+        runId,
+        taskId: context.req.query(TASK_KEY) ?? null,
+        view: activityViewOf(context.req.query(VIEW_KEY)),
+        eventId: context.req.query(EVENT_KEY) ?? null,
+      }
+      : null;
     return context.html(renderPage({
       analysisConsoleUrl: deps.config.analysisConsoleUrl,
-      title: 'アクティビティ', styles: STYLES, script: SCRIPT, data: { page: 'timeline', tasks: shown, agentId: agentId ?? null },
+      title: 'アクティビティ', styles: STYLES, script: SCRIPT,
+      data: { page: 'timeline', tasks: focus === null ? narrowed : focused, agentId: agentId ?? null, focus },
     }));
   });
 

@@ -1,10 +1,8 @@
-import { useCallback, useState } from 'react';
 import type { TimelineTask } from '../../activity/query.js';
 import { agentPagePath } from '../../agents/page-link.js';
-import { taskKeyOf } from '../../activity/task-key.js';
-import { blockedCountOf, failedCountOf, isSimulated, issueCountOf, StageCard } from './stage-card.js';
+import { activityFocusPath } from '../activity-links.js';
+import { blockedCountOf, failedCountOf, isSimulated, issueCountOf, TaskRow } from './task-row.js';
 import { LocalTime } from './local-time.js';
-import { RunPlayer, STORY_OPEN_LABEL } from './run-player.js';
 import type { Element } from '../element.js';
 
 export const NO_AGENT_YET = 'Agent はまだ作られていません';
@@ -12,6 +10,8 @@ export const NO_PURPOSE = '（目的の記録がありません）';
 export const OPEN_AGENT_PAGE = 'Agent の画面を開く';
 export const ONLY_THIS_AGENT = 'この Agent だけ表示';
 export const RUN_IDS_CAPTION = 'ID を表示';
+export const STORY_OPEN_LABEL = '流れを通しで見る';
+export const RUN_NO_ISSUES = 'この Agent に、遮断や失敗はありません。';
 
 /** One agent's story, as the page groups it: the tasks `readTimeline` filed under one run. */
 export interface Run {
@@ -64,12 +64,6 @@ export function summariseRun(tasks: readonly TimelineTask[]): RunSummary {
   };
 }
 
-/** Where the story's picture is: which task, and which event in it. */
-interface StoryPosition {
-  taskKey: string;
-  eventId: string;
-}
-
 /**
  * Tasks belong to an agent; the grouping is the person's mental model, not ours.
  *
@@ -80,54 +74,35 @@ interface StoryPosition {
  * never needs to read and sometimes needs to copy, so it is behind a disclosure rather
  * than printed across the head.
  *
- * The tasks follow as a rail: provisioning, then the numbered tasks in the order they
- * finished, then lifecycle — the order `readTimeline` already put them in, which is
- * the order the work actually happened in. This only lays them out.
- *
- * Between the head and the rail sits the one thing the rail cannot do: play the whole
- * story through. 「流れを通しで見る」 opens a panel that replays every finished task in
- * order on one picture (`RunPlayer`). It is opened by a press and by nothing else, so
- * the server never renders it; and while it plays, the task and the row it is on are
- * marked on the rail below, because the picture and the account are one state drawn
- * twice rather than two things that might disagree.
+ * The tasks follow as a rail of lines: provisioning, then the numbered tasks in the
+ * order they finished, then lifecycle — the order `readTimeline` already put them in,
+ * which is the order the work actually happened in. This only lays them out. Nothing
+ * on the card moves and nothing on it unfolds: the picture of the story and the
+ * account of each task are screens of their own, and the card only leads to them.
+ * 「流れを通しで見る」 leads to the picture of the whole story, from the login to the end;
+ * each line leads to its own picture and its own account.
  */
 export function RunCard(props: {
   run: Run;
-  /**
-   * Which finished tasks stand opened: all of them, none, or the ones with a refusal or
-   * a failure in them. The newest agent's all do; the rest fold; the issues view opens
-   * exactly the cards a person switched to that view to find.
-   */
-  open: boolean | 'issues';
   /** Offer the link that narrows the page to this agent. Off when it already is. */
   offerFilter: boolean;
+  /** The agent the page is narrowed to, so the viewer's addresses come back to the same list. */
+  narrowedTo?: string | null;
 }): Element {
   const { run } = props;
   const summary = summariseRun(run.tasks);
-  const [story, setStory] = useState(false);
-  const [position, setPosition] = useState<StoryPosition | null>(null);
+  const narrowedTo = props.narrowedTo ?? null;
   const playable = run.tasks.some((task) => task.status === 'completed');
-
-  /*
-   * A picture that has not moved reports the same position again, and an untouched
-   * one reports nothing — which is what the state already says. Returning the previous
-   * value in both cases keeps the rail from re-rendering to no effect on every report.
-   */
-  const reach = useCallback((taskKey: string | null, eventId: string | null): void => {
-    setPosition((previous) => {
-      if (taskKey === null || eventId === null) return previous === null ? previous : null;
-      if (previous !== null && previous.taskKey === taskKey && previous.eventId === eventId) return previous;
-      return { taskKey, eventId };
-    });
-  }, []);
-
-  const closeStory = useCallback((): void => {
-    setStory(false);
-    setPosition(null);
-  }, []);
+  const issues = run.tasks.reduce((sum, task) => sum + issueCountOf(task), 0);
 
   return (
-    <section className="run" data-run={run.runId} data-run-id={run.runId} data-agent-id={run.agentId ?? ''}>
+    <section
+      className="run"
+      data-run={run.runId}
+      data-run-id={run.runId}
+      data-agent-id={run.agentId ?? ''}
+      data-issue-count={String(issues)}
+    >
       <header className="run-head">
         <div className="run-title">
           <h2 className="run-purpose" data-field="run-purpose">{run.purpose === '' ? NO_PURPOSE : run.purpose}</h2>
@@ -161,15 +136,13 @@ export function RunCard(props: {
         <div className="run-links">
           {playable
             ? (
-              <button
-                type="button"
+              <a
                 className="story-open"
                 data-action="story-open"
-                aria-pressed={story}
-                onClick={() => (story ? closeStory() : setStory(true))}
+                href={activityFocusPath({ runId: run.runId, taskId: null, view: 'replay', eventId: null }, narrowedTo)}
               >
                 {STORY_OPEN_LABEL}
-              </button>
+              </a>
             )
             : null}
           {run.agentId === null ? null : <a href={agentPagePath(run.agentId)} data-field="agent-link">{OPEN_AGENT_PAGE}</a>}
@@ -191,17 +164,11 @@ export function RunCard(props: {
           </details>
         </div>
       </header>
-      {story ? <RunPlayer runId={run.runId} tasks={run.tasks} onCurrentEvent={reach} onClose={closeStory} /> : null}
       <ol className="stages">
-        {run.tasks.map((task) => (
-          <StageCard
-            key={task.task_id}
-            task={task}
-            open={props.open === 'issues' ? issueCountOf(task) > 0 : props.open}
-            storyEventId={position !== null && position.taskKey === taskKeyOf(task) ? position.eventId : null}
-          />
-        ))}
+        {run.tasks.map((task) => <TaskRow key={task.task_id} task={task} narrowedTo={narrowedTo} />)}
       </ol>
+      {/* Read only in the issues view, where every line without a refusal or a failure is hidden. */}
+      <p className="run-no-issues" data-field="run-no-issues">{RUN_NO_ISSUES}</p>
     </section>
   );
 }

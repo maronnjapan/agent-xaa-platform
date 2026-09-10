@@ -9,11 +9,12 @@ import { checkCounts, routeStops, stepVerdict } from '../src/ui/records/verdict.
 import { DecisionFlow, FLOW_EDGES, FLOW_NODES } from '../src/ui/components/decision-flow.js';
 import { DecisionTraceList } from '../src/ui/components/decision-trace.js';
 import { ExecutionLog } from '../src/ui/components/execution-log.js';
+import { EventDetail } from '../src/ui/components/event-detail.js';
 import { EventLog } from '../src/ui/components/event-log.js';
 import { OutcomeBar } from '../src/ui/components/outcome-bar.js';
 import { RouteStrip } from '../src/ui/components/route-strip.js';
 import { CountFunnel, StageTiming } from '../src/ui/components/stage-timing.js';
-import { StageCard } from '../src/ui/components/stage-card.js';
+import { TaskRow } from '../src/ui/components/task-row.js';
 import { TaskShape } from '../src/ui/components/task-shape.js';
 import { TrialTracker, trialStepStates } from '../src/ui/components/trial-tracker.js';
 import { SecurityPage, STAGE_LABELS, TRACE_ACTION } from '../src/ui/pages/security.js';
@@ -239,20 +240,20 @@ describe('the shape of a story', () => {
     ],
   };
 
-  it('draws a dot per event in the head, coloured by outcome, and says how long it took', () => {
-    const html = render(createElement(StageCard, { task: blockedTask as never }));
+  it('draws a dot per event on the line, coloured by outcome, and says how long it took', () => {
+    const html = render(createElement(TaskRow, { task: blockedTask as never }));
     expect(html.match(/class="shape-dot"/g)).toHaveLength(3);
     expect(html).toContain('data-outcome="blocked" data-phase="tool_call"');
     expect(html).toContain('3 件のできごと');
     expect(html).toContain('所要 2 秒');
     expect(html).toContain('遮断 2 件');
     expect(html).toContain('data-issue-count="2"');
-    const running = render(createElement(StageCard, { task: { run_id: 'r', task_id: 'task-2', agent_id: 'r', purpose: 'p', status: 'running' } }));
+    const running = render(createElement(TaskRow, { task: { run_id: 'r', task_id: 'task-2', agent_id: 'r', purpose: 'p', status: 'running' } }));
     expect(running).not.toContain('task-shape');
   });
 
   it('counts a failed end as a failure, once, even when the event was recorded as information', () => {
-    const html = render(createElement(StageCard, { task: {
+    const html = render(createElement(TaskRow, { task: {
       ...blockedTask, task_id: 'task-3', terminal_outcome: 'failed',
       events: [stamp({ event_id: 'f', task_id: 'task-3', occurred_at: '2026-01-01T00:00:00.000Z', outcome: 'info' })],
     } as never }));
@@ -279,16 +280,19 @@ describe('the shape of a story', () => {
   });
 
   it('runs a rail down the account and says how long after the last row each one came', () => {
-    const html = render(createElement(EventLog, { taskId: 'task-1', events: [
+    const events = [
       { event_id: 'e1', occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success', title: 't', message: 'm' },
       { event_id: 'e2', occurred_at: '2026-01-01T00:00:01.200Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'blocked', title: 't', message: 'm',
         record: { headline: 'h', sections: [], hops: [{ from: 'agent-runtime', to: 'resource-api', label: '実行の要求', outcome: 'blocked', message: 'm' }] } },
-    ] }));
+    ];
+    const html = render(createElement(EventLog, { taskId: 'task-1', events }));
     expect(html.match(/class="event-rail"/g)).toHaveLength(2);
     expect(html).toContain('class="event-rail" data-outcome="blocked"');
     expect(html).toContain('data-field="event-elapsed"');
     expect(html).toContain('+1.2 秒');
-    expect(html).toContain('route-strip is-compact');
+    // The route stands still beside the lines, in the chosen event's record, not on every line.
+    expect(html).not.toContain('route-strip');
+    expect(render(createElement(EventDetail, { event: events[1]!, order: 2, total: 2 }))).toContain('class="route-strip"');
   });
 });
 

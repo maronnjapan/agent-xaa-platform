@@ -23,14 +23,12 @@
 
 /*
  * The picture fills the column it is given and no more. The boxes sit at fixed
- * coordinates so two replays of the same system line up (DEC-APP-06), which means a
- * task that only involves the lower row leaves the upper half of the frame empty;
- * the column beside the list is narrow enough that the gap stays small.
+ * coordinates so two replays of the same system line up (DEC-APP-06); the viewer gives
+ * the picture the wider of its two columns, and nothing else competes with it there.
  */
 .replay-canvas {
   display: block;
   width: 100%;
-  max-width: 38rem;
   height: auto;
   background: #ffffff;
   border: 1px solid #e3e5ec;
@@ -165,6 +163,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The story's pace and the whole-screen switch, at the far end of the same bar. */
+.replay-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
 .replay-node .node-label {
   font-size: 13px;
   fill: #24313b;
@@ -260,7 +267,6 @@
   border-left: 4px solid #97a6b2;
   border-radius: 6px;
   background: #ffffff;
-  max-width: 38rem;
   box-sizing: border-box;
   min-height: 4.5rem;
 }
@@ -292,21 +298,6 @@
 
 .replay[data-replay-state="idle"] .caption-head { display: none; }
 
-/*
- * The picture, then the reasoning under it.
- *
- * They are one step's two halves — what moved, and why it moved — so they are read
- * together or not at all. They stack, picture first, because the picture is what a
- * person pressed play for, and because the column they share is the one beside the
- * written list rather than the whole page.
- */
-.replay-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.75rem;
-  align-items: start;
-}
-
 /* How far through the steps the replay is, as a bar rather than only as a count. */
 .replay-track {
   flex: 1 1 6rem;
@@ -325,16 +316,18 @@
   transform: scaleX(0);
 }
 
-/* A box can be pressed for the longer description of what it is. */
+/* A box can be pressed for the longer description of what it is; it stands beside the picture, alone. */
 .replay-node { cursor: pointer; }
 .replay-node:focus-visible rect { stroke: #1a4f9c; stroke-width: 3; }
 
 .replay-role-open {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  margin: 0.5rem 0;
+  gap: 0.5rem;
 }
+
+.replay-role-open .role-card { width: 100%; }
 
 .replay-role-open button {
   padding: 0.25rem 0.7rem;
@@ -342,11 +335,12 @@
 }
 
 /*
- * What the agent was thinking on the step the picture is on.
+ * What the agent was thinking on the step the picture is on, in brief.
  *
- * The diagram answers "what went where"; this answers "why". Every word in it is a
- * label, a message, a quotation or a value the publisher wrote — the panel supplies the
- * four headings and the marks beside the verdicts, and nothing else (RULE-54).
+ * The diagram answers "what went where"; this answers "why", in the agent's own words
+ * and the checks it made — the panel supplies two headings and the marks beside the
+ * verdicts, and nothing else (RULE-54). A new event slides in; the stylesheet does the
+ * sliding, so the server renders the panel complete.
  */
 .thinking {
   padding: 0.75rem 1rem;
@@ -370,6 +364,15 @@
   margin: 0;
   color: #5b5b66;
 }
+
+.thinking-body { animation: thinking-in 0.25s ease-out; }
+
+@keyframes thinking-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.thinking-more { margin: 0.75rem 0 0; font-size: 0.88rem; }
 
 .thinking-who {
   display: flex;
@@ -414,10 +417,8 @@
   font-weight: 700;
 }
 
-/* The four beats read as a sequence, so each carries its own mark down the left. */
-.thinking-beat[data-beat="read"] { border-left: 3px solid #9db4c8; padding-left: 0.6rem; }
+/* The two beats read as a sequence, so each carries its own mark down the left. */
 .thinking-beat[data-beat="thought"] { border-left: 3px solid #7c6bb5; padding-left: 0.6rem; }
-.thinking-beat[data-beat="decided"] { border-left: 3px solid #2f6fb5; padding-left: 0.6rem; }
 .thinking-beat[data-beat="checks"] { border-left: 3px solid #1d5c33; padding-left: 0.6rem; }
 
 .thinking-label {
@@ -491,49 +492,9 @@
 }
 
 /*
- * One agent's whole story, played through above the rail.
- *
- * The panel holds the same picture the cards below it hold, at the width of the card
- * rather than of a side column, with the chapters over it and the reasoning beside it.
- * It is opened by a press and is never on the page before one, so nothing here is
- * ever seen by a person without script; what they see is the rail, which the server
- * renders.
+ * The story's pace: two choices drawn as one control, the way the page's view switch is.
+ * It sits in the picture's own bar of controls, beside 再生 and 次へ.
  */
-.story {
-  margin: 1rem 0 0.25rem;
-  padding: 0.85rem 1.1rem 1.1rem;
-  border: 1px solid #c9cdd8;
-  border-radius: 10px;
-  background: #f8f9fc;
-}
-
-.story-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-}
-
-.story-caption { margin: 0; font-size: 1rem; }
-
-.story-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin-left: auto;
-}
-
-.story-tools > button { padding: 0.25rem 0.7rem; font-size: 0.85rem; }
-
-.story-note {
-  flex-basis: 100%;
-  margin: 0.15rem 0 0;
-  color: #6b7180;
-  font-size: 0.88rem;
-}
-
-/* The pace: two choices drawn as one control, the way the page's view switch is. */
 .story-speed {
   display: inline-flex;
   align-items: center;
@@ -562,62 +523,51 @@
 
 /*
  * The chapters: one stop per finished task, in the order they happened, with the one
- * the picture is in lit and the ones it has passed dimmed. Pressing a stop plays from
- * there. Each carries the task's fixed name, its publisher's last word, and its badge —
- * the same three things its card on the rail prints.
+ * the viewer is on lit and the ones the picture has passed dimmed. Pressing a stop
+ * moves there. Each carries only the task's fixed name and its badge — its title is
+ * the line under the strip, once, for the chapter that is on.
  */
 .story-chapters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
   padding: 0;
   list-style: none;
 }
 
-.story-chapters li { flex: 1 1 13rem; max-width: 22rem; }
-
-.story-chapters button {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.15rem 0.6rem;
-  align-items: baseline;
-  width: 100%;
-  padding: 0.45rem 0.75rem;
+.story-chapters a,
+.story-chapters .chapter-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
   color: #1b1d23;
-  text-align: left;
   background: #ffffff;
   border: 1px solid #e3e5ec;
-  border-radius: 8px;
+  border-radius: 999px;
   font: inherit;
-  font-weight: 400;
-  cursor: pointer;
+  text-decoration: none;
 }
 
-.story-chapters button:hover { background: #e8f0fb; border-color: #1f5fa8; }
+.story-chapters a:hover { background: #e8f0fb; border-color: #1f5fa8; }
 
-.story-chapters li[data-chapter-state="current"] > button {
+.story-chapters li[data-chapter-state="current"] > a {
   border-color: #2f6fb5;
   box-shadow: 0 0 0 2px #dbe7f7;
 }
 
-.story-chapters li[data-chapter-state="played"] > button { opacity: 0.65; }
+.story-chapters li[data-chapter-state="played"] > a { opacity: 0.65; }
+.story-chapters .chapter-running { color: #6b7180; border-style: dashed; }
 
 .chapter-kind {
-  padding: 0.05rem 0.55rem;
-  border: 1px solid #c9cdd8;
-  border-radius: 999px;
-  background: #f3f4f7;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 700;
   white-space: nowrap;
 }
 
-.chapter-title { font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; }
-
 .chapter-meta {
-  grid-column: 2;
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem 0.6rem;
@@ -625,44 +575,27 @@
   color: #6b7180;
 }
 
-/* Which chapter the picture is in, and how far through it — the seam, seen as well as counted. */
+/* Which chapter the viewer is in, and how far through it — the seam, seen as well as counted. */
 .story-now {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.35rem 0.75rem;
-  margin: 0 0 0.5rem;
-  font-size: 0.95rem;
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  animation: story-now-in 0.25s ease-out;
 }
 
 .story-now-kind { font-weight: 700; color: #163f70; }
 .story-now-title { font-weight: 600; }
 .story-now-step { margin-left: auto; color: #6b7180; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 
-/* The picture at the card's width, with the reasoning beside it rather than under it. */
-.story-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr);
-  gap: 1rem;
-  align-items: start;
+@keyframes story-now-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 
-.story-stage .replay { margin: 0; }
-.story-stage .replay-canvas,
-.story-stage .replay-caption { max-width: none; }
-
-@media (max-width: 68rem) {
-  .story-stage { grid-template-columns: minmax(0, 1fr); }
-}
-
-/* On the whole screen, for a room: more air, and the picture as wide as it can go. */
-.story:fullscreen {
-  overflow: auto;
-  padding: 2rem 3rem;
-  background: #f3f4f7;
-}
-
-.story:fullscreen .story-stage { grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr); }
+.viewer-stage .replay { margin: 0; }
 
 /*
  * What the picture says on its own.
@@ -795,9 +728,9 @@
 /*
  * The cast, beside the picture.
  *
- * Before the story plays, the roster: every part it involves, with the same six lines
- * its card carries. While the introduction plays, the one part being introduced, as
- * its card. Both stand where the reasoning panel stands once the story is on.
+ * Before the story plays, the roster: every part it involves, one line each. While the
+ * introduction plays, the one part being introduced, as its card. Both stand where the
+ * reasoning panel stands once the story is on.
  */
 .roster {
   padding: 0.75rem 1rem;
@@ -829,7 +762,11 @@
 }
 
 .roster-list > li {
-  padding: 0.5rem 0 0.5rem 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+  padding: 0.4rem 0 0.4rem 0.7rem;
   border-top: 1px solid #e7e9ee;
   border-left: 3px solid #dfe4ec;
 }
@@ -839,32 +776,10 @@
 .roster-list > li[data-role-lane="agent"] { border-left-color: #1d5c33; }
 .roster-list > li[data-role-lane="resource"] { border-left-color: #7c6bb5; }
 
-.roster-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.6rem;
-  margin: 0;
-}
-
 .roster-name { font-weight: 700; color: #24313b; }
 .roster-analogy { color: #163f70; }
 .roster-analogy::before { content: "＝ "; color: #9aa3b1; }
-.roster-lane { margin-left: auto; font-size: 0.78rem; color: #6b7180; }
-
-.roster-role { margin: 0.1rem 0 0.25rem; color: #35506a; }
-.roster-label { margin-left: 0.5rem; font-size: 0.78rem; color: #8a93a2; }
-
-.roster-body {
-  display: grid;
-  grid-template-columns: 4.2rem minmax(0, 1fr);
-  gap: 0.1rem 0.5rem;
-  margin: 0;
-  font-size: 0.82rem;
-}
-
-.roster-body dt { color: #6b7180; }
-.roster-body dd { margin: 0; color: #4a5560; }
+.roster-role { margin-left: auto; font-size: 0.82rem; color: #35506a; }
 
 /* The likeness beside a part's name, wherever its card is shown. */
 .role-card-analogy { color: #163f70; }

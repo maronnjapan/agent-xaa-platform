@@ -2,6 +2,7 @@ import type { AnalysisRun } from '@xaa/contracts';
 import type { FaultTrial } from '../agents/faults.js';
 import type { AgentStatusResponse } from '../agents/status.js';
 import type { TimelineTask } from '../activity/query.js';
+import type { ActivityFocus } from './activity-links.js';
 import type { HomeAgent, HomeTodoItem } from './pages/home.js';
 
 /**
@@ -26,7 +27,11 @@ export type PageData =
     page: 'home'; defaultMinutes: number; items: HomeTodoItem[]; agents: HomeAgent[];
     defaultFrom: string; defaultTo: string; today: string;
   }
-  | { page: 'timeline'; tasks: TimelineTask[]; agentId: string | null }
+  | {
+    page: 'timeline'; tasks: TimelineTask[]; agentId: string | null;
+    /** One agent opened in the viewer, or null for the list. Read off the address by the route. */
+    focus: ActivityFocus | null;
+  }
   | { page: 'agent-detail'; agentId: string; status: AgentStatusResponse; faultInjectionEnabled?: boolean; faultTrials?: FaultTrial[] }
   | { page: 'security'; runs: AnalysisRun[]; now: number }
   | { page: 'todo-new'; defaultMinutes: number }

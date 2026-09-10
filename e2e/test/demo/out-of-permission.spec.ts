@@ -167,15 +167,18 @@ describe('demo D-1: an out-of-permission instruction', () => {
     expect(task.status).toBe('completed');
     expect(task.terminal_outcome).toBe('blocked');
 
-    // And the replay stops before the Finance API rather than reaching it.
+    // And the replay stops before the Finance API rather than reaching it. The picture
+    // is the viewer's face for this task, at its own address.
     const tasks = await readTimeline({ documents: automation.documents, humanSubject });
-    const html = render(createElement(TimelinePage, { tasks }));
+    const runId = tasks.find((entry) => entry.task_id === 'task-1')!.run_id;
+    const html = render(createElement(TimelinePage, { tasks, focus: { runId, taskId: 'task-1', view: 'replay', eventId: null } }));
     expect(html).toContain('data-node="resource-api"');
     expect(html.match(/data-reached="false"/g)!.length).toBeGreaterThan(0);
 
-    // The written account is on the page beside the picture, server-rendered.
-    expect(html).toContain('data-event-log="task-1"');
-    expect(html).toContain('この Agent が使えるツール');
+    // The written account is the viewer's other face, server-rendered.
+    const account = render(createElement(TimelinePage, { tasks, focus: { runId, taskId: 'task-1', view: 'log', eventId: refusal.event_id } }));
+    expect(account).toContain('data-event-log="task-1"');
+    expect(account).toContain('この Agent が使えるツール');
 
     const events = task.events!.map((entry) => ({
       event_id: entry.event_id, occurred_at: entry.occurred_at, source: entry.source,

@@ -201,3 +201,21 @@ export function chapterState(chapter: StoryChapter, index: number): 'waiting' | 
   if (index < chapter.from + chapter.count) return 'current';
   return 'played';
 }
+
+/** The chapter that replays a task, by the task's id; null for a task the story has no chapter for. */
+export function chapterOfTask(plan: StoryPlan, taskId: string): StoryChapter | null {
+  return plan.chapters.find((chapter) => chapter.kind !== 'cast' && chapter.taskId === taskId) ?? null;
+}
+
+/**
+ * The first step that replays an event: the first of its exchanges, when it has
+ * several. Null for an event the story does not play.
+ */
+export function stepOfEvent(plan: StoryPlan, eventId: string): StoryStep | null {
+  return plan.steps.find((step) => step.eventId === eventId) ?? null;
+}
+
+/** The steps of one chapter, in order. */
+export function stepsOf(plan: StoryPlan, chapter: StoryChapter): StoryStep[] {
+  return plan.steps.slice(chapter.from, chapter.from + chapter.count);
+}

@@ -81,8 +81,9 @@ main {
 }
 
 /*
- * The activity screen is wider than the rest, because an opened task shows two things
- * at once: the list of what happened, and the picture of it moving beside the list.
+ * The activity screen is wider than the rest: the viewer puts the picture and the words
+ * about its step side by side, and the account puts a task's lines beside one event's
+ * record.
  */
 main.timeline { max-width: 84rem; }
 
@@ -220,11 +221,12 @@ summary { cursor: pointer; }
 
 /*
  * ────────────────────────────────────────────────────────────────────────────────
- * The activity screen.
+ * The activity screen, as a list.
  *
  * The numbers first, then one card per agent, newest first. Inside a card the tasks
- * hang on a rail in the order they happened, and a task opens into its rows and its
- * picture.
+ * hang on a rail in the order they happened, one line each, and nothing on the list
+ * moves or unfolds: a line leads into the viewer, further down this sheet, which shows
+ * one thing at a time.
  */
 .filter-note {
   display: flex;
@@ -348,8 +350,20 @@ summary { cursor: pointer; }
   font-size: 0.9rem;
 }
 
-/* The one button on a card's head: the story, played through, is what the head offers. */
-.run-links .story-open { padding: 0.3rem 0.9rem; font-size: 0.88rem; }
+/* The one door on a card's head: the story, played through, is what the head offers. */
+.run-links .story-open {
+  display: inline-block;
+  padding: 0.3rem 0.9rem;
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.run-links .story-open:hover { color: #fff; background: var(--accent-ink); border-color: var(--accent-ink); }
 
 .run-ids { display: inline; font-size: 0.85rem; }
 .run-ids > summary { display: inline; color: var(--muted); }
@@ -398,47 +412,27 @@ summary { cursor: pointer; }
 }
 
 .stage-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 1rem;
+  padding: 0.55rem 1rem;
   background: var(--paper);
   border: 1px solid var(--edge);
   border-radius: 8px;
 }
 
-.stage-card.is-running { padding: 0.65rem 1rem; border-style: dashed; }
-.stage-card.is-running .stage-head { padding: 0; }
-
-/* The chapter the story above the rail is playing: its mark and its card are lit. */
-.stage[data-story="current"] > .stage-marker { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.stage[data-story="current"] > .stage-card { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-
-details.stage-card > summary::-webkit-details-marker { display: none; }
+.stage-card.is-running { border-style: dashed; }
 
 .stage-head {
   display: flex;
+  flex: 1 1 22rem;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 0.75rem;
   margin: 0;
-  padding: 0.65rem 1rem;
-  list-style: none;
+  min-width: 0;
 }
-
-details.stage-card > summary.stage-head { cursor: pointer; }
-details.stage-card > summary.stage-head:hover { background: var(--paper-2); }
-
-/* The chevron that says the card opens, and turns when it has. */
-details.stage-card > summary.stage-head::before {
-  content: "";
-  flex: none;
-  width: 0.45rem;
-  height: 0.45rem;
-  margin-right: 0.1rem;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(-45deg);
-  transition: transform 0.15s ease;
-}
-
-details.stage-card[open] > summary.stage-head::before { transform: rotate(45deg); }
 
 .stage-kind {
   flex: none;
@@ -452,11 +446,13 @@ details.stage-card[open] > summary.stage-head::before { transform: rotate(45deg)
 
 .stage-title { flex: 1 1 14rem; font-weight: 600; }
 
+/* The line's numbers, and at its end the two doors into the viewer. */
 .stage-meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 0.2rem 0.8rem;
+  margin: 0;
   margin-left: auto;
   color: var(--muted);
   font-size: 0.83rem;
@@ -465,62 +461,139 @@ details.stage-card[open] > summary.stage-head::before { transform: rotate(45deg)
 
 .stage-blocked { font-weight: 700; }
 
-.stage-note { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
-
-.stage-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 31rem);
-  gap: 1.25rem;
-  align-items: start;
-  padding: 0.75rem 1rem 1rem;
-  border-top: 1px solid var(--edge);
+.stage-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: 0.25rem;
 }
 
-.stage-section-caption {
-  margin: 0 0 0.4rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.02em;
+.stage-actions a {
+  padding: 0.15rem 0.7rem;
+  color: var(--accent-ink);
+  background: var(--paper);
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
 }
+
+.stage-actions a:hover { background: var(--accent-soft); border-color: var(--accent); }
 
 /*
- * The picture stays put while the list scrolls past it, because the two are read
- * together: the row that is lit is the step the picture is on.
+ * Which lines to show. Every line is served; the switch only hides the ones with
+ * nothing refused and nothing failed in them, and a card left with no line says so.
  */
-.stage-player {
+.run-no-issues { display: none; margin: 0.75rem 0 0 1.75rem; color: var(--muted); font-size: 0.9rem; }
+.timeline[data-view="issues"] .stage[data-issue-count="0"] { display: none; }
+.timeline[data-view="issues"] .run[data-issue-count="0"] .stages { display: none; }
+.timeline[data-view="issues"] .run[data-issue-count="0"] .run-no-issues { display: block; }
+.event-log-none { display: none; margin: 0.5rem 0; color: var(--muted); font-size: 0.9rem; }
+
+/*
+ * ────────────────────────────────────────────────────────────────────────────────
+ * The viewer: one agent, one thing on the screen.
+ *
+ * A head that says which agent and offers the two faces, the chapters under it, and
+ * then either the picture with its one panel beside it, or a task's lines with the one
+ * chosen record beside them. Nothing else.
+ */
+.viewer-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 1.5rem;
+  align-items: center;
+  margin: 0 0 0.75rem;
+}
+
+.viewer-back { grid-column: 1 / -1; margin: 0; font-size: 0.9rem; }
+.viewer-back a { color: var(--muted); text-decoration: none; }
+.viewer-back a:hover { color: var(--accent-ink); text-decoration: underline; }
+.viewer-back a::before { content: "← "; }
+
+.viewer-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.viewer-purpose { margin: 0; font-size: 1.35rem; line-height: 1.35; }
+
+/* The two faces, as one control. Links, so a person without script still changes face. */
+.view-switch a {
+  display: inline-block;
+  padding: 0.3rem 1rem;
+  color: var(--ink-2);
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.view-switch a:hover { color: var(--accent-ink); background: var(--accent-soft); }
+.view-switch a.is-selected { color: #fff; background: var(--accent); }
+
+/* The picture, and the one panel beside it. */
+.viewer-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.viewer-aside {
   position: sticky;
   top: 3.5rem;
   max-height: calc(100vh - 4.25rem);
   overflow: auto;
-  padding: 0.75rem 0.9rem 0.9rem;
-  background: var(--paper-2);
+}
+
+/* A task's lines on the left, the chosen record on the right. */
+.viewer-log {
+  display: grid;
+  grid-template-columns: minmax(18rem, 2fr) minmax(0, 3fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.viewer-log .event-log {
+  padding: 0.35rem 0.5rem;
+  background: var(--paper);
   border: 1px solid var(--edge);
   border-radius: 8px;
 }
 
-.stage-player-note {
-  margin: 0 0 0.5rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
+.event-log-note { margin: 0.35rem 0.5rem 0.5rem; color: var(--muted); font-size: 0.88rem; }
 
 @media (max-width: 68rem) {
-  .stage-body { grid-template-columns: minmax(0, 1fr); }
-  .stage-player { position: static; max-height: none; }
+  .viewer-stage,
+  .viewer-log { grid-template-columns: minmax(0, 1fr); }
+  .viewer-aside { position: static; max-height: none; }
 }
 
-/* Which rows to show. Every row is served; the switch only hides. */
-.timeline[data-view="blocked"] .event-entry:not([data-emphasis^="ev-blocked"]) { display: none; }
-.timeline[data-view="blocked"] .stage[data-blocked-count="0"] > .stage-card > .stage-head { opacity: 0.6; }
-.event-log-none { display: none; margin: 0.5rem 0; color: var(--muted); font-size: 0.9rem; }
-.timeline[data-view="blocked"] .stage[data-blocked-count="0"] .event-log-none { display: block; }
+@media (max-width: 48rem) {
+  .viewer-head { grid-template-columns: minmax(0, 1fr); }
+  .viewer-modes { justify-self: start; }
+}
+
+/* On the whole display, for a room: more air, and the picture as wide as it can go. */
+.viewer:fullscreen {
+  overflow: auto;
+  max-width: none;
+  padding: 2rem 3rem;
+  background: var(--ground);
+}
 
 /*
  * ────────────────────────────────────────────────────────────────────────────────
- * The written account of what happened: one row per event under a task on the
- * activity screen, and one card per step on the agent's own screen while it runs.
- * Both render the same records, so they share one set of rules.
+ * The written account of what happened: one line per event of a task in the viewer,
+ * the chosen event's record beside the lines, and one card per step on the agent's
+ * own screen while it runs. All render the same records, so they share one set of
+ * rules.
  */
 .event-list {
   margin: 0;
@@ -532,12 +605,27 @@ details.stage-card[open] > summary.stage-head::before { transform: rotate(45deg)
   display: grid;
   grid-template-columns: 1.9rem minmax(0, 1fr);
   gap: 0.15rem 0.6rem;
-  padding: 0.65rem 0.4rem 0.65rem 0;
+  padding: 0.35rem 0.2rem 0.35rem 0;
   border-top: 1px solid var(--edge);
   border-radius: 6px;
 }
 
 .event-entry:first-child { border-top: 0; }
+
+/* One line: the number, the title, and under it who, which stage, when and how it ended. */
+.event-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.1rem 0.6rem;
+  align-items: start;
+  padding: 0.25rem 0.4rem;
+  color: inherit;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+a.event-row:hover { background: var(--paper-2); }
+.event-line { min-width: 0; }
 
 /* The step number, so a reader can say "the third thing that happened" out loud. */
 .event-order {
@@ -582,10 +670,10 @@ details.stage-card[open] > summary.stage-head::before { transform: rotate(45deg)
 .event-time { font-family: var(--mono); font-size: 0.8rem; }
 .event-head .badge { margin-left: auto; }
 
-.event-title { margin: 0.2rem 0 0; font-weight: 700; }
+.event-title { display: block; margin: 0; font-weight: 700; line-height: 1.5; }
 .event-message { margin: 0.1rem 0 0.4rem; color: var(--ink-2); }
 
-/* Which written entry the picture is on: three states, so a pause shows its boundary. */
+/* The line whose record is showing, and the lines already read on the way to it. */
 .event-entry[data-entry-state="current"] {
   background: var(--accent-soft);
   box-shadow: inset 3px 0 0 var(--accent);
@@ -597,10 +685,61 @@ details.stage-card[open] > summary.stage-head::before { transform: rotate(45deg)
   color: #fff;
 }
 
-.event-entry[data-entry-state="waiting"] { opacity: 0.55; }
+.event-entry[data-entry-state="played"] .event-order { border-color: var(--edge); color: var(--muted); }
 
-/* Nothing has played yet, so nothing is dimmed: the list reads on its own. */
-.event-log[data-log-state="idle"] .event-entry[data-entry-state="waiting"] { opacity: 1; }
+/* The chosen event's whole record, beside the lines. */
+.event-detail {
+  position: sticky;
+  top: 3.5rem;
+  max-height: calc(100vh - 4.25rem);
+  overflow: auto;
+  padding: 0.85rem 1.1rem 1rem;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-left-width: 4px;
+  border-radius: 8px;
+  animation: viewer-slide-in 0.25s ease-out;
+}
+
+.event-detail[data-emphasis="ev-success"] { border-left-color: #8fc7a1; }
+.event-detail[data-emphasis="ev-blocked-tool"] { border-left-color: #d8a94f; }
+.event-detail[data-emphasis="ev-blocked-security"] { border-left-color: #a32020; }
+.event-detail[data-emphasis="ev-failed"] { border-left-color: #c13d4a; }
+
+.event-detail-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.event-detail-order { font-weight: 400; font-variant-numeric: tabular-nums; }
+
+.event-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.event-detail-title { margin: 0.3rem 0 0; font-size: 1.1rem; line-height: 1.4; }
+.event-detail .event-message { margin: 0.25rem 0 0.5rem; }
+
+@media (max-width: 68rem) {
+  .event-detail { position: static; max-height: none; }
+}
+
+@keyframes viewer-slide-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 
 .execution-log-note,
 .execution-log-empty {
@@ -1228,8 +1367,6 @@ main.agent-detail, main.security-page { max-width: 76rem; }
 .shape-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: #b6c2cf; }
 .shape-more { font-size: .7rem; color: var(--muted); margin-left: .2rem; }
 
-.event-entry { position: relative; }
-
 /*
  * The route a step took, as boxes and the arrows between them.
  *
@@ -1411,6 +1548,10 @@ main.agent-detail, main.security-page { max-width: 76rem; }
 }
 
 .event-rail .phase-icon { margin: 0; width: 1rem; height: 1rem; }
+.event-rail[data-role-lane="control"] { background: #e3efff; }
+.event-rail[data-role-lane="agent"] { background: #e4f4ec; }
+.event-rail[data-role-lane="resource"] { background: #f2ecfa; }
+.event-rail[data-role-lane="person"] { background: #fbf3e0; }
 
 .event-entry[data-entry-state="current"] .event-rail { box-shadow: 0 0 0 2px var(--accent); }
 

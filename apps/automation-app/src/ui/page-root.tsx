@@ -31,7 +31,7 @@ export function PageRoot(props: { data: PageData }): Element {
         />
       );
     case 'timeline':
-      return <TimelinePage tasks={data.tasks} agentId={data.agentId} />;
+      return <TimelinePage tasks={data.tasks} agentId={data.agentId} focus={data.focus} />;
     case 'agent-detail':
       return <AgentDetailPage {...data} />;
     case 'security':

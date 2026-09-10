@@ -5,7 +5,8 @@ import { storeActivityEvent } from '../src/activity/subscriber.js';
 import { readTimeline } from '../src/activity/query.js';
 import { RecordView } from '../src/ui/components/record-view.js';
 import { EventLog } from '../src/ui/components/event-log.js';
-import { STAGE_LOG_CAPTION, STAGE_PLAYER_CAPTION } from '../src/ui/components/stage-card.js';
+import { EventDetail } from '../src/ui/components/event-detail.js';
+import { VIEWER_NOTHING_FINISHED } from '../src/ui/components/activity-viewer.js';
 import { ExecutionLog, EXECUTION_LOG_EMPTY, EXECUTION_LOG_HEADING } from '../src/ui/components/execution-log.js';
 import { ReplayCanvas, REPLAY_LEGEND } from '../src/ui/components/replay-canvas.js';
 import { AgentDetailPage } from '../src/ui/pages/agent-detail.js';
@@ -122,7 +123,7 @@ describe('the execution log on the agent screen', () => {
   });
 });
 
-describe('the written log beside a replay', () => {
+describe('the written account in the viewer', () => {
   const event = (overrides: Partial<ActivityEvent> = {}): ActivityEvent => validateActivityEvent({
     event_id: 'ev-1', trace_id: 'tr-1', human_subject: SUBJECT, agent_id: AGENT_ID, task_id: 'task-1',
     occurred_at: '2026-01-01T00:00:00.000Z', source: 'agent-runtime', phase: 'tool_call', outcome: 'success',
@@ -131,56 +132,63 @@ describe('the written log beside a replay', () => {
     ...overrides,
   }) as ActivityEvent;
 
-  it('gives every event a numbered entry the animation can point at', () => {
-    const html = render(EventLog({
-      taskId: 'task-1',
-      events: [
-        { ...event(), record },
-        { ...event({ event_id: 'ev-2', outcome: 'blocked', phase: 'security', title: '遮断しました', message: '検知しました。' }) },
-      ],
-    }));
-    expect(html).toContain('data-event-log="task-1"');
-    expect(html).toContain('data-event-id="ev-1"');
-    expect(html).toContain('data-event-id="ev-2"');
-    expect(html).toContain('data-emphasis="ev-blocked-security"');
-    // The publisher's own sentences, and the breakdown under them.
-    expect(html).toContain('実行し、結果を受け取りました。');
-    expect(html).toContain(record.headline);
+  it('gives every event one line, and the chosen one its whole record beside the lines', () => {
+    const events = [
+      { ...event(), record },
+      { ...event({ event_id: 'ev-2', outcome: 'blocked', phase: 'security', title: '遮断しました', message: '検知しました。' }) },
+    ];
+    const lines = render(EventLog({ taskId: 'task-1', events, currentEventId: 'ev-1' }));
+    expect(lines).toContain('data-event-log="task-1"');
+    expect(lines).toContain('data-event-id="ev-1"');
+    expect(lines).toContain('data-event-id="ev-2"');
+    expect(lines).toContain('data-emphasis="ev-blocked-security"');
+    // A line is the publisher's title and who, which stage, when and how — not the breakdown.
+    expect(lines).toContain('ツールを実行しました');
+    expect(lines).not.toContain('実行し、結果を受け取りました。');
+    expect(lines).not.toContain(record.headline);
     // The picture and the text call the same box by the same name, in words a person
     // can read, with the formal name kept as the tooltip.
-    expect(html).toContain('Agent 実行環境');
-    expect(html).toContain('title="Agent Runtime"');
+    expect(lines).toContain('Agent 実行環境');
+    expect(lines).toContain('title="Agent Runtime"');
     // The phase, captioned rather than printed as its code.
-    expect(html).toContain('ツールの実行');
+    expect(lines).toContain('ツールの実行');
+
+    // The record of one event: the sentence, the route standing still, the breakdown.
+    const detail = render(createElement(EventDetail, { event: events[0]!, order: 1, total: 2 }));
+    expect(detail).toContain('data-event-detail="ev-1"');
+    expect(detail).toContain('実行し、結果を受け取りました。');
+    expect(detail).toContain(record.headline);
+    expect(detail).toContain('data-route-strip="true"');
+    expect(detail).toContain('送ったリクエスト');
+    expect(detail).toContain('1 / 2');
   });
 
   it('is rendered by the server, so it reads with no animation at all', () => {
-    const html = render(createElement(TimelinePage, {
-      tasks: [{
-        run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '日報をまとめる', status: 'completed',
-        terminal_outcome: 'success', completed_at: '2026-01-01T00:00:10.000Z',
-        events: [{ ...event(), record }],
-      }],
-    }));
+    const tasks = [{
+      run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '日報をまとめる', status: 'completed' as const,
+      terminal_outcome: 'success', completed_at: '2026-01-01T00:00:10.000Z',
+      events: [{ ...event(), record }],
+    }];
+    const html = render(createElement(TimelinePage, { tasks, focus: { runId: AGENT_ID, taskId: 'task-1', view: 'log', eventId: null } }));
     expect(html).toContain('data-event-log="task-1"');
     expect(html).toContain(record.headline);
     expect(html).toContain('送ったリクエスト');
-    // The list and the picture sit under one task, each under its own heading, the
-    // list first: it is the half that reads with no script at all.
-    expect(html).toContain(STAGE_LOG_CAPTION);
-    expect(html).toContain(STAGE_PLAYER_CAPTION);
-    const card = html.indexOf(`data-stage-card="${AGENT_ID}:task-1"`);
-    expect(card).toBeGreaterThan(-1);
-    expect(html.indexOf('data-event-log="task-1"')).toBeGreaterThan(card);
-    expect(html.indexOf('data-event-log="task-1"')).toBeLessThan(html.indexOf(`data-stage-player="${AGENT_ID}:task-1"`));
+    // One face at a time: the account carries no picture, and the list carries neither.
+    expect(html).not.toContain('class="replay"');
+    const list = render(createElement(TimelinePage, { tasks }));
+    expect(list).not.toContain('data-event-log');
+    expect(list).not.toContain('class="replay"');
+    expect(list).toContain(`data-stage-card="${AGENT_ID}:task-1"`);
   });
 
   it('adds no replay and no log for a task that has not finished', () => {
-    const html = render(createElement(TimelinePage, {
-      tasks: [{ run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '実行中の作業', status: 'running' }],
-    }));
+    const tasks = [{ run_id: AGENT_ID, task_id: 'task-1', agent_id: AGENT_ID, purpose: '実行中の作業', status: 'running' as const }];
+    const html = render(createElement(TimelinePage, { tasks }));
     expect(html).not.toContain('class="replay"');
     expect(html).not.toContain('data-event-log');
+    const viewer = render(createElement(TimelinePage, { tasks, focus: { runId: AGENT_ID, taskId: 'task-1', view: 'log', eventId: null } }));
+    expect(viewer).toContain(VIEWER_NOTHING_FINISHED);
+    expect(viewer).not.toContain('data-event-log');
   });
 });
 

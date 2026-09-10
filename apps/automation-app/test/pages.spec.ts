@@ -46,7 +46,7 @@ describe('the timeline page', () => {
     expect(html).toContain('href="/styles/replay.css"');
   });
 
-  it("renders the person's own finished task as a row and a canvas", async () => {
+  it("renders the person's own finished task as a line, and its picture and account at their own addresses", async () => {
     const harness = await startAutomationApp();
     await seedEvent(harness);
     const html = await (await harness.fetch('/activity')).text();
@@ -54,9 +54,30 @@ describe('the timeline page', () => {
     expect(html).toContain('data-outcome="success"');
     // Named for a person, not by its id.
     expect(html).toContain('作業 1');
+    // The list holds no picture and no account; each is a screen of its own.
+    expect(html).not.toContain('data-node="agent-runtime"');
+    expect(html).not.toContain('data-event-log');
+    expect(html).toContain(`href="/activity?run=${AGENT_ID}&amp;task=task-1&amp;view=replay"`);
+
+    const picture = await (await harness.fetch(`/activity?run=${AGENT_ID}&task=task-1&view=replay`)).text();
+    expect(picture).toContain('data-page="timeline"');
+    expect(picture).toContain(`data-viewer="${AGENT_ID}"`);
     // The canvas carries the coordinates the browser draws the arrows between.
-    expect(html).toContain('data-node="agent-runtime"');
-    expect(html).toMatch(/data-node="agent-runtime"[^>]*data-x="260"[^>]*data-y="220"/);
+    expect(picture).toContain('data-node="agent-runtime"');
+    expect(picture).toMatch(/data-node="agent-runtime"[^>]*data-x="260"[^>]*data-y="220"/);
+    expect(picture).not.toContain('data-event-log');
+
+    const account = await (await harness.fetch(`/activity?run=${AGENT_ID}&task=task-1&view=log`)).text();
+    expect(account).toContain('data-event-log="task-1"');
+    expect(account).toContain('data-event-detail="ev-1"');
+    expect(account).not.toContain('data-node="agent-runtime"');
+    // The same value renders both halves: the address's focus is in the page's data too.
+    expect(account).toContain('"focus":{"runId":');
+
+    // A run the person's timeline does not hold is the list, not someone else's story.
+    const nobody = await (await harness.fetch('/activity?run=agent-nobody&task=task-1&view=log')).text();
+    expect(nobody).toContain('data-task-id="task-1"');
+    expect(nobody).not.toContain('data-viewer=');
   });
 
   it('narrows to one agent when asked, without widening past the session subject', async () => {

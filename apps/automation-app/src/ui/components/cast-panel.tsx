@@ -73,17 +73,18 @@ export function RoleCard(props: { actor: ActorRole }): Element {
 }
 
 export const ROSTER_CAPTION = '登場人物';
-export const ROSTER_NOTE = 'この流れに出てくるものです。「再生」を押すと、まず1つずつ紹介してから、流れを再生します。';
+export const ROSTER_NOTE = '「再生」を押すと、まず1つずつ紹介してから、流れを再生します。箱を押すと、その説明が出ます。';
 export const SPOTLIGHT_CAPTION = '登場人物の紹介';
 
 /**
- * The cast of one story, before it plays.
+ * The cast of one story, before it plays: one line per part.
  *
- * A person about to watch the whole story should know who is in it first: the same
- * six lines each card carries, once per part the story involves, in the order the
- * story meets them — the person, then the parts that decide, then the ones that act,
- * then the ones that hold the data. It stands where the reasoning panel will stand
- * once the story is playing, so the eye is already on the place the words will come.
+ * A person about to watch the whole story should know who is in it first — but only
+ * who, at this point. Each line is the part's name, what it is like in everyday terms,
+ * and its one phrase, in the order the story meets them. What each part does and does
+ * not do comes when the picture introduces it, and whenever its box is pressed; put
+ * here as well, six parts made a column of thirty lines beside a picture nobody had
+ * pressed play on yet.
  */
 export function CastRoster(props: { actors: readonly ActorRole[]; note?: string }): Element {
   return (
@@ -93,21 +94,9 @@ export function CastRoster(props: { actors: readonly ActorRole[]; note?: string 
       <ol className="roster-list">
         {props.actors.map((actor) => (
           <li key={actor.id} data-roster-actor={actor.id} data-role-lane={actor.lane}>
-            <p className="roster-head">
-              <span className="roster-name">{actor.name}</span>
-              <span className="roster-analogy">{actor.analogy}</span>
-              <span className="roster-lane">{LANE_LABELS[actor.lane]}</span>
-            </p>
-            <p className="roster-role">
-              {actor.role}
-              {actor.label === actor.name ? null : <span className="roster-label">{actor.label}</span>}
-            </p>
-            <dl className="roster-body">
-              <dt>{CAST_DOES}</dt>
-              <dd>{actor.does}</dd>
-              <dt>{CAST_DOES_NOT}</dt>
-              <dd>{actor.doesNot}</dd>
-            </dl>
+            <span className="roster-name">{actor.name}</span>
+            <span className="roster-analogy">{actor.analogy}</span>
+            <span className="roster-role">{actor.role}</span>
           </li>
         ))}
       </ol>
