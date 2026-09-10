@@ -51,6 +51,12 @@ export interface ReplayCanvasProps {
   frame?: ReplayFrame | null;
   total: number;
   controls?: ReplayControls;
+  /**
+   * How long a step's movement takes. The ordinary length unless a story is being
+   * played at another pace, in which case the motion shortens with the step so the dot
+   * still lands before the step is up.
+   */
+  motionMs?: number;
   /** Which box's description the person opened, if any. */
   openNode?: string | null;
   onOpenNode?: (id: string | null) => void;
@@ -85,8 +91,9 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
   const frame = props.frame ?? null;
   const step = frame?.step ?? null;
   const emphasis = step ? emphasisClass(step.outcome, step.phase) : '';
+  const motionMs = props.motionMs ?? REPLAY_MOTION_MS;
   const motionStyle: MotionStyle = {
-    '--motion-ms': `${REPLAY_MOTION_MS}ms`,
+    '--motion-ms': `${motionMs}ms`,
     '--stop-ratio': String(frame?.stopRatio ?? 1),
   };
   return (

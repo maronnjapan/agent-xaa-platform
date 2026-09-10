@@ -88,8 +88,14 @@ export function toLogEvent(event: ActivityEvent): LogEvent {
  *
  * `data-task-key` is what the page and the tests use to find this card: two agents both
  * have a `task-1`, so the id alone names two things on one page.
+ *
+ * `storyEventId` is set while the agent's whole story is being played through above
+ * the rail and its picture is on an event of this task. The card then marks itself as
+ * the chapter that is playing, and the row the story is on is the row its own list
+ * marks — the story's position wins over the card's own picture, because a person who
+ * started the story is watching that one.
  */
-export function StageCard(props: { task: TimelineTask; open?: boolean }): Element {
+export function StageCard(props: { task: TimelineTask; open?: boolean; storyEventId?: string | null }): Element {
   const task = props.task;
   const key = taskKeyOf(task);
   const kind = taskLabelOf(task.task_id);
@@ -116,13 +122,14 @@ export function StageCard(props: { task: TimelineTask; open?: boolean }): Elemen
       </li>
     );
   }
-  return <CompletedStage task={task} taskKey={key} open={props.open === true} />;
+  return <CompletedStage task={task} taskKey={key} open={props.open === true} storyEventId={props.storyEventId ?? null} />;
 }
 
-function CompletedStage(props: { task: CompletedTask; taskKey: string; open: boolean }): Element {
+function CompletedStage(props: { task: CompletedTask; taskKey: string; open: boolean; storyEventId: string | null }): Element {
   const { task, taskKey } = props;
   const kind = taskLabelOf(task.task_id);
-  const [current, setCurrent] = useState<string | null>(null);
+  const [own, setOwn] = useState<string | null>(null);
+  const current = props.storyEventId ?? own;
   const first = task.events[0];
   const terminal = task.events[task.events.length - 1];
   const blocked = blockedCountOf(task);
@@ -142,6 +149,7 @@ function CompletedStage(props: { task: CompletedTask; taskKey: string; open: boo
       data-emphasis={emphasisClass(task.terminal_outcome, phase)}
       data-issue-count={String(blocked + failed)}
       {...(simulated ? { 'data-simulated': 'true' } : {})}
+      {...(props.storyEventId === null ? {} : { 'data-story': 'current' })}
     >
       <span className="stage-marker" aria-hidden="true" />
       <details className="stage-card" data-stage-card={taskKey} open={props.open}>
@@ -172,7 +180,7 @@ function CompletedStage(props: { task: CompletedTask; taskKey: string; open: boo
               taskKey={taskKey}
               events={task.events}
               simulated={simulated}
-              onCurrentEvent={setCurrent}
+              onCurrentEvent={setOwn}
             />
           </aside>
         </div>

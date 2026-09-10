@@ -488,3 +488,177 @@
   color: #4a5560;
   font-size: 0.85rem;
 }
+
+/*
+ * One agent's whole story, played through above the rail.
+ *
+ * The panel holds the same picture the cards below it hold, at the width of the card
+ * rather than of a side column, with the chapters over it and the reasoning beside it.
+ * It is opened by a press and is never on the page before one, so nothing here is
+ * ever seen by a person without script; what they see is the rail, which the server
+ * renders.
+ */
+.story {
+  margin: 1rem 0 0.25rem;
+  padding: 0.85rem 1.1rem 1.1rem;
+  border: 1px solid #c9cdd8;
+  border-radius: 10px;
+  background: #f8f9fc;
+}
+
+.story-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.story-caption { margin: 0; font-size: 1rem; }
+
+.story-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-left: auto;
+}
+
+.story-tools > button { padding: 0.25rem 0.7rem; font-size: 0.85rem; }
+
+.story-note {
+  flex-basis: 100%;
+  margin: 0.15rem 0 0;
+  color: #6b7180;
+  font-size: 0.88rem;
+}
+
+/* The pace: two choices drawn as one control, the way the page's view switch is. */
+.story-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.15rem 0.15rem 0.15rem 0.7rem;
+  border: 1px solid #c9cdd8;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 0.85rem;
+  color: #6b7180;
+}
+
+.story-speed-label { margin-right: 0.3rem; }
+
+.story-speed button {
+  padding: 0.15rem 0.7rem;
+  color: #454a55;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.story-speed button:hover { color: #163f70; background: #e8f0fb; }
+.story-speed button.is-selected { color: #ffffff; background: #1f5fa8; }
+
+/*
+ * The chapters: one stop per finished task, in the order they happened, with the one
+ * the picture is in lit and the ones it has passed dimmed. Pressing a stop plays from
+ * there. Each carries the task's fixed name, its publisher's last word, and its badge —
+ * the same three things its card on the rail prints.
+ */
+.story-chapters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.story-chapters li { flex: 1 1 13rem; max-width: 22rem; }
+
+.story-chapters button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.15rem 0.6rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  color: #1b1d23;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #e3e5ec;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.story-chapters button:hover { background: #e8f0fb; border-color: #1f5fa8; }
+
+.story-chapters li[data-chapter-state="current"] > button {
+  border-color: #2f6fb5;
+  box-shadow: 0 0 0 2px #dbe7f7;
+}
+
+.story-chapters li[data-chapter-state="played"] > button { opacity: 0.65; }
+
+.chapter-kind {
+  padding: 0.05rem 0.55rem;
+  border: 1px solid #c9cdd8;
+  border-radius: 999px;
+  background: #f3f4f7;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chapter-title { font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; }
+
+.chapter-meta {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  color: #6b7180;
+}
+
+/* Which chapter the picture is in, and how far through it — the seam, seen as well as counted. */
+.story-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.story-now-kind { font-weight: 700; color: #163f70; }
+.story-now-title { font-weight: 600; }
+.story-now-step { margin-left: auto; color: #6b7180; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+/* The picture at the card's width, with the reasoning beside it rather than under it. */
+.story-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.story-stage .replay { margin: 0; }
+.story-stage .replay-canvas,
+.story-stage .replay-caption { max-width: none; }
+
+@media (max-width: 68rem) {
+  .story-stage { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* On the whole screen, for a room: more air, and the picture as wide as it can go. */
+.story:fullscreen {
+  overflow: auto;
+  padding: 2rem 3rem;
+  background: #f3f4f7;
+}
+
+.story:fullscreen .story-stage { grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr); }

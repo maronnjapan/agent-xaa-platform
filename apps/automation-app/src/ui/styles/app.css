@@ -348,6 +348,9 @@ summary { cursor: pointer; }
   font-size: 0.9rem;
 }
 
+/* The one button on a card's head: the story, played through, is what the head offers. */
+.run-links .story-open { padding: 0.3rem 0.9rem; font-size: 0.88rem; }
+
 .run-ids { display: inline; font-size: 0.85rem; }
 .run-ids > summary { display: inline; color: var(--muted); }
 .run-ids dl { margin: 0.35rem 0 0; }
@@ -402,6 +405,10 @@ summary { cursor: pointer; }
 
 .stage-card.is-running { padding: 0.65rem 1rem; border-style: dashed; }
 .stage-card.is-running .stage-head { padding: 0; }
+
+/* The chapter the story above the rail is playing: its mark and its card are lit. */
+.stage[data-story="current"] > .stage-marker { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.stage[data-story="current"] > .stage-card { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
 details.stage-card > summary::-webkit-details-marker { display: none; }
 
