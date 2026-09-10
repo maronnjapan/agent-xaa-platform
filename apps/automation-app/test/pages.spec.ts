@@ -52,6 +52,8 @@ describe('the timeline page', () => {
     const html = await (await harness.fetch('/activity')).text();
     expect(html).toContain('data-task-id="task-1"');
     expect(html).toContain('data-outcome="success"');
+    // Named for a person, not by its id.
+    expect(html).toContain('作業 1');
     // The canvas carries the coordinates the browser draws the arrows between.
     expect(html).toContain('data-node="agent-runtime"');
     expect(html).toMatch(/data-node="agent-runtime"[^>]*data-x="260"[^>]*data-y="220"/);
@@ -100,8 +102,10 @@ describe('the agent detail page', () => {
 
     // The snapshot the panel shows comes from the checkpoint, not from the events.
     const statusSection = html.slice(html.indexOf('data-section="status"'), html.indexOf('data-section="timeline-link"'));
-    expect(statusSection).toContain('data-field="agent_status" data-state="ACTIVE">ACTIVE</span>');
-    expect(statusSection).toContain('task-1');
+    expect(statusSection).toMatch(/<dd data-field="agent_status" data-value="ACTIVE">/);
+    expect(statusSection).toContain('稼働中');
+    expect(statusSection).toContain('data-value="task-1"');
+    expect(statusSection).toContain('作業 1');
     // And the timeline side carries no row at all, so it cannot carry a running one.
     expect(html).not.toContain('data-status="running"');
     expect(html).not.toContain('data-task-id=');

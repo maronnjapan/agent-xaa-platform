@@ -1,65 +1,151 @@
 /*
- * The plain shell every screen is drawn in: readable text, a card per step, and
- * buttons that look like buttons. It carries no colour that means anything — an
- * outcome's colour belongs to emphasis.css, which is where someone looking for the
- * meaning of a colour will look.
+ * The shell every screen is drawn in: readable text, one card per thing, and buttons
+ * that look like buttons. It carries no colour that means anything — an outcome's
+ * colour belongs to emphasis.css, which is where someone looking for the meaning of a
+ * colour will look. What is here is the furniture: the page head, the cards, the rail
+ * an agent's tasks hang on, the rows a task's events are listed in.
  */
 :root {
-  --ink: #1b1b1f;
-  --muted: #5b5b66;
-  --edge: #d5d5dd;
-  --ground: #f6f6f8;
-  --accent: #1a4f9c;
+  --ink: #1b1d23;
+  --ink-2: #454a55;
+  --muted: #6b7180;
+  --edge: #e3e5ec;
+  --edge-strong: #c9cdd8;
+  --ground: #f3f4f7;
+  --paper: #ffffff;
+  --paper-2: #f8f9fc;
+  --accent: #1f5fa8;
+  --accent-ink: #163f70;
+  --accent-soft: #e8f0fb;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(20, 24, 40, 0.06), 0 6px 16px rgba(20, 24, 40, 0.05);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
   color: var(--ink);
   background: var(--ground);
-  font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+  font-size: 15px;
   line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
 }
 
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  word-break: break-all;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--accent-ink); }
+
+/* The bar across the top: the site's name and its four screens. */
 .app-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
-  gap: 1.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #fff;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1.25rem;
+  padding: 0.6rem 1.5rem;
+  background: var(--paper);
   border-bottom: 1px solid var(--edge);
+  box-shadow: 0 1px 0 rgba(20, 24, 40, 0.03);
 }
 
-.app-nav a { color: var(--accent); }
+.app-brand {
+  margin-right: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.app-nav a {
+  padding: 0.15rem 0.1rem;
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.app-nav a:hover { color: var(--accent-ink); border-bottom-color: var(--accent); }
 
 main {
   max-width: 52rem;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 1.5rem 1.25rem 4rem;
 }
 
 /*
- * The timeline is wider than the rest, because it is the one screen that shows two
- * things at once: the picture of a step, and what the agent was thinking on it. At 52rem
- * the second one had to go underneath, which is where nobody reads it while the first
- * one is moving.
+ * The activity screen is wider than the rest, because an opened task shows two things
+ * at once: the list of what happened, and the picture of it moving beside the list.
  */
-main.timeline {
-  max-width: 78rem;
-}
+main.timeline { max-width: 84rem; }
 
-h1 { font-size: 1.5rem; }
+h1 { margin: 0 0 0.25rem; font-size: 1.6rem; line-height: 1.3; }
 h2 { font-size: 1.15rem; }
-h3 { font-size: 1.05rem; }
+h3 { font-size: 1.02rem; }
 h4 { font-size: 0.95rem; }
 
-.lead { color: var(--muted); }
+.lead { margin: 0; color: var(--muted); }
+
+/* Where every screen starts: what it is, and what a person can do to the whole of it. */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin: 0 0 1rem;
+}
+
+.page-head-text { flex: 1 1 24rem; }
+
+.page-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.updated-at {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.page-id code {
+  padding: 0.05rem 0.4rem;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink-2);
+}
 
 .card {
-  margin: 1.5rem 0;
+  margin: 1.25rem 0;
   padding: 1rem 1.25rem;
-  background: #fff;
+  background: var(--paper);
   border: 1px solid var(--edge);
-  border-radius: 8px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
+
+.card > h2:first-child { margin-top: 0.1rem; }
 
 form label {
   display: block;
@@ -75,37 +161,788 @@ textarea {
   width: 100%;
   max-width: 34rem;
   margin-top: 0.25rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.45rem 0.6rem;
   font: inherit;
   color: inherit;
-  border: 1px solid var(--edge);
-  border-radius: 4px;
-  box-sizing: border-box;
+  background: var(--paper);
+  border: 1px solid var(--edge-strong);
+  border-radius: 6px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button {
   padding: 0.45rem 1rem;
   font: inherit;
+  font-weight: 600;
   color: #fff;
   background: var(--accent);
-  border: 0;
-  border-radius: 4px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
   cursor: pointer;
 }
 
+button:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
 button[disabled] { opacity: 0.5; cursor: progress; }
 
+button.secondary {
+  color: var(--accent-ink);
+  background: var(--paper);
+  border-color: var(--edge-strong);
+}
+
+button.secondary:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+summary { cursor: pointer; }
+
+/* A small labelled count or state, on a head. Its colours are in emphasis.css. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.05rem 0.6rem;
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
 /*
- * One ToDo. The head carries its state, priority and due date as short badges, so a
- * person scanning the list reads the state of each item before its text. The colour on
- * the left edge is priority, and the badge always says the same thing in words.
+ * ────────────────────────────────────────────────────────────────────────────────
+ * The activity screen.
+ *
+ * The numbers first, then one card per agent, newest first. Inside a card the tasks
+ * hang on a rail in the order they happened, and a task opens into its rows and its
+ * picture.
+ */
+.filter-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--accent-soft);
+  border: 1px solid #c8daf3;
+  border-radius: 8px;
+  color: var(--accent-ink);
+  font-size: 0.92rem;
+}
+
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  margin: 0 0 1rem;
+}
+
+.summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.summary-chips .chip { font-size: 0.9rem; padding: 0.2rem 0.8rem; }
+
+/* Which rows to show: a two-way switch, drawn as one control. */
+.view-switch {
+  display: inline-flex;
+  padding: 0.15rem;
+  background: var(--paper);
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+}
+
+.view-switch button {
+  padding: 0.25rem 0.9rem;
+  color: var(--ink-2);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.88rem;
+}
+
+.view-switch button:hover { color: var(--accent-ink); background: var(--accent-soft); }
+.view-switch button.is-selected { color: #fff; background: var(--accent); }
+
+.timeline-empty {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px dashed var(--edge-strong);
+  border-radius: var(--radius);
+}
+
+/* One agent's story. */
+.run {
+  margin: 1rem 0 1.5rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.run-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem 1.5rem;
+  align-items: start;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--edge);
+}
+
+.run-title { grid-column: 1; }
+
+.run-purpose {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.35;
+}
+
+.run-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0;
+}
+
+.run-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.run-meta > div { display: flex; flex-direction: column; }
+.run-meta dt { font-size: 0.75rem; }
+.run-meta dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.run-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1.25rem;
+  grid-column: 1;
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+}
+
+.run-ids { display: inline; font-size: 0.85rem; }
+.run-ids > summary { display: inline; color: var(--muted); }
+.run-ids dl { margin: 0.35rem 0 0; }
+.run-ids dt { color: var(--muted); font-size: 0.78rem; }
+.run-ids dd { margin: 0 0 0.3rem; }
+
+@media (max-width: 48rem) {
+  .run-head { grid-template-columns: minmax(0, 1fr); }
+  .run-meta { grid-column: 1; grid-row: auto; text-align: left; }
+  .run-meta > div { flex-direction: row; gap: 0.4rem; }
+}
+
+/*
+ * The rail: an agent's tasks in the order they happened, each with a mark on the line
+ * whose colour is the task's outcome (emphasis.css) and a card beside it.
+ */
+.stages {
+  position: relative;
+  margin: 0;
+  padding: 0.75rem 0 0 1.75rem;
+  list-style: none;
+}
+
+.stages::before {
+  content: "";
+  position: absolute;
+  top: 1rem;
+  bottom: 0.75rem;
+  left: 0.55rem;
+  width: 2px;
+  background: var(--edge-strong);
+}
+
+.stage { position: relative; margin: 0 0 0.75rem; }
+
+.stage-marker {
+  position: absolute;
+  top: 1rem;
+  left: calc(-1.75rem + 0.55rem - 6px + 1px);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--edge-strong);
+  background: var(--paper);
+}
+
+.stage-card {
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+.stage-card.is-running { padding: 0.65rem 1rem; border-style: dashed; }
+.stage-card.is-running .stage-head { padding: 0; }
+
+details.stage-card > summary::-webkit-details-marker { display: none; }
+
+.stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  margin: 0;
+  padding: 0.65rem 1rem;
+  list-style: none;
+}
+
+details.stage-card > summary.stage-head { cursor: pointer; }
+details.stage-card > summary.stage-head:hover { background: var(--paper-2); }
+
+/* The chevron that says the card opens, and turns when it has. */
+details.stage-card > summary.stage-head::before {
+  content: "";
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.1rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+details.stage-card[open] > summary.stage-head::before { transform: rotate(45deg); }
+
+.stage-kind {
+  flex: none;
+  padding: 0.05rem 0.6rem;
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+  background: var(--ground);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.stage-title { flex: 1 1 14rem; font-weight: 600; }
+
+.stage-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.8rem;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.83rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-blocked { font-weight: 700; }
+
+.stage-note { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
+
+.stage-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 31rem);
+  gap: 1.25rem;
+  align-items: start;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--edge);
+}
+
+.stage-section-caption {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/*
+ * The picture stays put while the list scrolls past it, because the two are read
+ * together: the row that is lit is the step the picture is on.
+ */
+.stage-player {
+  position: sticky;
+  top: 3.5rem;
+  max-height: calc(100vh - 4.25rem);
+  overflow: auto;
+  padding: 0.75rem 0.9rem 0.9rem;
+  background: var(--paper-2);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+.stage-player-note {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 68rem) {
+  .stage-body { grid-template-columns: minmax(0, 1fr); }
+  .stage-player { position: static; max-height: none; }
+}
+
+/* Which rows to show. Every row is served; the switch only hides. */
+.timeline[data-view="blocked"] .event-entry:not([data-emphasis^="ev-blocked"]) { display: none; }
+.timeline[data-view="blocked"] .stage[data-blocked-count="0"] > .stage-card > .stage-head { opacity: 0.6; }
+.event-log-none { display: none; margin: 0.5rem 0; color: var(--muted); font-size: 0.9rem; }
+.timeline[data-view="blocked"] .stage[data-blocked-count="0"] .event-log-none { display: block; }
+
+/*
+ * ────────────────────────────────────────────────────────────────────────────────
+ * The written account of what happened: one row per event under a task on the
+ * activity screen, and one card per step on the agent's own screen while it runs.
+ * Both render the same records, so they share one set of rules.
+ */
+.event-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-entry {
+  display: grid;
+  grid-template-columns: 1.9rem minmax(0, 1fr);
+  gap: 0.15rem 0.6rem;
+  padding: 0.65rem 0.4rem 0.65rem 0;
+  border-top: 1px solid var(--edge);
+  border-radius: 6px;
+}
+
+.event-entry:first-child { border-top: 0; }
+
+/* The step number, so a reader can say "the third thing that happened" out loud. */
+.event-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  margin-top: 0.15rem;
+  border: 2px solid var(--edge-strong);
+  border-radius: 50%;
+  background: var(--paper);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.event-body { min-width: 0; }
+
+.event-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.event-actor { font-weight: 700; color: var(--ink); }
+.event-source-role { font-size: 0.8rem; }
+
+.event-phase {
+  padding: 0 0.45rem;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--ground);
+  font-size: 0.76rem;
+}
+
+.event-time { font-family: var(--mono); font-size: 0.8rem; }
+.event-head .badge { margin-left: auto; }
+
+.event-title { margin: 0.2rem 0 0; font-weight: 700; }
+.event-message { margin: 0.1rem 0 0.4rem; color: var(--ink-2); }
+
+/* Which written entry the picture is on: three states, so a pause shows its boundary. */
+.event-entry[data-entry-state="current"] {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.event-entry[data-entry-state="current"] .event-order {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.event-entry[data-entry-state="waiting"] { opacity: 0.55; }
+
+/* Nothing has played yet, so nothing is dimmed: the list reads on its own. */
+.event-log[data-log-state="idle"] .event-entry[data-entry-state="waiting"] { opacity: 1; }
+
+.execution-log-note,
+.execution-log-empty {
+  margin: 0.25rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.execution-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.execution-step {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-left-width: 4px;
+  border-radius: 8px;
+}
+
+/* The breakdown of one event: its headline, its checks, its prose, its folded bodies. */
+.record {
+  margin: 0.25rem 0 0.35rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--paper-2);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+
+.record-headline { margin: 0 0 0.4rem; font-weight: 700; }
+
+/*
+ * The checks are not behind a disclosure. They answer "did anything stop this", and a
+ * person who has to open something to find out will not open it.
+ */
+.record-checks {
+  margin: 0.4rem 0;
+  padding: 0.45rem 0.7rem;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+}
+
+.record-checks h4 { margin: 0 0 0.3rem; font-size: 0.8rem; color: var(--muted); }
+.record-checks ul { margin: 0; padding: 0; list-style: none; }
+
+.record-checks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.12rem 0;
+}
+
+.check-mark {
+  flex: none;
+  min-width: 3rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--edge-strong);
+  border-radius: 4px;
+  background: var(--paper);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.check-label { font-weight: 700; }
+.check-message { flex: 1 1 14rem; color: var(--muted); }
+
+.record-section {
+  margin: 0.3rem 0 0;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--edge);
+}
+
+.record-section > summary { font-size: 0.88rem; color: var(--accent-ink); }
+.record-message { margin: 0.3rem 0; color: var(--muted); font-size: 0.88rem; }
+
+.record-fields {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.record-fields th {
+  width: 11rem;
+  padding: 0.18rem 0.5rem 0.18rem 0;
+  color: var(--muted);
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+}
+
+.record-fields td {
+  padding: 0.18rem 0;
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  word-break: break-all;
+}
+
+/*
+ * A request body, an answer, or the agent's own words. `pre` because the whitespace is
+ * part of what was sent, and horizontal scrolling because a wrapped URL is a URL a
+ * person cannot copy.
+ */
+.record-text {
+  max-height: 20rem;
+  margin: 0.3rem 0;
+  padding: 0.5rem 0.75rem;
+  overflow: auto;
+  background: #1b1d23;
+  color: #e8e8ee;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* The agent's own prose is prose: it wraps, and it is not dressed up as code. */
+.record-text[data-text-format="text"] {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--edge);
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+/*
+ * Someone's own words, in the open: the agent's reasoning, the Authorization AI's
+ * stated grounds, the instruction a person wrote. Prose the publisher marked as prose
+ * is a quotation, not a folded body, because it is the first thing a reader asks for.
+ */
+.record-prose {
+  margin: 0.4rem 0;
+  padding: 0.45rem 0.75rem;
+  border-left: 4px solid #7c6bb5;
+  background: #f7f5fc;
+  border-radius: 0 6px 6px 0;
+}
+
+.record-prose-label { margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--muted); }
+
+.record-quote {
+  margin: 0.3rem 0;
+  padding: 0;
+  white-space: pre-wrap;
+  color: var(--ink);
+}
+
+.record-prose .record-fields { margin-top: 0.35rem; }
+
+/* The route a step took, listed under its record, folded. */
+.record-hops { margin: 0.3rem 0 0; padding-top: 0.3rem; border-top: 1px solid var(--edge); }
+.record-hops > summary { font-size: 0.88rem; color: var(--accent-ink); }
+.record-hops ol { margin: 0.3rem 0 0; padding-left: 1.2rem; font-size: 0.88rem; }
+.record-hops li { margin: 0.2rem 0; }
+.hop-route { font-weight: 700; }
+.hop-arrow { margin: 0 0.3rem; color: var(--muted); }
+.hop-role { margin-left: 0.4rem; color: var(--muted); font-size: 0.8rem; }
+.hop-label { margin-left: 0.5rem; color: #35506a; }
+.hop-message { display: block; color: var(--muted); }
+.record-hops li[data-hop-outcome="blocked"] .hop-label { color: #6b4a06; font-weight: 700; }
+
+/* The event's raw values, captioned where the caption is known, folded. */
+.detail-disclosure { margin: 0.2rem 0 0; font-size: 0.85rem; }
+.detail-disclosure > summary { color: var(--muted); }
+
+.detail-disclosure table {
+  width: 100%;
+  margin-top: 0.3rem;
+  border-collapse: collapse;
+}
+
+.detail-disclosure th {
+  width: 14rem;
+  padding: 0.15rem 0.5rem 0.15rem 0;
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+  color: var(--muted);
+}
+
+.detail-disclosure td { padding: 0.15rem 0; font-family: var(--mono); font-size: 0.82rem; word-break: break-all; }
+.detail-caption { display: block; color: var(--ink-2); }
+.detail-key { display: block; font-size: 0.76rem; color: var(--muted); }
+
+/*
+ * ────────────────────────────────────────────────────────────────────────────────
+ * Who is who: one card per part of the platform that appears in the records shown.
+ */
+.cast {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.cast > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-weight: 700;
+}
+
+.cast-summary-count { color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+
+.cast-note { margin: 0.5rem 0; color: var(--muted); font-size: 0.9rem; }
+
+.cast-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.6rem;
+  margin: 0.5rem 0 0.4rem;
+  padding: 0;
+  list-style: none;
+}
+
+.role-card {
+  height: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--edge);
+  border-left: 4px solid #97a6b2;
+  border-radius: 6px;
+  background: var(--paper-2);
+}
+
+/* The lanes of the story: the person, who decides, who acts, what holds the data. */
+.role-card[data-role-lane="person"] { border-left-color: #6b7f8c; }
+.role-card[data-role-lane="control"] { border-left-color: #2f6fb5; }
+.role-card[data-role-lane="agent"] { border-left-color: #7c6bb5; }
+.role-card[data-role-lane="resource"] { border-left-color: #1d5c33; }
+.role-card[data-role-lane="watch"] { border-left-color: #a3701f; }
+
+.role-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.role-card-name { font-weight: 700; }
+.role-card-lane { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.role-card-label { margin: 0; font-size: 0.78rem; color: var(--muted); font-family: var(--mono); }
+.role-card-role { margin: 0.1rem 0 0.4rem; font-size: 0.85rem; color: #35506a; }
+.role-card-body { margin: 0; font-size: 0.82rem; }
+.role-card-body dt { color: var(--muted); font-weight: 700; }
+.role-card-body dd { margin: 0 0 0.3rem; line-height: 1.6; }
+
+/*
+ * ────────────────────────────────────────────────────────────────────────────────
+ * The agent's own screen: the snapshot, the steps so far, the two operations.
+ */
+.status-panel,
+.execution-log,
+.agent-controls,
+.timeline-link {
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.status-panel > h2,
+.execution-log > h2,
+.agent-controls > h2,
+.timeline-link > h2 { margin-top: 0.1rem; }
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.status-grid > div {
+  padding: 0.6rem 0.8rem;
+  background: var(--paper-2);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+.status-grid dt { font-size: 0.78rem; color: var(--muted); }
+.status-grid dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; margin: 0.1rem 0 0; font-size: 1.05rem; font-weight: 700; }
+.status-code { font-size: 0.75rem; font-weight: 400; color: var(--muted); }
+
+/* The agent's state as a word on a coloured ground; the colours are in emphasis.css. */
+.status-pill {
+  display: inline-block;
+  padding: 0.05rem 0.6rem;
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+  background: var(--ground);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.status-panel h3 { margin: 0.75rem 0 0.35rem; }
+.status-empty { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+.tool-invocations { margin: 0; padding: 0; list-style: none; }
+
+.tool-invocations li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--edge);
+}
+
+.tool-invocations li:first-child { border-top: 0; }
+.tool-summary { color: var(--muted); }
+
+.stop-note { color: var(--muted); font-size: 0.9rem; }
+.timeline-note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.9rem; }
+
+.blocked-guidance {
+  margin: 1.25rem 0;
+  padding: 0.9rem 1.25rem;
+  background: #fdf3e1;
+  border: 1px solid #e6c98a;
+  border-radius: var(--radius);
+}
+
+.blocked-guidance p { margin: 0 0 0.5rem; }
+
+/*
+ * ────────────────────────────────────────────────────────────────────────────────
+ * The ToDo screen.
+ *
+ * One ToDo is one card. The head carries its state, priority and due date as short
+ * badges, so a person scanning the list reads the state of each item before its text.
+ * The colour on the left edge is priority, and the badge always says the same thing in
+ * words.
  */
 .todo {
   margin: 1rem 0;
   padding: 0.75rem 1rem;
   border: 1px solid var(--edge);
   border-left-width: 4px;
-  border-radius: 6px;
+  border-radius: 8px;
+  background: var(--paper);
 }
 
 .todo[data-priority="high"] { border-left-color: #a3401f; }
@@ -128,14 +965,14 @@ button[disabled] { opacity: 0.5; cursor: progress; }
 .todo-meta > span {
   padding: 0 0.45rem;
   border: 1px solid var(--edge);
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--ground);
 }
 
 .todo-meta .todo-status { font-weight: 700; color: var(--ink); }
 .todo-meta [data-overdue="true"] { color: #8a1f1f; border-color: #8a1f1f; }
 
-.todo-context summary { cursor: pointer; font-size: 0.9rem; }
+.todo-context summary { font-size: 0.9rem; }
 
 .todo-context pre {
   margin: 0.3rem 0;
@@ -156,8 +993,10 @@ button[disabled] { opacity: 0.5; cursor: progress; }
 .todo-agent {
   margin: 0.75rem 0;
   padding: 0.5rem 0.75rem;
-  background: var(--ground);
+  background: var(--paper-2);
+  border: 1px solid var(--edge);
   border-left: 4px solid #7c6bb5;
+  border-radius: 0 8px 8px 0;
 }
 
 .todo-agent p { margin: 0.2rem 0; }
@@ -171,18 +1010,10 @@ button[disabled] { opacity: 0.5; cursor: progress; }
 }
 
 .todo-cancel { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-
-button.secondary {
-  color: var(--accent);
-  background: #fff;
-  border: 1px solid var(--accent);
-}
-
 .todo-note { margin: 0; color: var(--muted); font-size: 0.85rem; }
 .todo-closed { color: var(--muted); font-size: 0.9rem; }
 
 .todo-edit { margin: 0.75rem 0; }
-.todo-edit > summary { cursor: pointer; }
 
 .todo-form-row {
   display: flex;
@@ -193,19 +1024,21 @@ button.secondary {
 .todo-form-row label { flex: 1 1 10rem; }
 
 .todo-archive { margin-top: 1rem; }
-.todo-archive > summary { cursor: pointer; color: var(--muted); }
+.todo-archive > summary { color: var(--muted); }
 
 /* The permissions a person is about to agree to, set apart from the work they describe. */
 .agent-definition {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  background: var(--ground);
+  background: var(--paper-2);
+  border: 1px solid var(--edge);
   border-left: 4px solid var(--accent);
+  border-radius: 0 8px 8px 0;
 }
 
 .agent-definition [data-field="presented-capabilities"] {
   margin: 0.25rem 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
 }
 
 [data-field="action-status"][data-status="error"],
@@ -222,427 +1055,26 @@ button.secondary {
  * exactly like a refusal would leave the person guessing at the one button they cannot
  * press twice.
  */
-[data-field="control-status"][data-status="done"] {
-  color: #1d5c33;
-}
+[data-field="control-status"][data-status="done"] { color: #1d5c33; }
 
 [data-field="suggestions"] { padding-left: 1.25rem; }
 
-/*
- * The written account of what an agent did: on its own screen while it is running, and
- * under 「やったこと」 once a task has finished. Both render the same records, so they
- * share one set of rules rather than drifting into two looks for one thing.
- */
-.execution-log-note {
-  margin: 0.25rem 0 1rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.execution-steps,
-.event-log ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.execution-step,
-.event-entry {
-  margin: 0.75rem 0;
-  padding: 0.75rem 1rem;
-  background: #fff;
-  border: 1px solid var(--edge);
-  border-left-width: 4px;
-  border-radius: 6px;
-}
-
-.event-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-/* The step number, so a reader can say "the third thing that happened" out loud. */
-.event-order {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.6rem;
-  height: 1.6rem;
-  background: var(--ground);
-  border: 1px solid var(--edge);
-  border-radius: 50%;
-  font-variant-numeric: tabular-nums;
-}
-
-.event-source { font-weight: 700; color: var(--ink); }
-.event-time { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }
-
-.event-title {
-  margin: 0.4rem 0 0;
-  font-weight: 700;
-}
-
-.event-message {
-  margin: 0.2rem 0 0.6rem;
-}
-
-.record-headline {
-  margin: 0 0 0.5rem;
-  font-weight: 700;
-}
+/* The guide: one card per step. */
+.guide .card p { margin: 0.4rem 0; }
+.guide dt { font-weight: 700; margin-top: 0.5rem; }
+.guide dd { margin: 0 0 0.3rem; color: var(--ink-2); }
 
 /*
- * The checks are not behind a disclosure. They answer "did anything stop this", and a
- * person who has to open something to find out will not open it.
- */
-.record-checks {
-  margin: 0.5rem 0;
-  padding: 0.5rem 0.75rem;
-  background: var(--ground);
-  border-radius: 6px;
-}
-
-.record-checks h4 { margin: 0 0 0.35rem; font-size: 0.85rem; color: var(--muted); }
-.record-checks ul { margin: 0; padding: 0; list-style: none; }
-
-.record-checks li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.15rem 0;
-}
-
-.check-mark {
-  flex: none;
-  min-width: 3rem;
-  padding: 0 0.3rem;
-  border: 1px solid var(--edge);
-  border-radius: 3px;
-  background: #fff;
-  font-size: 0.8rem;
-  text-align: center;
-}
-
-.check-label { font-weight: 700; }
-.check-message { color: var(--muted); flex: 1 1 16rem; }
-
-.record-section {
-  margin: 0.3rem 0;
-  border-top: 1px solid var(--edge);
-  padding-top: 0.3rem;
-}
-
-.record-section > summary { cursor: pointer; font-size: 0.9rem; }
-.record-message { margin: 0.3rem 0; color: var(--muted); font-size: 0.9rem; }
-
-.record-fields {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-.record-fields th {
-  width: 12rem;
-  padding: 0.2rem 0.5rem 0.2rem 0;
-  color: var(--muted);
-  font-weight: 400;
-  text-align: left;
-  vertical-align: top;
-}
-
-.record-fields td {
-  padding: 0.2rem 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  word-break: break-all;
-}
-
-/*
- * A request body, an answer, or the agent's own words. `pre` because the whitespace is
- * part of what was sent, and horizontal scrolling because a wrapped URL is a URL a
- * person cannot copy.
- */
-.record-text {
-  max-height: 20rem;
-  margin: 0.3rem 0;
-  padding: 0.5rem 0.75rem;
-  overflow: auto;
-  background: #1b1b1f;
-  color: #e8e8ee;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-/* The agent's own prose is prose: it wraps, and it is not dressed up as code. */
-.record-text[data-text-format="text"] {
-  background: var(--ground);
-  color: var(--ink);
-  white-space: pre-wrap;
-  font-family: inherit;
-}
-
-.execution-log-empty { color: var(--muted); }
-
-/*
- * The task list, laid out as the four columns it always claimed to be.
+ * ────────────────────────────────────────────────────────────────────────────────
+ * The pictures beside the words, and the two monitors.
  *
- * The markup has named them since the list was written; nothing had ever given them
- * room, so a purpose, an id, an outcome and a timestamp ran together into one line of
- * unbroken text.
+ * Everything below lays out a shape that a list already says in text — the bar under
+ * the chips, the dots in a task's head, the route a step took, the ribbon of a run,
+ * the tracker of a failure exercise, the flowchart of the detector, the trace under a
+ * decision — and the two screens that re-read themselves: the agent's own screen and
+ * the log-analysis monitor. None of it carries a colour that means anything on its
+ * own; the meaning colours are in emphasis.css.
  */
-.task-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.task-button {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  color: var(--ink);
-  background: #fff;
-  border: 1px solid var(--edge);
-  text-align: left;
-}
-
-.task-button.is-running { cursor: default; }
-
-.col-purpose { flex: 1 1 14rem; font-weight: 700; }
-
-.col-task-id,
-.col-completed-at {
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85rem;
-}
-
-/*
- * One agent's pictures, then one agent's accounts.
- *
- * They used to alternate, and an account is long enough that no two pictures were ever
- * on screen together. The pictures are now stacked with only their own headings between
- * them, so the run reads as a sequence; the writing follows underneath.
- */
-.run-stages,
-.run-record { margin-top: 1.75rem; }
-
-.run-stages > h3,
-.run-record > h3 { margin: 0; }
-
-.run-note {
-  margin: 0.2rem 0 0.75rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.run-record .task-record + .task-record { margin-top: 1.5rem; }
-
-/* Which of an agent's tasks this replay is, when the agent has more than one. */
-.task-replay { margin-top: 1.25rem; }
-
-.task-replay > h2 { margin-bottom: 0; }
-
-.task-replay-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: 0.1rem 0 0.5rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.task-replay-meta time { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-
-/*
- * One agent's story: the heading is the work, the line under it the agent, and the
- * rows and replays that follow are its tasks in the order they happened.
- */
-.run { margin-top: 2.5rem; padding-top: 1rem; border-top: 2px solid var(--edge); }
-.run:first-of-type { border-top: 0; }
-
-.agent-group > h2 { margin-bottom: 0.1rem; }
-
-.agent-group-meta {
-  margin: 0 0 0.6rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.agent-group-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-
-.task-button:not(.is-running) { cursor: pointer; }
-.task-button:not(.is-running):hover { border-color: var(--accent); }
-
-.task-replay > h4,
-.task-record > h4 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.6rem;
-  margin: 0;
-  font-size: 1rem;
-}
-
-.task-replay-count { font-variant-numeric: tabular-nums; }
-
-.timeline-empty { color: var(--muted); }
-
-/*
- * Someone's own words, in the open.
- *
- * The agent's reasoning, the Authorization AI's stated grounds, the instruction a
- * person wrote: prose the publisher marked as prose is shown as a quotation rather
- * than folded away with the request bodies, because it is the first thing a reader
- * asks for.
- */
-.record-prose {
-  margin: 0.5rem 0;
-  padding: 0.5rem 0.75rem;
-  border-left: 4px solid var(--accent);
-  background: #f7f9fc;
-  border-radius: 0 6px 6px 0;
-}
-
-.record-prose-label {
-  margin: 0;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.record-quote {
-  margin: 0.35rem 0;
-  padding: 0;
-  white-space: pre-wrap;
-  color: var(--ink);
-}
-
-.record-prose .record-fields { margin-top: 0.35rem; }
-
-/* The route a step took, listed under its record, folded. */
-.record-hops { margin: 0.3rem 0; border-top: 1px solid var(--edge); padding-top: 0.3rem; }
-.record-hops > summary { cursor: pointer; font-size: 0.9rem; }
-.record-hops ol { margin: 0.3rem 0 0; padding-left: 1.2rem; font-size: 0.9rem; }
-.record-hops li { margin: 0.2rem 0; }
-.hop-route { font-weight: 700; }
-.hop-arrow { margin: 0 0.3rem; color: var(--muted); }
-.hop-label { margin-left: 0.5rem; color: #35506a; }
-.hop-message { display: block; color: var(--muted); }
-.record-hops li[data-hop-outcome="blocked"] .hop-label { color: #6b4a06; font-weight: 700; }
-
-.event-entry[data-entry-state="current"] .record-prose { background: #eef5ff; }
-
-/*
- * Who is who.
- *
- * The timeline names ten different parts and every row of the log begins with one of
- * them. These cards are what turn those names into something a reader can hold: what
- * each part is for, what it does, and — the half that explains the platform — what it
- * deliberately does not do.
- */
-.cast {
-  margin: 1rem 0;
-  padding: 0.6rem 0.9rem;
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-  background: #fff;
-}
-
-.cast > summary {
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.cast-note {
-  margin: 0.5rem 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.cast-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
-  gap: 0.6rem;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.role-card {
-  height: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--edge);
-  border-left: 4px solid #97a6b2;
-  border-radius: 6px;
-  background: #fbfcfe;
-  box-sizing: border-box;
-}
-
-/* The lanes of the story: the person, who decides, who acts, what holds the data. */
-.role-card[data-role-lane="person"] { border-left-color: #6b7f8c; }
-.role-card[data-role-lane="control"] { border-left-color: #2f6fb5; }
-.role-card[data-role-lane="agent"] { border-left-color: #7c6bb5; }
-.role-card[data-role-lane="resource"] { border-left-color: #1d5c33; }
-.role-card[data-role-lane="watch"] { border-left-color: #a3701f; }
-
-.role-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.role-card-label { font-weight: 700; }
-
-.role-card-lane {
-  font-size: 0.75rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.role-card-role {
-  margin: 0.1rem 0 0.4rem;
-  font-size: 0.85rem;
-  color: #35506a;
-}
-
-.role-card-body {
-  margin: 0;
-  font-size: 0.82rem;
-}
-
-.role-card-body dt {
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.role-card-body dd {
-  margin: 0 0 0.3rem;
-  line-height: 1.6;
-}
-
-/* The name of the part that published a line, and what that part is for. */
-.event-source-role {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.hop-role {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
 /* Observability panels */
 .page-heading, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .page-heading { margin: .8rem 0 1.8rem; }
@@ -656,20 +1088,15 @@ button.secondary {
 .metric span { font-size: .8rem; color: var(--muted); }
 .metric strong { font-size: 2rem; font-variant-numeric: tabular-nums; line-height: 1.4; }
 .metric.blue { border-top-color: #285ad6; } .metric.green { border-top-color: #208261; } .metric.amber { border-top-color: #c58b14; } .metric.red { border-top-color: #c13d4a; }
-.timeline-toolbar, .monitor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: .85rem; flex-wrap: wrap; margin: 1.25rem 0; }
 select { font: inherit; background: #fff; color: var(--ink); border: 1px solid var(--edge); border-radius: 6px; padding: .45rem .8rem; margin-left: .6rem; }
-.task-inspector { scroll-margin-top: 1rem; border-top: 3px solid var(--accent); }
 .result-mark { display: inline-flex; align-items: center; justify-content: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; font-weight: 700; color: #40536c; background: #ecf1f7; flex-shrink: 0; }
 .result-mark[data-outcome="success"] { background: #e4f4ec; color: #196343; }
 .result-mark[data-outcome="blocked"] { background: #fff0cb; color: #805309; }
 .result-mark[data-outcome="failed"], .result-mark[data-outcome="error"] { background: #fce5e8; color: #a22335; }
 .result-mark[data-outcome="running"] { color: #2452a7; background: #e8efff; }
-.event-stream > li { display: flex; gap: 1rem; position: relative; padding: 0 0 1.4rem; }
-.event-stream > li:not(:last-child)::before { content: ''; position: absolute; top: 2.3rem; bottom: .2rem; left: 1rem; width: 2px; background: var(--edge); }
 .event-content { flex: 1; border: 1px solid var(--edge); border-radius: 9px; padding: .9rem 1rem; background: #fbfcfe; }
 .event-content p { margin: .5rem 0; font-size: .85rem; }
 .event-content strong { font-size: .9rem; }
-details { color: var(--muted); } summary { cursor: pointer; } pre { overflow: auto; max-height: 24rem; background: #eef2f7; padding: .8rem; border-radius: 6px; }
 .empty-state { text-align: center; background: #fff; border: 1px dashed #bccbdd; border-radius: 12px; padding: 2rem; color: var(--muted); }
 .state-pill { padding: .25rem .8rem; background: #eaf1ff; color: #244f9f; border: 1px solid #b8c9e8; border-radius: 30px; font-size: .8rem; font-weight: 700; }
 /* The Lifecycle states that mean something went wrong (docs 07 §2). An execution
@@ -702,40 +1129,25 @@ meter { width: 100%; height: .6rem; display: block; margin: .7rem 0; }
 .notice[data-failure] { background: #fce5e8; color: #8f2231; }
 .fault-panel { border-color: #e9b8be; } .fault-panel label { display: block; margin: 1rem 0; }
 .danger-button { background: #b03043; }
-button { border-radius: 7px; font-size: .9rem; white-space: normal; }
 button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible { outline: 3px solid #88aaf6; outline-offset: 3px; }
 .ev-failed { background: #fce5e8; color: #a22335; border-color: #e9b4bd; }
 @media (max-width: 700px) {
-  main { padding: 1rem; } .app-nav { gap: 1rem; padding: 1rem; } h1 { font-size: 1.5rem; }
+  .app-nav { gap: 1rem; padding: 0.75rem 1rem; } h1 { font-size: 1.45rem; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
-  .card, .agent-group { padding: 1rem; } .section-heading, .page-heading { flex-wrap: wrap; }
-  .task-button { grid-template-columns: 2.1rem minmax(0, 1fr) auto; gap: .3rem .6rem; }
-  .col-completed-at { grid-row: 3; grid-column: 2 / span 2; }
-  .task-button:has(.simulated-badge) .simulated-badge { grid-row: 4; }
+  .card { padding: 1rem; } .section-heading, .page-heading { flex-wrap: wrap; }
   .pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .risk-bands { grid-template-columns: repeat(2, 1fr); }
   .event-content .section-heading { gap: .5rem; } .event-stream > li { gap: .6rem; }
 }
 @media (prefers-reduced-motion: reduce) { .replay-dot { animation-duration: .01ms; } html { scroll-behavior: auto; } }
-.detail-disclosure { overflow-wrap: anywhere; }
-.detail-disclosure table { border-collapse: collapse; width: 100%; table-layout: fixed; margin: .6rem 0; font-size: .8rem; }
-.detail-disclosure th, .detail-disclosure td { padding: .5rem; border-bottom: 1px solid var(--edge); text-align: left; vertical-align: top; }
-.detail-disclosure th { width: 30%; }
 
 /* Execution and decision paths remain readable without relying on colour. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .activity-search { white-space: nowrap; display: flex; align-items: center; gap: .7rem; flex: 1; max-width: 26rem; }
 input[type="search"] { min-width: 0; width: 100%; font: inherit; padding: .5rem .8rem; border: 1px solid var(--edge); border-radius: 7px; background: #fff; color: var(--ink); }
-.event-outline, .execution-strip { display: flex; list-style: none; gap: .75rem; padding: 1rem; border: 1px solid var(--edge); background: #f7f9fd; border-radius: 10px; overflow-x: auto; }
-.event-outline li { flex: 1 0 8rem; display: flex; flex-direction: column; align-items: center; text-align: center; gap: .25rem; font-size: .8rem; position: relative; }
-.event-outline li > span:first-child { font-size: .65rem; color: var(--muted); font-weight: 700; }
-.event-outline li:not(:last-child)::after { content: '→'; position: absolute; right: -.7rem; top: 2rem; color: #7c8fa7; }
-.event-outline small { font-size: .65rem; }
 .execution-strip li { display: flex; align-items: center; gap: .4rem; font-size: .75rem; font-weight: 700; }
 .execution-strip li:not(:last-child)::after { content: '→'; margin-left: .3rem; color: #7c8fa7; }
 .step-label { display: block; font-size: .65rem; letter-spacing: .12em; color: var(--accent); margin-bottom: .2rem; }
-.event-stream > li[data-outcome="blocked"] .event-content { border-left: 3px solid #bc8215; }
-.event-stream > li[data-outcome="failed"] .event-content { border-left: 3px solid #b03043; background: #fffafb; }
 .policy-flow, .test-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; list-style: none; padding: 0; margin: 1rem 0 1.5rem; }
 .policy-flow li, .test-flow li { padding: 1.2rem; border: 1px solid #d9e4f4; border-radius: 10px; background: #f7faff; }
 .policy-flow h3 { margin: .6rem 0 .3rem; }
@@ -770,24 +1182,11 @@ input[type="search"] { min-width: 0; width: 100%; font: inherit; padding: .5rem 
   .activity-search { max-width: none; flex-basis: 100%; }
   .decision-route { gap: .35rem; padding: .6rem; }
   .decision-route b { font-size: .75rem; }
-  .event-outline { padding: .75rem; }
 }
 
-/* The task summary and detailed records keep their React replay layout. */
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
 main.agent-detail, main.security-page { max-width: 76rem; }
 .app-nav { flex-wrap: wrap; }
-.task-button { border-radius: 8px; margin-top: .6rem; }
-.task-button .result-mark { flex: 0 0 2.1rem; }
-.agent-group { border: 1px solid var(--edge); border-radius: 12px; background: #fff; padding: 1.25rem; }
-.agent-group-id { overflow-wrap: anywhere; }
-.execution-log { background: #fff; border: 1px solid var(--edge); border-radius: 12px; padding: 1.25rem; }
-.event-log > ol.event-outline { display: flex; list-style: none; gap: .75rem; padding: 1rem; }
-.event-outline li { min-width: 8rem; }
 @media (max-width: 700px) {
-  .task-button .col-purpose { flex-basis: calc(100% - 4rem); }
-  .task-button .col-task-id, .task-button .col-completed-at { overflow-wrap: anywhere; }
 }
 
 /*
@@ -816,52 +1215,13 @@ main.agent-detail, main.security-page { max-width: 76rem; }
 
 /* A small glyph beside a phase's name. */
 .phase-icon { width: 1em; height: 1em; vertical-align: -.12em; margin-right: .3rem; flex: none; }
-.col-purpose .row-phase { color: var(--muted); }
-
-/*
- * One agent's story as a line of stops.
- *
- * The stops are buttons, the line between them is drawn by the list, and the mark
- * on each is the same mark the row below carries. The line does not bend: an agent's
- * story is read left to right, and on a narrow screen it scrolls rather than wraps so
- * the order survives.
- */
-.journey { display: flex; align-items: stretch; gap: 0; margin: .5rem 0 1rem; padding: .25rem 0; list-style: none; overflow-x: auto; }
-.journey-stop { position: relative; display: flex; flex: 1 0 9rem; max-width: 14rem; }
-.journey-stop + .journey-stop::before { content: ''; position: absolute; left: -1px; top: 2.05rem; width: 1.2rem; height: 2px; background: #c6ccd6; transform: translateX(-100%); }
-.journey-stop + .journey-stop { margin-left: 1.2rem; }
-.journey-node { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; width: 100%; padding: .55rem .75rem; color: var(--ink); background: #fff; border: 1px solid var(--edge); border-radius: 10px; text-align: left; cursor: pointer; }
-.journey-node[disabled] { cursor: default; opacity: 1; border-style: dashed; }
-.journey-node:not([disabled]):hover { border-color: var(--accent); }
-.journey-glyph { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--ground); color: #40536c; }
-.journey-glyph .phase-icon { margin: 0; width: 1.05rem; height: 1.05rem; }
-.journey-label { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; overflow-wrap: anywhere; }
-.journey-outcome { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; }
-.journey-outcome .result-mark { width: 1.4rem; height: 1.4rem; font-size: .75rem; }
-.journey-meta { font-size: .72rem; color: var(--muted); }
 
 /* The dots that make a row's shape, and the count beside them. */
-.col-shape { display: flex; align-items: center; gap: .6rem; flex-basis: 100%; }
 .task-shape { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; }
 .shape-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: #b6c2cf; }
 .shape-more { font-size: .7rem; color: var(--muted); margin-left: .2rem; }
-.col-duration { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/*
- * The rail down the account of a task.
- *
- * Each entry is pushed right to make room for a mark in its margin; a line joins the
- * marks so the eye runs down the column. The mark is the phase's glyph on a disc in
- * the colour of how the entry ended, which is what lets a person find the one refused
- * step of twelve without reading twelve.
- */
-.event-entries { position: relative; margin: 0; padding: 0 0 0 2.6rem; list-style: none; }
-.event-entries::before { content: ''; position: absolute; left: 1.05rem; top: 1rem; bottom: 1rem; width: 2px; background: #dfe3ea; }
 .event-entry { position: relative; }
-.event-rail { position: absolute; left: -2.6rem; top: .9rem; display: inline-flex; align-items: center; justify-content: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: #ecf1f7; color: #40536c; border: 2px solid #fff; box-shadow: 0 0 0 1px #dfe3ea; }
-.event-rail .phase-icon { margin: 0; width: 1rem; height: 1rem; }
-.event-elapsed { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; color: #5f7080; padding: 0 .35rem; border: 1px dashed #c6ccd6; border-radius: 4px; }
-.event-outline li strong { display: inline-flex; align-items: center; }
 
 /*
  * The route a step took, as boxes and the arrows between them.
@@ -1022,10 +1382,78 @@ main.agent-detail, main.security-page { max-width: 76rem; }
 .funnel-note { grid-column: 1 / -1; margin: .3rem 0 0; font-size: .72rem; color: var(--muted); }
 
 @media (max-width: 700px) {
-  .journey-stop { flex-basis: 8rem; }
-  .event-entries { padding-left: 2rem; }
-  .event-rail { left: -2rem; width: 1.7rem; height: 1.7rem; }
-  .event-entries::before { left: .8rem; }
   .decision-trace li { grid-template-columns: 1.2rem minmax(0, 1fr) auto; }
   .decision-trace .trace-evidence { grid-column: 2; }
 }
+
+/* The rail's mark, the dots and the order number, in this sheet's own grid. */
+.event-entry { grid-template-columns: 2.2rem minmax(0, 1fr); }
+
+.event-rail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  margin-top: 0.15rem;
+  border-radius: 50%;
+  background: #ecf1f7;
+  color: #40536c;
+  border: 2px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--edge-strong);
+}
+
+.event-rail .phase-icon { margin: 0; width: 1rem; height: 1rem; }
+
+.event-entry[data-entry-state="current"] .event-rail { box-shadow: 0 0 0 2px var(--accent); }
+
+.event-elapsed {
+  padding: 0 0.35rem;
+  border: 1px dashed var(--edge-strong);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.event-body > .route-strip { margin: 0.35rem 0 0.45rem; }
+
+/* The dots in a task's head, and the counts beside them. */
+.stage-meta .task-shape { margin-right: 0.2rem; }
+.stage-failed { color: #a22335; font-weight: 700; }
+
+/* The search box and the switch, side by side on the summary bar. */
+.summary-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.summary-tools .activity-search { flex: 1 1 14rem; max-width: 22rem; font-size: 0.88rem; color: var(--muted); }
+.summary-tools .activity-search input { padding: 0.35rem 0.7rem; }
+
+/* The monitor's own line: the switch and the last time it read. */
+.monitor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.monitor-toolbar label { display: inline-flex; align-items: center; gap: 0.4rem; }
+.monitor-status { font-variant-numeric: tabular-nums; }
+
+/* The snapshot's failure line and its exercises, inside the status card. */
+.status-panel .notice { margin: 0.75rem 0; }
+.status-panel .fault-history { margin: 1rem 0; }
+.status-panel .outcome-bar { margin: 0.25rem 0 0.75rem; }
+.tool-step { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* The execution log's ribbon and step heads sit on this sheet's cards. */
+.execution-log .section-heading { margin-bottom: 0.25rem; }
+.execution-log .section-heading h2 { margin: 0.1rem 0; }
+

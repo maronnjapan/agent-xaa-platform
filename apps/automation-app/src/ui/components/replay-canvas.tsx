@@ -4,7 +4,7 @@ import { emphasisClass } from '../replay/emphasis.js';
 import { REPLAY_MOTION_MS } from '../replay/config.js';
 import type { ReplayFrame } from '../replay/geometry.js';
 import { NODE_HALF_HEIGHT, NODE_HALF_WIDTH, REPLAY_NODES, REPLAY_VIEWBOX } from '../replay/nodes.js';
-import { labelOf } from '../roles.js';
+import { nameOf } from '../roles.js';
 import { SimulatedBadge } from './simulated-badge.js';
 import type { Element } from '../element.js';
 
@@ -23,7 +23,7 @@ export const REPLAY_LEGEND_CAPTION = 'この図の見方';
  * it, the name that appears on the arrow. A legend nobody finishes explains nothing.
  */
 export const REPLAY_LEGEND: readonly string[] = [
-  '上の段は人と権限を決める側、下の段は Agent とリソースです。',
+  '上の段は人と権限を決める側、下の段は Agent とデータを持つ側です。',
   '丸は1回のやり取りです。図に出るのは、いま動いている1回分だけです。',
   '止められたやり取りは、相手に届く手前で止まります。',
   '箱の中だけで起きたことは、矢印を出さずにその箱が光ります。',
@@ -74,7 +74,7 @@ type MotionStyle = CSSProperties & Record<'--motion-ms' | '--stop-ratio', string
  * it comes off the event, never composed (RULE-54).
  *
  * It holds the current step and only the current step, and so does the canvas. What
- * did happen, in order and in full, is the account under 「やったこと」 — server-rendered
+ * did happen, in order and in full, is the written list beside the picture — server-rendered
  * from the same events, complete, and never wiped by the picture.
  *
  * The controls exist because a replay that only ran once, start to finish, at a fixed
@@ -139,7 +139,7 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
             transform={`translate(${node.x},${node.y})`}
             role="button"
             tabIndex={0}
-            aria-label={`${node.label}：${node.role}`}
+            aria-label={`${node.actor.name}（${node.label}）：${node.role}`}
             onClick={() => props.onOpenNode?.(props.openNode === node.id ? null : node.id)}
             {...(props.visible.has(node.id) ? {} : { hidden: true })}
           >
@@ -150,7 +150,8 @@ export function ReplayCanvas(props: ReplayCanvasProps): Element {
               height={String(NODE_HALF_HEIGHT * 2)}
               rx="6"
             />
-            <text className="node-label" textAnchor="middle" dy="-2">{node.label}</text>
+            <title>{`${node.actor.name}（${node.label}）`}</title>
+            <text className="node-label" textAnchor="middle" dy="-2">{node.actor.name}</text>
             <text className="node-role" textAnchor="middle" dy="15">{node.role}</text>
           </g>
         ))}
@@ -275,8 +276,8 @@ function captionState(state: ReplayCanvasProps['state'], blocked: boolean): stri
 
 /** The boxes' own names, joined by the diagram's arrow glyph: a route, not a sentence. */
 function routeOf(from: string | null, to: string | null, kind: string): string {
-  const left = from === null ? '' : labelOf(from);
-  const right = to === null ? '' : labelOf(to);
+  const left = from === null ? '' : nameOf(from);
+  const right = to === null ? '' : nameOf(to);
   if (kind === 'move') return `${left} → ${right}`;
   return left || right;
 }

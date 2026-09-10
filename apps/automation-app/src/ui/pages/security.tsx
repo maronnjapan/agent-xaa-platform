@@ -106,7 +106,7 @@ export function AnalysisResults(props: {
         <article key={run.run_id} className="card analysis-run" data-status={run.status}>
           <header className="section-heading">
             <div>
-              <span className="eyebrow">LOG ANALYSIS</span>
+              <span className="eyebrow">ログ分析</span>
               <h2>
                 {run.status === 'completed'
                   ? '分析完了'
@@ -268,7 +268,7 @@ export function SecurityPage(props: { runs: readonly AnalysisRun[]; now: number 
     <main className="security-page" data-page="security">
       <header className="page-heading">
         <div>
-          <span className="eyebrow">OBSERVABILITY</span>
+          <span className="eyebrow">監視</span>
           <h1>ログ分析モニター</h1>
           <p className="lead">ログの受信から、AI分析を起動した理由、対応の判断まで。</p>
         </div>
@@ -277,7 +277,7 @@ export function SecurityPage(props: { runs: readonly AnalysisRun[]; now: number 
         </button>
       </header>
       <section className="card policy-guide">
-        <div className="section-heading"><h2>プラットフォームの判断の流れ</h2><span className="eyebrow">DECISION FLOW</span></div>
+        <div className="section-heading"><h2>プラットフォームの判断の流れ</h2><span className="eyebrow">判断の流れ</span></div>
         <p className="muted">上の段が、ログが届いてから検知になるまでの段階です。そのあとの質問に順に答えて、AI を起動するか、人に確認するか、自動で状態を変えるかが決まります。閾値は Security Detection が判定に使う値そのものです。</p>
         <DecisionFlow trace={decision ? traceDecision(decision) : null} findingId={decision ? traced : null} />
         <div className="risk-bands">

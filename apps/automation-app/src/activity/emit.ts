@@ -256,13 +256,13 @@ export async function emitDecisionReceived(context: EmitContext, input: {
     ...base(context, null, 'provisioning'),
     phase: 'authorization', outcome: 'info',
     title: '権限の決定を受け取りました',
-    message: `Authorization Platform から決定 ${input.decisionId} が返りました。許可された操作は ${input.effectiveCapabilities.length} 件です。`,
+    message: `Authorization Platform から権限の決定が返りました。許可された操作は ${input.effectiveCapabilities.length} 件です。`,
     detail: {
       event_type: 'DECISION_RECEIVED', work_definition_id: input.workDefinitionId, decision_id: input.decisionId,
       agent_definition_id: input.agentDefinitionId, purpose: input.purpose,
     },
     record: {
-      headline: `決定 ${input.decisionId} を受け取り、承認を待つ Agent Definition にしました`,
+      headline: '権限の決定を受け取り、承認を待つ Agent Definition にしました',
       sections: [{
         id: 'received',
         label: '返ってきた決定',
@@ -277,7 +277,7 @@ export async function emitDecisionReceived(context: EmitContext, input: {
       }],
       hops: [{
         from: 'authorization-platform', to: 'automation-app', label: '決定を受領', outcome: 'success',
-        message: `決定 ${input.decisionId} が返りました。利用者に提示し、承認を待ちます。`,
+        message: '権限の決定が返りました。利用者に提示し、承認を待ちます。',
       }],
     },
   });
@@ -381,7 +381,7 @@ export async function emitProvisionRequested(context: EmitContext, input: {
       }],
       hops: [{
         from: 'automation-app', to: 'agent-provisioner', label: 'Agent の作成を依頼', outcome: 'info',
-        message: `決定 ${input.decisionId} で Agent を作るよう依頼しました。ここから先は Agent Provisioner が記録します。`,
+        message: '承認された決定のとおりに Agent を作るよう依頼しました。ここから先は Agent Provisioner が記録します。',
       }],
     },
   });
@@ -469,7 +469,7 @@ export async function emitAgentStopped(context: EmitContext, input: { agentId: s
     ...base(context, input.agentId, 'lifecycle'),
     phase: 'lifecycle', outcome: 'success',
     title: 'Agent を停止しました',
-    message: `${input.agentId} の停止を依頼し、受理されました。`,
+    message: 'Agent の停止を依頼し、受理されました。',
     detail: { event_type: 'AGENT_STOPPED' },
     record: {
       headline: '利用者が Agent を止めました',
@@ -479,7 +479,7 @@ export async function emitAgentStopped(context: EmitContext, input: { agentId: s
         message: 'Lifecycle Manager に停止を依頼し、受理されました。止めた Agent は元に戻せません。',
         fields: [{ label: 'Agent', value: input.agentId }],
       }],
-      hops: [personHop('停止を押す', `利用者が ${input.agentId} の停止を押し、Lifecycle Manager が受理しました。`, 'success')],
+      hops: [personHop('停止を押す', '利用者が Agent の停止を押し、Lifecycle Manager が受理しました。', 'success')],
     },
   });
 }

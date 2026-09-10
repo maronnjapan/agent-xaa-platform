@@ -55,11 +55,11 @@ describe('the timeline list', () => {
     const html = render(createElement(TimelinePage, {
       tasks: await readTimeline({ documents: harness.documents, humanSubject: 'testuser' }),
     }));
-    const groups = [...html.matchAll(/<section class="agent-group" data-run-id="[^"]*" data-agent-id="([^"]*)"/g)].map((match) => match[1]);
+    const groups = [...html.matchAll(/<section class="run" data-run="[^"]*" data-run-id="[^"]*" data-agent-id="([^"]*)"/g)].map((match) => match[1]);
     expect(groups).toEqual([agentTwo, agentOne]);
-    // Within each agent's group: provisioning, then the numbered tasks in the order
+    // Within each agent's card: provisioning, then the numbered tasks in the order
     // they finished, then lifecycle.
-    const sections = html.split('<section class="agent-group"').slice(1);
+    const sections = html.split('<section class="run"').slice(1);
     expect(sections).toHaveLength(2);
     expect([...sections[1]!.matchAll(/data-task-key="[^"]+:([^"]+)"/g)].map((match) => match[1]))
       .toEqual(['provisioning', 'task-1', 'task-2', 'lifecycle']);
@@ -67,19 +67,20 @@ describe('the timeline list', () => {
       .toEqual(['task-9']);
   });
 
-  it('renders a running task as a disabled row with no replay canvas', async () => {
+  it('renders a running task as a row that cannot be opened, with no replay canvas', async () => {
     const harness = await startAutomationAppHarness();
     await seed(harness, [event({ event_id: '1', task_id: 'task-1', phase: 'tool_call', detail: { event_type: 'TOOL_SUCCEEDED' } })]);
     const html = render(createElement(TimelinePage, {
       tasks: await readTimeline({ documents: harness.documents, humanSubject: 'testuser' }),
     }));
     expect(html).toContain('data-status="running"');
-    expect(html).toContain('disabled');
-    // No canvas for an unfinished task: there is nothing complete to play.
+    expect(html).toContain('実行中');
+    // No canvas and no list for an unfinished task: there is nothing complete to show.
     expect(html).not.toContain('class="replay"');
+    expect(html).not.toContain('data-event-log=');
   });
 
-  it('renders the four columns of a completed row', async () => {
+  it('renders the head of a completed row', async () => {
     const harness = await startAutomationAppHarness();
     await seed(harness, [event({
       event_id: '1', task_id: 'task-1', phase: 'tool_call', outcome: 'blocked',
@@ -90,6 +91,7 @@ describe('the timeline list', () => {
     }));
     expect(html).toContain('支払を承認する');
     expect(html).toContain('data-task-id="task-1"');
+    expect(html).toContain('>作業 1<');
     expect(html).toContain('data-outcome="blocked"');
     expect(html).toContain('2026-01-01T09:00:00.000Z');
     expect(html).toContain('data-emphasis="ev-blocked-tool"');

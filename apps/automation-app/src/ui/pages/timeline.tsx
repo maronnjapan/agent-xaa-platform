@@ -1,114 +1,110 @@
-import { MarkLegend, Metric } from '../components/visual.js';
-import { OutcomeBar } from '../components/outcome-bar.js';
 import { useCallback, useState } from 'react';
-import type { ActivityEvent } from '@xaa/contracts';
 import type { TimelineTask } from '../../activity/query.js';
-import { taskKeyOf } from '../../activity/task-key.js';
-import { AgentGroup } from '../components/agent-group.js';
+import { taskLabelOf } from '../labels.js';
 import { CastPanel } from '../components/cast-panel.js';
+import { OutcomeBar, type OutcomeCounts } from '../components/outcome-bar.js';
+import { RunCard, summariseRun, type Run } from '../components/run-card.js';
 import { partiesIn } from '../roles.js';
-import type { LogEvent } from '../components/event-log.js';
-import { RunReplay, type ReplayTask } from '../components/run-replay.js';
-import type { TaskRowProps } from '../components/task-row.js';
 import type { Element } from '../element.js';
 
-export const TIMELINE_LEAD = '終わった処理を Agent ごとに、新しい順で並べています。まず動きを再生し、そのあと「やったこと」で中身を読みます。';
-export const TIMELINE_CAST_LEAD = '箱の名前が分からないときは、次の一覧を開いてください。';
-export const TIMELINE_EMPTY = 'まだ記録がありません。作業を書いて Agent を作ると、ここに並びます。';
+export const TIMELINE_TITLE = 'アクティビティ';
+export const TIMELINE_LEAD = 'ログインから、権限の決定、Agent の作成、作業、終了までを Agent ごとにまとめています。新しい Agent が上です。';
+export const TIMELINE_EMPTY = 'まだ記録がありません。ToDo を書いて Agent を作ると、ここに並びます。';
+export const TIMELINE_NO_MATCH = '検索に一致する Agent はありません。';
+export const TIMELINE_FILTERED_NOTE = 'この Agent の記録だけを表示しています。';
+export const SHOW_ALL_AGENTS = 'すべての Agent を表示';
+export const REFRESH_LABEL = '最新の状態に更新';
+export const REFRESH_FAILED = '更新できませんでした。表示は前回の内容のままです。';
+export const SEARCH_LABEL = '検索';
+export const SEARCH_PLACEHOLDER = '目的、Agent ID、作業の名前';
+export const VIEW_ALL = 'すべて';
+export const VIEW_ISSUES = '問題があったものだけ';
 
-type CompletedTask = Extract<TimelineTask, { status: 'completed' }>;
-
-function isSimulated(task: TimelineTask): boolean {
-  return task.status === 'completed' && task.events.some((event) => event.is_simulated === true);
-}
-
-function toRow(task: TimelineTask): TaskRowProps {
-  if (task.status === 'running') {
-    return { run_id: task.run_id, task_id: task.task_id, purpose: task.purpose, status: 'running', simulated: false };
-  }
-  const terminal = task.events[task.events.length - 1];
-  const first = task.events[0];
-  const span = first && terminal ? Date.parse(terminal.occurred_at) - Date.parse(first.occurred_at) : Number.NaN;
-  return {
-    run_id: task.run_id,
-    task_id: task.task_id,
-    purpose: task.purpose,
-    status: 'completed',
-    terminal_outcome: task.terminal_outcome,
-    completed_at: task.completed_at,
-    ...(terminal ? { phase: terminal.phase } : {}),
-    ...(terminal?.detail ? { detail: terminal.detail as Record<string, unknown> } : {}),
-    simulated: isSimulated(task),
-    event_count: task.events.length,
-    ...(Number.isFinite(span) ? { duration_ms: span } : {}),
-    // The shape of the task: one dot per event, from the two values the schema pins.
-    shape: task.events.map((event) => ({ phase: event.phase, outcome: event.outcome })),
-  };
-}
+/** What the person is looking at: everything, or only the rows where something was refused or failed. */
+export type TimelineView = 'all' | 'issues';
 
 /**
- * An event as the log renders it: the same values, named rather than spread.
+ * Tasks grouped into agents, in the order `readTimeline` handed them over.
  *
- * The event arrives from the store and is on its way to a browser. Spreading it would
- * forward whatever the store or a future publisher happens to add — the same reason
- * the agent status endpoint copies field by field (RULE-38).
- */
-function toLogEvent(event: ActivityEvent): LogEvent {
-  return {
-    event_id: event.event_id,
-    occurred_at: event.occurred_at,
-    source: event.source,
-    phase: event.phase,
-    outcome: event.outcome,
-    title: event.title,
-    message: event.message,
-    ...(event.detail ? { detail: event.detail as Record<string, unknown> } : {}),
-    ...(event.record ? { record: event.record } : {}),
-  };
-}
-
-/** The same task, in the two shapes the pictures and the accounts each need. */
-function toReplayTask(task: CompletedTask): ReplayTask {
-  return {
-    taskId: task.task_id,
-    taskKey: taskKeyOf(task),
-    purpose: task.purpose,
-    completedAt: task.completed_at,
-    events: task.events,
-    logEvents: task.events.map(toLogEvent),
-    simulated: isSimulated(task),
-  };
-}
-
-/**
- * Tasks grouped by agent, newest agent first, and within an agent: the rows, then every
- * picture, then every account.
- *
- * A group is one agent's whole story — from the login that preceded it, through the
+ * A run is one agent's whole story — from the login that preceded it, through the
  * proposal and the decision, to its tasks and its end — and the grouping is by
- * `run_id`, which `readTimeline` has already resolved. Within a group the order is
- * fixed: provisioning, then the numbered tasks in the order they finished, then
- * lifecycle, which is the order the work actually happened in. This only groups.
+ * `run_id`, which `readTimeline` has already resolved. Within a run the order is fixed:
+ * provisioning, then the numbered tasks in the order they finished, then lifecycle,
+ * which is the order the work actually happened in. This only groups.
+ */
+export function groupRuns(tasks: readonly TimelineTask[]): Run[] {
+  const runs = new Map<string, Run>();
+  for (const task of tasks) {
+    const run = runs.get(task.run_id) ?? { runId: task.run_id, agentId: task.agent_id, purpose: task.purpose, tasks: [] };
+    runs.set(task.run_id, { ...run, agentId: run.agentId ?? task.agent_id, tasks: [...run.tasks, task] });
+  }
+  return [...runs.values()];
+}
+
+/**
+ * How the tasks ended, counted for the bar under the numbers.
  *
- * The picture and the account are not alternatives: the picture answers "what talked to
- * what, and where did it stop", and the account answers "what was sent, what came back,
- * and what was checked first". They are no longer interleaved task by task, because an
- * account runs to a hundred lines and put every pair of pictures a screenful apart
- * (`RunReplay`).
+ * Each task counts once, by the outcome its terminal event carried — or as running,
+ * when it has no terminal event yet. These are the schema's own values; the screen
+ * adds no fourth verdict of its own (RULE-54).
+ */
+export function outcomeCountsOf(tasks: readonly TimelineTask[]): OutcomeCounts {
+  const counts: OutcomeCounts = { success: 0, blocked: 0, failed: 0, running: 0, info: 0 };
+  for (const task of tasks) {
+    if (task.status === 'running') counts.running = (counts.running ?? 0) + 1;
+    else if (task.terminal_outcome === 'success') counts.success += 1;
+    else if (task.terminal_outcome === 'blocked') counts.blocked += 1;
+    else if (task.terminal_outcome === 'failed') counts.failed += 1;
+    else counts.info = (counts.info ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** Whether an agent's card matches what a person typed: its purpose, its id, or a task's name. */
+export function matchesSearch(run: Run, search: string): boolean {
+  const needle = search.trim().toLocaleLowerCase();
+  if (needle === '') return true;
+  const haystack = [run.purpose, run.agentId ?? '', ...run.tasks.flatMap((task) => [task.task_id, taskLabelOf(task.task_id).label])]
+    .join(' ').toLocaleLowerCase();
+  return haystack.includes(needle);
+}
+
+/**
+ * The person's activity, as one page.
  *
- * The list of what each box is opens the page rather than hiding at the bottom of it,
- * because the names in every row below are meaningless until someone has read it once.
+ * It opens with the numbers a person wants before reading anything: how many agents,
+ * how many still running, how many ran into a refusal or a failure, and one bar for
+ * how the tasks ended. Then one card per agent, newest first, each headed by the work
+ * it was made for and followed by its tasks on a rail. The newest agent's tasks start
+ * opened, because that is the one a person came to look at; the rest fold to a line
+ * each, so ten agents are ten lines rather than ten screens.
+ *
+ * Nothing on the page is a sentence about what an event meant. The chips count the
+ * publishers' own `outcome`, the heads print the publishers' own titles, and the words
+ * the screen adds are names for kinds of things — a phase, a task, a part of the
+ * platform (RULE-54).
  *
  * Refreshing is a button. The page asks once when it opens and once per press, and at
  * no other time: a timeline that streamed would need a live channel to the datastore,
- * and the browser is deliberately never given one (DEV-13).
+ * and the browser is deliberately never given one (DEV-13). A page narrowed to one
+ * agent stays narrowed when it refreshes — the subject still comes from the session,
+ * and the narrowing is a filter over the person's own timeline, never a widening of it.
+ *
+ * The view switch hides nothing from the markup: every row is served, and 「問題が
+ * あったものだけ」 is a stylesheet rule keyed on the page's `data-view`, so a person
+ * without script sees everything and a person with it sees what they asked for. What
+ * the switch does change is which cards stand open: the ones with a refusal or a
+ * failure in them, and only those, so the page becomes the list of where things went
+ * wrong. The search narrows the cards the same way — by hiding, never by dropping.
  */
-export function TimelinePage(props: { tasks: readonly TimelineTask[] }): Element {
+export function TimelinePage(props: { tasks: readonly TimelineTask[]; agentId?: string | null }): Element {
   const [tasks, setTasks] = useState<readonly TimelineTask[]>(props.tasks);
   const [refreshing, setRefreshing] = useState(false);
-  const [outcome, setOutcome] = useState('all');
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const [view, setView] = useState<TimelineView>('all');
   const [search, setSearch] = useState('');
-  const [message, setMessage] = useState('');
+  const agentId = props.agentId ?? null;
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -117,74 +113,101 @@ export function TimelinePage(props: { tasks: readonly TimelineTask[] }): Element
         const response = await fetch('/api/activity/tasks', { credentials: 'same-origin' });
         if (!response.ok) throw new Error(String(response.status));
         const body = await response.json() as { tasks: TimelineTask[] };
-        const agentFilter = new URLSearchParams(window.location.search).get('agent_id');
-        setTasks(agentFilter ? body.tasks.filter((task) => task.agent_id === agentFilter) : body.tasks);
-        setMessage('最新の記録を取得しました。');
+        setTasks(agentId === null ? body.tasks : body.tasks.filter((task) => task.agent_id === agentId));
+        setUpdatedAt(new Date().toLocaleTimeString('ja-JP', { hour12: false }));
+        setRefreshFailed(false);
       } catch {
-        setMessage('更新できませんでした。表示は前回の取得結果です。');
+        setRefreshFailed(true);
       } finally {
         setRefreshing(false);
       }
     })();
-  }, []);
+  }, [agentId]);
 
-  const shown = tasks.filter((task) => (outcome === 'all' || (task.status === 'running' ? 'running' : task.terminal_outcome) === outcome)
-    && `${task.purpose} ${task.agent_id ?? ''} ${task.task_id}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  const groups = new Map<string, TimelineTask[]>();
-  for (const task of shown) {
-    groups.set(task.run_id, [...(groups.get(task.run_id) ?? []), task]);
-  }
+  const runs = groupRuns(tasks);
+  const summaries = runs.map((run) => summariseRun(run.tasks));
+  const running = summaries.reduce((sum, summary) => sum + summary.running, 0);
+  const blocked = summaries.reduce((sum, summary) => sum + summary.blocked, 0);
+  const failed = summaries.reduce((sum, summary) => sum + summary.failed, 0);
+  const shown = runs.filter((run) => matchesSearch(run, search));
   const sources = partiesIn(tasks.flatMap((task) => (task.status === 'completed' ? task.events : [])));
 
   return (
-    <main className="timeline" data-page="timeline">
-      <header className="page-heading"><div><span className="eyebrow">ACTIVITY</span><h1>アクティビティ</h1><p className="lead">{TIMELINE_LEAD}</p></div>
-        <button type="button" data-action="refresh" onClick={refresh} disabled={refreshing}>更新</button></header>
-      <div className="metric-grid">
-        <Metric label="すべてのタスク" value={tasks.length} />
-        <Metric label="実行中" value={tasks.filter((task) => task.status === 'running').length} tone="blue" />
-        <Metric label="成功" value={tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'success').length} tone="green" />
-        <Metric label="遮断" value={tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'blocked').length} tone="amber" />
-        <Metric label="失敗" value={tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'failed').length} tone="red" />
+    <main className="timeline" data-page="timeline" data-view={view}>
+      <header className="page-head">
+        <div className="page-head-text">
+          <h1>{TIMELINE_TITLE}</h1>
+          <p className="lead">{TIMELINE_LEAD}</p>
+        </div>
+        <div className="page-tools">
+          <button type="button" className="secondary" data-action="refresh" onClick={refresh} disabled={refreshing}>{REFRESH_LABEL}</button>
+          <span className="updated-at" data-field="updated-at" role="status">
+            {refreshFailed ? REFRESH_FAILED : updatedAt === null ? '' : `${updatedAt} に更新`}
+          </span>
+        </div>
+      </header>
+
+      {agentId === null ? null : (
+        <p className="filter-note" data-field="filter-note">
+          {TIMELINE_FILTERED_NOTE}
+          <a href="/activity">{SHOW_ALL_AGENTS}</a>
+        </p>
+      )}
+
+      <div className="summary-bar" data-section="summary">
+        <p className="summary-chips">
+          <span className="chip" data-summary="agent-count">{`Agent ${runs.length} 体`}</span>
+          <span className="chip chip-running" data-summary="running">{`実行中 ${running} 件`}</span>
+          <span className="chip chip-blocked" data-summary="blocked">{`遮断あり ${blocked} 件`}</span>
+          <span className="chip chip-failed" data-summary="failed">{`失敗 ${failed} 件`}</span>
+        </p>
+        <div className="summary-tools">
+          <label className="activity-search">
+            <span>{SEARCH_LABEL}</span>
+            <input
+              type="search"
+              data-filter="search"
+              placeholder={SEARCH_PLACEHOLDER}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <div className="view-switch" role="group" aria-label="表示する内容">
+            <button
+              type="button"
+              className={view === 'all' ? 'is-selected' : ''}
+              data-action="view-all"
+              aria-pressed={view === 'all'}
+              onClick={() => setView('all')}
+            >
+              {VIEW_ALL}
+            </button>
+            <button
+              type="button"
+              className={view === 'issues' ? 'is-selected' : ''}
+              data-action="view-issues"
+              aria-pressed={view === 'issues'}
+              onClick={() => setView('issues')}
+            >
+              {VIEW_ISSUES}
+            </button>
+          </div>
+        </div>
       </div>
-      <OutcomeBar
-        label="タスクの結果"
-        counts={{
-          success: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'success').length,
-          blocked: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'blocked').length,
-          failed: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'failed').length,
-          running: tasks.filter((task) => task.status === 'running').length,
-          info: tasks.filter((task) => task.status === 'completed' && task.terminal_outcome === 'info').length,
-        }}
-      />
-      <div className="timeline-toolbar">
-        <label>表示する結果 <select data-filter="outcome" value={outcome} onChange={(event) => setOutcome(event.target.value)}>
-          <option value="all">すべて</option><option value="running">実行中</option><option value="success">成功</option><option value="blocked">遮断</option><option value="failed">失敗</option>
-        </select></label>
-        <label className="activity-search">検索<input type="search" data-filter="search" placeholder="作業名・Agent・Task ID" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-        <span role="status">{shown.length} 件を表示</span>
-        <MarkLegend />
-      </div>
-      <p role="status" data-timeline-status="true">{message}</p>
-      <p className="lead">{TIMELINE_CAST_LEAD}</p>
-      <CastPanel sources={sources} open />
-      {tasks.length === 0 ? <p className="timeline-empty" data-field="timeline-empty">{TIMELINE_EMPTY}</p> : null}
-      {tasks.length > 0 && shown.length === 0 ? <p className="empty-state">条件に一致するタスクはありません。</p> : null}
-      {[...groups].map(([runId, runTasks]) => (
-        <section key={runId} className="run" data-run={runId}>
-          <AgentGroup
-            runId={runId}
-            agentId={runTasks[0]?.agent_id ?? null}
-            purpose={runTasks[0]?.purpose ?? ''}
-            tasks={runTasks.map(toRow)}
+      <OutcomeBar label="作業の結果" counts={outcomeCountsOf(tasks)} />
+
+      <CastPanel sources={sources} />
+
+      {runs.length === 0 ? <p className="timeline-empty" data-field="timeline-empty">{TIMELINE_EMPTY}</p> : null}
+      {runs.length > 0 && shown.length === 0 ? <p className="timeline-empty" data-field="timeline-no-match">{TIMELINE_NO_MATCH}</p> : null}
+      {runs.map((run, index) => (
+        <div key={run.runId} data-run-shown={String(shown.includes(run))} {...(shown.includes(run) ? {} : { hidden: true })}>
+          <RunCard
+            run={run}
+            open={view === 'issues' ? 'issues' : (index === 0 || agentId !== null)}
+            offerFilter={agentId === null}
           />
-          <RunReplay
-            runId={runId}
-            tasks={runTasks
-              .filter((task): task is CompletedTask => task.status === 'completed')
-              .map(toReplayTask)}
-          />
-        </section>
+        </div>
       ))}
     </main>
   );

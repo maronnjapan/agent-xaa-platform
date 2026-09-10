@@ -10,11 +10,11 @@ import { DecisionFlow, FLOW_EDGES, FLOW_NODES } from '../src/ui/components/decis
 import { DecisionTraceList } from '../src/ui/components/decision-trace.js';
 import { ExecutionLog } from '../src/ui/components/execution-log.js';
 import { EventLog } from '../src/ui/components/event-log.js';
-import { JourneyStrip } from '../src/ui/components/journey-strip.js';
 import { OutcomeBar } from '../src/ui/components/outcome-bar.js';
 import { RouteStrip } from '../src/ui/components/route-strip.js';
 import { CountFunnel, StageTiming } from '../src/ui/components/stage-timing.js';
-import { TaskRow } from '../src/ui/components/task-row.js';
+import { StageCard } from '../src/ui/components/stage-card.js';
+import { TaskShape } from '../src/ui/components/task-shape.js';
 import { TrialTracker, trialStepStates } from '../src/ui/components/trial-tracker.js';
 import { SecurityPage, STAGE_LABELS, TRACE_ACTION } from '../src/ui/pages/security.js';
 import { html as render, mount } from './render.js';
@@ -199,7 +199,8 @@ describe('the mark beside a step', () => {
       { from: 'agent-op', to: 'resource-api', label: '実行の要求', outcome: 'blocked', message: 'm' },
     ] }));
     expect(html).toContain('data-route-node="agent-runtime"');
-    expect(html).toContain('Agent OP');
+    expect(html).toContain('Agent の身元発行');
+    expect(html).toContain('title="Agent OP"');
     expect(html).toContain('route-stop-mark');
     expect(html).toMatch(/data-route-node="resource-api" data-hop-outcome="blocked"[\s\S]*?data-reached="false"/);
     expect(html).toContain('ID-JAG を要求');
@@ -224,29 +225,48 @@ describe('the mark beside a step', () => {
 });
 
 describe('the shape of a story', () => {
-  const tasks = [
-    { run_id: 'r', task_id: 'provisioning', purpose: 'p', status: 'completed' as const, terminal_outcome: 'success', phase: 'provisioning', event_count: 4 },
-    { run_id: 'r', task_id: 'task-1', purpose: 'p', status: 'completed' as const, terminal_outcome: 'blocked', phase: 'tool_call', event_count: 3,
-      shape: [{ phase: 'tool_call', outcome: 'success' }, { phase: 'tool_call', outcome: 'blocked' }, { phase: 'tool_call', outcome: 'blocked' }], duration_ms: 2500 },
-    { run_id: 'r', task_id: 'task-2', purpose: 'p', status: 'running' as const },
-  ];
-
-  it('lines the tasks up as stops, in order, each with how it ended', () => {
-    const html = render(createElement(JourneyStrip, { tasks }));
-    expect([...html.matchAll(/data-journey-task="([^"]+)" data-outcome="([^"]+)" data-phase="([^"]+)"/g)].map((match) => match.slice(1)))
-      .toEqual([['provisioning', 'success', 'provisioning'], ['task-1', 'blocked', 'tool_call'], ['task-2', 'running', 'tool_call']]);
-    expect(html).toContain('Agent の準備');
-    expect(html).toContain('data-phase-icon="provisioning"');
-    expect(html).toMatch(/data-journey-target="r:task-2" disabled/);
-    expect(html).toContain('4 件');
+  const stamp = (overrides: Record<string, unknown>) => ({
+    trace_id: 'tr', human_subject: 'testuser', agent_id: 'r', task_id: 'task-1', source: 'agent-runtime', phase: 'tool_call',
+    outcome: 'success', title: 't', message: 'm', related_finding_id: null, is_simulated: false, ...overrides,
   });
+  const blockedTask = {
+    run_id: 'r', task_id: 'task-1', agent_id: 'r', purpose: 'p', status: 'completed' as const, terminal_outcome: 'blocked',
+    completed_at: '2026-01-01T00:00:02.500Z',
+    events: [
+      stamp({ event_id: 'a', occurred_at: '2026-01-01T00:00:00.000Z' }),
+      stamp({ event_id: 'b', occurred_at: '2026-01-01T00:00:01.000Z', outcome: 'blocked' }),
+      stamp({ event_id: 'c', occurred_at: '2026-01-01T00:00:02.500Z', outcome: 'blocked' }),
+    ],
+  };
 
-  it('draws a dot per event in the row, coloured by outcome, and says how long it took', () => {
-    const html = render(TaskRow(tasks[1]!));
+  it('draws a dot per event in the head, coloured by outcome, and says how long it took', () => {
+    const html = render(createElement(StageCard, { task: blockedTask as never }));
     expect(html.match(/class="shape-dot"/g)).toHaveLength(3);
     expect(html).toContain('data-outcome="blocked" data-phase="tool_call"');
-    expect(html).toContain('3 件 · 2.5 秒');
-    expect(render(TaskRow(tasks[2]!))).not.toContain('task-shape');
+    expect(html).toContain('3 件のできごと');
+    expect(html).toContain('所要 2 秒');
+    expect(html).toContain('遮断 2 件');
+    expect(html).toContain('data-issue-count="2"');
+    const running = render(createElement(StageCard, { task: { run_id: 'r', task_id: 'task-2', agent_id: 'r', purpose: 'p', status: 'running' } }));
+    expect(running).not.toContain('task-shape');
+  });
+
+  it('counts a failed end as a failure, once, even when the event was recorded as information', () => {
+    const html = render(createElement(StageCard, { task: {
+      ...blockedTask, task_id: 'task-3', terminal_outcome: 'failed',
+      events: [stamp({ event_id: 'f', task_id: 'task-3', occurred_at: '2026-01-01T00:00:00.000Z', outcome: 'info' })],
+    } as never }));
+    expect(html).toContain('失敗 1 件');
+    expect(html).toContain('data-issue-count="1"');
+    expect(html).toContain('data-emphasis="ev-failed"');
+  });
+
+  it('caps the dots and says how many are left', () => {
+    const shape = Array.from({ length: 30 }, () => ({ phase: 'tool_call', outcome: 'success' }));
+    const html = render(createElement(TaskShape, { shape }));
+    expect(html.match(/class="shape-dot"/g)).toHaveLength(24);
+    expect(html).toContain('+6');
+    expect(html).toContain('title="1. ツールの実行 · 成功"');
   });
 
   it('turns counts into one bar with every segment named', () => {

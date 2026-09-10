@@ -54,7 +54,7 @@ export function FaultControls(props: { agentId: string; onAccepted(): Promise<vo
   };
   return (
     <section className="card fault-panel" data-section="fault-controls">
-      <span className="eyebrow">FAILURE TEST</span><h2>{FAULT_HEADING}</h2>
+      <span className="eyebrow">異常系試験</span><h2>{FAULT_HEADING}</h2>
       <p>{FAULT_LEAD}</p>
       <fieldset className="fault-kinds" disabled={busy || accepted}>
         <legend>起こす失敗</legend>

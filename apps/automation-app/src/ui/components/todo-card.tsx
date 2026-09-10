@@ -6,7 +6,9 @@ import { actionUrl, afterProvision, type HomeAction } from '../actions/home-acti
 import { failureMessage } from '../actions/messages.js';
 import { navigateTo, reloadPage } from '../actions/navigate.js';
 import { updateTodo, type TodoBody } from '../actions/todo-request.js';
+import { agentStatusLabelOf, formatRemaining } from '../labels.js';
 import { AgentDefinitionPanel } from './agent-definition-panel.js';
+import { LocalTime } from './local-time.js';
 import { TodoForm } from './todo-form.js';
 import { isClosedStatus, PRIORITY_LABELS, SOURCE_LABELS, STATUS_LABELS, TERMINAL_OUTCOME_LABELS } from './todo-labels.js';
 import type { Element } from '../element.js';
@@ -153,14 +155,16 @@ export function TodoCard(props: TodoCardProps): Element {
           <section className="todo-agent" data-section="todo-agent" data-agent-status={agent.status}>
             <p>
               <a href={agentPagePath(agent.agentId)} data-field="agent-link">この ToDo を実行している Agent</a>
-              ：<span data-field="agent-status">{agent.status}</span>
-              {agent.status === 'ACTIVE' ? <span data-field="remaining">{`（残り ${String(agent.remainingSeconds)} 秒）`}</span> : null}
+              ：<span data-field="agent-status" data-value={agent.status} className="status-pill" data-agent-status={agent.status}>{agentStatusLabelOf(agent.status)}</span>
+              {agent.status === 'ACTIVE' ? <span data-field="remaining">{`（残り ${formatRemaining(agent.remainingSeconds)}）`}</span> : null}
             </p>
             {agent.outcome !== null
               ? (
                 <p data-field="agent-outcome" data-outcome={agent.outcome}>
-                  {`${TERMINAL_OUTCOME_LABELS[agent.outcome] ?? agent.outcome}${agent.completedAt ? `（${agent.completedAt}）` : ''}。詳しくは`}
-                  <a href={`/activity?agent_id=${encodeURIComponent(agent.agentId)}`}>タイムライン</a>
+                  {TERMINAL_OUTCOME_LABELS[agent.outcome] ?? agent.outcome}
+                  {agent.completedAt ? <>（<LocalTime at={agent.completedAt} format="full" />）</> : null}
+                  。詳しくは
+                  <a href={`/activity?agent_id=${encodeURIComponent(agent.agentId)}`}>アクティビティ</a>
                   へ。
                 </p>
               )

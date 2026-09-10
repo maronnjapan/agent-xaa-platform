@@ -1,6 +1,6 @@
 import type { ActivityRecordHop } from '@xaa/contracts';
 import { routeStops } from '../records/verdict.js';
-import { labelOf } from '../roles.js';
+import { labelOf, nameOf } from '../roles.js';
 import type { Element } from '../element.js';
 
 /**
@@ -31,7 +31,7 @@ export function RouteStrip(props: { hops: readonly ActivityRecordHop[]; compact?
               </span>
             )
             : null}
-          <span className="route-node" data-reached={stop.arrival?.outcome === 'blocked' ? 'false' : 'true'}>{labelOf(stop.node)}</span>
+          <span className="route-node" data-reached={stop.arrival?.outcome === 'blocked' ? 'false' : 'true'} title={labelOf(stop.node)}>{nameOf(stop.node)}</span>
         </li>
       ))}
     </ol>

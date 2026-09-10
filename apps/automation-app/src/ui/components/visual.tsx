@@ -1,3 +1,4 @@
+import { phaseLabelOf } from '../labels.js';
 import type { Element } from '../element.js';
 
 export function Metric(props: { label: string; value: string | number; tone?: string }): Element {
@@ -38,10 +39,9 @@ export function formatDuration(millis: number): string {
   return `${Math.floor(seconds / 60)} 分 ${Math.floor(seconds % 60)} 秒`;
 }
 
+/** The phase's caption, from the one dictionary the rows and the dots share. */
 export function phaseLabel(phase: string): string {
-  const labels: Record<string, string> = { login: 'ログイン', work_definition: '作業定義', authorization: '権限確認',
-    provisioning: 'Agent準備', tool_call: 'ツール実行', security: 'セキュリティ', lifecycle: 'ライフサイクル' };
-  return labels[phase] ?? phase;
+  return phaseLabelOf(phase);
 }
 
 /** The four marks, spelled out once so a person learns them before the rows use them. */

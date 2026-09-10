@@ -33,7 +33,7 @@ const CHECK_TEXT = { passed: '通過', blocked: '不可', failed: '失敗', skip
 export function ExecutionLog(props: { records: readonly ActivityRecord[] }): Element {
   return (
     <section className="execution-log" data-section="execution-log">
-      <div className="section-heading"><h2>{EXECUTION_LOG_HEADING}</h2><span className="muted">{props.records.length} STEPS</span></div>
+      <div className="section-heading"><h2>{EXECUTION_LOG_HEADING}</h2><span className="muted" data-field="step-count">{`${props.records.length} 手`}</span></div>
       <p className="execution-log-note">{EXECUTION_LOG_NOTE}</p>
       {props.records.length === 0
         ? <p className="execution-log-empty" data-field="execution-log-empty">{EXECUTION_LOG_EMPTY}</p>
@@ -68,7 +68,7 @@ export function ExecutionLog(props: { records: readonly ActivityRecord[] }): Ele
                 return (
                   <li key={`${step}:${index}`} className="execution-step" data-execution-step={step} data-verdict={verdict}>
                     <header className="step-head">
-                      <span className="step-order"><ResultMark outcome={verdict} /><span className="step-label">STEP {step.padStart(2, '0')}</span></span>
+                      <span className="step-order"><ResultMark outcome={verdict} /><span className="step-label">{`${step} 手目`}</span></span>
                       <span className="step-facts">
                         {(Object.keys(CHECK_TEXT) as Array<keyof typeof CHECK_TEXT>).map((result) => (counts[result] === 0 ? null : (
                           <span key={result} className="check-chip" data-check={result}>{CHECK_TEXT[result]} {counts[result]}</span>

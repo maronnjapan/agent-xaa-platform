@@ -184,7 +184,8 @@ describe('the home screen', () => {
     const html = await (await harness.fetch('/')).text();
     expect(html).toContain('data-section="todo-agent"');
     expect(html).toContain(`href="/agents/${AGENT_ID}"`);
-    expect(html).toContain('<span data-field="agent-status">ACTIVE</span>');
+    // In words, with the code kept on the element for anyone matching it against a log.
+    expect(html).toMatch(/<span data-field="agent-status" data-value="ACTIVE"[^>]*>稼働中<\/span>/);
     expect(html).toContain('data-action="complete"');
     expect(html).toContain(AGENT_RUNNING_NOTE);
     expect(html).not.toContain('data-action="cancel"');

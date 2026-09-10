@@ -1,13 +1,15 @@
-import { ResultMark, formatDuration, phaseLabel } from './visual.js';
+import { useEffect } from 'react';
 import type { ActivityRecord } from '@xaa/contracts';
 import { emphasisClass } from '../replay/emphasis.js';
-import { labelOf, roleTextOf } from '../roles.js';
+import { phaseLabelOf } from '../labels.js';
+import { labelOf, nameOf, roleTextOf } from '../roles.js';
 import { DetailDisclosure } from './detail-disclosure.js';
 import { LocalTime } from './local-time.js';
 import { OutcomeBadge } from './outcome-badge.js';
 import { PhaseIcon } from './phase-icon.js';
 import { RecordView } from './record-view.js';
 import { RouteStrip } from './route-strip.js';
+import { formatDuration as formatElapsed } from './visual.js';
 import type { Element } from '../element.js';
 
 export interface LogEvent {
@@ -20,30 +22,41 @@ export interface LogEvent {
   message: string;
   detail?: Record<string, unknown>;
   record?: ActivityRecord;
+  /** A scripted event, which must never be mistakable for one that happened (RULE-58). */
+  simulated?: boolean;
 }
 
+export const EVENT_LOG_NO_ISSUES = 'この区切りに、遮断や失敗はありません。';
+
 /**
- * The whole of a finished task, in words, under 「やったこと」.
+ * The whole of a finished task, in words, as a list down the page.
  *
- * It is rendered by the server and always present, which is the point: the animation
- * shows the shape of what happened, and this shows what happened. Someone who never
- * presses play, or who cannot watch an animation at all, loses nothing but the motion.
+ * It is rendered by the server and always present, which is the point: the picture
+ * beside it shows the shape of what happened, and this shows what happened. Someone
+ * who never presses play, or who cannot watch an animation at all, loses nothing but
+ * the motion.
  *
- * Each row names the part that published it and, beside the name, what that part is
- * for. A log whose every line began `agent-op` and assumed the reader knew what an
- * Agent OP was is a log only its authors could read — which is what people said about
- * it. The name and the phrase both come from the one role dictionary the diagram draws
- * its boxes from, so the picture and the text cannot call the same part two things.
+ * Each row is headed by who did it, in the words the screen uses for that part, with
+ * the formal name a hover away; by which stage of the story it belongs to; by when;
+ * and by how it ended. A log whose every line began `agent-op` and assumed the reader
+ * knew what an Agent OP was is a log only its authors could read — which is what people
+ * said about it. The name and the phrase both come from the one role dictionary the
+ * diagram draws its boxes from, so the picture and the text cannot call the same part
+ * two things. The title and the sentence under them are the publisher's own.
  *
- * Down the left runs a rail with a mark per row — the phase's glyph, in the colour of
- * how the row ended — so a long account can be scanned for the one amber mark without
- * reading. Beside each time is how long after the previous row it happened: the
- * recorded instants, subtracted, and nothing else.
+ * Down the left runs a rail with a mark per row — the phase's glyph, on a disc in the
+ * colour of how the row ended — so a long account can be scanned for the one amber
+ * mark without reading. Beside each time is how long after the previous row it
+ * happened: the recorded instants, subtracted, and nothing else. A row whose record
+ * lists the exchanges it made shows them as a route, standing still, so the path the
+ * picture animates is on the page for a person who never presses play.
  *
  * Which row the replay has reached is a prop rather than an attribute the browser
  * pokes in afterwards: one state, held by the task's picture, rendered by both halves.
  * The section says whether any picture is on it at all, because a log nothing is
  * playing against has no passed rows to dim — every row of it reads at full strength.
+ * When the picture moves on, the row it reached is brought into view, gently, so a
+ * person reading beside the picture is never looking at the wrong line.
  */
 export function EventLog(props: {
   taskId: string;
@@ -54,23 +67,20 @@ export function EventLog(props: {
 }): Element {
   const current = props.currentEventId ?? null;
   const currentIndex = current === null ? -1 : props.events.findIndex((event) => event.event_id === current);
+  const logKey = props.taskKey ?? props.taskId;
   return (
     <section
       className="event-log"
       data-event-log={props.taskId}
-      data-log-key={props.taskKey ?? props.taskId}
+      data-log-key={logKey}
       data-log-state={current === null ? 'idle' : 'playing'}
     >
-      <ol className="event-outline" aria-label="記録された処理の流れ">
-        {props.events.map((event, index) => <li key={event.event_id} data-outcome={event.outcome} data-phase={event.phase}>
-          <span>{String(index + 1).padStart(2, '0')}</span><ResultMark outcome={event.outcome} /><strong><PhaseIcon phase={event.phase} />{phaseLabel(event.phase)}</strong>
-          <small>{labelOf(event.source)}</small><span className="sr-only">{event.outcome}</span>
-        </li>)}
-      </ol>
-      <ol className="event-entries">
+      <FollowCurrentRow logKey={logKey} current={current} />
+      <ol className="event-list">
         {props.events.map((event, index) => {
           const previous = index > 0 ? props.events[index - 1] : undefined;
           const elapsed = previous ? Date.parse(event.occurred_at) - Date.parse(previous.occurred_at) : null;
+          const hops = event.record?.hops ?? [];
           return (
             <li
               key={event.event_id}
@@ -82,28 +92,56 @@ export function EventLog(props: {
               data-emphasis={emphasisClass(event.outcome, event.phase)}
               data-entry-state={entryState(index, currentIndex)}
             >
-              <span className="event-rail" data-outcome={event.outcome} aria-hidden="true"><PhaseIcon phase={event.phase} /></span>
-              <p className="event-head">
-                <span className="event-order">{String(index + 1)}</span>
-                <span className="event-source">{labelOf(event.source)}</span>
-                <span className="event-source-role" data-field="event-source-role">{roleTextOf(event.source)}</span>
-                <LocalTime className="event-time" at={event.occurred_at} />
-                {elapsed !== null && Number.isFinite(elapsed)
-                  ? <span className="event-elapsed" data-field="event-elapsed" title="前の行からの経過">+{formatDuration(elapsed)}</span>
-                  : null}
-                <OutcomeBadge outcome={event.outcome} phase={event.phase} />
-              </p>
-              <p className="event-title">{event.title}</p>
-              <p className="event-message">{event.message}</p>
-              {event.record?.hops && event.record.hops.length > 0 ? <RouteStrip hops={event.record.hops} compact /> : null}
-              <RecordView {...(event.record ? { record: event.record } : {})} />
-              <DetailDisclosure {...(event.detail ? { detail: event.detail } : {})} />
+              <span className="event-rail" data-outcome={event.outcome} aria-hidden="true">
+                <PhaseIcon phase={event.phase} />
+              </span>
+              <div className="event-body">
+                <p className="event-head">
+                  <span className="event-order">{String(index + 1)}</span>
+                  <span className="event-actor" data-field="event-actor" title={labelOf(event.source)}>{nameOf(event.source)}</span>
+                  <span className="event-source-role" data-field="event-source-role">{roleTextOf(event.source)}</span>
+                  <span className="event-phase" data-field="event-phase">{phaseLabelOf(event.phase)}</span>
+                  <LocalTime className="event-time" at={event.occurred_at} format="short" />
+                  {elapsed !== null && Number.isFinite(elapsed)
+                    ? <span className="event-elapsed" data-field="event-elapsed" title="前の行からの経過">{`+${formatElapsed(elapsed)}`}</span>
+                    : null}
+                  <OutcomeBadge outcome={event.outcome} phase={event.phase} />
+                </p>
+                <p className="event-title">{event.title}</p>
+                <p className="event-message">{event.message}</p>
+                {hops.length > 0 ? <RouteStrip hops={hops} compact /> : null}
+                <RecordView {...(event.record ? { record: event.record } : {})} />
+                <DetailDisclosure {...(event.detail ? { detail: event.detail } : {})} simulated={event.simulated === true} />
+              </div>
             </li>
           );
         })}
       </ol>
+      <p className="event-log-none" data-field="event-log-none">{EVENT_LOG_NO_ISSUES}</p>
     </section>
   );
+}
+
+/**
+ * Brings the row the picture has reached into view.
+ *
+ * A component of its own, and the only thing in this file with a hook, so the list
+ * itself stays a plain function of its props — which is how the tests call it and how
+ * the server renders it. It renders nothing; the effect finds the row by the key the
+ * list was served with, and asks the browser to scroll only as far as needed, so a
+ * person reading beside the picture is never looking at the wrong line and never
+ * yanked away from the one they were on.
+ */
+function FollowCurrentRow(props: { logKey: string; current: string | null }): Element {
+  const { logKey, current } = props;
+  useEffect(() => {
+    if (current === null || typeof document === 'undefined') return;
+    const rows = document.querySelectorAll<HTMLElement>('[data-log-key] [data-event-id]');
+    const row = [...rows].find((entry) =>
+      entry.getAttribute('data-event-id') === current && entry.closest('[data-log-key]')?.getAttribute('data-log-key') === logKey);
+    if (row && typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [logKey, current]);
+  return null;
 }
 
 /**

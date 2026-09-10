@@ -22,13 +22,19 @@ export const CAST_DOES_NOT = 'しないこと';
  *
  * It lists the parts that appear in the records being shown, not all ten, so a person
  * reading one tool call is not handed a directory of a platform they did not use.
+ *
+ * Folded by default. The names on the rows below are the Japanese ones, which read on
+ * their own; the cards are for the person who wants to know what stands behind one.
  */
 export function CastPanel(props: { sources?: Iterable<string>; open?: boolean }): Element {
   const actors = props.sources === undefined ? ACTOR_ROLES : rolesFor(props.sources);
   if (actors.length === 0) return null;
   return (
     <details className="cast" data-section="cast" {...(props.open ? { open: true } : {})}>
-      <summary>{CAST_CAPTION}</summary>
+      <summary>
+        <span className="cast-summary-title">{CAST_CAPTION}</span>
+        <span className="cast-summary-count">{`${actors.length} 件`}</span>
+      </summary>
       <p className="cast-note">{CAST_NOTE}</p>
       <ul className="cast-list">
         {actors.map((actor) => <li key={actor.id}><RoleCard actor={actor} /></li>)}
@@ -38,8 +44,8 @@ export function CastPanel(props: { sources?: Iterable<string>; open?: boolean })
 }
 
 /**
- * One part, in four lines: what it is called, what it is for, what it does, and what it
- * does not do.
+ * One part, in five lines: what the screen calls it, what the documents call it, what
+ * it is for, what it does, and what it does not do.
  *
  * The same card is what a box on the diagram opens, so a person who clicks a box while
  * a replay is paused reads exactly what the list beside the picture would have told
@@ -50,9 +56,10 @@ export function RoleCard(props: { actor: ActorRole }): Element {
   return (
     <article className="role-card" data-role-id={actor.id} data-role-lane={actor.lane}>
       <p className="role-card-head">
-        <span className="role-card-label">{actor.label}</span>
+        <span className="role-card-name" data-field="role-name">{actor.name}</span>
         <span className="role-card-lane">{LANE_LABELS[actor.lane]}</span>
       </p>
+      {actor.label === actor.name ? null : <p className="role-card-label" data-field="role-label">{actor.label}</p>}
       <p className="role-card-role">{actor.role}</p>
       <dl className="role-card-body">
         <dt>{CAST_DOES}</dt>

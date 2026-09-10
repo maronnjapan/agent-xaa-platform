@@ -22,16 +22,19 @@
 }
 
 /*
- * Capped rather than stretched. The boxes sit at fixed coordinates so two replays of
- * the same system line up (DEC-APP-06), which means a task that only involves the
- * lower row leaves the upper half of the frame empty. Letting the picture fill the
- * column turned that gap into the largest thing on the page.
+ * The picture fills the column it is given and no more. The boxes sit at fixed
+ * coordinates so two replays of the same system line up (DEC-APP-06), which means a
+ * task that only involves the lower row leaves the upper half of the frame empty;
+ * the column beside the list is narrow enough that the gap stays small.
  */
 .replay-canvas {
   display: block;
   width: 100%;
   max-width: 38rem;
   height: auto;
+  background: #ffffff;
+  border: 1px solid #e3e5ec;
+  border-radius: 8px;
 }
 
 .replay-node rect {
@@ -152,8 +155,8 @@
 }
 
 .replay-controls button {
-  padding: 0.3rem 0.75rem;
-  font-size: 0.9rem;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.85rem;
 }
 
 .replay-progress {
@@ -189,26 +192,6 @@
   color: #5b5b66;
 }
 
-/*
- * Which written entry the picture is on.
- *
- * Three states, because a person who paused halfway needs to see the boundary between
- * what has been shown and what has not. The current one is moved and brightened rather
- * than merely tinted, so it is findable on a long list without scanning colours.
- */
-.event-entry[data-entry-state="current"] {
-  background: #f2f7fd;
-  box-shadow: 0 0 0 2px #2f6fb5;
-}
-
-.event-entry[data-entry-state="waiting"] {
-  opacity: 0.55;
-}
-
-/* Nothing has played yet, so nothing is dimmed: the log reads on its own. */
-.event-log[data-log-state="idle"] .event-entry[data-entry-state="waiting"] {
-  opacity: 1;
-}
 
 /*
  * The words on the picture.
@@ -278,6 +261,7 @@
   background: #ffffff;
   max-width: 38rem;
   box-sizing: border-box;
+  min-height: 4.5rem;
 }
 
 .replay-caption[data-caption-state="idle"] { color: #5b5b66; }
@@ -308,21 +292,18 @@
 .replay[data-replay-state="idle"] .caption-head { display: none; }
 
 /*
- * The picture and the reasoning, side by side.
+ * The picture, then the reasoning under it.
  *
  * They are one step's two halves — what moved, and why it moved — so they are read
- * together or not at all. On a narrow screen they stack, picture first, because the
- * picture is what a person pressed play for.
+ * together or not at all. They stack, picture first, because the picture is what a
+ * person pressed play for, and because the column they share is the one beside the
+ * written list rather than the whole page.
  */
 .replay-stage {
   display: grid;
-  grid-template-columns: minmax(0, 39rem) minmax(0, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
   align-items: start;
-}
-
-@media (max-width: 68rem) {
-  .replay-stage { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* How far through the steps the replay is, as a bar rather than only as a count. */
@@ -370,9 +351,9 @@
   padding: 0.75rem 1rem;
   border: 1px solid #d5d5dd;
   border-radius: 8px;
-  background: #fbfcfe;
+  background: #ffffff;
   font-size: 0.9rem;
-  min-height: 12rem;
+  min-height: 6rem;
   box-sizing: border-box;
 }
 
