@@ -17,8 +17,13 @@ review-markdown-cli は、この基盤のことを何も知らない。
 何を登録したかの記録は、このコマンド自身のファイルへ書く（[4章](#4-二重に登録しない)）。
 
 境目をこちら側へ寄せてあるのは、`/external/todos` の項目・断り方・トークンの決まりが、いずれもこの基盤の都合だからである。
-`priority` を3段階にしたのも、`title` だけを必須にしたのも、`agent:operate` スコープを求めるのも、この基盤が決めたことであり、レビューの道具が抱える理由がない。
+`title` だけを必須にしたのも、`agent:operate` スコープを求めるのも、この基盤が決めたことであり、レビューの道具が抱える理由がない。
 項目を増やせばこのコマンドが直り、レビューの道具は関係しない。
+
+ただし、レビュアーが書く項目の**形**は、あちらがこちらへ揃えている。
+優先度の `high` / `normal` / `low` と、完了条件・手順・補足（`done_criteria` / `steps` / `notes`）は、名前も意味も上限も同じである。
+読み替え表を挟まないのは、表が「片方にだけ足された値」を黙って既定値へ落とすからである。
+揃える前に書かれた記録の `now` / `next` / `later` は、読むときだけ `high` / `normal` / `low` として読む。
 
 ## 2. 用意する
 
@@ -36,7 +41,8 @@ export AUTOMATION_APP_ACCESS_TOKEN=<アクセストークン>
 
 ## 3. 動かす
 
-レビューしたディレクトリ（`.review/` があるところ）を渡す。
+レビューしたディレクトリを渡す。
+`.review/` はリポジトリに1つで、レビュー対象がその下の階層でも構わない（`docs/` を渡せば、上の `.review/` を探して読む）。
 
 ```bash
 pnpm build
@@ -84,9 +90,10 @@ AI が起こしただけで、まだ誰も読んでいない候補は登録し�
 | `title` | タスクの題名 |
 | `description` | タスクの詳細 |
 | `context` | 元の文書のパス、担当、引用、レビュアーが書いた参考知識のうち、書かれているものだけ |
-| `priority` | タスクの優先度（いま→`high`、次に→`normal`、あとで→`low`） |
+| `priority` | タスクの優先度。同じ3値なので、そのまま送る |
 | `due_on` | レビュアーが決めた期限。決めていなければ送らない |
-| `done_criteria`、`steps`、`notes` | 空。レビューのタスクは持たないので、作らない |
+| `done_criteria` | レビュアー（完了条件はレビューAIが書くこともある）が書いた完了条件。書かれていなければ空 |
+| `steps`、`notes` | レビュアーが書いた手順と補足。書かれていなければ空 |
 | `requested_lifetime_minutes` | 送らない。実行してよい時間はこのアプリの既定に従う |
 
 1件が断られても、残りは続ける。
@@ -97,6 +104,7 @@ AI が起こしただけで、まだ誰も読んでいない候補は登録し�
 | `the access token is not valid any more` | トークンを取り直して `AUTOMATION_APP_ACCESS_TOKEN` に入れ直す |
 | `the access token does not carry the agent:operate scope` | `agent:operate` を要求してトークンを取り直す |
 | `title is longer than 200 characters` など | そのタスクを review-markdown-cli 側で短くする |
+| `steps has more than 50 items` など | 記録を手で直したときだけ出る。review-markdown-cli 側で直す |
 | `could not reach <url>` | `AUTOMATION_APP_URL` と、アプリが動いているかを確かめる |
 
 ## 6. できないこと

@@ -1,17 +1,18 @@
 import {
-  TODO_CONTEXT_MAX, TODO_TEXT_MAX, TODO_TITLE_MAX,
+  TODO_CONTEXT_MAX, TODO_LIST_ITEM_MAX, TODO_LIST_MAX_ITEMS, TODO_TEXT_MAX, TODO_TITLE_MAX,
 } from '@xaa/automation-app/src/schemas/index';
 import type { TodoInput } from '@xaa/automation-app/src/work-definition/input';
-import type { ReviewPriority, ReviewTask } from './tasks.js';
+import type { ReviewTask } from './tasks.js';
 
 /**
  * A reviewer's task, written as the ToDo body `POST /external/todos` reads.
  *
  * The mapping lives here rather than in the review tool because it is a statement about
  * this platform's ToDo: which of its fields a review task can honestly fill, and which
- * it must leave alone. `done_criteria`, `steps` and `notes` are left empty on purpose —
- * a review task does not carry them, and inventing them would put words in front of an
- * agent that no person wrote.
+ * it must leave alone. The review tool now writes `done_criteria`, `steps` and `notes`
+ * under its own names, with the same meanings and the same limits, so they are carried
+ * across as written. Nothing here fills them in: a task whose reviewer wrote no done
+ * criteria arrives with none, rather than with a bar this app invented.
  *
  * `requested_lifetime_minutes` is left out of the body entirely, so the app applies its
  * own default. A connector guessing how long an errand should be allowed to run is
@@ -23,13 +24,6 @@ import type { ReviewPriority, ReviewTask } from './tasks.js';
 export type TodoRequest =
   & Pick<TodoInput, 'title' | 'description' | 'context' | 'done_criteria' | 'steps' | 'notes' | 'priority'>
   & { due_on?: string };
-
-/** The review tool orders work by when to start it; this app by how much it matters. */
-export const PRIORITY_FROM_REVIEW: Record<ReviewPriority, TodoInput['priority']> = {
-  now: 'high',
-  next: 'normal',
-  later: 'low',
-};
 
 /** Why one task cannot be registered, in words the person can act on. */
 export class TaskNotRegisterable extends Error {
@@ -52,12 +46,27 @@ export function buildTodoRequest(task: ReviewTask, documentPath: string): TodoRe
     title,
     description: task.detail,
     context,
-    done_criteria: [],
-    steps: [],
-    notes: [],
-    priority: PRIORITY_FROM_REVIEW[task.priority],
+    done_criteria: listOf(task.doneCriteria, 'done_criteria'),
+    steps: listOf(task.steps, 'steps'),
+    notes: listOf(task.notes, 'notes'),
+    // The review tool writes this app's own three values, so nothing is translated.
+    priority: task.priority,
     ...(task.due === '' ? {} : { due_on: task.due }),
   };
+}
+
+/**
+ * One list, checked against the app's bounds before it is sent.
+ *
+ * The review tool holds the same limits, so a list that fails here was hand-edited in
+ * the task file. Naming the field and the limit costs no round trip and says where to fix it.
+ */
+function listOf(items: string[], field: string): string[] {
+  if (items.length > TODO_LIST_MAX_ITEMS) {
+    throw new TaskNotRegisterable(`${field} has more than ${TODO_LIST_MAX_ITEMS} items`);
+  }
+  for (const item of items) limit(item, TODO_LIST_ITEM_MAX, field);
+  return items;
 }
 
 /**

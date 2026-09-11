@@ -15,7 +15,7 @@ async function reviewRoot(files: Record<string, unknown>): Promise<string> {
 }
 
 const committed = (over: Record<string, unknown> = {}) => ({
-  id: 't1', title: '請求書の様式を確認する', detail: '', kind: 'action', priority: 'now',
+  id: 't1', title: '請求書の様式を確認する', detail: '', kind: 'action', priority: 'high',
   status: 'open', source: 'ai', quote: '', owner: '',
   plan: { commitment: 'committed', due: '', note: '', decidedAt: null },
   ...over,
@@ -27,7 +27,10 @@ describe('scanning what a reviewer committed to', () => {
     const scan = await scanCommittedTasks(root);
     expect(scan.documents).toEqual([{
       documentPath: 'docs/plan.md',
-      tasks: [{ id: 't1', title: '請求書の様式を確認する', detail: '', priority: 'now', owner: '', quote: '', knowledge: '', due: '' }],
+      tasks: [{
+        id: 't1', title: '請求書の様式を確認する', detail: '', priority: 'high',
+        owner: '', quote: '', knowledge: '', due: '', doneCriteria: [], steps: [], notes: [],
+      }],
     }]);
   });
 
@@ -68,6 +71,44 @@ describe('scanning what a reviewer committed to', () => {
       detail: '様式は経理に聞く', quote: '請求書の様式が古い', owner: '田中',
       knowledge: '前回の改訂は2024年', due: '2026-09-30',
     });
+  });
+
+  it('carries the done criteria, steps and notes the reviewer wrote', async () => {
+    const root = await reviewRoot({
+      'plan.md.tasks.json': {
+        tasks: [committed({
+          doneCriteria: ['経理の返事がある', ' '],
+          steps: ['経理へ問い合わせる'],
+          notes: 'メモは並びではない',
+        })],
+      },
+    });
+    const [task] = (await scanCommittedTasks(root)).documents[0]!.tasks;
+    expect(task?.doneCriteria).toEqual(['経理の返事がある']);
+    expect(task?.steps).toEqual(['経理へ問い合わせる']);
+    expect(task?.notes).toEqual([]);
+  });
+
+  it('reads the priorities written before the two tools agreed on their names', async () => {
+    const root = await reviewRoot({
+      'plan.md.tasks.json': {
+        tasks: [
+          committed({ id: 'a', priority: 'now' }),
+          committed({ id: 'b', priority: 'next' }),
+          committed({ id: 'c', priority: 'later' }),
+          committed({ id: 'd', priority: 'unknown' }),
+        ],
+      },
+    });
+    const [document] = (await scanCommittedTasks(root)).documents;
+    expect(document?.tasks.map((task) => task.priority)).toEqual(['high', 'normal', 'low', 'normal']);
+  });
+
+  it('finds the one .review of the repository from a directory below it', async () => {
+    const root = await reviewRoot({ 'docs/plan.md.tasks.json': { tasks: [committed()] } });
+    await mkdir(join(root, 'docs'), { recursive: true });
+    const scan = await scanCommittedTasks(join(root, 'docs'));
+    expect(scan.documents.map((document) => document.documentPath)).toEqual(['docs/plan.md']);
   });
 
   it('reports a task file it cannot parse instead of passing over it', async () => {

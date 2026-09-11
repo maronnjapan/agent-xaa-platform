@@ -10,7 +10,7 @@ const URL_ = 'http://127.0.0.1:8080';
 const ENV = { AUTOMATION_APP_URL: URL_, AUTOMATION_APP_ACCESS_TOKEN: 'token' } as NodeJS.ProcessEnv;
 
 const committed = (over: Record<string, unknown> = {}) => ({
-  id: 't1', title: '請求書の様式を確認する', priority: 'now', status: 'open',
+  id: 't1', title: '請求書の様式を確認する', priority: 'high', status: 'open',
   plan: { commitment: 'committed' }, ...over,
 });
 
