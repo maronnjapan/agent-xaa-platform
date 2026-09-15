@@ -1,7 +1,10 @@
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  createCliClient, createModelClient, extractJson, LANGCHAIN_PROVIDER_NAMES,
-  ModelConfigurationError, readModelOptions,
+  createCliClient, createModelClient, extractJson, findOnPath, LANGCHAIN_PROVIDER_NAMES,
+  LANGCHAIN_PROVIDERS, ModelConfigurationError, readModelOptions,
 } from '../src/index.js';
 
 const schema = {
@@ -33,7 +36,39 @@ describe('choosing which model answers', () => {
     expect(readModelOptions({ ...env, MODEL_PROVIDER: 'vertex', PROJECT_ID: 'p' }).model).toBe('gemini-2.5-flash');
     expect(readModelOptions({ ...env, MODEL_PROVIDER: 'cli' }).model).toBe('');
     expect(readModelOptions({ ...env, MODEL_PROVIDER: 'cli', MODEL_NAME: 'opus' }).model).toBe('opus');
-    expect(readModelOptions({ ...env, MODEL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k' }).model).toBe('');
+    // A provider reached over an API answers with its own default rather than with a
+    // Gemini name it cannot serve.
+    expect(readModelOptions({ ...env, MODEL_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k' }).model)
+      .toBe(LANGCHAIN_PROVIDERS.anthropic.defaultModel);
+  });
+
+  /**
+   * A key is the only thing a person should have to produce to try a provider. Naming the
+   * model too means a second lookup in a second place before anything runs, so the table
+   * answers for the provider and the banner prints what it chose.
+   */
+  it('asks each provider for its own default model when MODEL_NAME names none', () => {
+    for (const provider of LANGCHAIN_PROVIDER_NAMES) {
+      const definition = LANGCHAIN_PROVIDERS[provider];
+      expect(definition.defaultModel).not.toBe('');
+      const env = { MODEL_PROVIDER: provider, [definition.apiKeyEnv]: 'k' };
+      expect(readModelOptions(env).model).toBe(definition.defaultModel);
+      // And a named model still wins, because the default is a starting point, not a cap.
+      expect(readModelOptions({ ...env, MODEL_NAME: 'named' }).model).toBe('named');
+      // The whole point of the default is that this no longer refuses to start.
+      expect(() => createModelClient(readModelOptions(env))).not.toThrow();
+    }
+  });
+
+  /**
+   * The two providers that must not be given one. `cli` would override the model the
+   * agent on the machine already picked; `vertex` is a deployment whose model is named in
+   * Terraform, and inventing one here would have it answer from a model nobody chose.
+   */
+  it('invents no model for the coding agent or for Vertex', () => {
+    expect(readModelOptions({ MODEL_PROVIDER: 'cli' }).model).toBe('');
+    expect(readModelOptions({ MODEL_PROVIDER: 'vertex', PROJECT_ID: 'p' }).model).toBe('');
+    expect(() => createModelClient({ provider: 'vertex', model: '', project: 'p' })).toThrow(/MODEL_NAME/);
   });
 
   it('reads the provider, the model and the credential from the deployment', () => {
@@ -97,7 +132,20 @@ describe('a coding agent on the machine', () => {
   });
 
   it('reads Codex from stdin too, and answers null when the command fails', async () => {
-    expect(createCliClient({ preset: 'codex', run: async () => '' }));
+    const seen: Array<{ command: string; args: readonly string[] }> = [];
+    const client = createCliClient({
+      preset: 'codex', model: 'gpt-5-codex',
+      run: async (input) => {
+        seen.push({ command: input.command, args: input.args });
+        return 'Here is the answer:\n{"value":"ok"}\n';
+      },
+    });
+    await expect(client.generateJson(params)).resolves.toEqual({ value: 'ok' });
+    expect(seen[0]!.command).toBe('codex');
+    // `-` is the prompt on stdin, and `--skip-git-repo-check` is what lets Codex start in
+    // the scratch directory it is given rather than refusing to run outside a repository.
+    expect(seen[0]!.args).toEqual(['exec', '--skip-git-repo-check', '--model', 'gpt-5-codex', '-']);
+
     const failing = createCliClient({ preset: 'codex', run: async () => { throw new Error('not installed'); } });
     await expect(failing.generateJson(params)).resolves.toBeNull();
   });
@@ -105,6 +153,43 @@ describe('a coding agent on the machine', () => {
   it('answers null for prose with no JSON in it', async () => {
     const client = createCliClient({ preset: 'claude-code', run: async () => 'I could not do that.' });
     await expect(client.generateJson(params)).resolves.toBeNull();
+  });
+
+  /**
+   * `null` means "the model was asked and gave nothing usable". A command that is not
+   * installed was never asked, and answering `null` to it would have every Work Definition
+   * come back without an Agent Definition and nothing say why — the same thing a person
+   * sees from the fake. So it is refused before anything is asked.
+   */
+  it('refuses a command that is not on PATH instead of answering null forever', () => {
+    expect(() => createCliClient({ preset: 'custom', command: 'xaa-no-such-agent' }))
+      .toThrow(ModelConfigurationError);
+    expect(() => createCliClient({ preset: 'custom', command: 'xaa-no-such-agent' }))
+      .toThrow(/xaa-no-such-agent/);
+    expect(() => createCliClient({ preset: 'codex', command: 'xaa-no-such-agent' }))
+      .toThrow(/not on PATH/);
+  });
+
+  /** A caller that handed in `run` has no binary to find, so nothing is looked for. */
+  it('looks for no command when the caller supplies the transport', () => {
+    expect(() => createCliClient({ preset: 'codex', command: 'xaa-no-such-agent', run: async () => '{}' }))
+      .not.toThrow();
+  });
+
+  it('resolves a command the way spawn will resolve it', () => {
+    expect(findOnPath('xaa-no-such-agent')).toBeUndefined();
+    // `node` is running this test, so it is on PATH by definition.
+    expect(findOnPath('node')).toMatch(/node$/);
+    expect(findOnPath(process.execPath)).toBe(process.execPath);
+    expect(findOnPath('node', { PATH: '' })).toBeUndefined();
+  });
+
+  /** A directory carries the execute bit too, and `spawn` would still fail on it. */
+  it('does not take a directory on PATH for the command', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xaa-path-'));
+    mkdirSync(join(root, 'codex'));
+    expect(findOnPath('codex', { PATH: root })).toBeUndefined();
+    rmSync(root, { recursive: true, force: true });
   });
 });
 

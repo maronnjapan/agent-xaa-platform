@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
+import { accessSync, constants, statSync } from 'node:fs';
+import { delimiter, isAbsolute, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ModelConfigurationError } from './errors.js';
 import { extractJson, jsonOnlyPrompt, validateAnswer } from './json-answer.js';
 import type { GenerateJsonParams, VertexClient } from '@xaa/vertex';
 
@@ -46,6 +49,37 @@ function presetArgv(preset: Exclude<CliPreset, 'custom'>, model: string | undefi
   };
 }
 
+/**
+ * Whether a command is actually there to be spawned.
+ *
+ * `spawn` does not fail until the question is asked, and the answer to a question that
+ * could not be asked is `null` — which is also the answer to a question the agent
+ * answered badly. So `MODEL_CLI=codex` on a machine without Codex would look like a
+ * platform whose model is installed and unhelpful: every Work Definition would come back
+ * without an Agent Definition, and nothing would say why. Resolving the command the way
+ * `spawn` will resolve it turns that into one sentence at startup.
+ *
+ * A name containing a separator is a path and is checked as one; anything else is looked
+ * for along `PATH`, executable bit and all, because that is what `spawn` does with it.
+ */
+export function findOnPath(command: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  // A directory on `PATH` can carry the execute bit and share the command's name, and
+  // `spawn` would still fail on it, so presence alone is not the question.
+  const executable = (candidate: string): boolean => {
+    try {
+      accessSync(candidate, constants.X_OK);
+      return statSync(candidate).isFile();
+    } catch { return false; }
+  };
+  if (command.includes('/') || isAbsolute(command)) return executable(command) ? command : undefined;
+  for (const directory of (env.PATH ?? '').split(delimiter)) {
+    if (directory === '') continue;
+    const candidate = join(directory, command);
+    if (executable(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 function runProcess(input: { command: string; args: readonly string[]; prompt: string; cwd: string; timeoutMs: number }): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, [...input.args], { cwd: input.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -76,6 +110,10 @@ function runProcess(input: { command: string; args: readonly string[]; prompt: s
  * It runs in a temporary directory, never in the repository: a coding agent invoked
  * here is being asked one question, and giving it the checkout as a working tree would
  * let an answer become an edit.
+ *
+ * The one thing it will not answer `null` to is a command that is not installed. That is
+ * a configuration the platform cannot run at all rather than a question that went badly,
+ * so it is raised here, before anything is asked.
  */
 export function createCliClient(options: CliClientOptions): VertexClient {
   const resolved = options.preset === 'custom'
@@ -86,6 +124,13 @@ export function createCliClient(options: CliClientOptions): VertexClient {
   const cwd = options.cwd ?? tmpdir();
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const run = options.run ?? runProcess;
+  // Only when this really will spawn: a caller that handed in `run` has no binary to find.
+  if (options.run === undefined && command !== '' && findOnPath(command) === undefined) {
+    throw new ModelConfigurationError(
+      `MODEL_CLI=${options.preset} needs the \`${command}\` command, and it is not on PATH. `
+      + 'Install it, or choose a provider that needs no command (MODEL_PROVIDER=anthropic or openai with an API key).',
+    );
+  }
 
   return {
     async generateJson<T>(params: GenerateJsonParams): Promise<T | null> {

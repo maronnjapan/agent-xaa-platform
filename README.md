@@ -29,6 +29,10 @@ MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=... pnpm local     # Anthropic
 MODEL_PROVIDER=openai OPENAI_API_KEY=... pnpm local           # OpenAI と OpenAI 互換のサーバ
 ```
 
+どれもこれだけで動く。
+モデル名は `MODEL_NAME` で変えられるが、指定しなくてよい。
+キーが無い、コマンドが入っていないといった場合は、ポートを開く前に、何を足せばよいかを1行出して止まる。
+
 API を呼ぶプロバイダは LangChain 経由の1つのクライアントにまとまっている（[packages/xaa-model](./packages/xaa-model)）。
 `OPENAI_BASE_URL` を向ければ Ollama や vLLM など手元で動かしているモデルもそのまま使える。
 

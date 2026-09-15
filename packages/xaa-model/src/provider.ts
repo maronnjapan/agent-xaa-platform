@@ -1,5 +1,6 @@
 import { createFakeClient, createVertexClient, type FakeResponder, type VertexClient } from '@xaa/vertex';
 import { createCliClient, type CliPreset } from './cli-client.js';
+import { ModelConfigurationError } from './errors.js';
 import {
   createLangChainClient, isLangChainProvider, LANGCHAIN_PROVIDERS, LANGCHAIN_PROVIDER_NAMES,
   type LangChainProvider,
@@ -33,7 +34,7 @@ export interface ModelClientOptions {
   fetchImpl?: typeof fetch;
 }
 
-export class ModelConfigurationError extends Error {}
+export { ModelConfigurationError } from './errors.js';
 
 const PROVIDERS: readonly ModelProvider[] = ['fake', 'vertex', ...LANGCHAIN_PROVIDER_NAMES, 'cli'];
 const CLI_PRESETS: readonly CliPreset[] = ['claude-code', 'codex', 'custom'];
@@ -93,14 +94,23 @@ function oneOf<T extends string>(name: string, value: string | undefined, allowe
 export function readModelOptions(env: NodeJS.ProcessEnv): ModelClientOptions {
   const provider = oneOf('MODEL_PROVIDER', env.MODEL_PROVIDER, PROVIDERS)
     ?? (env.VERTEX_MODE === 'live' ? 'vertex' : 'fake');
+  // Which variable holds the credential is the provider's own answer, so a provider
+  // added to the table brings its variable names with it rather than adding a branch.
+  const credential = isLangChainProvider(provider) ? LANGCHAIN_PROVIDERS[provider] : undefined;
   // `VERTEX_MODEL` holds a Gemini model name, so it stands in for `MODEL_NAME` only
   // where a Gemini name is what the provider wants. Letting it through to the others
   // would have `claude --model` pointed at a Gemini one on a deployment that named
   // neither.
-  const model = env.MODEL_NAME ?? (provider === 'vertex' || provider === 'fake' ? env.VERTEX_MODEL ?? '' : '');
-  // Which variable holds the credential is the provider's own answer, so a provider
-  // added to the table brings its variable names with it rather than adding a branch.
-  const credential = isLangChainProvider(provider) ? LANGCHAIN_PROVIDERS[provider] : undefined;
+  //
+  // With neither named, each provider answers for itself. A provider reached over an API
+  // has to be asked for some model by name, so the table's default stands in and a key is
+  // the only thing a person has to produce; `cli` has no default because the agent on the
+  // machine already has one, and a name invented here would override the one it picked.
+  // `vertex` keeps none either: `createModelClient` refuses it by name, which is the only
+  // way a deployment that set no model learns that from the platform rather than from a
+  // bill.
+  const model = env.MODEL_NAME
+    ?? (provider === 'vertex' || provider === 'fake' ? env.VERTEX_MODEL ?? '' : credential?.defaultModel ?? '');
   const apiKey = credential ? env[credential.apiKeyEnv] : undefined;
   const baseUrl = credential ? env[credential.baseUrlEnv] : undefined;
   const cliArgs = env.MODEL_CLI_ARGS === undefined || env.MODEL_CLI_ARGS === ''

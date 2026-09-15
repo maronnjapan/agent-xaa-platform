@@ -9,7 +9,8 @@
  * environment and installs it with `setDefaultModelClient`, so the applications ask the
  * same `generateJson` and never learn which model answered.
  */
-export { createCliClient, type CliClientOptions, type CliPreset } from './cli-client.js';
+export { createCliClient, findOnPath, type CliClientOptions, type CliPreset } from './cli-client.js';
+export { ModelConfigurationError } from './errors.js';
 export { extractJson, jsonOnlyPrompt, validateAnswer } from './json-answer.js';
 export {
   createLangChainClient, isLangChainProvider, LANGCHAIN_PROVIDER_NAMES, LANGCHAIN_PROVIDERS,
@@ -17,6 +18,6 @@ export {
   type LangChainProvider, type LangChainProviderDefinition,
 } from './langchain-client.js';
 export {
-  createModelClient, ModelConfigurationError, readModelOptions,
+  createModelClient, readModelOptions,
   type ModelClientOptions, type ModelProvider,
 } from './provider.js';

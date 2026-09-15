@@ -31,6 +31,8 @@ export interface LangChainProviderDefinition {
   apiKeyEnv: string;
   /** The variable that points the provider somewhere other than its own endpoint. */
   baseUrlEnv: string;
+  /** What the provider is asked for when `MODEL_NAME` names nothing. */
+  defaultModel: string;
   create(request: ChatModelRequest): ChatModel;
 }
 
@@ -39,7 +41,10 @@ export interface LangChainProviderDefinition {
  * machine, as one table.
  *
  * Adding a provider is an entry here and a dependency in `package.json`: the client
- * below, `readModelOptions` and the four applications learn no new name. That is what
+ * below, `readModelOptions` and the four applications learn no new name. `defaultModel`
+ * is part of that entry because a key is the only thing a person should have to produce
+ * to try a provider — naming the model too is a second lookup, in a second place, before
+ * anything runs at all. That is what
  * LangChain is in the tree for — each of these used to be a hand-written client that had
  * to be told again how to carry a schema, how to find the answer in the reply, and how
  * to fail — and it is why the provider, not this file, decides what a schema-constrained
@@ -54,6 +59,7 @@ export const LANGCHAIN_PROVIDERS = {
   anthropic: {
     apiKeyEnv: 'ANTHROPIC_API_KEY',
     baseUrlEnv: 'ANTHROPIC_BASE_URL',
+    defaultModel: 'claude-sonnet-5',
     create: (request: ChatModelRequest): ChatModel => new ChatAnthropic({
       model: request.model,
       apiKey: request.apiKey,
@@ -66,6 +72,7 @@ export const LANGCHAIN_PROVIDERS = {
   openai: {
     apiKeyEnv: 'OPENAI_API_KEY',
     baseUrlEnv: 'OPENAI_BASE_URL',
+    defaultModel: 'gpt-5',
     create: (request: ChatModelRequest): ChatModel => new ChatOpenAI({
       model: request.model,
       apiKey: request.apiKey,

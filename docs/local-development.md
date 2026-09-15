@@ -68,6 +68,9 @@ LOCAL_PORT_OFFSET=100 pnpm local   # Automation App は http://127.0.0.1:8180 �
 
 Gemini に限定していない。
 `MODEL_PROVIDER` で選び、モデル名は `MODEL_NAME` で渡す。
+`MODEL_NAME` は省いてよい。
+API キーで呼ぶプロバイダは省いた場合それぞれの既定のモデルを使い、`cli` はコーディングエージェント自身が選んだモデルに任せる。
+どのプロバイダのどのモデルを呼ぶかは、起動時のバナーに出る。
 
 | `MODEL_PROVIDER` | 何を呼ぶか | 追加で必要なもの |
 |---|---|---|
@@ -97,9 +100,17 @@ MODEL_PROVIDER=cli MODEL_CLI=codex pnpm local
 ```
 
 API キーを使う場合はこうである。
+キーだけあればよい。
 
 ```bash
-MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... MODEL_NAME=claude-sonnet-5 pnpm local
+MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... pnpm local   # claude-sonnet-5 を呼ぶ
+MODEL_PROVIDER=openai OPENAI_API_KEY=sk-... pnpm local             # gpt-5 を呼ぶ
+```
+
+呼ぶモデルを自分で決めるときは `MODEL_NAME` を添える。
+
+```bash
+MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... MODEL_NAME=claude-opus-5 pnpm local
 MODEL_PROVIDER=openai OPENAI_API_KEY=sk-... MODEL_NAME=gpt-5 pnpm local
 ```
 
@@ -122,11 +133,12 @@ Vertex とフェイクは配備した基盤が呼ぶ経路なので [packages/xa
 選ぶのはローカル実行の合成点1か所で、`setDefaultModelClient` で全アプリに渡す。
 コンテナへ `MODEL_PROVIDER=anthropic` を渡しても、そのコンテナは Gemini で代わりに答えたりはせず、届かないと言って止まる。
 
-`cli` プロバイダについては、次の3点に注意する。
+`cli` プロバイダについては、次の4点に注意する。
 
 - プロンプトは標準入力から渡し、シェルを経由しない。
 - 作業ディレクトリは一時ディレクトリであり、このリポジトリではない。エージェントの答えが編集にならないようにするためである。
 - スキーマを渡すチャネルが無いため、スキーマはプロンプトに書いて渡し、標準出力から JSON を取り出す。取り出せなければ `null` になる。
+- コマンドが PATH に無いときは、ポートを開く前に止まり、どのコマンドが無いかを出す。答えが `null` になるのは「問うたが使える答えが返らなかった」場合だけであり、そもそも問えなかった場合と混ざらない。
 
 コマンドと引数を自分で決めたい場合は `MODEL_CLI=custom` を使う。
 
@@ -140,7 +152,7 @@ MODEL_PROVIDER=cli MODEL_CLI=custom \
 | 環境変数 | 既定 | 意味 |
 |---|---|---|
 | `MODEL_PROVIDER` | `fake` | 3章 |
-| `MODEL_NAME` | `VERTEX_MODEL` | モデル名 |
+| `MODEL_NAME` | プロバイダ次第 | モデル名。`anthropic` は `claude-sonnet-5`、`openai` は `gpt-5`、`vertex` と `fake` は `VERTEX_MODEL`、`cli` はエージェントに任せる |
 | `MODEL_CLI` | `claude-code` | `claude-code` / `codex` / `custom` |
 | `MODEL_CLI_COMMAND` | プリセット依存 | `custom` のときのコマンド |
 | `MODEL_CLI_ARGS` | プリセット依存 | JSON 配列で渡す引数 |
